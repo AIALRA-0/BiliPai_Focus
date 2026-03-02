@@ -1,18 +1,22 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -37,8 +41,22 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -1143,20 +1161,98 @@ private fun VideoPageItem(
             }
         }
 
-        if (showLongPressSpeedFeedback && isCurrentPage) {
-            Text(
-                text = "${longPressSpeed}x",
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .background(
-                        Color.Black.copy(alpha = 0.75f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                    )
-                    .padding(horizontal = 18.dp, vertical = 10.dp)
+        // 长按倍速提示（透明背景 + 循环箭头动画，位于视频上方）
+        AnimatedVisibility(
+            visible = isLongPressing && isCurrentPage,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 48.dp),
+            enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { -it })
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "fast_forward_portrait")
+            val arrow1Alpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0.3f at 0
+                        1.0f at 300
+                        0.3f at 600
+                        0.3f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "arrow1"
             )
+            val arrow2Alpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0.3f at 0
+                        0.3f at 300
+                        1.0f at 600
+                        0.3f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "arrow2"
+            )
+            val arrow3Alpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0.3f at 0
+                        0.3f at 600
+                        1.0f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "arrow3"
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                val arrowAlphas = listOf(arrow1Alpha, arrow2Alpha, arrow3Alpha)
+                arrowAlphas.forEach { alpha ->
+                    Canvas(
+                        modifier = Modifier.size(14.dp)
+                    ) {
+                        val path = Path().apply {
+                            moveTo(0f, 0f)
+                            lineTo(size.width, size.height / 2f)
+                            lineTo(0f, size.height)
+                            close()
+                        }
+                        drawPath(
+                            path = path,
+                            color = Color.White.copy(alpha = alpha)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${longPressSpeed}x",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            offset = Offset(1f, 1f),
+                            blurRadius = 4f
+                        )
+                    )
+                )
+            }
         }
 
         // Overlay & Interaction

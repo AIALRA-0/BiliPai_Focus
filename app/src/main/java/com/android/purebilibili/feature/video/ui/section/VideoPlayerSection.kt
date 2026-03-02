@@ -40,6 +40,14 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.keyframes
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path
 import androidx.activity.compose.BackHandler
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -1987,33 +1995,97 @@ fun VideoPlayerSection(
             }
         }
         
-        //  长按倍速提示（简洁版，1秒后消失）
-        LaunchedEffect(longPressSpeedFeedbackVisible) {
-            if (longPressSpeedFeedbackVisible) {
-                kotlinx.coroutines.delay(1000)
-                longPressSpeedFeedbackVisible = false
-            }
-        }
-        
+        //  长按倍速提示（透明背景 + 快进箭头动画，整个长按期间持续显示）
         AnimatedVisibility(
-            visible = longPressSpeedFeedbackVisible && !isInPipMode,
-            modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn(initialScale = 0.5f) + fadeIn(),
-            exit = scaleOut(targetScale = 0.8f) + fadeOut()
+            visible = isLongPressing && !isInPipMode,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp),
+            enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { -it })
         ) {
-            Box(
-                modifier = Modifier
-                    .background(Color.Black.copy(0.75f), RoundedCornerShape(16.dp))
-                    .padding(
-                        horizontal = uiLayoutPolicy.longPressBadgeHorizontalPaddingDp.dp,
-                        vertical = uiLayoutPolicy.longPressBadgeVerticalPaddingDp.dp
-                    )
+            val infiniteTransition = rememberInfiniteTransition(label = "fast_forward")
+            // 三个箭头循环亮度动画，依次偏移相位
+            val arrow1Alpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0.3f at 0
+                        1.0f at 300
+                        0.3f at 600
+                        0.3f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "arrow1"
+            )
+            val arrow2Alpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0.3f at 0
+                        0.3f at 300
+                        1.0f at 600
+                        0.3f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "arrow2"
+            )
+            val arrow3Alpha by infiniteTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 900
+                        0.3f at 0
+                        0.3f at 600
+                        1.0f at 900
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "arrow3"
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
+                // 三个三角形快进箭头
+                val arrowAlphas = listOf(arrow1Alpha, arrow2Alpha, arrow3Alpha)
+                arrowAlphas.forEach { alpha ->
+                    Canvas(
+                        modifier = Modifier.size(14.dp)
+                    ) {
+                        val path = Path().apply {
+                            moveTo(0f, 0f)
+                            lineTo(size.width, size.height / 2f)
+                            lineTo(0f, size.height)
+                            close()
+                        }
+                        drawPath(
+                            path = path,
+                            color = Color.White.copy(alpha = alpha)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                // 倍速文字
                 Text(
                     text = "${longPressSpeed}x",
                     color = Color.White,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            offset = Offset(1f, 1f),
+                            blurRadius = 4f
+                        )
                     )
                 )
             }

@@ -84,6 +84,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     //  [新增] 会话级去重集合 (避免重复推荐)
     private val sessionSeenBvids = mutableSetOf<String>()
+    //  [新增] 刷新撤销快照
+    private var _undoSnapshot: List<VideoItem>? = null
 
     // [Feature] Blocked UPs
     private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
@@ -654,6 +656,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isRefreshing.value = true
             val refreshingCategory = _uiState.value.currentCategory
+            //  [新增] 刷新前保存推荐视频快照（用于撤销）
+            if (refreshingCategory == HomeCategory.RECOMMEND) {
+                val currentVideos = _uiState.value.categoryStates[HomeCategory.RECOMMEND]?.videos
+                    ?: _uiState.value.videos
+                if (currentVideos.isNotEmpty()) {
+                    _undoSnapshot = currentVideos.take(20) // 保存前 20 条足够恢复首屏
+                }
+            }
             val previousRecommendTopBvid = if (refreshingCategory == HomeCategory.RECOMMEND) {
                 (_uiState.value.categoryStates[HomeCategory.RECOMMEND]?.videos
                     ?: _uiState.value.videos).firstOrNull()?.bvid?.takeIf { it.isNotBlank() }
@@ -681,7 +691,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 refreshNewItemsCount = newItemsCount,
                 refreshNewItemsKey = if (newItemsCount != null) System.currentTimeMillis() else _uiState.value.refreshNewItemsKey,
                 recommendOldContentAnchorBvid = newAnchor,
-                recommendOldContentStartIndex = newBoundary
+                recommendOldContentStartIndex = newBoundary,
+                //  刷新成功且是推荐分类时标记可撤销
+                undoAvailable = refreshingCategory == HomeCategory.RECOMMEND && _undoSnapshot != null
             )
             _isRefreshing.value = false
         }
@@ -692,6 +704,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val current = _uiState.value
         if (key != current.refreshNewItemsKey || key <= current.refreshNewItemsHandledKey) return
         _uiState.value = current.copy(refreshNewItemsHandledKey = key)
+    }
+
+    //  [新增] 撤销刷新：恢复刷新前的推荐视频列表
+    fun undoRefresh() {
+        val snapshot = _undoSnapshot ?: return
+        updateCategoryState(HomeCategory.RECOMMEND) { oldState ->
+            oldState.copy(videos = snapshot)
+        }
+        _undoSnapshot = null
+        _uiState.value = _uiState.value.copy(
+            undoAvailable = false,
+            recommendOldContentAnchorBvid = null,
+            recommendOldContentStartIndex = null
+        )
+        Logger.d("HomeVM", "↩️ Undo refresh: restored ${snapshot.size} videos")
+    }
+
+    //  [新增] 取消撤销（超时或用户主动忽略）
+    fun dismissUndo() {
+        _undoSnapshot = null
+        if (_uiState.value.undoAvailable) {
+            _uiState.value = _uiState.value.copy(undoAvailable = false)
+        }
     }
 
     fun loadMore() {

@@ -1225,6 +1225,60 @@ fun HomeScreen(
                 }
             }
         }
+
+        //  [新增] 刷新撤销悬浮按钮（右下角，5秒后自动消失）
+        val undoVisible = state.undoAvailable && state.currentCategory == HomeCategory.RECOMMEND
+        LaunchedEffect(undoVisible) {
+            if (undoVisible) {
+                kotlinx.coroutines.delay(5000)
+                viewModel.dismissUndo()
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(95f),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            AnimatedVisibility(
+                visible = undoVisible,
+                enter = fadeIn(animationSpec = tween(200)) + slideInVertically(
+                    animationSpec = tween(250),
+                    initialOffsetY = { it }
+                ),
+                exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(
+                    animationSpec = tween(250),
+                    targetOffsetY = { it }
+                ),
+                modifier = Modifier.padding(end = 16.dp, bottom = homeListBottomPadding + 8.dp)
+            ) {
+            androidx.compose.material3.Button(
+                onClick = { viewModel.undoRefresh() },
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                elevation = androidx.compose.material3.ButtonDefaults.buttonElevation(
+                    defaultElevation = 6.dp,
+                    pressedElevation = 2.dp
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = "⟲",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "撤销刷新",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
+            }
+            }
+        }
+
         // [Feature] Video Preview Overlay with Animation
         androidx.compose.animation.AnimatedVisibility(
             visible = targetVideoItemState.value != null,

@@ -150,5 +150,7 @@ data class HomeUiState(
     val todayWatchError: String? = null,
     val todayWatchPluginEnabled: Boolean = false,
     val todayWatchCollapsed: Boolean = false,
-    val todayWatchCardConfig: TodayWatchCardUiConfig = TodayWatchCardUiConfig()
+    val todayWatchCardConfig: TodayWatchCardUiConfig = TodayWatchCardUiConfig(),
+    //  [新增] 刷新撤销状态
+    val undoAvailable: Boolean = false
 )
