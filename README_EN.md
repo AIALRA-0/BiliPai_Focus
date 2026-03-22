@@ -106,21 +106,11 @@ From the perspective of attention psychology and behavioral design, recommendati
 <p align="center">
   <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus home filtering" height="500">
   <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus search filtering" height="500">
-</p>
-
-<p align="center">
-  <sub>Shows the filtered home top surface and the disabled search hot list</sub>
-</p>
-
-#### History and detail cleanup
-
-<p align="center">
-  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus watch history clear-all" height="500">
   <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus related video filtering" height="500">
 </p>
 
 <p align="center">
-  <sub>Shows one-tap watch-history clearing and the hidden related-video area beneath video detail</sub>
+  <sub>Shows the filtered home top surface, the disabled search hot list, and the hidden related-video area beneath video detail</sub>
 </p>
 
 #### Follow-group management
@@ -133,6 +123,16 @@ From the perspective of attention psychology and behavioral design, recommendati
 
 <p align="center">
   <sub>Shows the Dynamic entry point, expanded group management, and single-group assignment for followed creators</sub>
+</p>
+
+#### Watch history clearing
+
+<p align="center">
+  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus watch history clear-all" height="500">
+</p>
+
+<p align="center">
+  <sub>Shows the one-tap watch-history clearing entry and its actual result state</sub>
 </p>
 
 ### Main diff files against upstream

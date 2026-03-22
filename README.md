@@ -123,21 +123,11 @@
 <p align="center">
   <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus 首页过滤" height="500">
   <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus 搜索过滤" height="500">
-</p>
-
-<p align="center">
-  <sub>首页顶部入口过滤，以及搜索热搜过滤后的实际效果</sub>
-</p>
-
-#### 历史与详情清理
-
-<p align="center">
-  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus 历史一键清空" height="500">
   <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus 相关推荐过滤" height="500">
 </p>
 
 <p align="center">
-  <sub>展示历史记录一键清空，以及视频详情页下方相关推荐过滤后的实际效果</sub>
+  <sub>首页顶部入口过滤、搜索热搜过滤，以及视频详情页下方相关推荐过滤后的实际效果</sub>
 </p>
 
 #### 关注分组管理
@@ -150,6 +140,16 @@
 
 <p align="center">
   <sub>动态页分组入口、分组管理展开，以及关注对象按单归属分组管理的实际界面，点击动态页面右上角小齿轮进入分组管理</sub>
+</p>
+
+#### 历史记录清除
+
+<p align="center">
+  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus 历史一键清空" height="500">
+</p>
+
+<p align="center">
+  <sub>展示历史记录一键清空后的实际界面与交互入口</sub>
 </p>
 
 ### 与官方的主要 diff 文件

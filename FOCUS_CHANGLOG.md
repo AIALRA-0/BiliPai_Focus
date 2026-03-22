@@ -62,6 +62,7 @@
 - `2026-03-22T14:20:48.0000000-04:00` 将用户提供的 Focus 功能截图复制进仓库 `docs/images/focus`，把中英文 README 的 Focus 区块同步改成真实截图展示；同时确认本机 Git Credential Manager 中已有 PAT，现已接入 `gh auth login --with-token --insecure-storage`，CLI 端登录状态恢复正常，可继续发布 GitHub Release。
 - `2026-03-22T14:50:02.6626191-04:00` 将 Focus 发布版本提升到 `7.1.0-focus.4 / 127`，重写 Focus 核心理念、维护节奏、测试设备范围与主要 diff 文件清单，把“应用预览”明确标注为官方原始预览，新增“历史记录一键清空”截图并切换 Star History 到 Focus 仓库；同时完成 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 验证，产出 `BliPai-Focus-debug-7.1.0-focus.4-debug.apk` 与 `BliPai-Focus-release-7.1.0-focus.4.apk`。
 - `2026-03-22T14:57:07.6261542-04:00` 调整 README / README_EN 的 Focus 文档结构，把“与官方的主要 diff 文件”整体移动到“关注分组管理”之后、“官方应用预览”之前，保持 Focus 展示顺序更符合阅读流。
+- `2026-03-22T15:00:55.8640008-04:00` 继续细化 Focus 截图区顺序：把“视频详情页下方相关推荐过滤”并回“首页、搜索与详情过滤”分组，并将“历史记录清除”单独移动到“关注分组管理”之后；中英文 README 已同步保持一致。
 
 ## v7.0.2 Focus (2026-03-22)
 
