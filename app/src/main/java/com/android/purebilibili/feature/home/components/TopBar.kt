@@ -177,6 +177,38 @@ internal fun resolveTopTabItemWidthDp(
     return baseWidth.coerceAtLeast(resolveTopTabMinItemWidthDp(isFloatingStyle))
 }
 
+internal fun resolveTopTabCenteredStartPaddingDp(
+    containerWidthDp: Float,
+    categoryCount: Int,
+    isFloatingStyle: Boolean
+): Float {
+    if (containerWidthDp <= 0f || categoryCount <= 0) return 0f
+    val visibleSlots = resolveTopTabVisibleSlots(categoryCount)
+    if (categoryCount >= visibleSlots) return 0f
+    val itemWidthDp = resolveTopTabItemWidthDp(
+        containerWidthDp = containerWidthDp,
+        categoryCount = categoryCount,
+        isFloatingStyle = isFloatingStyle
+    )
+    val occupiedWidthDp = itemWidthDp * categoryCount
+    return ((containerWidthDp - occupiedWidthDp) / 2f).coerceAtLeast(0f)
+}
+
+internal fun resolveMd3TopTabCenteredStartPaddingDp(
+    containerWidthDp: Float,
+    categoryCount: Int,
+    visibleSlots: Int = resolveMd3TopTabVisibleSlots()
+): Float {
+    if (containerWidthDp <= 0f || categoryCount <= 0) return 0f
+    if (categoryCount >= visibleSlots) return 0f
+    val slotWidthDp = resolveMd3TopTabItemWidthDp(
+        containerWidthDp = containerWidthDp,
+        visibleSlots = visibleSlots
+    )
+    val occupiedWidthDp = slotWidthDp * categoryCount
+    return ((containerWidthDp - occupiedWidthDp) / 2f).coerceAtLeast(0f)
+}
+
 internal fun normalizeTopTabLabelMode(mode: Int): Int {
     return when (mode) {
         0, 1, 2 -> mode
@@ -510,6 +542,11 @@ fun CategoryTabRow(
                 categoryCount = categories.size,
                 isFloatingStyle = isFloatingStyle
             ).dp
+            val centeredStartPadding = resolveTopTabCenteredStartPaddingDp(
+                containerWidthDp = tabViewportWidth.value,
+                categoryCount = categories.size,
+                isFloatingStyle = isFloatingStyle
+            ).dp
             val localDensity = LocalDensity.current
             val tabListState = rememberLazyListState()
             
@@ -683,7 +720,7 @@ fun CategoryTabRow(
                             itemCount = categories.size,
                             isDragging = isInteracting,
                             velocity = indicatorVelocityPxPerSecond,
-                            startPadding = floatingAdjustedInsetDp,
+                            startPadding = centeredStartPadding + floatingAdjustedInsetDp,
                             modifier = Modifier.fillMaxSize(),
                             isLiquidGlassEnabled = effectiveLiquidGlassEnabled,
                             clampToBounds = true,
@@ -724,6 +761,7 @@ fun CategoryTabRow(
                             itemWidthPx = actualTabWidthPx,
                             isDragging = isInteracting,
                             velocityPxPerSecond = indicatorVelocityPxPerSecond,
+                            startPadding = centeredStartPadding,
                             isLiquidGlassEnabled = effectiveLiquidGlassEnabled,
                             liquidGlassStyle = liquidGlassStyle,
                             liquidGlassTuning = resolvedLiquidGlassTuning,
@@ -768,7 +806,8 @@ fun CategoryTabRow(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Start,
                         contentPadding = PaddingValues(
-                            horizontal = if (isFloatingStyle) floatingAdjustedInsetDp else 0.dp
+                            start = centeredStartPadding + if (isFloatingStyle) floatingAdjustedInsetDp else 0.dp,
+                            end = centeredStartPadding + if (isFloatingStyle) floatingAdjustedInsetDp else 0.dp
                         )
                     ) {
                         itemsIndexed(categories) { index, category ->
@@ -915,10 +954,18 @@ private fun Md3CategoryTabRow(
         ) {
             val availableWidth = (maxWidth - viewportPadding * 2).coerceAtLeast(0.dp)
             val slotCount = visibleIndices.size.coerceAtLeast(1)
-            val slotWidth = availableWidth / slotCount
+            val slotWidth = resolveMd3TopTabItemWidthDp(
+                containerWidthDp = availableWidth.value
+            ).dp
+            val centeredStartPadding = resolveMd3TopTabCenteredStartPaddingDp(
+                containerWidthDp = availableWidth.value,
+                categoryCount = slotCount
+            ).dp
             val indicatorWidth = (slotWidth * 0.34f).coerceIn(24.dp, 32.dp)
             val animatedIndicatorOffset by animateDpAsState(
-                targetValue = slotWidth * currentVisiblePosition + ((slotWidth - indicatorWidth) / 2f),
+                targetValue = centeredStartPadding +
+                    slotWidth * currentVisiblePosition +
+                    ((slotWidth - indicatorWidth) / 2f),
                 label = "md3TopTabIndicatorOffset"
             )
 
@@ -945,7 +992,9 @@ private fun Md3CategoryTabRow(
                 ) {}
 
                 Row(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = centeredStartPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     visibleIndices.forEachIndexed { visibleIndex, originalIndex ->

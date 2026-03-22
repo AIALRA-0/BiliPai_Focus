@@ -3,8 +3,8 @@
 ## v7.1.0 Focus (2026-03-22)
 
 ### 版本信息
-- 基于上游 `BiliPai v7.1.0` 维护 Focus 发布线，当前推荐对外版本为 `7.1.0-focus.2`，`versionCode` 为 `125`。
-- 本次为“Focus 命名统一 + 上游 7.1.0 合流 + 关注分组/动态页细节持续收口 + Release 文档同步”的维护更新。
+- 基于上游 `BiliPai v7.1.0` 维护 Focus 发布线，当前推荐对外版本为 `7.1.0-focus.3`，`versionCode` 为 `126`。
+- 本次为“首页顶部分类居中对称收口 + Focus 文档与发布入口同步”的维护更新。
 
 ### 上游同步
 - 同步上游 `v7.1.0` 的番剧播放器 Overlay 动作收口，补齐 `BangumiPlayerOverlayPolicy`、`BangumiPlayerOverlayHost`、番剧播放器界面与配套单测。
@@ -37,6 +37,7 @@
 - 关注分组顶部简介精简为一句说明，并把首页顶部关注标签行的内边距再放松一点，让首个按钮与屏幕边缘之间保留更自然的缝隙。
 - 关注分组卡片的标题信息与操作控件改成分层布局，避免“动态与首页当前隐藏”这类状态文案和右侧编辑/删除/展开控件互相挤压。
 - 动态页关注列表启动链路改成“本地缓存即时回填 + 启动即并行预热关注列表”，不再强制等主动态和直播状态完成后再延迟 `1200ms` 触发关注列表补水。
+- 首页顶部分类在 Focus 过滤后改成按剩余数量严格居中对称排布；无论是 iOS 风格还是 MD3 风格，像只保留“关注”这一栏时也会自动回到屏幕中轴，不再偏向左侧。
 
 ### 维护记录
 - `2026-03-22T09:04:20.7751067-04:00` 统一 `AIALRA -> Focus` 命名，重写 `FOCUS_CHANGLOG.md` 风格，升级到上游 `v7.1.0`，并补齐 Windows 构建环境自动探测。
@@ -56,6 +57,7 @@
 - `2026-03-22T13:27:25.4201280-04:00` 优化关注分组卡片的标题/操作布局，拆开状态文案与编辑、删除、展开控件，避免窄屏下互相挤压；同时调查并确认动态页关注加载偏慢的根因是启动策略把关注列表补水延后到主动态完成后再额外延迟 `1200ms`，现已改成优先从本地缓存回填并在页面启动时并行预热关注列表，随后确认 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug` 通过。
 - `2026-03-22T13:27:25.4201280-04:00` 同步将 Focus 发布版本提升到 `7.1.0-focus.2 / 125`，补齐 `CHANGELOG.md` 顶部 Focus 发布入口、README / README_EN 的当前版本与 release notes 入口，并新增可直接用于 GitHub Release 的中英文说明文件。
 - `2026-03-22T13:48:53.3817710-04:00` 重新使用更高 Gradle JVM 内存完成 `7.1.0-focus.2` 的发布验证，确认 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 通过，并已将 `BliPai-Focus-debug-7.1.0-focus.2-debug.apk` 覆盖安装到真机。
+- `2026-03-22T14:12:14.0000000-04:00` 将 Focus 发布版本提升到 `7.1.0-focus.3 / 126`，把首页顶部分类在 Focus 过滤后的剩余项改为严格居中对称排布，补齐 README / CHANGELOG / Release Notes 的 `focus.3` 发布入口，并为 iOS 风格与 MD3 风格新增对称居中策略测试；随后完成 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 验证，并已将 `BliPai-Focus-debug-7.1.0-focus.3-debug.apk` 覆盖安装到真机。
 
 ## v7.0.2 Focus (2026-03-22)
 

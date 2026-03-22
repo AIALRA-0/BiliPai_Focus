@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-22 · Upstream base v7.1.0 · Current Focus release v7.1.0-focus.2</sub>
+  <sub>Last updated: 2026-03-22 · Upstream base v7.1.0 · Current Focus release v7.1.0-focus.3</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.2-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.3-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.0-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
@@ -32,7 +32,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.3-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -45,18 +45,18 @@ This fork keeps upstream features and mergeability intact, while shipping a more
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.3-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.0-focus.2` |
+| Focus version | `7.1.0-focus.3` |
 | Upstream base | `7.1.0` |
-| Release tag | `v7.1.0-focus.2` |
-| Release notes | [docs/releases/focus-7.1.0-focus.2-en.md](docs/releases/focus-7.1.0-focus.2-en.md) |
-| Main refinements | cleaner group-management card layout, faster Dynamic follow hydration, synced Focus entry/docs |
-| APK names | `BliPai-Focus-debug-7.1.0-focus.2-debug.apk` · `BliPai-Focus-release-7.1.0-focus.2.apk` |
+| Release tag | `v7.1.0-focus.3` |
+| Release notes | [docs/releases/focus-7.1.0-focus.3-en.md](docs/releases/focus-7.1.0-focus.3-en.md) |
+| Main refinements | strictly centered filtered home top tabs, follow-management and Dynamic hydration refinements, synced Focus docs |
+| APK names | `BliPai-Focus-debug-7.1.0-focus.3-debug.apk` · `BliPai-Focus-release-7.1.0-focus.3.apk` |
 
 ### Default customizations
 
@@ -73,6 +73,7 @@ This fork keeps upstream features and mergeability intact, while shipping a more
 ### Focus notes
 
 - Focus changes only the default UI surface and priority of entry points; upstream feature chains stay intact.
+- Home top categories now snap back to a strictly centered and symmetric layout after Focus filtering, including the single-tab case.
 - Dynamic and Home Follow now share the same local follow-group filtering rules.
 - Follow assignments are shown per group and expanded on demand, so large follow lists no longer render as one long flat block.
 - Dynamic follow users now restore from local cache first and hydrate in parallel during startup, instead of waiting for the primary feed to finish first.

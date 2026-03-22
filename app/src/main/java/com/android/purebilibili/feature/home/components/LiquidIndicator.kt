@@ -243,6 +243,7 @@ fun SimpleLiquidIndicator(
     itemWidthPx: Float, // [修复] 使用像素值计算
     isDragging: Boolean,
     velocityPxPerSecond: Float = 0f,
+    startPadding: Dp = 0.dp,
     isLiquidGlassEnabled: Boolean = false,
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     liquidGlassTuning: LiquidGlassTuning? = null,
@@ -273,6 +274,7 @@ fun SimpleLiquidIndicator(
     }
     val minWidthPx = with(density) { minWidth.toPx() }
     val horizontalInsetPx = with(density) { horizontalInset.toPx() }
+    val startPaddingPx = with(density) { startPadding.toPx() }
     val indicatorWidthPx = resolveTopTabIndicatorWidthPx(
         itemWidthPx = itemWidthPx,
         widthRatio = widthRatio,
@@ -309,7 +311,7 @@ fun SimpleLiquidIndicator(
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    translationX = position * itemWidthPx + centerOffsetPx
+                    translationX = startPaddingPx + position * itemWidthPx + centerOffsetPx
                     translationY = verticalCenterOffsetPx
                     
                     this.scaleX = scale

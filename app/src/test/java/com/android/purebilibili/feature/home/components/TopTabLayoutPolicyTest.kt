@@ -31,6 +31,14 @@ class TopTabLayoutPolicyTest {
     }
 
     @Test
+    fun `filtered top tabs should reserve symmetric centered padding`() {
+        assertEquals(150f, resolveTopTabCenteredStartPaddingDp(400f, 1, isFloatingStyle = false), 0.001f)
+        assertEquals(100f, resolveTopTabCenteredStartPaddingDp(400f, 2, isFloatingStyle = false), 0.001f)
+        assertEquals(50f, resolveTopTabCenteredStartPaddingDp(400f, 3, isFloatingStyle = false), 0.001f)
+        assertEquals(0f, resolveTopTabCenteredStartPaddingDp(400f, 4, isFloatingStyle = false), 0.001f)
+    }
+
+    @Test
     fun `live route decision should follow category label not fixed index`() {
         assertTrue(shouldRouteTopTabToLivePage("直播"))
         assertFalse(shouldRouteTopTabToLivePage("推荐"))
@@ -62,5 +70,13 @@ class TopTabLayoutPolicyTest {
                 selectedIndex = 4
             )
         )
+    }
+
+    @Test
+    fun `md3 filtered top tabs should stay visually centered`() {
+        assertEquals(120f, resolveMd3TopTabCenteredStartPaddingDp(containerWidthDp = 320f, categoryCount = 1), 0.001f)
+        assertEquals(80f, resolveMd3TopTabCenteredStartPaddingDp(containerWidthDp = 320f, categoryCount = 2), 0.001f)
+        assertEquals(40f, resolveMd3TopTabCenteredStartPaddingDp(containerWidthDp = 320f, categoryCount = 3), 0.001f)
+        assertEquals(0f, resolveMd3TopTabCenteredStartPaddingDp(containerWidthDp = 320f, categoryCount = 4), 0.001f)
     }
 }
