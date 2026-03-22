@@ -58,6 +58,37 @@ class HomeFollowFocusPolicyTest {
         assertEquals(listOf(2001L, 2002L), result.map { it.owner.mid })
     }
 
+    @Test
+    fun shouldPrefetchMoreFocusFollowVideos_requestsExtraPagesWhenVisibleVideosAreTooFew() {
+        assertEquals(
+            true,
+            shouldPrefetchMoreFocusFollowVideos(
+                visibleVideoCount = 2,
+                hasMore = true,
+                filterEnabled = true,
+                extraPagesFetched = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreFocusFollowVideos(
+                visibleVideoCount = 6,
+                hasMore = true,
+                filterEnabled = true,
+                extraPagesFetched = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreFocusFollowVideos(
+                visibleVideoCount = 2,
+                hasMore = true,
+                filterEnabled = false,
+                extraPagesFetched = 0
+            )
+        )
+    }
+
     private fun videoItem(mid: Long): VideoItem {
         return VideoItem(
             bvid = "BV$mid",

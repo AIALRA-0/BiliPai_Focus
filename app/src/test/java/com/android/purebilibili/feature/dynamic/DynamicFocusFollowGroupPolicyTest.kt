@@ -73,15 +73,46 @@ class DynamicFocusFollowGroupPolicyTest {
             "没有可用关注对象",
             resolveDynamicFollowUserEmptyMessage(
                 visibleUserCount = 0,
-                isLoading = false,
+                hasResolvedUsers = true,
                 error = null
             )
         )
         assertNull(
             resolveDynamicFollowUserEmptyMessage(
                 visibleUserCount = 0,
-                isLoading = true,
+                hasResolvedUsers = false,
                 error = null
+            )
+        )
+    }
+
+    @Test
+    fun shouldPrefetchMoreFocusDynamicItems_requestsExtraPagesWhenFilteredItemsAreTooFew() {
+        assertEquals(
+            true,
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = 1,
+                hasMore = true,
+                filterEnabled = true,
+                extraPagesFetched = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = 4,
+                hasMore = true,
+                filterEnabled = true,
+                extraPagesFetched = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = 1,
+                hasMore = true,
+                filterEnabled = true,
+                extraPagesFetched = 3
             )
         )
     }

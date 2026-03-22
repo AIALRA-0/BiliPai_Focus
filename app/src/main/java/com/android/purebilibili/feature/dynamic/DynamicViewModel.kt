@@ -131,6 +131,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _isFocusFollowingUsersLoading = MutableStateFlow(false)
     val isFocusFollowingUsersLoading: StateFlow<Boolean> = _isFocusFollowingUsersLoading.asStateFlow()
 
+    private val _hasResolvedFollowedUsers = MutableStateFlow(false)
+    val hasResolvedFollowedUsers: StateFlow<Boolean> = _hasResolvedFollowedUsers.asStateFlow()
+
     private val _isFocusFollowGroupFilteringEnabled = MutableStateFlow(true)
     val isFocusFollowGroupFilteringEnabled: StateFlow<Boolean> =
         _isFocusFollowGroupFilteringEnabled.asStateFlow()
@@ -196,6 +199,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         runCatching { json.decodeFromString<List<DynamicItem>>(cachedJson) }
             .onSuccess { items ->
                 if (items.isNotEmpty()) {
+                    _hasResolvedFollowedUsers.value = true
                     _uiState.value = _uiState.value.copy(
                         items = items,
                         isLoading = false,
@@ -251,6 +255,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 liveJob.await()
             }
         } finally {
+            _hasResolvedFollowedUsers.value = true
             if (showRefreshIndicator) {
                 _isRefreshing.value = false
             }
@@ -265,9 +270,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFollowedUsersInternal() {
-        LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
-            cachedLiveRooms = liveRooms
-            rebuildFollowedUsers()
+        try {
+            LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
+                cachedLiveRooms = liveRooms
+                rebuildFollowedUsers()
+            }
+        } finally {
+            _hasResolvedFollowedUsers.value = true
         }
     }
     
@@ -322,6 +331,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             e.printStackTrace()
         } finally {
             isFollowingsLoading = false
+            _hasResolvedFollowedUsers.value = true
         }
     }
 
@@ -394,6 +404,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             config = focusGroups,
             filterEnabled = focusFollowGroupFilteringEnabled
         )
+        if (visibleUsers.isNotEmpty()) {
+            _hasResolvedFollowedUsers.value = true
+        }
         _followedUsers.value = applyUserPreferences(visibleUsers)
     }
     
@@ -441,6 +454,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         if (snapshot.users.isEmpty()) return
         cachedFollowings = snapshot.users
         _focusFollowingUsers.value = snapshot.users
+        _hasResolvedFollowedUsers.value = true
         hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
         lastFollowingsLoadMs = snapshot.cachedAtMs
     }
@@ -763,8 +777,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         incrementalRefreshEnabled = incrementalTimelineRefreshEnabled,
                         hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
                     )
-                    _uiState.value = successState
-                    saveDynamicCache(successState.items)
+                    val hydratedState = hydrateFocusedTimelineIfNeeded(successState)
+                    _uiState.value = hydratedState
+                    saveDynamicCache(hydratedState.items)
                     rebuildFollowedUsers()
                 },
                 onFailure = { error ->
@@ -778,6 +793,51 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         } finally {
             isTimelineLoadingLocked = false
         }
+    }
+
+    private suspend fun hydrateFocusedTimelineIfNeeded(
+        currentState: DynamicUiState
+    ): DynamicUiState {
+        if (!focusFollowGroupFilteringEnabled) return currentState
+        if (_selectedUserId.value != null) return currentState
+
+        var hydratedState = currentState
+        var extraPagesFetched = 0
+        while (shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = filterDynamicItemsByFocusFollowGroups(
+                    items = hydratedState.items,
+                    config = focusGroups,
+                    filterEnabled = true
+                ).size,
+                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
+                filterEnabled = true,
+                extraPagesFetched = extraPagesFetched
+            )
+        ) {
+            val extraItems = DynamicRepository.getDynamicFeed(
+                refresh = false,
+                scope = DynamicFeedScope.DYNAMIC_SCREEN
+            ).getOrElse {
+                return hydratedState.copy(
+                    hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+                )
+            }
+            if (extraItems.isEmpty()) break
+
+            hydratedState = hydratedState.copy(
+                items = appendDistinctByKey(
+                    existing = hydratedState.items,
+                    incoming = extraItems,
+                    keySelector = ::dynamicFeedItemKey
+                ),
+                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+            )
+            extraPagesFetched += 1
+        }
+
+        return hydratedState.copy(
+            hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+        )
     }
     
     fun refresh() {

@@ -82,7 +82,9 @@ fun FocusFollowGroupSheet(
     onSetGroupVisible: (String, Boolean) -> Unit,
     onAssignUserToGroup: (Long, String) -> Unit
 ) {
-    val inputHeight = 56.dp
+    val inputHeight = 60.dp
+    val inputShape = RoundedCornerShape(26.dp)
+    val actionButtonContentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp)
     var newGroupName by rememberSaveable { mutableStateOf("") }
     var followSearchQuery by rememberSaveable { mutableStateOf("") }
     var renameTargetGroup by remember { mutableStateOf<FocusFollowGroup?>(null) }
@@ -165,7 +167,12 @@ fun FocusFollowGroupSheet(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            FilledTonalButton(onClick = onRefreshFollowings) {
+                            FilledTonalButton(
+                                onClick = onRefreshFollowings,
+                                modifier = Modifier.height(inputHeight),
+                                shape = inputShape,
+                                contentPadding = actionButtonContentPadding
+                            ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Refresh,
                                     contentDescription = null,
@@ -188,14 +195,15 @@ fun FocusFollowGroupSheet(
                                     .weight(1f)
                                     .height(inputHeight),
                                 singleLine = true,
-                                shape = RoundedCornerShape(26.dp),
+                                shape = inputShape,
                                 label = { Text("新分组名称") },
                                 placeholder = { Text("例如：高优先、朋友、暂时隐藏") }
                             )
-                            Button(
+                            FilledTonalButton(
                                 modifier = Modifier.height(inputHeight),
                                 enabled = canCreateFocusFollowGroup(newGroupName, config.groups),
-                                shape = RoundedCornerShape(20.dp),
+                                shape = inputShape,
+                                contentPadding = actionButtonContentPadding,
                                 onClick = {
                                     onCreateGroup(newGroupName)
                                     newGroupName = ""
@@ -218,7 +226,7 @@ fun FocusFollowGroupSheet(
                                 .fillMaxWidth()
                                 .height(inputHeight),
                             singleLine = true,
-                            shape = RoundedCornerShape(26.dp),
+                            shape = inputShape,
                             label = { Text("搜索关注对象") },
                             placeholder = { Text("搜索 UP 名称或 UID") },
                             leadingIcon = {

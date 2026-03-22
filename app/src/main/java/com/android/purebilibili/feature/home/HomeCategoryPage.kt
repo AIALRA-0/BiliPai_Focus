@@ -47,6 +47,20 @@ import androidx.compose.ui.Alignment
 import coil.compose.AsyncImage
 import kotlinx.coroutines.yield
 
+internal fun shouldLoadMoreHomeCategoryContent(
+    totalItems: Int,
+    lastVisibleItemIndex: Int,
+    contentItemCount: Int,
+    isLoading: Boolean,
+    hasMore: Boolean,
+    preloadThreshold: Int = 4
+): Boolean {
+    if (contentItemCount <= 0) return false
+    if (isLoading || !hasMore) return false
+    if (totalItems <= 0) return false
+    return lastVisibleItemIndex >= totalItems - preloadThreshold.coerceAtLeast(1)
+}
+
 @Composable
 internal fun HomeCategoryPageContent(
     category: HomeCategory,
@@ -111,7 +125,17 @@ internal fun HomeCategoryPageContent(
             val layoutInfo = gridState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItemIndex >= totalItems - 4 && !categoryState.isLoading && categoryState.hasMore
+            shouldLoadMoreHomeCategoryContent(
+                totalItems = totalItems,
+                lastVisibleItemIndex = lastVisibleItemIndex,
+                contentItemCount = if (category == HomeCategory.LIVE) {
+                    categoryState.followedLiveRooms.size + categoryState.liveRooms.size
+                } else {
+                    categoryState.videos.size
+                },
+                isLoading = categoryState.isLoading,
+                hasMore = categoryState.hasMore
+            )
         }
     }
     LaunchedEffect(shouldLoadMore) {

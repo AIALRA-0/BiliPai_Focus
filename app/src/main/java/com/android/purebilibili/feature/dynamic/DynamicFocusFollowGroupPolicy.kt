@@ -4,6 +4,9 @@ import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.data.model.response.DynamicItem
 
+private const val MIN_VISIBLE_DYNAMIC_ITEMS_AFTER_FOCUS_FILTER = 4
+private const val MAX_FOCUS_DYNAMIC_PREFETCH_PAGES = 3
+
 internal fun filterDynamicItemsByFocusFollowGroups(
     items: List<DynamicItem>,
     config: FocusFollowGroupConfig,
@@ -39,9 +42,23 @@ internal fun resolveSelectedUserIdAfterFocusFollowGroupFilter(
 
 internal fun resolveDynamicFollowUserEmptyMessage(
     visibleUserCount: Int,
-    isLoading: Boolean,
+    hasResolvedUsers: Boolean,
     error: String?
 ): String? {
-    if (visibleUserCount > 0 || isLoading || !error.isNullOrBlank()) return null
+    if (visibleUserCount > 0 || !hasResolvedUsers || !error.isNullOrBlank()) return null
     return "没有可用关注对象"
+}
+
+internal fun shouldPrefetchMoreFocusDynamicItems(
+    visibleItemCount: Int,
+    hasMore: Boolean,
+    filterEnabled: Boolean,
+    extraPagesFetched: Int,
+    minVisibleCount: Int = MIN_VISIBLE_DYNAMIC_ITEMS_AFTER_FOCUS_FILTER,
+    maxExtraPages: Int = MAX_FOCUS_DYNAMIC_PREFETCH_PAGES
+): Boolean {
+    if (!filterEnabled) return false
+    if (!hasMore) return false
+    if (visibleItemCount >= minVisibleCount.coerceAtLeast(1)) return false
+    return extraPagesFetched < maxExtraPages.coerceAtLeast(0)
 }

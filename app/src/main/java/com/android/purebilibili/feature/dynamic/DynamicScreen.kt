@@ -122,6 +122,7 @@ fun DynamicScreen(
     val focusFollowGroupConfig by viewModel.focusFollowGroupConfig.collectAsState()
     val focusFollowingUsers by viewModel.focusFollowingUsers.collectAsState()
     val isFocusFollowingUsersLoading by viewModel.isFocusFollowingUsersLoading.collectAsState()
+    val hasResolvedFollowedUsers by viewModel.hasResolvedFollowedUsers.collectAsState()
     val isFocusFollowGroupFilteringEnabled by viewModel.isFocusFollowGroupFilteringEnabled.collectAsState()
     var showFocusFollowGroupSheet by remember { mutableStateOf(false) }
     
@@ -223,10 +224,10 @@ fun DynamicScreen(
             selectedUserId = selectedUserId
         )
     }
-    val emptyFollowUserMessage = remember(followedUsers, activeLoading, activeError, isFocusFollowingUsersLoading) {
+    val emptyFollowUserMessage = remember(followedUsers, hasResolvedFollowedUsers, activeError) {
         resolveDynamicFollowUserEmptyMessage(
             visibleUserCount = followedUsers.size,
-            isLoading = activeLoading || isFocusFollowingUsersLoading,
+            hasResolvedUsers = hasResolvedFollowedUsers,
             error = activeError
         )
     }
@@ -256,9 +257,13 @@ fun DynamicScreen(
     val shouldLoadMore by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
-            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItemIndex >= totalItems - 3 && !activeLoading && currentHasMore
+            shouldLoadMoreDynamicFeed(
+                totalItems = layoutInfo.totalItemsCount,
+                lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                visibleItemCount = filteredItems.size,
+                isLoading = activeLoading,
+                hasMore = currentHasMore
+            )
         }
     }
     //  [埋点] 页面浏览追踪
@@ -420,6 +425,7 @@ fun DynamicScreen(
                                     } else {
                                         null
                                     },
+                                    keepEmptyStateVisibleWhileLoading = !emptyFollowUserMessage.isNullOrBlank(),
                                     listState = listState,
                                     statusBarHeight = statusBarHeight,
                                     topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
@@ -497,6 +503,7 @@ fun DynamicScreen(
                                  } else {
                                      null
                                  },
+                                 keepEmptyStateVisibleWhileLoading = !emptyFollowUserMessage.isNullOrBlank(),
                                  listState = listState,
                                  statusBarHeight = statusBarHeight,
                                  topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
@@ -650,6 +657,7 @@ private fun DynamicList(
     filteredItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
     emptyMessage: String,
     emptyActionText: String?,
+    keepEmptyStateVisibleWhileLoading: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     statusBarHeight: androidx.compose.ui.unit.Dp,
     topPaddingExtra: androidx.compose.ui.unit.Dp,
@@ -677,7 +685,11 @@ private fun DynamicList(
         modifier = modifier.fillMaxSize().responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth())
     ) {
         // 空状态
-        if (filteredItems.isEmpty() && !activeLoading && activeError == null) {
+        if (
+            filteredItems.isEmpty() &&
+            activeError == null &&
+            (!activeLoading || keepEmptyStateVisibleWhileLoading)
+        ) {
             item {
                 EmptyState(
                     message = emptyMessage,

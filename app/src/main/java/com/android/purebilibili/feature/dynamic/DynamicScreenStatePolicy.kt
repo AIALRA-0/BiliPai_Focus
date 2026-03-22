@@ -41,6 +41,20 @@ internal fun shouldShowDynamicNoMoreFooter(
     return !hasMore && activeItemsCount > 0
 }
 
+internal fun shouldLoadMoreDynamicFeed(
+    totalItems: Int,
+    lastVisibleItemIndex: Int,
+    visibleItemCount: Int,
+    isLoading: Boolean,
+    hasMore: Boolean,
+    preloadThreshold: Int = 3
+): Boolean {
+    if (visibleItemCount <= 0) return false
+    if (isLoading || !hasMore) return false
+    if (totalItems <= 0) return false
+    return lastVisibleItemIndex >= totalItems - preloadThreshold.coerceAtLeast(1)
+}
+
 internal fun shouldShowDynamicCommentSheet(selectedDynamicId: String?): Boolean {
     return !selectedDynamicId.isNullOrBlank()
 }
