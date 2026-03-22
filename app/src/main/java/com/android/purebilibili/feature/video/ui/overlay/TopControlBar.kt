@@ -137,6 +137,7 @@ fun TopControlBar(
     // Interactions
     isLiked: Boolean = false,
     isCoined: Boolean = false,
+    allowDislikeAction: Boolean = true,
     onLikeClick: () -> Unit = {},
     onDislikeClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
@@ -155,8 +156,10 @@ fun TopControlBar(
             widthDp = configuration.screenWidthDp
         )
     }
-    val showDislikeAction = remember(configuration.screenWidthDp) {
-        showInteractiveActions && shouldShowDislikeInTopControlBar(widthDp = configuration.screenWidthDp)
+    val showDislikeAction = remember(configuration.screenWidthDp, allowDislikeAction, showInteractiveActions) {
+        allowDislikeAction &&
+            showInteractiveActions &&
+            shouldShowDislikeInTopControlBar(widthDp = configuration.screenWidthDp)
     }
     val showInteractiveActionGroup = remember(showInteractiveActions) {
         shouldShowInteractiveActionsInTopControlBar(

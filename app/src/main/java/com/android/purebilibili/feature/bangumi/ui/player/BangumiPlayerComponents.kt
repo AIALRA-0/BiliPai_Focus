@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,16 +38,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
-import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenu
-import com.android.purebilibili.feature.video.ui.components.SpeedButton
-import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
-import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
+import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import com.android.purebilibili.data.model.response.SponsorSegment
 import com.android.purebilibili.feature.bangumi.resolveBangumiDanmakuTopInsetDp
 import com.android.purebilibili.feature.bangumi.resolveBangumiPlayerTopControlsPaddingTopDp
+import kotlinx.coroutines.launch
 
 /**
  * 手势模式枚举
@@ -64,6 +65,19 @@ fun BangumiPlayerView(
     danmakuManager: DanmakuManager,
     danmakuEnabled: Boolean,
     onDanmakuToggle: () -> Unit = {},
+    seasonId: Long = 0L,
+    epId: Long = 0L,
+    title: String = "",
+    subtitle: String = "",
+    bvid: String = "",
+    aid: Long = 0L,
+    cid: Long = 0L,
+    coverUrl: String = "",
+    currentVideoUrl: String = "",
+    currentAudioUrl: String = "",
+    pages: List<Page> = emptyList(),
+    currentPageIndex: Int = 0,
+    onPageSelect: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
     isFullscreen: Boolean = false,
     currentQuality: Int = 0,
@@ -89,7 +103,13 @@ fun BangumiPlayerView(
     onDanmakuFontScaleChange: (Float) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
     onDanmakuDisplayAreaChange: (Float) -> Unit = {},
-    onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {}
+    onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {},
+    isLiked: Boolean = false,
+    coinCount: Int = 0,
+    onToggleLike: () -> Unit = {},
+    onCoin: () -> Unit = {},
+    onReloadVideo: () -> Unit = {},
+    onShowMessage: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val statusBarsInsetTopDp = WindowInsets.statusBars
@@ -111,10 +131,10 @@ fun BangumiPlayerView(
     
     // 控制层状态
     var showControls by remember { mutableStateOf(true) }
-    var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var showQualityMenu by remember { mutableStateOf(false) }
-    var showSpeedMenu by remember { mutableStateOf(false) }  //  倍速菜单
-    var showDanmakuSettings by remember { mutableStateOf(false) }  //  弹幕设置面板
+    var isScreenLocked by rememberSaveable { mutableStateOf(false) }
+    var currentAspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    val scope = rememberCoroutineScope()
     
     // 手势状态
     var gestureMode by remember { mutableStateOf(BangumiGestureMode.None) }
@@ -150,16 +170,6 @@ fun BangumiPlayerView(
         }
     }
     
-    // 自动隐藏控制
-    LaunchedEffect(showControls, lastInteractionTime) {
-        if (showControls && gestureMode == BangumiGestureMode.None) {
-            kotlinx.coroutines.delay(4000)
-            if (System.currentTimeMillis() - lastInteractionTime >= 4000) {
-                showControls = false
-            }
-        }
-    }
-    
     Box(
         modifier = modifier
             .background(Color.Black)
@@ -167,22 +177,21 @@ fun BangumiPlayerView(
                 detectTapGestures(
                     onTap = {
                         showControls = !showControls
-                        if (showControls) lastInteractionTime = System.currentTimeMillis()
                     },
                     onDoubleTap = {
+                        if (isScreenLocked) return@detectTapGestures
                         if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                     }
                 )
             }
             .then(
-                Modifier.pointerInput(isFullscreen) {
+                Modifier.pointerInput(isFullscreen, isScreenLocked) {
                     val screenWidth = size.width.toFloat()
                     val screenHeight = size.height.toFloat()
                     
                     detectDragGestures(
-                        onDragStart = { offset ->
+                        onDragStart = {
                             showControls = true
-                            lastInteractionTime = System.currentTimeMillis()
                             dragDelta = 0f
                             seekPreviewPosition = currentPosition
                             gestureMode = BangumiGestureMode.None
@@ -196,6 +205,7 @@ fun BangumiPlayerView(
                         onDragCancel = { gestureMode = BangumiGestureMode.None },
                         onDrag = { change, dragAmount ->
                             change.consume()
+                            if (isScreenLocked) return@detectDragGestures
                             
                             if (gestureMode == BangumiGestureMode.None) {
                                 gestureMode = if (isFullscreen && kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y)) {
@@ -250,9 +260,11 @@ fun BangumiPlayerView(
             factory = { ctx ->
                 android.util.Log.w("BangumiPlayer", "🎬 PlayerView FACTORY: creating new view, player=${exoPlayer.hashCode()}, isFullscreen=$isFullscreen")
                 PlayerView(ctx).apply {
+                    playerViewRef = this
                     player = exoPlayer  // [关键] 在 factory 中也设置 player
                     useController = false
                     keepScreenOn = true
+                    resizeMode = currentAspectRatio.playerResizeMode
                     setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)  // 禁用系统缓冲指示器
                     setBackgroundColor(android.graphics.Color.BLACK)
                     
@@ -264,7 +276,9 @@ fun BangumiPlayerView(
                 //  [关键] 无条件设置 player，确保 MediaSource 变化后 PlayerView 能正确刷新
                 val videoSize = exoPlayer.videoSize
                 android.util.Log.w("BangumiPlayer", "🔗 PlayerView UPDATE: player=${exoPlayer.hashCode()}, mediaItems=${exoPlayer.mediaItemCount}, videoSize=${videoSize.width}x${videoSize.height}, isFullscreen=$isFullscreen, viewSize=${view.width}x${view.height}")
+                playerViewRef = view
                 view.player = exoPlayer
+                view.resizeMode = currentAspectRatio.playerResizeMode
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -314,234 +328,70 @@ fun BangumiPlayerView(
             )
         }
         
-        // 控制层
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showControls && gestureMode == BangumiGestureMode.None,
-            enter = androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.fadeOut(),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // 返回按钮
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 8.dp, end = 8.dp, top = topControlsPaddingTop, bottom = 8.dp)
-                ) {
-                    Icon(CupertinoIcons.Default.ChevronBackward, "返回", tint = Color.White)
+        BangumiPlayerOverlayHost(
+            player = exoPlayer,
+            seasonId = seasonId,
+            epId = epId,
+            title = title,
+            subtitle = subtitle,
+            bvid = bvid,
+            aid = aid,
+            cid = cid,
+            coverUrl = coverUrl,
+            currentVideoUrl = currentVideoUrl,
+            currentAudioUrl = currentAudioUrl,
+            isVisible = showControls && gestureMode == BangumiGestureMode.None,
+            onToggleVisible = { showControls = !showControls },
+            isFullscreen = isFullscreen,
+            isScreenLocked = isScreenLocked,
+            onLockToggle = { isScreenLocked = !isScreenLocked },
+            currentQuality = currentQuality,
+            acceptQuality = acceptQuality,
+            acceptDescription = acceptDescription,
+            onQualityChange = onQualityChange,
+            onBack = onBack,
+            onToggleFullscreen = onToggleFullscreen,
+            danmakuEnabled = danmakuEnabled,
+            onDanmakuToggle = onDanmakuToggle,
+            danmakuOpacity = danmakuOpacity,
+            danmakuFontScale = danmakuFontScale,
+            danmakuSpeed = danmakuSpeed,
+            danmakuDisplayArea = danmakuDisplayArea,
+            danmakuMergeDuplicates = danmakuMergeDuplicates,
+            onDanmakuOpacityChange = onDanmakuOpacityChange,
+            onDanmakuFontScaleChange = onDanmakuFontScaleChange,
+            onDanmakuSpeedChange = onDanmakuSpeedChange,
+            onDanmakuDisplayAreaChange = onDanmakuDisplayAreaChange,
+            onDanmakuMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
+            currentAspectRatio = currentAspectRatio,
+            onAspectRatioChange = { currentAspectRatio = it },
+            pages = pages,
+            currentPageIndex = currentPageIndex,
+            onPageSelect = onPageSelect,
+            isLiked = isLiked,
+            coinCount = coinCount,
+            onToggleLike = onToggleLike,
+            onCoin = onCoin,
+            onCaptureScreenshot = {
+                val playerView = playerViewRef
+                if (playerView == null) {
+                    onShowMessage("截图失败，请稍后重试")
+                    return@BangumiPlayerOverlayHost
                 }
-                
-                // 顶部右侧按钮组
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(start = 8.dp, end = 8.dp, top = topControlsPaddingTop, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // 弹幕开关按钮
-                    Surface(
-                        onClick = onDanmakuToggle,
-                        color = Color.Black.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Default.TextBubble,
-                                contentDescription = "弹幕",
-                                tint = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(0.7f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (danmakuEnabled) "弹幕" else "弹幕关",
-                                color = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(0.7f),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                    
-                    //  弹幕设置按钮（仅横屏显示）
-                    if (isFullscreen && danmakuEnabled) {
-                        Surface(
-                            onClick = { showDanmakuSettings = true },
-                            color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Icon(
-                                CupertinoIcons.Default.Gear,
-                                contentDescription = "弹幕设置",
-                                tint = Color.White.copy(0.9f),
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(16.dp)
-                            )
-                        }
-                    }
-                    
-                    //  倍速按钮
-                    SpeedButton(
-                        currentSpeed = currentSpeed,
-                        onClick = { showSpeedMenu = true }
+                scope.launch {
+                    val success = captureAndSaveVideoScreenshot(
+                        context = context,
+                        playerView = playerView,
+                        videoWidth = exoPlayer.videoSize.width,
+                        videoHeight = exoPlayer.videoSize.height,
+                        videoTitle = subtitle.ifBlank { title.ifBlank { "bangumi" } }
                     )
-                    
-                    // 画质选择按钮
-                    if (acceptDescription.isNotEmpty()) {
-                        val currentQualityLabel = acceptDescription.getOrNull(
-                            acceptQuality.indexOf(currentQuality)
-                        ) ?: "自动"
-                        
-                        Surface(
-                            onClick = { showQualityMenu = true },
-                            color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = currentQualityLabel,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
+                    onShowMessage(if (success) "截图已保存到相册" else "截图失败，请稍后重试")
                 }
-                
-                // 播放/暂停按钮
-                IconButton(
-                    onClick = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(64.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(32.dp))
-                ) {
-                    Icon(
-                        if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
-                        contentDescription = if (isPlaying) "暂停" else "播放",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                
-                // 底部控制栏
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            androidx.compose.ui.graphics.Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                            )
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    // 进度条（全屏和竖屏都显示）- 使用细进度条样式
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            FormatUtils.formatDuration((currentPosition / 1000).toInt()), 
-                            color = Color.White, 
-                            fontSize = 12.sp
-                        )
-                        
-                        //  [优化] 使用自定义细进度条替代粗 Slider
-                        BangumiSlimProgressBar(
-                            progress = currentProgress,
-                            onProgressChange = { newProgress ->
-                                lastInteractionTime = System.currentTimeMillis()
-                                currentProgress = newProgress
-                            },
-                            onSeekFinished = {
-                                exoPlayer.seekTo((currentProgress * duration).toLong())
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 8.dp)
-                        )
-                        
-                        Text(
-                            FormatUtils.formatDuration((duration / 1000).toInt()), 
-                            color = Color.White, 
-                            fontSize = 12.sp
-                        )
-                        
-                        // 全屏/退出全屏按钮
-                        IconButton(
-                            onClick = onToggleFullscreen,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                if (isFullscreen) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight, 
-                                "全屏", 
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        
-        // 画质选择菜单
-        if (showQualityMenu && acceptDescription.isNotEmpty()) {
-            BangumiQualityMenu(
-                qualities = acceptDescription,
-                qualityIds = acceptQuality,
-                currentQualityId = currentQuality,
-                onQualitySelected = { qn ->
-                    onQualityChange(qn)
-                    showQualityMenu = false
-                },
-                onDismiss = { showQualityMenu = false }
-            )
-        }
-        
-        //  倍速选择菜单
-        if (showSpeedMenu) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { showSpeedMenu = false },
-                contentAlignment = Alignment.Center
-            ) {
-                SpeedSelectionMenu(
-                    currentSpeed = currentSpeed,
-                    onSpeedSelected = { speed ->
-                        onSpeedChange(speed)
-                        exoPlayer.setPlaybackSpeed(speed)  //  直接应用倍速
-                        showSpeedMenu = false
-                    },
-                    onDismiss = { showSpeedMenu = false }
-                )
-            }
-        }
-        
-        //  弹幕设置面板
-        if (showDanmakuSettings) {
-            DanmakuSettingsPanel(
-                opacity = danmakuOpacity,
-                fontScale = danmakuFontScale,
-                speed = danmakuSpeed,
-                displayArea = danmakuDisplayArea,
-                mergeDuplicates = danmakuMergeDuplicates,
-                onOpacityChange = onDanmakuOpacityChange,
-                onFontScaleChange = onDanmakuFontScaleChange,
-                onSpeedChange = onDanmakuSpeedChange,
-                onDisplayAreaChange = onDanmakuDisplayAreaChange,
-                onMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
-                onDismiss = { showDanmakuSettings = false }
-            )
-        }
+            },
+            onReloadVideo = onReloadVideo,
+            onShowMessage = onShowMessage
+        )
         
         // 空降助手跳过按钮 (位置调整到进度条上方)
         SponsorSkipButton(

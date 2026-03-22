@@ -285,6 +285,7 @@ fun VideoPlayerOverlay(
     onAspectRatioChange: (VideoAspectRatio) -> Unit = {},
     // 🔗 [新增] 分享功能 (Moved bvid to top)
     onShare: (() -> Unit)? = null,
+    showDislikeAction: Boolean = true,
     // [New] Cover URL for Download
     coverUrl: String = "",
     //  [新增] 视频设置面板回调
@@ -693,11 +694,14 @@ fun VideoPlayerOverlay(
                         // Interactions
                         isLiked = isLiked,
                         isCoined = isCoined,
+                        allowDislikeAction = showDislikeAction,
                         onLikeClick = onToggleLike,
                         onDislikeClick = onDislike,
                         onCoinClick = onCoin,
                         onShareClick = {
-                            if (bvid.isNotEmpty()) {
+                            if (onShare != null) {
+                                onShare()
+                            } else if (bvid.isNotEmpty()) {
                                 ShareUtils.shareVideo(context, title, bvid)
                             }
                         },

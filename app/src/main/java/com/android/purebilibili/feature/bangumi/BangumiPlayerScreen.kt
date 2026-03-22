@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -24,13 +25,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlaylistItem
+import com.android.purebilibili.feature.video.ui.components.CoinDialog
 //  使用提取后的组件
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerView
-import com.android.purebilibili.feature.bangumi.ui.player.BangumiMiniProgressBar
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerContent
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiErrorContent
 
@@ -52,6 +54,9 @@ fun BangumiPlayerScreen(
     val view = LocalView.current
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
+    val coinDialogVisible by viewModel.coinDialogVisible.collectAsState()
+    val userCoinBalance by viewModel.userCoinBalance.collectAsState()
+    val successState = uiState as? BangumiPlayerState.Success
     
     //  空降助手状态
     val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
@@ -106,6 +111,12 @@ fun BangumiPlayerScreen(
         viewModel.attachPlayer(exoPlayer)
         // 然后加载番剧
         viewModel.loadBangumiPlay(seasonId, epId)
+    }
+
+    LaunchedEffect(viewModel, context) {
+        viewModel.toastEvent.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
     
     //  [优化] 播放错误监听 - 记录日志并触发重试
@@ -380,7 +391,15 @@ fun BangumiPlayerScreen(
             .background(if (isLandscape) Color.Black else MaterialTheme.colorScheme.background)
     ) {
         //  获取清晰度数据
-        val successState = uiState as? BangumiPlayerState.Success
+        val bangumiPages = remember(successState) {
+            buildBangumiOverlayPages(successState?.seasonDetail?.episodes.orEmpty())
+        }
+        val currentPageIndex = remember(successState) {
+            resolveBangumiOverlayCurrentPageIndex(
+                episodes = successState?.seasonDetail?.episodes.orEmpty(),
+                currentEpisodeId = successState?.currentEpisode?.id ?: 0L
+            )
+        }
         
         //  [修复] 直接渲染 BangumiPlayerView，使用 key() 保持同一实例
         //  移除 movableContentOf，它会导致切换全屏时 Surface 丢失
@@ -394,6 +413,30 @@ fun BangumiPlayerScreen(
                     onDanmakuToggle = {
                         scope.launch {
                             com.android.purebilibili.core.store.SettingsManager.setDanmakuEnabled(context, !danmakuEnabled)
+                        }
+                    },
+                    seasonId = successState?.seasonDetail?.seasonId ?: 0L,
+                    epId = successState?.currentEpisode?.id ?: 0L,
+                    title = successState?.seasonDetail?.title.orEmpty(),
+                    subtitle = listOf(
+                        successState?.currentEpisode?.title.orEmpty(),
+                        successState?.currentEpisode?.longTitle.orEmpty()
+                    ).filter { it.isNotBlank() }.joinToString(" "),
+                    bvid = successState?.currentEpisode?.bvid.orEmpty(),
+                    aid = successState?.currentEpisode?.aid ?: 0L,
+                    cid = successState?.currentEpisode?.cid ?: 0L,
+                    coverUrl = successState?.currentEpisode?.cover ?: successState?.seasonDetail?.cover.orEmpty(),
+                    currentVideoUrl = successState?.playUrl.orEmpty(),
+                    currentAudioUrl = successState?.audioUrl.orEmpty(),
+                    pages = bangumiPages,
+                    currentPageIndex = currentPageIndex,
+                    onPageSelect = { selectedPageIndex ->
+                        val episode = resolveBangumiEpisodeForPageSelection(
+                            episodes = successState?.seasonDetail?.episodes.orEmpty(),
+                            selectedPageIndex = selectedPageIndex
+                        )
+                        if (episode != null) {
+                            viewModel.switchEpisode(episode)
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
@@ -421,7 +464,15 @@ fun BangumiPlayerScreen(
                     onDanmakuFontScaleChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuFontScale(context, it) } },
                     onDanmakuSpeedChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuSpeed(context, it) } },
                     onDanmakuDisplayAreaChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuArea(context, it) } },
-                    onDanmakuMergeDuplicatesChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuMergeDuplicates(context, it) } }
+                    onDanmakuMergeDuplicatesChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuMergeDuplicates(context, it) } },
+                    isLiked = successState?.isLiked ?: false,
+                    coinCount = successState?.coinCount ?: 0,
+                    onToggleLike = { viewModel.toggleLike() },
+                    onCoin = { viewModel.openCoinDialog() },
+                    onReloadVideo = { viewModel.retry() },
+                    onShowMessage = { message ->
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    }
                 )
             }
         }
@@ -487,6 +538,16 @@ fun BangumiPlayerScreen(
             }
         }
     }
+
+    CoinDialog(
+        visible = coinDialogVisible,
+        currentCoinCount = successState?.coinCount ?: 0,
+        userBalance = userCoinBalance,
+        onDismiss = { viewModel.closeCoinDialog() },
+        onConfirm = { count, alsoLike ->
+            viewModel.doCoin(count, alsoLike)
+        }
+    )
 }
 
 /**

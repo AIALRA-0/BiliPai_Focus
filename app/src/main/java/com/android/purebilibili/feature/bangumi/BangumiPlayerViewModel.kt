@@ -4,16 +4,23 @@ package com.android.purebilibili.feature.bangumi
 import androidx.lifecycle.viewModelScope
 import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.player.BasePlayerViewModel
+import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
+import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.BangumiRepository
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.usecase.VideoInteractionUseCase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 /**
  * 番剧播放器 UI 状态
@@ -29,7 +36,9 @@ sealed class BangumiPlayerState {
         val audioUrl: String?,
         val quality: Int,
         val acceptQuality: List<Int>,
-        val acceptDescription: List<String>
+        val acceptDescription: List<String>,
+        val isLiked: Boolean = false,
+        val coinCount: Int = 0
     ) : BangumiPlayerState()
     
     data class Error(
@@ -82,6 +91,7 @@ internal fun buildExternalPlaylistFromBangumi(
  *  [重构] 继承 BasePlayerViewModel，复用空降助手、DASH 播放、弹幕等公共功能
  */
 class BangumiPlayerViewModel : BasePlayerViewModel() {
+    private val interactionUseCase = VideoInteractionUseCase()
     
     private val _uiState = MutableStateFlow<BangumiPlayerState>(BangumiPlayerState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -89,6 +99,12 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     //  Toast 事件通道
     private val _toastEvent = Channel<String>()
     val toastEvent = _toastEvent.receiveAsFlow()
+
+    private val _coinDialogVisible = MutableStateFlow(false)
+    val coinDialogVisible = _coinDialogVisible.asStateFlow()
+
+    private val _userCoinBalance = MutableStateFlow<Double?>(null)
+    val userCoinBalance = _userCoinBalance.asStateFlow()
     
     private var currentSeasonId: Long = 0
     private var currentEpId: Long = 0
@@ -308,6 +324,11 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 acceptDescription = playData.acceptDescription ?: emptyList()
             )
 
+            refreshEpisodeInteractionState(
+                episodeAid = episode.aid,
+                episodeId = episode.id
+            )
+
             buildExternalPlaylistFromBangumi(
                 detail = correctedDetail,
                 currentEpisodeId = episode.id
@@ -487,6 +508,92 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             }
         }
     }
+
+    fun toggleLike() {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        val aid = currentState.currentEpisode.aid
+        if (aid <= 0L) {
+            viewModelScope.launch {
+                _toastEvent.send("当前剧集暂不支持点赞")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val result = interactionUseCase.toggleLike(
+                aid = aid,
+                currentlyLiked = currentState.isLiked,
+                bvid = currentState.currentEpisode.bvid
+            )
+            result.onSuccess { liked ->
+                val latestState = _uiState.value as? BangumiPlayerState.Success ?: currentState
+                if (latestState.currentEpisode.id != currentState.currentEpisode.id) return@onSuccess
+                _uiState.value = updateBangumiSuccessInteractionState(
+                    state = latestState,
+                    isLiked = liked,
+                    coinCount = latestState.coinCount
+                )
+                _toastEvent.trySend(if (liked) "已点赞" else "已取消点赞")
+            }.onFailure { error ->
+                _toastEvent.trySend(error.message ?: "点赞失败")
+            }
+        }
+    }
+
+    fun openCoinDialog() {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        if (currentState.currentEpisode.aid <= 0L) {
+            viewModelScope.launch {
+                _toastEvent.send("当前剧集暂不支持投币")
+            }
+            return
+        }
+        if (currentState.coinCount >= 2) {
+            viewModelScope.launch {
+                _toastEvent.send("已投满2个硬币")
+            }
+            return
+        }
+        _coinDialogVisible.value = true
+        fetchUserCoins()
+    }
+
+    fun closeCoinDialog() {
+        _coinDialogVisible.value = false
+    }
+
+    fun doCoin(count: Int, alsoLike: Boolean) {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        val aid = currentState.currentEpisode.aid
+        if (aid <= 0L) {
+            viewModelScope.launch {
+                _toastEvent.send("当前剧集暂不支持投币")
+            }
+            return
+        }
+
+        _coinDialogVisible.value = false
+        viewModelScope.launch {
+            val result = interactionUseCase.doCoin(
+                aid = aid,
+                count = count,
+                alsoLike = alsoLike,
+                bvid = currentState.currentEpisode.bvid
+            )
+            result.onSuccess {
+                val latestState = _uiState.value as? BangumiPlayerState.Success ?: currentState
+                if (latestState.currentEpisode.id != currentState.currentEpisode.id) return@onSuccess
+                _uiState.value = applyBangumiCoinResult(
+                    state = latestState,
+                    coinDelta = count,
+                    alsoLike = alsoLike
+                )
+                _toastEvent.trySend("投币成功")
+            }.onFailure { error ->
+                _toastEvent.trySend(error.message ?: "投币失败")
+            }
+        }
+    }
     
     /**
      * 重试
@@ -505,5 +612,58 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             loadedFollowTypes.add(type)
         }
         return preloadResult.total
+    }
+
+    private fun refreshEpisodeInteractionState(
+        episodeAid: Long,
+        episodeId: Long
+    ) {
+        if (episodeAid <= 0L) return
+
+        viewModelScope.launch {
+            val isLiked = runCatching {
+                ActionRepository.checkLikeStatus(episodeAid)
+            }.getOrDefault(false)
+            val coinCount = runCatching {
+                ActionRepository.checkCoinStatus(episodeAid)
+            }.getOrDefault(0)
+
+            val currentState = _uiState.value as? BangumiPlayerState.Success ?: return@launch
+            if (currentState.currentEpisode.id != episodeId || currentState.currentEpisode.aid != episodeAid) {
+                return@launch
+            }
+
+            _uiState.value = updateBangumiSuccessInteractionState(
+                state = currentState,
+                isLiked = isLiked,
+                coinCount = coinCount
+            )
+        }
+    }
+
+    private fun fetchUserCoins() {
+        viewModelScope.launch {
+            _userCoinBalance.value = null
+            try {
+                if (TokenManager.sessDataCache.isNullOrEmpty()) {
+                    _userCoinBalance.value = -4.0
+                    return@launch
+                }
+
+                val result = withContext(Dispatchers.IO) {
+                    withTimeout(5_000L) {
+                        NetworkModule.api.getNavInfo()
+                    }
+                }
+
+                _userCoinBalance.value = when {
+                    result.code == 0 && result.data?.isLogin == true -> result.data.money
+                    result.code == 0 -> -3.0
+                    else -> -1.0
+                }
+            } catch (_: Exception) {
+                _userCoinBalance.value = -2.0
+            }
+        }
     }
 }
