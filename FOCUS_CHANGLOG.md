@@ -3,8 +3,8 @@
 ## v7.1.0 Focus (2026-03-22)
 
 ### 版本信息
-- 基于上游 `BiliPai v7.1.0` 维护 Focus 发布线，当前推荐对外版本为 `7.1.0-focus.3`，`versionCode` 为 `126`。
-- 本次为“首页顶部分类居中对称收口 + Focus 文档与发布入口同步”的维护更新。
+- 基于上游 `BiliPai v7.1.0` 维护 Focus 发布线，当前推荐对外版本为 `7.1.0-focus.4`，`versionCode` 为 `127`。
+- 本次为“Focus 理念与维护边界重写 + 文档图库补齐 + `focus.4` 构建发布”的维护更新。
 
 ### 上游同步
 - 同步上游 `v7.1.0` 的番剧播放器 Overlay 动作收口，补齐 `BangumiPlayerOverlayPolicy`、`BangumiPlayerOverlayHost`、番剧播放器界面与配套单测。
@@ -15,6 +15,7 @@
 - 用户可见的 `AIALRA` 定制命名统一改为 `Focus`，设置入口、设置搜索、README 与英文文档全部使用同一命名。
 - 独立变更日志改名为 `FOCUS_CHANGLOG.md`，并改写成与官方 `CHANGELOG.md` 一致的版本分段风格。
 - README 现已按 `BiliPai Focus` 维护，默认行为补充了“视频相关推荐默认隐藏”和专属变更日志入口。
+- README / README_EN 现已补充 Focus 核心理念、维护节奏、测试设备范围、主要 diff 文件清单，并明确“官方应用预览”以下内容主要沿用上游原始说明。
 
 ### 构建与验证
 - `scripts/ci_verify_windows.ps1` 现在会自动探测本机 `Java 21 / Android SDK`，减少 Windows 端重复手配 `JAVA_HOME`、`ANDROID_SDK_ROOT` 的成本。
@@ -59,6 +60,7 @@
 - `2026-03-22T13:48:53.3817710-04:00` 重新使用更高 Gradle JVM 内存完成 `7.1.0-focus.2` 的发布验证，确认 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 通过，并已将 `BliPai-Focus-debug-7.1.0-focus.2-debug.apk` 覆盖安装到真机。
 - `2026-03-22T14:12:14.0000000-04:00` 将 Focus 发布版本提升到 `7.1.0-focus.3 / 126`，把首页顶部分类在 Focus 过滤后的剩余项改为严格居中对称排布，补齐 README / CHANGELOG / Release Notes 的 `focus.3` 发布入口，并为 iOS 风格与 MD3 风格新增对称居中策略测试；随后完成 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 验证，并已将 `BliPai-Focus-debug-7.1.0-focus.3-debug.apk` 覆盖安装到真机。
 - `2026-03-22T14:20:48.0000000-04:00` 将用户提供的 Focus 功能截图复制进仓库 `docs/images/focus`，把中英文 README 的 Focus 区块同步改成真实截图展示；同时确认本机 Git Credential Manager 中已有 PAT，现已接入 `gh auth login --with-token --insecure-storage`，CLI 端登录状态恢复正常，可继续发布 GitHub Release。
+- `2026-03-22T14:50:02.6626191-04:00` 将 Focus 发布版本提升到 `7.1.0-focus.4 / 127`，重写 Focus 核心理念、维护节奏、测试设备范围与主要 diff 文件清单，把“应用预览”明确标注为官方原始预览，新增“历史记录一键清空”截图并切换 Star History 到 Focus 仓库；同时完成 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 验证，产出 `BliPai-Focus-debug-7.1.0-focus.4-debug.apk` 与 `BliPai-Focus-release-7.1.0-focus.4.apk`。
 
 ## v7.0.2 Focus (2026-03-22)
 

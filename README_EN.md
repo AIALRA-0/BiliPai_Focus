@@ -5,14 +5,14 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-22 · Upstream base v7.1.0 · Current Focus release v7.1.0-focus.3</sub>
+  <sub>Last updated: 2026-03-22 · Upstream base v7.1.0 · Current Focus release v7.1.0-focus.4</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.3-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.4-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.0-00a1d6?style=flat-square" alt="Upstream Version">
-  <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
-  <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
+  <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
+  <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
 </p>
 
@@ -32,7 +32,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.3-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.4-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -40,23 +40,27 @@
 
 This fork keeps upstream features and mergeability intact, while shipping a more controlled default surface for Focus usage.
 
+### Core idea
+
+From the perspective of attention psychology and behavioral design, recommendation feeds are very good at exploiting variable rewards, instant feedback, and fear of missing out, pulling users away from their original intent into passive scrolling. The stronger side of Bilibili, however, often appears when you have intent: direct search, saved items, history replay, and followed creators. Focus is therefore not about “less capability”; it is about “fewer traps, more intention”, removing as many temptation-driven surfaces as possible while preserving what you deliberately choose to search for, follow, and watch.
+
 ### Choose your edition
 
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.3-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.4-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.0-focus.3` |
+| Focus version | `7.1.0-focus.4` |
 | Upstream base | `7.1.0` |
-| Release tag | `v7.1.0-focus.3` |
-| Release notes | [docs/releases/focus-7.1.0-focus.3-en.md](docs/releases/focus-7.1.0-focus.3-en.md) |
-| Main refinements | strictly centered filtered home top tabs, follow-management and Dynamic hydration refinements, synced Focus docs |
-| APK names | `BliPai-Focus-debug-7.1.0-focus.3-debug.apk` · `BliPai-Focus-release-7.1.0-focus.3.apk` |
+| Release tag | `v7.1.0-focus.4` |
+| Release notes | [docs/releases/focus-7.1.0-focus.4-en.md](docs/releases/focus-7.1.0-focus.4-en.md) |
+| Main refinements | rewritten Focus philosophy and docs positioning, added history-clear showcase, synced maintenance scope and diff-file inventory |
+| APK names | `BliPai-Focus-debug-7.1.0-focus.4-debug.apk` · `BliPai-Focus-release-7.1.0-focus.4.apk` |
 
 ### Default customizations
 
@@ -78,6 +82,38 @@ This fork keeps upstream features and mergeability intact, while shipping a more
 - Follow assignments are shown per group and expanded on demand, so large follow lists no longer render as one long flat block.
 - Dynamic follow users now restore from local cache first and hydrate in parallel during startup, instead of waiting for the primary feed to finish first.
 
+### Maintenance cadence and test scope
+
+- Focus tries to stay on the same upstream major version. For now, the plan is to follow upstream major releases first, then roll Focus sub-versions on top of that baseline.
+- Testing is currently performed only on `realme Neo 7` and `Lenovo Y700 2023`. If you hit compatibility or behavior issues on other devices, please open an [issue](https://github.com/AIALRA-0/BiliPai_Focus/issues).
+
+### Main diff files against upstream
+
+This list only covers the main Focus-maintained entry points; use the repository history for the full diff.
+
+| Type | File | Purpose |
+| --- | --- | --- |
+| Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
+| Added | `docs/releases/focus-7.1.0-focus.4.md` | Chinese release notes for `focus.4` |
+| Added | `docs/releases/focus-7.1.0-focus.4-en.md` | English release notes for `focus.4` |
+| Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
+| Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
+| Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus settings entry and Quiet Mode switches |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Settings search indexing and Focus entry copy |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | Home top-tab filtering, centered layout, and viewport spacing |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | Indicator offset and centered compensation |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | Home Follow projection and local cache filtering |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | Dynamic follow hydration, grouping, and visibility policy |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | Follow-group management, expansion flow, and single-group assignment |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | Dynamic group entry and interaction handoff |
+| Modified | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | Watch-history clear-all API integration |
+| Modified | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | Watch-history clear-all repository flow |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | Watch-history clear-all state and UI feedback |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | Official / Focus GitHub links on first-use onboarding |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | In-app update source switched to the Focus repository |
+| Modified | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus docs entry points, version line, screenshots, and release notes |
+
 ### Focus feature screenshots
 
 #### Focus entry and settings
@@ -97,11 +133,21 @@ This fork keeps upstream features and mergeability intact, while shipping a more
 <p align="center">
   <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus home filtering" height="500">
   <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus search filtering" height="500">
+</p>
+
+<p align="center">
+  <sub>Shows the filtered home top surface and the disabled search hot list</sub>
+</p>
+
+#### History and detail cleanup
+
+<p align="center">
+  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus watch history clear-all" height="500">
   <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus related video filtering" height="500">
 </p>
 
 <p align="center">
-  <sub>Shows the filtered home top surface, disabled search hot list, and hidden related-video area beneath video detail</sub>
+  <sub>Shows one-tap watch-history clearing and the hidden related-video area beneath video detail</sub>
 </p>
 
 #### Follow-group management
@@ -116,7 +162,10 @@ This fork keeps upstream features and mergeability intact, while shipping a more
   <sub>Shows the Dynamic entry point, expanded group management, and single-group assignment for followed creators</sub>
 </p>
 
-## 📸 Preview
+## 📸 Official app preview
+
+> [!NOTE]
+> The preview below and most of the following feature description continue to use the upstream official README structure, so the Focus fork can be compared against the original app more easily.
 
 <p align="center">
   <img src="docs/images/screenshot_preview_1.png" alt="Preview 1" height="500">
@@ -589,6 +638,12 @@ Issues and Pull Requests are welcome!
 ## ☕ Support
 
 If you like BiliPai, buy me a coffee ☕
+
+## ⭐ Star History
+
+If this project helps you, a Star is appreciated.
+
+[![Star History Chart](https://api.star-history.com/svg?repos=AIALRA-0/BiliPai_Focus&type=Date)](https://github.com/AIALRA-0/BiliPai_Focus/stargazers)
 
 <p align="center">
   <img src="docs/donate.jpg" alt="Donation" width="300">

@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-22 · 上游基线 v7.1.0 · 当前 Focus 发布 v7.1.0-focus.3</sub>
+  <sub>最后更新：2026-03-22 · 上游基线 v7.1.0 · 当前 Focus 发布 v7.1.0-focus.4</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.3-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.4-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.0-00a1d6?style=flat-square" alt="Upstream Version">
-  <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
-  <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
+  <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
+  <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
 </p>
 
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.3.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.4.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,25 +50,29 @@
 ## 🧩 Focus 定制版
 
 > [!TIP]
-> 这是一个面向 Focus 使用场景维护的公开定制 fork。原则是：保留上游核心能力与可同步性，把首页入口、搜索热搜、相关推荐与历史管理做成更克制、更可控的默认体验。
+> 这是一个面向 Focus 使用场景维护的公开定制 fork。它尽量保留上游核心能力与可同步性，同时把首页入口、搜索热搜、相关推荐与历史管理收口成更克制、更可控的默认体验。
+
+### 核心理念
+
+从注意力心理学和行为设计的角度看，推荐流最擅长利用变动奖励、即时反馈和错失焦虑，把人从原本的目标拉进被动刷取；而 B 站真正高质量的部分，往往出现在你有明确意图时的定点搜索、收藏回看、历史回溯和关注订阅。Focus 的核心不是“少功能”，而是“少诱饵、保留目的”，尽量去掉一切勾引你继续看的入口，只保留你主动寻找、主动订阅、主动决定要看的内容。
 
 ### 版本入口
 
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.3.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.4.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.0-focus.3` |
+| Focus 版本 | `7.1.0-focus.4` |
 | 上游基线 | `7.1.0` |
-| 发布标签 | `v7.1.0-focus.3` |
-| Release Notes | [docs/releases/focus-7.1.0-focus.3.md](docs/releases/focus-7.1.0-focus.3.md) |
-| 主要收口 | 首页顶部分类在 Focus 过滤后严格居中对称、分组管理与动态页提速优化延续、Focus 文档入口同步 |
-| APK 命名 | `BliPai-Focus-debug-7.1.0-focus.3-debug.apk` · `BliPai-Focus-release-7.1.0-focus.3.apk` |
+| 发布标签 | `v7.1.0-focus.4` |
+| Release Notes | [docs/releases/focus-7.1.0-focus.4.md](docs/releases/focus-7.1.0-focus.4.md) |
+| 主要收口 | Focus 理念与文档说明重写、历史清空展示补齐、维护范围与差异文件清单同步 |
+| APK 命名 | `BliPai-Focus-debug-7.1.0-focus.4-debug.apk` · `BliPai-Focus-release-7.1.0-focus.4.apk` |
 
 ### 默认定制项
 
@@ -95,6 +99,38 @@
 - Focus 开关优先于首页顶部标签最终展示结果，但不会破坏原有顶栏管理/底栏管理页。
 - 如果首页顶部项被全部隐藏，会自动回退到 `关注`，避免首页出现空白。
 
+### 维护节奏与测试范围
+
+- Focus 尽量与主项目保持相同主版本号，目前暂定只跟进上游大版本，再在同一上游基线上滚动维护 Focus 子版本。
+- 当前测试设备仅覆盖 `真我 Neo 7` 与 `联想 Y700 2023`；如果你在其他设备上遇到兼容性或行为问题，请到仓库提交 [Issue](https://github.com/AIALRA-0/BiliPai_Focus/issues)。
+
+### 与官方的主要 diff 文件
+
+以下只列 Focus 维护线最核心的新增和改动入口，完整差异以仓库提交历史为准。
+
+| 类型 | 文件 | 作用 |
+| --- | --- | --- |
+| 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
+| 新增 | `docs/releases/focus-7.1.0-focus.4.md` | Focus `focus.4` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.0-focus.4-en.md` | Focus `focus.4` 英文发布说明 |
+| 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
+| 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
+| 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus 设置页入口与专注模式开关 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Focus 设置搜索索引与设置入口文案 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | 首页顶部分类过滤、居中对称布局与边界留白 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | 顶部分类指示器偏移与居中补偿 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | 首页“关注”数据过滤与本地缓存投影 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | 动态页关注对象预热、分组过滤与显示策略 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | 关注分组管理、分组展开与单归属迁移 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | 动态页分组入口与交互承接 |
+| 修改 | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | 历史记录清空 API 接入 |
+| 修改 | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | 历史记录清空仓储链路 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | 历史记录一键清空状态与交互回写 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | 首次使用页的官方 / Focus GitHub 入口 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | 应用内更新检查切换到 Focus 仓库 |
+| 修改 | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus 文档入口、版本线、截图与发布说明 |
+
 ### Focus 功能截图
 
 #### 专注模式入口与设置
@@ -114,11 +150,21 @@
 <p align="center">
   <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus 首页过滤" height="500">
   <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus 搜索过滤" height="500">
+</p>
+
+<p align="center">
+  <sub>首页顶部入口过滤，以及搜索热搜过滤后的实际效果</sub>
+</p>
+
+#### 历史与详情清理
+
+<p align="center">
+  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus 历史一键清空" height="500">
   <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus 相关推荐过滤" height="500">
 </p>
 
 <p align="center">
-  <sub>首页顶部入口过滤、搜索热搜过滤，以及视频详情页下方相关推荐过滤后的实际效果</sub>
+  <sub>展示历史记录一键清空，以及视频详情页下方相关推荐过滤后的实际效果</sub>
 </p>
 
 #### 关注分组管理
@@ -133,7 +179,10 @@
   <sub>动态页分组入口、分组管理展开，以及关注对象按单归属分组管理的实际界面，点击动态页面右上角小齿轮进入分组管理</sub>
 </p>
 
-## 📸 应用预览
+## 📸 官方应用预览
+
+> [!NOTE]
+> 下方预览与后续大部分功能说明基本沿用上游官方 README 的原始内容，方便对照 Focus 定制版与官方原版的差异。
 
 <p align="center">
   <img src="docs/images/screenshot_preview_1.png" alt="预览图 1" height="500">
@@ -806,7 +855,7 @@ git merge upstream/main
 
 如果这个项目对你有帮助，欢迎点个 Star ⭐
 
-[![Star History Chart](https://api.star-history.com/svg?repos=jay3-yy/BiliPai&type=Date)](https://github.com/jay3-yy/BiliPai/stargazers)
+[![Star History Chart](https://api.star-history.com/svg?repos=AIALRA-0/BiliPai_Focus&type=Date)](https://github.com/AIALRA-0/BiliPai_Focus/stargazers)
 
 ---
 
