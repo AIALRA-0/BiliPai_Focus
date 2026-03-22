@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>原生、纯净、可扩展 —— 在 BiliPai 之上，做一份更贴合 Focus 使用习惯的定制版</strong>
+  <strong>原生、纯净、可扩展 —— 在 BiliPai 之上，打造更专注的 B 站体验</strong>
 </p>
 
 <p align="center">
