@@ -48,6 +48,13 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `focus subversion should compare within same upstream base version`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("7.1.0", "7.1.0-focus.1"))
+        assertTrue(AppUpdateChecker.isRemoteNewer("7.1.0-focus.1", "7.1.0-focus.2"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("7.1.0-focus.2", "7.1.0-focus.1"))
+    }
+
+    @Test
     fun `selectLatestReleaseCandidate should allow prerelease when current version is beta`() {
         val release = AppUpdateChecker.selectLatestReleaseCandidate(
             rawReleaseJson = """
@@ -123,7 +130,7 @@ class AppUpdateCheckerTest {
         )
 
         assertEquals("7.0.0 RC2", candidate?.tagName)
-        assertEquals("https://github.com/jay3-yy/BiliPai", candidate?.releaseUrl)
+        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus", candidate?.releaseUrl)
         assertTrue(candidate?.releaseNotes?.contains("未创建 GitHub Release") == true)
         assertTrue(candidate?.isPrerelease == true)
     }

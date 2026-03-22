@@ -31,13 +31,20 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Download Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
 ## 🧩 Focus Edition
 
 This fork keeps upstream features and mergeability intact, while shipping a more controlled default surface for Focus usage.
+
+### Choose your edition
+
+| Edition | Best for | Entry |
+| --- | --- | --- |
+| Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Default customizations
 
@@ -48,7 +55,14 @@ This fork keeps upstream features and mergeability intact, while shipping a more
 | Related videos below video detail | Hidden |
 | Search hot list | Disabled, while keeping suggestions, discovery, results, and search history |
 | Watch history | Adds a one-tap clear-all action |
+| Follow-group filtering | Supports single-group assignment per creator, shared filtering across Dynamic and Home Follow, with a master switch |
 | Settings entry | `Settings -> General -> Focus` |
+
+### Focus notes
+
+- Focus changes only the default UI surface and priority of entry points; upstream feature chains stay intact.
+- Dynamic and Home Follow now share the same local follow-group filtering rules.
+- Follow assignments are shown per group and expanded on demand, so large follow lists no longer render as one long flat block.
 
 ### Screenshot placeholders
 
@@ -316,9 +330,21 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ## 📦 Download & Install
 
-<a href="https://github.com/jay3-yy/BiliPai/releases">
-  <img src="https://img.shields.io/badge/Download-Latest%20Release-fb7299?style=for-the-badge&logo=github" alt="Download">
-</a>
+<p align="left">
+  <a href="https://github.com/jay3-yy/BiliPai/releases">
+    <img src="https://img.shields.io/badge/Download-Official%20Release-fb7299?style=for-the-badge&logo=github" alt="Official Download">
+  </a>
+  <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases">
+    <img src="https://img.shields.io/badge/Download-Focus%20Release-1f8bff?style=for-the-badge&logo=github" alt="Focus Download">
+  </a>
+</p>
+
+### Which build should you install
+
+| Edition | Notes | Download |
+| --- | --- | --- |
+| Official upstream | Matches upstream defaults and release rhythm | [jay3-yy/BiliPai Releases](https://github.com/jay3-yy/BiliPai/releases) |
+| Focus edition | Adds Focus switches, quieter defaults, and follow-group filtering on top of upstream | [AIALRA-0/BiliPai_Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) |
 
 ### Requirements
 
@@ -331,10 +357,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ### Installation
 
-1. Download the latest APK from [Releases](https://github.com/jay3-yy/BiliPai/releases)
-2. Install on your device (Unknown Sources permission may be required)
-3. Open app, login via QR code or Web
-4. Enjoy the pure Bilibili experience!
+1. If you want the upstream default experience, download the APK from [Official Releases](https://github.com/jay3-yy/BiliPai/releases)
+2. If you want this customized build, download the APK from [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases)
+3. Install it on your device (Unknown Sources permission may be required)
+4. Open the app and log in via QR code or Web
+5. On the Focus build, go to `Settings -> General -> Focus` to adjust Focus mode and follow filtering
 
 ---
 

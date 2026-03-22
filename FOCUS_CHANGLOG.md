@@ -1,0 +1,73 @@
+# Focus Changelog
+
+## v7.1.0 Focus (2026-03-22)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.0` 同步，`versionCode` 升级到 `123`。
+- 本次为“Focus 命名统一 + 上游 7.1.0 合流 + Windows 构建环境自动探测”的维护更新。
+
+### 上游同步
+- 同步上游 `v7.1.0` 的番剧播放器 Overlay 动作收口，补齐 `BangumiPlayerOverlayPolicy`、`BangumiPlayerOverlayHost`、番剧播放器界面与配套单测。
+- `VideoPlayerOverlay` 与 `TopControlBar` 回到上游 `v7.1.0` 行为，确保番剧播放页的分享、交互按钮与控制层逻辑保持最新实现。
+- 官方 `CHANGELOG.md` 已同步到 `v7.1.0`。
+
+### 命名与文档统一
+- 用户可见的 `AIALRA` 定制命名统一改为 `Focus`，设置入口、设置搜索、README 与英文文档全部使用同一命名。
+- 独立变更日志改名为 `FOCUS_CHANGLOG.md`，并改写成与官方 `CHANGELOG.md` 一致的版本分段风格。
+- README 现已按 `BiliPai Focus` 维护，默认行为补充了“视频相关推荐默认隐藏”和专属变更日志入口。
+
+### 构建与验证
+- `scripts/ci_verify_windows.ps1` 现在会自动探测本机 `Java 21 / Android SDK`，减少 Windows 端重复手配 `JAVA_HOME`、`ANDROID_SDK_ROOT` 的成本。
+- 脚本同时补上了外部 `gradlew` 非零退出码的硬失败校验，避免环境错误被误判成成功。
+- 本轮已确认 `.\scripts\ci_verify_windows.ps1 -IncludeBaselineProfile` 在 `Java 21 + Android SDK` 环境下通过，覆盖 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 与 `:baselineprofile:pixel6Api31BenchmarkAndroidTest`。
+
+### Focus 关注分组与内容过滤
+- 动态页顶部新增“关注分组”入口，点击后会在底部抽屉里展示完整关注对象列表，默认全部归属到“默认分组”，并允许本地创建更多自定义分组。
+- 每个分组都支持单独可见开关；每位关注对象只能归属一个分组，切换分组后会立即同步影响动态页和首页“关注”里的内容可见性。
+- Focus 设置新增“启用关注过滤”总开关；关闭后会保留分组和归属关系，但动态页与首页“关注”不再按分组隐藏内容。
+- 首页“关注”现在保留一份原始关注视频缓存，再按 Focus 分组可见性实时投影到当前页面，避免切换分组开关后必须重新刷新才能恢复内容。
+- 新增本地 `FocusFollowGroupStore`、动态/首页过滤策略与定向单测，确保默认分组兜底、分组删除回收和隐藏分组过滤都可验证。
+
+### 维护记录
+- `2026-03-22T09:04:20.7751067-04:00` 统一 `AIALRA -> Focus` 命名，重写 `FOCUS_CHANGLOG.md` 风格，升级到上游 `v7.1.0`，并补齐 Windows 构建环境自动探测。
+- `2026-03-22T09:46:45.4489084-04:00` 修复 Windows 验证脚本误选 `JDK 11` 和未正确传递 `gradlew` 失败状态的问题，并完成 Focus 命名版 `v7.1.0` 的全量本地验证。
+- `2026-03-22T10:14:35.0479860-04:00` 新增 Focus 关注分组抽屉、本地单归属分组存储、动态页/首页“关注”联动过滤，并完成 `:app:testDebugUnitTest`、`:app:assembleDebug` 与 `:app:lintDebug` 验证。
+- `2026-03-22T10:30:24.0753639-04:00` 调整 Focus 设置页顶部简介文案，去掉句末中文句号，保持文案风格与当前定制版一致。
+- `2026-03-22T10:41:17.2972134-04:00` 新增 Focus“启用关注过滤”总开关，关闭后保留分组归属但停止在动态页与首页“关注”按分组隐藏内容，并完成 `:app:testDebugUnitTest` 与 `:app:assembleDebug` 验证。
+- `2026-03-22T10:42:32.1455409-04:00` 收口 Focus 设置页简介文案，移除重新引入的中文句号，并重新确认 `:app:assembleDebug` 出包通过。
+- `2026-03-22T10:44:32.7236053-04:00` 将已安装 `debug` 包的应用名称从 `BiliPai Debug` 改为 `BliPai Focus`，以便桌面显示名与当前定制分支保持一致。
+- `2026-03-22T10:54:48.5027499-04:00` 按“仅应用内用户可见文案”范围清理中文句号，句中文案改为中文分号，句末文案去掉句号，并确认 `app/src/main` 可见文案无残留 `。` 且 `:app:assembleDebug` 通过。
+- `2026-03-22T11:07:57.6328683-04:00` 优化 Focus 相关 UI：增大新分组/重命名输入框圆角，重新排版 Focus 设置页与关注分组筛选简介，并把 onboarding 页底部 GitHub 入口拆成“官方 / Focus”双链接，随后确认 `:app:assembleDebug` 通过。
+- `2026-03-22T11:20:13.2168020-04:00` 将本地 `origin` 切换到 `AIALRA-0/BiliPai_Focus`，同步把 onboarding 的 Focus GitHub 链接与应用内更新检查源改到新仓库，并确认 `:app:assembleDebug` 通过；匿名 HTTPS 已确认仓库存在，但当前 `git@github.com` 仍因 `publickey` 认证失败而暂时无法 push。
+- `2026-03-22T11:54:50.0872419-04:00` 将“关注对象归属”重构为按分组展开查看的结构，避免大关注列表整页平铺；同时补强中英文 README，保留官方原版说明并新增 Focus 专属仓库 / Releases / 变更日志入口，顺手修正已失效的更新检查与缓存清理单测断言，并确认 `.\scripts\ci_verify_windows.ps1` 全量通过。
+- `2026-03-22T12:14:29.8211951-04:00` 为 Focus 建立首个“官方主版本 + Focus 子版本”发布方案，当前版本号升级为 `7.1.0-focus.1 / 124`；同时补上 Focus 子版本比较逻辑、本机私有 release keystore 接线与签名出包能力，产出 `BliPai-Focus-release-7.1.0-focus.1.apk` 并确认 `.\scripts\ci_verify_windows.ps1` 全量通过、release APK 已完成签名验证。
+
+## v7.0.2 Focus (2026-03-22)
+
+### 版本信息
+- 基于上游 `BiliPai v7.0.2` 建立首版 Focus 定制线，`versionCode` 为 `122`。
+- 本次为“首页入口收敛 + 搜索降噪 + 历史一键清空 + 相关推荐开关 + 构建链路打通”的初始定制版本。
+
+### Focus 设置与首页
+- 新增 `FocusSettings`、`SettingsManager` 持久化、设置搜索索引、导航路由与独立设置子页，把所有定制项收纳到 `设置 -> 常规 -> Focus`。
+- 首页顶部的 `推荐 / 热门 / 直播 / 游戏` 标签与首页右上角 `分区` 按钮支持按 Focus 策略统一控制默认显隐。
+- Focus 开关优先于顶部标签管理结果；当顶部标签全部被隐藏时，会自动回退到 `关注`，避免首页出现空白。
+
+### 搜索、历史与视频详情
+- 搜索页保留搜索建议、搜索发现、搜索结果和历史记录链路，但默认关闭热门搜索区块及其标题展示。
+- 观看历史新增官方 `clear all` API 链路与顶部“一键清空全部历史记录”入口，保留原有单条/批量删除逻辑。
+- 视频详情页新增“相关推荐”总开关，手机详情页、平板影院侧栏、旧平板布局和竖屏详情抽屉统一受同一处 Focus 设置控制。
+- 平板侧额外清理了“评论为空时引导跳相关推荐”的残留交互，保证关闭相关推荐后不会再出现反向引导。
+
+### 构建链路与性能门禁
+- CI 与本地构建统一切到 `Java 21`，并放宽 `google-services`/FCM 缺失时的阻塞条件，保证 fork 可以独立构建。
+- 新增 Windows 端 `ci_verify_windows.ps1`，打通 `unit test / lint / assemble / connected tests` 的可重复验证路径。
+- 新增 `benchmark` 变体与 `baselineprofile` 托管设备链路，`pixel6Api31` 的基线性能校验可稳定运行。
+- `release` 产物继续保持 `arm64-v8a only`，`benchmark` 变体单独使用 `x86_64` 以适配托管设备。
+
+### 维护记录
+- `2026-03-21T22:16:56.2484916-04:00` 建立 Focus 设置模型、设置搜索索引、导航路由与独立设置页骨架。
+- `2026-03-21T22:42:12.8694595-04:00` 落地首页/搜索/历史定制逻辑，接入历史一键清空 API，并更新 README / CI。
+- `2026-03-22T01:29:26.3938928-04:00` 新增 `benchmark` 变体、托管设备 baseline profile 链路与 Windows CI 验证脚本。
+- `2026-03-22T02:20:35.4051624-04:00` 新增视频相关推荐开关，并补齐平板/竖屏详情页的统一策略与单测。
+- `2026-03-22T08:44:33.7146843-04:00` 记录一次真机 `connectedDebugAndroidTest` 导致测试包被移除的维护事故；已通过本地 `debug` APK 重新安装恢复，后续不再在主力真机上直接执行该任务。

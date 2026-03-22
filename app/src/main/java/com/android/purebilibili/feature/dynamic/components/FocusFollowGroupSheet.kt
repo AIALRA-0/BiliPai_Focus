@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.dynamic.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,9 +18,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
@@ -58,9 +61,10 @@ import com.android.purebilibili.core.store.canCreateFocusFollowGroup
 import com.android.purebilibili.core.store.countFocusFollowGroupMembers
 import com.android.purebilibili.core.store.normalizeFocusFollowGroupName
 import com.android.purebilibili.core.store.resolveFocusFollowGroupForUser
-import com.android.purebilibili.core.store.resolveFocusFollowGroupIdForUser
 import com.android.purebilibili.core.ui.IOSModalBottomSheet
 import com.android.purebilibili.data.model.response.FollowingUser
+import com.android.purebilibili.feature.dynamic.FocusFollowAssignmentSection
+import com.android.purebilibili.feature.dynamic.buildFocusFollowAssignmentSections
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +84,10 @@ fun FocusFollowGroupSheet(
     var renameTargetGroup by remember { mutableStateOf<FocusFollowGroup?>(null) }
     var renameDraft by rememberSaveable { mutableStateOf("") }
     var deleteTargetGroupId by remember { mutableStateOf<String?>(null) }
+    val assignmentGroupStateKey = remember(config.groups) {
+        config.groups.joinToString(separator = "|") { group -> group.id }
+    }
+    var expandedAssignmentGroupId by rememberSaveable(assignmentGroupStateKey) { mutableStateOf<String?>(null) }
 
     val groupCounts = remember(followings, config) {
         countFocusFollowGroupMembers(
@@ -87,18 +95,10 @@ fun FocusFollowGroupSheet(
             config = config
         )
     }
-    val orderedFollowings = remember(followings, config) {
-        followings.sortedWith(
-            compareBy<FollowingUser>(
-                {
-                    val groupId = resolveFocusFollowGroupIdForUser(config, it.mid)
-                    config.groups.indexOfFirst { group -> group.id == groupId }
-                        .takeIf { index -> index >= 0 }
-                        ?: Int.MAX_VALUE
-                },
-                { it.uname.lowercase() },
-                { it.mid }
-            )
+    val assignmentSections = remember(followings, config) {
+        buildFocusFollowAssignmentSections(
+            followings = followings,
+            config = config
         )
     }
 
@@ -244,14 +244,22 @@ fun FocusFollowGroupSheet(
             }
 
             item {
-                Text(
-                    text = "关注对象归属",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "关注对象归属",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "点开某个分组后\n再调整这组里的关注对象归属",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
+                }
             }
 
-            if (!isLoading && orderedFollowings.isEmpty()) {
+            if (!isLoading && assignmentSections.all { it.members.isEmpty() }) {
                 item {
                     Surface(
                         shape = RoundedCornerShape(18.dp),
@@ -259,7 +267,7 @@ fun FocusFollowGroupSheet(
                         color = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         Text(
-                            text = "还没有载入完整关注列表；点上面的“刷新”后，就可以把每位关注对象移动到任意分组",
+                            text = "还没有载入完整关注列表；点上面的“刷新”后，就可以按分组查看并调整每位关注对象的归属",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
@@ -270,14 +278,20 @@ fun FocusFollowGroupSheet(
                 }
             }
 
-            items(orderedFollowings, key = { it.mid }) { user ->
-                FocusFollowUserAssignmentRow(
-                    user = user,
+            items(assignmentSections, key = { it.group.id }) { section ->
+                FocusFollowAssignmentSectionCard(
+                    section = section,
                     groups = config.groups,
-                    currentGroup = resolveFocusFollowGroupForUser(config, user.mid),
-                    onAssignToGroup = { groupId ->
-                        onAssignUserToGroup(user.mid, groupId)
-                    }
+                    expanded = expandedAssignmentGroupId == section.group.id,
+                    onToggleExpanded = {
+                        expandedAssignmentGroupId = if (expandedAssignmentGroupId == section.group.id) {
+                            null
+                        } else {
+                            section.group.id
+                        }
+                    },
+                    onAssignUserToGroup = onAssignUserToGroup,
+                    resolveCurrentGroup = { mid -> resolveFocusFollowGroupForUser(config, mid) }
                 )
             }
         }
@@ -340,6 +354,91 @@ fun FocusFollowGroupSheet(
                     Text("删除后，该分组下的关注对象会自动回到“默认分组”")
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun FocusFollowAssignmentSectionCard(
+    section: FocusFollowAssignmentSection,
+    groups: List<FocusFollowGroup>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onAssignUserToGroup: (Long, String) -> Unit,
+    resolveCurrentGroup: (Long) -> FocusFollowGroup
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = 1.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggleExpanded)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = section.group.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "${section.members.size} 位关注对象 · ${if (section.group.visible) "动态和首页当前可见" else "动态和首页当前隐藏"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) {
+                        Icons.Outlined.KeyboardArrowDown
+                    } else {
+                        Icons.AutoMirrored.Outlined.KeyboardArrowRight
+                    },
+                    contentDescription = if (expanded) "收起分组成员" else "展开分组成员",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (expanded) {
+                if (section.members.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer
+                    ) {
+                        Text(
+                            text = "这个分组里还没有关注对象",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        section.members.forEach { user ->
+                            FocusFollowUserAssignmentRow(
+                                user = user,
+                                groups = groups,
+                                currentGroup = resolveCurrentGroup(user.mid),
+                                onAssignToGroup = { groupId ->
+                                    onAssignUserToGroup(user.mid, groupId)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

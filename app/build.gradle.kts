@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -28,6 +31,15 @@ val debugUiToolingRuntimeEnabled = providers.gradleProperty("bili.debug.uiToolin
     .map(String::toBoolean)
     .orElse(false)
     .get()
+val releaseSigningPropertiesFile = rootProject.file("keystore.properties")
+val releaseSigningProperties = Properties().apply {
+    if (releaseSigningPropertiesFile.exists()) {
+        releaseSigningPropertiesFile.inputStream().use(::load)
+    }
+}
+val hasFocusReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { key ->
+    !releaseSigningProperties.getProperty(key).isNullOrBlank()
+}
 
 android {
     namespace = "com.android.purebilibili"
@@ -43,10 +55,11 @@ android {
         applicationId = "com.android.purebilibili"
         minSdk = 26
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
-        // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
+        // 🔥🔥 [版本号] 发布新版前记得更新！格式：官方主版本 + Focus 子版本
         // 更新日志：CHANGELOG.md
-        versionCode = 123
-        versionName = "7.1.0"
+        versionCode = 124
+        versionName = "7.1.0-focus.1"
+        resValue("string", "app_name", "BliPai Focus")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -61,6 +74,17 @@ android {
 
         manifestPlaceholders["castServiceProcess"] = castServiceProcess
     }
+
+    signingConfigs {
+        if (hasFocusReleaseSigning) {
+            create("focusRelease") {
+                storeFile = File(releaseSigningProperties.getProperty("storeFile"))
+                storePassword = releaseSigningProperties.getProperty("storePassword")
+                keyAlias = releaseSigningProperties.getProperty("keyAlias")
+                keyPassword = releaseSigningProperties.getProperty("keyPassword")
+            }
+        }
+    }
     
     // 🔥 Keep a single APK artifact while packaging arm64-v8a only
     splits {
@@ -71,6 +95,9 @@ android {
 
         buildTypes {
             release {
+            if (hasFocusReleaseSigning) {
+                signingConfig = signingConfigs.getByName("focusRelease")
+            }
             // Disable PNG crunching to avoid AAPT errors
             isCrunchPngs = false
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "false")
@@ -89,7 +116,6 @@ android {
             // Debug 构建保持快速编译
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            resValue("string", "app_name", "BliPai Focus")
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
             buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", debugVerboseLogsEnabled.toString())
             buildConfigField(
@@ -105,7 +131,7 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
-            resValue("string", "app_name", "BiliPai Benchmark")
+            resValue("string", "app_name", "BliPai Focus Benchmark")
             ndk {
                 abiFilters.clear()
                 abiFilters += listOf("x86_64")
@@ -116,7 +142,7 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "BiliPai Dev")
+            resValue("string", "app_name", "BliPai Focus Dev")
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
             buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", "false")
             buildConfigField("boolean", "ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE", "false")
@@ -171,7 +197,7 @@ android {
         val variant = this
         outputs.configureEach {
             val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            output.outputFileName = "BiliPai-${variant.name}-${variant.versionName}.apk"
+            output.outputFileName = "BliPai-Focus-${variant.name}-${variant.versionName}.apk"
         }
     }
 }
