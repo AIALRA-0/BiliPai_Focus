@@ -436,7 +436,7 @@ fun ProfileWallpaperAdjustmentSheet(
             }
 
             Text(
-                text = "不同设备分别保存；首次设置会以居中参数作为默认值。",
+                text = "不同设备分别保存；首次设置会以居中参数作为默认值",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier

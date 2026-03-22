@@ -29,14 +29,6 @@ class AppIconAliasMappingTest {
     }
 
     @Test
-    fun resolveAppIconLauncherAlias_keepsStableComponentNamespaceForDebugBuilds() {
-        assertEquals(
-            "com.android.purebilibili.MainActivityAlias3DLauncher",
-            resolveAppIconLauncherAlias("com.android.purebilibili.debug", "icon_3d")
-        )
-    }
-
-    @Test
     fun allManagedAppIconLauncherAliases_containsFlatMaterialAndHeadphone() {
         val aliases = allManagedAppIconLauncherAliases("com.android.purebilibili")
         assertTrue(aliases.contains("com.android.purebilibili.MainActivityAliasFlatMaterial"))

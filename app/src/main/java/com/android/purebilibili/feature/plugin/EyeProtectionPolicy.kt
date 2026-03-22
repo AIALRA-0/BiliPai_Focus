@@ -147,9 +147,9 @@ internal fun tuningForPreset(preset: EyeCarePreset): EyeCareTuning {
 
 internal fun buildCareReminderMessage(usageMinutes: Int): String {
     val messages = listOf(
-        "你已经连续观看 ${usageMinutes} 分钟了，试着看向 6 米外 20 秒。",
-        "眼睛已经很努力了，建议起身活动下肩颈，放松 1 分钟。",
-        "喝一口温水，眨眨眼，再继续看会更舒服。"
+        "你已经连续观看 ${usageMinutes} 分钟了，试着看向 6 米外 20 秒",
+        "眼睛已经很努力了，建议起身活动下肩颈，放松 1 分钟",
+        "喝一口温水，眨眨眼，再继续看会更舒服"
     )
     return messages[usageMinutes % messages.size]
 }

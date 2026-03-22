@@ -38,7 +38,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import java.io.File
 import kotlin.math.abs
 
 // 声明 DataStore 扩展属性
@@ -271,6 +270,18 @@ data class HomeTopTabSettings(
     val visibleIds: Set<String> = setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
 )
 
+data class FocusSettings(
+    val showHomeRecommendTab: Boolean = false,
+    val showHomePopularTab: Boolean = false,
+    val showHomeLiveTab: Boolean = false,
+    val showHomeGameTab: Boolean = false,
+    val showHomePartitionButton: Boolean = false,
+    val enableFollowGroupFiltering: Boolean = true,
+    val showVideoRelatedVideosSection: Boolean = false,
+    val showHistoryClearAllAction: Boolean = true,
+    val showSearchHotSection: Boolean = false
+)
+
 data class PlayerInteractionSettings(
     val gestureSensitivity: Float = 1.0f,
     val doubleTapLikeEnabled: Boolean = true,
@@ -452,6 +463,22 @@ object SettingsManager {
     //  [新增] 顶部标签自定义 - 顺序和可见性
     private val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
     private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
+    private val KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_recommend_tab_visible")
+    private val KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_popular_tab_visible")
+    private val KEY_FOCUS_HOME_LIVE_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_live_tab_visible")
+    private val KEY_FOCUS_HOME_GAME_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_game_tab_visible")
+    private val KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE =
+        booleanPreferencesKey("focus_home_partition_button_visible")
+    private val KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED =
+        booleanPreferencesKey("focus_follow_group_filtering_enabled")
+    private val KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE =
+        booleanPreferencesKey("focus_video_related_videos_section_visible")
+    private val KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED =
+        booleanPreferencesKey("focus_history_clear_all_action_enabled")
     
     //  [新增] 开屏壁纸
     private val KEY_SPLASH_WALLPAPER_URI = stringPreferencesKey("splash_wallpaper_uri")
@@ -608,8 +635,26 @@ object SettingsManager {
         )
     }
 
+    internal fun mapFocusSettingsFromPreferences(preferences: Preferences): FocusSettings {
+        return FocusSettings(
+            showHomeRecommendTab = preferences[KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE] ?: false,
+            showHomePopularTab = preferences[KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE] ?: false,
+            showHomeLiveTab = preferences[KEY_FOCUS_HOME_LIVE_TAB_VISIBLE] ?: false,
+            showHomeGameTab = preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] ?: false,
+            showHomePartitionButton = preferences[KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE] ?: false,
+            enableFollowGroupFiltering = preferences[KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED] ?: true,
+            showVideoRelatedVideosSection = preferences[KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE] ?: false,
+            showHistoryClearAllAction = preferences[KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED] ?: true,
+            showSearchHotSection = preferences[KEY_SEARCH_HOT_SECTION_ENABLED] ?: false
+        )
+    }
+
     fun getHomeTopTabSettings(context: Context): Flow<HomeTopTabSettings> = context.settingsDataStore.data
         .map(::mapHomeTopTabSettingsFromPreferences)
+        .distinctUntilChanged()
+
+    fun getFocusSettings(context: Context): Flow<FocusSettings> = context.settingsDataStore.data
+        .map(::mapFocusSettingsFromPreferences)
         .distinctUntilChanged()
 
     internal fun mapPlayerInteractionSettingsFromPreferences(
@@ -1355,10 +1400,82 @@ object SettingsManager {
     }
 
     fun getSearchHotSectionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_SEARCH_HOT_SECTION_ENABLED] ?: true }
+        .map { preferences -> preferences[KEY_SEARCH_HOT_SECTION_ENABLED] ?: false }
 
     suspend fun setSearchHotSectionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_SEARCH_HOT_SECTION_ENABLED] = value }
+    }
+
+    fun getFocusHomeRecommendTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE] ?: false }
+
+    suspend fun setFocusHomeRecommendTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHomePopularTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE] ?: false }
+
+    suspend fun setFocusHomePopularTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHomeLiveTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_LIVE_TAB_VISIBLE] ?: false }
+
+    suspend fun setFocusHomeLiveTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_LIVE_TAB_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHomeGameTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] ?: false }
+
+    suspend fun setFocusHomeGameTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHomePartitionButtonVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE] ?: false }
+
+    suspend fun setFocusHomePartitionButtonVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE] = value
+        }
+    }
+
+    fun getFocusFollowGroupFilteringEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED] ?: true }
+
+    suspend fun setFocusFollowGroupFilteringEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED] = value
+        }
+    }
+
+    fun getFocusVideoRelatedVideosSectionVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE] ?: false }
+
+    suspend fun setFocusVideoRelatedVideosSectionVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHistoryClearAllActionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED] ?: true }
+
+    suspend fun setFocusHistoryClearAllActionEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED] = value
+        }
     }
     
     //  [新增] --- 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字) ---
@@ -2457,10 +2574,7 @@ object SettingsManager {
      *  获取默认下载路径描述
      */
     fun getDefaultDownloadPath(context: Context): String {
-        val baseDir = runCatching { context.getExternalFilesDir(null) }
-            .getOrNull()
-            ?: context.filesDir
-        return File(baseDir, "downloads").absolutePath
+        return context.getExternalFilesDir(null)?.absolutePath + "/downloads"
     }
     
     // ========== 📉 省流量模式 ==========
@@ -3059,6 +3173,15 @@ object SettingsManager {
             IntShareablePreferenceDefinition(KEY_TOP_TAB_LABEL_MODE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_ORDER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_LIVE_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_GAME_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_SEARCH_HOT_SECTION_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
@@ -3197,3 +3320,4 @@ object SettingsManager {
         )
     }
 }
+

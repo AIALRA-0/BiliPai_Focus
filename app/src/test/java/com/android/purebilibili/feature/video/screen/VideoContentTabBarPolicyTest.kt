@@ -18,7 +18,7 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
-    fun `danmaku input stays visible when player is expanded`() {
+    fun `danmaku input visible when player is expanded`() {
         assertTrue(
             shouldShowDanmakuSendInput(
                 isPlayerCollapsed = false
@@ -39,9 +39,10 @@ class VideoContentTabBarPolicyTest {
     fun `danmaku action layout keeps settings target comfortably tappable`() {
         val policy = resolveVideoContentTabBarDanmakuActionLayoutPolicy(widthDp = 412)
 
-        assertEquals("点我发弹幕", policy.sendLabel)
         assertEquals(40, policy.settingsButtonSizeDp)
         assertEquals(20, policy.settingsIconSizeDp)
+        assertEquals(22, policy.sendBadgeSizeDp)
+        assertEquals("点我发弹幕", policy.sendLabel)
     }
 
     @Test
@@ -56,5 +57,6 @@ class VideoContentTabBarPolicyTest {
         assertEquals("发弹幕", policy.sendLabel)
         assertEquals(36, policy.settingsButtonSizeDp)
         assertEquals(18, policy.settingsIconSizeDp)
+        assertEquals(20, policy.sendBadgeSizeDp)
     }
 }

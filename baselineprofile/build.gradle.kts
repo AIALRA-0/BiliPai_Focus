@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val benchmarkFullTracingEnabled = providers.gradleProperty("bili.benchmark.fullTracing")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
+
 android {
     namespace = "com.android.purebilibili.baselineprofile"
     compileSdk = 36
@@ -12,8 +17,10 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR,LOW_BATTERY"
-        // Enable Perfetto composition tracing in macrobenchmark runs when needed.
-        testInstrumentationRunnerArguments["androidx.benchmark.fullTracing.enable"] = "true"
+        // Full SDK tracing is optional; keep it off by default for a more stable
+        // managed-device verification path on Windows/CI.
+        testInstrumentationRunnerArguments["androidx.benchmark.fullTracing.enable"] =
+            benchmarkFullTracingEnabled.toString()
     }
 
     targetProjectPath = ":app"
@@ -24,13 +31,21 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
+    buildTypes {
+        create("benchmark") {
+            initWith(getByName("debug"))
+            matchingFallbacks += listOf("debug")
+        }
+    }
+
     testOptions {
         managedDevices {
-            allDevices {
+            devices {
                 create<com.android.build.api.dsl.ManagedVirtualDevice>("pixel6Api31") {
                     device = "Pixel 6"
                     apiLevel = 31
                     systemImageSource = "aosp"
+                    testedAbi = "x86_64"
                 }
             }
         }

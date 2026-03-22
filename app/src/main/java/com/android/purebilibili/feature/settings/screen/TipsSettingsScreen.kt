@@ -69,25 +69,25 @@ fun TipsSettingsScreen(
                 icon = CupertinoIcons.Filled.HandDraw,
                 iconTint = iOSBlue,
                 title = "1. 摸鱼模式：评论区一滑隐藏播放器",
-                content = "在播放设置开启「上滑隐藏播放器」后，竖屏评论区上滑即可先隐藏画面，只留评论和声音。"
+                content = "在播放设置开启「上滑隐藏播放器」后，竖屏评论区上滑即可先隐藏画面，只留评论和声音"
             ),
             TipEntry(
                 icon = CupertinoIcons.Default.ChevronUp,
                 iconTint = iOSTeal,
                 title = "2. 回顶部不用狂划",
-                content = "首页刷太深时，双击底栏「首页」图标，或双击顶部频道标题，可快速回到列表顶部。"
+                content = "首页刷太深时，双击底栏「首页」图标，或双击顶部频道标题，可快速回到列表顶部"
             ),
             TipEntry(
                 icon = CupertinoIcons.Filled.HandTap,
                 iconTint = iOSOrange,
                 title = "3. 封面长按有快捷操作",
-                content = "长按视频卡片可快速预览，并直接执行「稍后再看」等常用动作。"
+                content = "长按视频卡片可快速预览，并直接执行「稍后再看」等常用动作"
             ),
             TipEntry(
                 icon = CupertinoIcons.Default.MagnifyingGlass,
                 iconTint = iOSGreen,
                 title = "4. 搜索不只搜视频",
-                content = "搜索页可切换「视频 / UP主 / 番剧 / 直播」，还能按分区、排序、时长做精确筛选。"
+                content = "搜索页可切换「视频 / UP主 / 番剧 / 直播」，还能按分区、排序、时长做精确筛选"
             )
         )
     }
@@ -98,25 +98,25 @@ fun TipsSettingsScreen(
                 icon = CupertinoIcons.Filled.ForwardEnd,
                 iconTint = iOSPink,
                 title = "5. 关闭自动连播，结尾更安静",
-                content = "在播放设置关闭「自动播放下一个」后，视频播完会停在结束态，不再自动连播。"
+                content = "在播放设置关闭「自动播放下一个」后，视频播完会停在结束态，不再自动连播"
             ),
             TipEntry(
                 icon = CupertinoIcons.Filled.ArrowTriangle2CirclepathCamera,
                 iconTint = iOSBlue,
                 title = "6. 自动横竖屏更省手",
-                content = "开启「自动横竖屏切换」后，跟随手机方向自动进出全屏，单手看片更顺。"
+                content = "开启「自动横竖屏切换」后，跟随手机方向自动进出全屏，单手看片更顺"
             ),
             TipEntry(
                 icon = CupertinoIcons.Filled.Pip,
                 iconTint = iOSTeal,
                 title = "7. 小窗和画中画是两种玩法",
-                content = "播放设置中的「后台播放模式」可切换：默认后台播放或系统画中画；画中画需先授予权限。"
+                content = "播放设置中的「后台播放模式」可切换：默认后台播放或系统画中画；画中画需先授予权限"
             ),
             TipEntry(
                 icon = CupertinoIcons.Filled.HandThumbsup,
                 iconTint = iOSOrange,
                 title = "8. 双击点赞可按喜好开关",
-                content = "若你容易误触，可在播放设置关闭「双击点赞」；喜欢快操作就保持开启。"
+                content = "若你容易误触，可在播放设置关闭「双击点赞」；喜欢快操作就保持开启"
             )
         )
     }
@@ -127,25 +127,25 @@ fun TipsSettingsScreen(
                 icon = CupertinoIcons.Default.Sparkles,
                 iconTint = iOSBlue,
                 title = "9. 空降助手能跳过片头广告",
-                content = "在设置开启「空降助手」后，可自动跳过赞助/片头片尾；也可改成仅提示不自动跳过。"
+                content = "在设置开启「空降助手」后，可自动跳过赞助/片头片尾；也可改成仅提示不自动跳过"
             ),
             TipEntry(
                 icon = CupertinoIcons.Filled.Tag,
                 iconTint = iOSPink,
                 title = "10. 版本号连点有彩蛋",
-                content = "在设置页连续点击版本号会触发隐藏彩蛋提示，适合探索党。"
+                content = "在设置页连续点击版本号会触发隐藏彩蛋提示，适合探索党"
             ),
             TipEntry(
                 icon = CupertinoIcons.Filled.Gift,
                 iconTint = iOSOrange,
                 title = "11. 趣味彩蛋可随时关闭",
-                content = "如果不想看到趣味提示，可在设置里关闭「趣味彩蛋」，界面会更克制。"
+                content = "如果不想看到趣味提示，可在设置里关闭「趣味彩蛋」，界面会更克制"
             ),
             TipEntry(
                 icon = CupertinoIcons.Default.Link,
                 iconTint = iOSTeal,
                 title = "12. 链接默认打开可一步到位",
-                content = "在设置中配置「默认打开链接」后，点到 B 站链接可更稳定地直达应用内页面。"
+                content = "在设置中配置「默认打开链接」后，点到 B 站链接可更稳定地直达应用内页面"
             )
         )
     }

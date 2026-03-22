@@ -95,7 +95,7 @@ fun rememberPermissionState(
             onDismissRequest = { showSettingsDialog = false },
             icon = { Icon(CupertinoIcons.Default.Checkmark, contentDescription = null, tint = BiliPink) },
             title = { Text("权限已关闭") },
-            text = { Text("您已拒绝该权限。如需使用此功能，请在系统设置中手动开启权限。") },
+            text = { Text("您已拒绝该权限；如需使用此功能，请在系统设置中手动开启权限") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -173,7 +173,7 @@ fun rememberStoragePermissionState(
     return rememberPermissionState(
         permission = Manifest.permission.WRITE_EXTERNAL_STORAGE,
         rationaleTitle = "需要存储权限",
-        rationaleMessage = "保存图片到相册需要访问设备存储空间。授权后即可将喜欢的图片保存到手机。",
+        rationaleMessage = "保存图片到相册需要访问设备存储空间；授权后即可将喜欢的图片保存到手机",
         onPermissionResult = onPermissionResult
     )
 }
@@ -201,7 +201,7 @@ fun rememberNotificationPermissionState(
     return rememberPermissionState(
         permission = permission,
         rationaleTitle = "开启通知",
-        rationaleMessage = "开启通知后，您可以在后台播放视频时通过通知栏控制播放。",
+        rationaleMessage = "开启通知后，您可以在后台播放视频时通过通知栏控制播放",
         onPermissionResult = onPermissionResult
     )
 }

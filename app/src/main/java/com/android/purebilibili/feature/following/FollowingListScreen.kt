@@ -945,7 +945,7 @@ fun FollowingListScreen(
                                         ) {
                                             if (groupDialogMixed) {
                                                 Text(
-                                                    text = "检测到已选 UP 主原分组不一致，已默认全部不选。",
+                                                    text = "检测到已选 UP 主原分组不一致，已默认全部不选",
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     fontSize = 12.sp,
                                                     modifier = Modifier.padding(bottom = 8.dp)
@@ -991,7 +991,7 @@ fun FollowingListScreen(
                                                 }
                                             }
                                             Text(
-                                                text = "确定后会完全覆盖原分组设置。",
+                                                text = "确定后会完全覆盖原分组设置",
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 12.sp,
                                                 modifier = Modifier.padding(top = 8.dp)

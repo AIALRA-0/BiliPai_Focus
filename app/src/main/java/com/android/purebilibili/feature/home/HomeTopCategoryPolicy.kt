@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.store.FocusSettings
+
 private val DEFAULT_HOME_TOP_CATEGORIES = listOf(
     HomeCategory.RECOMMEND,
     HomeCategory.FOLLOW,
@@ -46,7 +48,7 @@ fun resolveHomeTopCategories(
     val effectiveVisible = if (resolvedVisible.isEmpty()) {
         DEFAULT_HOME_TOP_CATEGORIES.toSet()
     } else {
-        resolvedVisible + HomeCategory.RECOMMEND
+        resolvedVisible
     }
 
     val resolvedOrder = customOrderIds
@@ -65,8 +67,33 @@ fun resolveHomeTopCategories(
     }
 
     if (ordered.isEmpty()) return DEFAULT_HOME_TOP_CATEGORIES
-    val withoutRecommend = ordered.filterNot { it == HomeCategory.RECOMMEND }
-    return listOf(HomeCategory.RECOMMEND) + withoutRecommend
+    return ordered.toList()
+}
+
+private fun isFocusHomeCategoryVisible(
+    category: HomeCategory,
+    settings: FocusSettings
+): Boolean = when (category) {
+    HomeCategory.RECOMMEND -> settings.showHomeRecommendTab
+    HomeCategory.POPULAR -> settings.showHomePopularTab
+    HomeCategory.LIVE -> settings.showHomeLiveTab
+    HomeCategory.GAME -> settings.showHomeGameTab
+    HomeCategory.FOLLOW,
+    HomeCategory.ANIME,
+    HomeCategory.KNOWLEDGE,
+    HomeCategory.TECH -> true
+}
+
+fun applyFocusHomeTopCategories(
+    categories: List<HomeCategory>,
+    settings: FocusSettings,
+    fallbackCategory: HomeCategory = HomeCategory.FOLLOW
+): List<HomeCategory> {
+    val filtered = categories.filter { category ->
+        isFocusHomeCategoryVisible(category, settings)
+    }
+    if (filtered.isNotEmpty()) return filtered
+    return listOf(fallbackCategory)
 }
 
 fun resolveHomeTopTabIndex(
@@ -98,3 +125,4 @@ fun resolveHomeTopCategoryKey(
 ): Int {
     return resolveHomeTopCategoryOrNull(topCategories, index)?.ordinal ?: index
 }
+

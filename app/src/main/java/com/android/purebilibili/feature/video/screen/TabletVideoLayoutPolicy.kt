@@ -87,13 +87,6 @@ fun resolveTabletVideoLayoutPolicy(
     }
 }
 
-internal fun resolveTabletSecondaryDefaultTab(
-    replyCount: Int,
-    hasRelatedVideos: Boolean
-): Int {
-    return if (replyCount == 0 && hasRelatedVideos) 1 else 0
-}
-
 fun resolveTabletCinemaLayoutPolicy(
     widthDp: Int
 ): TabletCinemaLayoutPolicy {
@@ -173,8 +166,13 @@ internal fun resolveCinemaSideCurtainSelectedTab(
     currentSelectedTab: Int,
     replyCount: Int,
     isRepliesLoading: Boolean,
-    hasRelatedVideos: Boolean
+    hasRelatedVideos: Boolean,
+    showRelatedVideosSection: Boolean
 ): Int {
+    if (!showRelatedVideosSection) {
+        return 0
+    }
+
     return if (
         currentSelectedTab == 0 &&
         replyCount == 0 &&
@@ -184,6 +182,60 @@ internal fun resolveCinemaSideCurtainSelectedTab(
         1
     } else {
         currentSelectedTab
+    }
+}
+
+internal fun shouldShowVideoRelatedVideosSection(
+    showRelatedVideosSection: Boolean,
+    relatedVideoCount: Int
+): Boolean {
+    return showRelatedVideosSection && relatedVideoCount > 0
+}
+
+internal fun resolveTabletSecondaryDefaultTab(
+    replyCount: Int,
+    hasRelatedVideos: Boolean,
+    showRelatedVideosSection: Boolean
+): Int {
+    return if (replyCount == 0 && hasRelatedVideos && showRelatedVideosSection) 1 else 0
+}
+
+internal fun resolveTabletSecondaryTabs(
+    replyCount: Int,
+    showRelatedVideosSection: Boolean
+): List<String> {
+    val commentsTabTitle = if (replyCount > 0) {
+        "评论 ($replyCount)"
+    } else {
+        "评论"
+    }
+    return buildList {
+        add(commentsTabTitle)
+        if (showRelatedVideosSection) {
+            add("相关推荐")
+        }
+    }
+}
+
+internal fun resolveVideoCommentEmptyStateHint(
+    hasRelatedVideos: Boolean,
+    showRelatedVideosSection: Boolean
+): String? {
+    return if (hasRelatedVideos && showRelatedVideosSection) {
+        "先看看相关推荐"
+    } else {
+        null
+    }
+}
+
+internal fun resolveVideoCommentEmptyStateActionLabel(
+    hasRelatedVideos: Boolean,
+    showRelatedVideosSection: Boolean
+): String? {
+    return if (hasRelatedVideos && showRelatedVideosSection) {
+        "切换到相关推荐"
+    } else {
+        null
     }
 }
 

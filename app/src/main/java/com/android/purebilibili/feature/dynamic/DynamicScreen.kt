@@ -53,6 +53,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
 import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
+import com.android.purebilibili.feature.dynamic.components.FocusFollowGroupSheet
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
 import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
@@ -117,6 +118,11 @@ fun DynamicScreen(
     
     //  布局模式状态（侧边栏/横向）
     val displayMode by viewModel.displayMode.collectAsState()
+    val focusFollowGroupConfig by viewModel.focusFollowGroupConfig.collectAsState()
+    val focusFollowingUsers by viewModel.focusFollowingUsers.collectAsState()
+    val isFocusFollowingUsersLoading by viewModel.isFocusFollowingUsersLoading.collectAsState()
+    val isFocusFollowGroupFilteringEnabled by viewModel.isFocusFollowGroupFilteringEnabled.collectAsState()
+    var showFocusFollowGroupSheet by remember { mutableStateOf(false) }
     
     //  [Haze] 模糊状态
     val hazeState = rememberRecoverableHazeState()
@@ -129,16 +135,44 @@ fun DynamicScreen(
     val context = LocalContext.current
     val gifImageLoader = context.imageLoader
     
+    val visibleTimelineItems = remember(
+        state.items,
+        focusFollowGroupConfig,
+        isFocusFollowGroupFilteringEnabled
+    ) {
+        filterDynamicItemsByFocusFollowGroups(
+            items = state.items,
+            config = focusFollowGroupConfig,
+            filterEnabled = isFocusFollowGroupFilteringEnabled
+        )
+    }
+    val visibleSelectedUserItems = remember(
+        state.userItems,
+        focusFollowGroupConfig,
+        isFocusFollowGroupFilteringEnabled
+    ) {
+        filterDynamicItemsByFocusFollowGroups(
+            items = state.userItems,
+            config = focusFollowGroupConfig,
+            filterEnabled = isFocusFollowGroupFilteringEnabled
+        )
+    }
+
     //  [修改] 过滤动态 - 选中用户时使用 userItems
-    val filteredItems = remember(state.items, state.userItems, selectedTab, selectedUserId) {
+    val filteredItems = remember(
+        visibleTimelineItems,
+        visibleSelectedUserItems,
+        selectedTab,
+        selectedUserId
+    ) {
         val baseItems = if (selectedUserId != null) {
             resolveSelectedUserVisibleItems(
-                timelineItems = state.items,
-                remoteUserItems = state.userItems,
+                timelineItems = visibleTimelineItems,
+                remoteUserItems = visibleSelectedUserItems,
                 selectedUid = selectedUserId
             )
         } else {
-            state.items
+            visibleTimelineItems
         }
         var items = baseItems
         if (selectedTab == 1) {
@@ -402,6 +436,10 @@ fun DynamicScreen(
                                     tabs = tabs,
                                     onTabSelected = { selectedTab = it },
                                     displayMode = displayMode,
+                                    onSettingsClick = {
+                                        showFocusFollowGroupSheet = true
+                                        viewModel.loadFocusFollowingUsersForSettings(force = false)
+                                    },
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     hazeState = hazeState, // 传入 hazeState
                                     modifier = Modifier.align(Alignment.TopCenter)
@@ -483,6 +521,10 @@ fun DynamicScreen(
                                          tabs = tabs,
                                          onTabSelected = { selectedTab = it },
                                          displayMode = displayMode,
+                                         onSettingsClick = {
+                                             showFocusFollowGroupSheet = true
+                                             viewModel.loadFocusFollowingUsersForSettings(force = false)
+                                         },
                                          onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                          hazeState = null // 禁用内部模糊，由外层统一处理
                                      )
@@ -542,6 +584,33 @@ fun DynamicScreen(
                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                     if (success) showRepostDialog = null
                 }
+            }
+        )
+    }
+
+    if (showFocusFollowGroupSheet) {
+        FocusFollowGroupSheet(
+            config = focusFollowGroupConfig,
+            followings = focusFollowingUsers,
+            isLoading = isFocusFollowingUsersLoading,
+            onDismissRequest = { showFocusFollowGroupSheet = false },
+            onRefreshFollowings = {
+                viewModel.loadFocusFollowingUsersForSettings(force = true)
+            },
+            onCreateGroup = { name ->
+                viewModel.createFocusFollowGroup(name)
+            },
+            onRenameGroup = { groupId, name ->
+                viewModel.renameFocusFollowGroup(groupId, name)
+            },
+            onDeleteGroup = { groupId ->
+                viewModel.deleteFocusFollowGroup(groupId)
+            },
+            onSetGroupVisible = { groupId, visible ->
+                viewModel.setFocusFollowGroupVisible(groupId, visible)
+            },
+            onAssignUserToGroup = { mid, groupId ->
+                viewModel.assignFocusFollowingUserToGroup(mid, groupId)
             }
         )
     }

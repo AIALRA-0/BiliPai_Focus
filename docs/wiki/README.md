@@ -1,6 +1,6 @@
 # BiliPai Wiki
 
-最后更新：2026-03-22（按当前 main 分支结构校对）
+最后更新：2026-03-07（按当前 main 分支结构校对）
 
 ## 目录
 
@@ -20,7 +20,7 @@
 2. `README.md` / `README_EN.md` 的 Latest 与 Roadmap
 3. 本 Wiki 的功能矩阵、架构、QA 与发布流程
 4. 若 `app/build.gradle.kts` 的 `versionName` 已领先 `CHANGELOG.md`，需先补齐发布文档或明确说明仍是主线未同步状态
-5. 若调整了 AI 入口或文档优先级，需同步 `AI.txt`、`llm.txt`、`llms.txt` 与 `docs/wiki/AI.md`
+5. 若调整了 AI 入口或文档优先级，需同步 `llms.txt` 与 `docs/wiki/AI.md`
 
 ## 快速入口
 
@@ -29,4 +29,3 @@
 - 版本配置：`app/build.gradle.kts`
 - 发布日志：`CHANGELOG.md`
 - AI 入口：`llms.txt`
-- 兼容别名：`AI.txt` / `llm.txt`

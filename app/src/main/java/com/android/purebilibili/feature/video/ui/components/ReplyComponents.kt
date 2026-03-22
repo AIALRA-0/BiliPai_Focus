@@ -67,8 +67,6 @@ internal val COMMENT_INLINE_BVID_PATTERN =
     Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
 internal const val COLLAPSED_SUB_REPLY_PREVIEW_LIMIT = 3
 const val COMMENT_PICTURE_TAG_PREFIX = "comment_picture_"
-const val COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX = "comment_sub_reply_preview_"
-const val COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX = "comment_view_all_replies_"
 
 private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
 
@@ -792,7 +790,6 @@ fun ReplyItemView(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
                                     .clickable { onSubClick(item) }
                             ) {
                                 ReplyMessageText(
@@ -823,22 +820,15 @@ fun ReplyItemView(
                         
                         if (item.rcount > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Box(
+                            Text(
+                                text = "查看全部 ${item.rcount} 条回复 >",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 44.dp)
-                                    .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
-                                    .clickable { onSubClick(item) },
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = "查看全部 ${item.rcount} 条回复 >",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
-                                )
-                            }
+                                    .clickable { onSubClick(item) }
+                                    .padding(vertical = 4.dp) // Increase touch target
+                            )
                         }
                     }
                     }
@@ -869,7 +859,7 @@ fun ReplyItemView(
  * 若整条评论是视频引用，则异步解析标题后替换为主题色标题。
  */
 @Composable
-internal fun ReplyMessageText(
+private fun ReplyMessageText(
     text: String,
     fontSize: TextUnit,
     color: Color = MaterialTheme.colorScheme.onSurface,
@@ -906,8 +896,7 @@ internal fun ReplyMessageText(
             maxLines = maxLines,
             url = videoReference.navigationUrl,
             onUrlClick = onUrlClick,
-            prefix = prefix,
-            copyText = text.trim()
+            prefix = prefix
         )
     } else {
         RichCommentText(
@@ -930,8 +919,7 @@ private fun ReplyVideoReferenceText(
     maxLines: Int,
     url: String,
     onUrlClick: ((String) -> Unit)?,
-    prefix: AnnotatedString? = null,
-    copyText: String = text
+    prefix: AnnotatedString? = null
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val annotatedString = remember(text, url, prefix, primaryColor) {
@@ -952,28 +940,20 @@ private fun ReplyVideoReferenceText(
         }
     }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-    var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
     val modifier = if (onUrlClick != null) {
         Modifier.pointerInput(annotatedString, url) {
-            detectTapGestures(
-                onLongPress = {
-                    if (copyText.isNotEmpty()) {
-                        showCopySelectionDialog = true
-                    }
-                },
-                onTap = { offset ->
-                    textLayoutResult?.let { layoutResult ->
-                        val position = layoutResult.getOffsetForPosition(offset)
-                        annotatedString.getStringAnnotations(
-                            tag = "URL",
-                            start = maxOf(0, position - 1),
-                            end = minOf(annotatedString.length, position + 1)
-                        ).firstOrNull()?.let { annotation ->
-                            onUrlClick(annotation.item)
-                        }
+            detectTapGestures { offset ->
+                textLayoutResult?.let { layoutResult ->
+                    val position = layoutResult.getOffsetForPosition(offset)
+                    annotatedString.getStringAnnotations(
+                        tag = "URL",
+                        start = maxOf(0, position - 1),
+                        end = minOf(annotatedString.length, position + 1)
+                    ).firstOrNull()?.let { annotation ->
+                        onUrlClick(annotation.item)
                     }
                 }
-            )
+            }
         }
     } else {
         Modifier
@@ -988,14 +968,6 @@ private fun ReplyVideoReferenceText(
         onTextLayout = { textLayoutResult = it },
         modifier = modifier
     )
-
-    if (showCopySelectionDialog) {
-        CopySelectionDialog(
-            text = copyText,
-            title = "选择评论内容",
-            onDismiss = { showCopySelectionDialog = false }
-        )
-    }
 }
 
 /**

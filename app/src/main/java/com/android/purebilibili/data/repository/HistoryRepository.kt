@@ -110,4 +110,21 @@ object HistoryRepository {
             }
         }
     }
+
+    suspend fun clearHistory(
+        csrf: String
+    ): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.clearHistory(csrf = csrf)
+                if (response.code == 0) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "清空历史失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
 }

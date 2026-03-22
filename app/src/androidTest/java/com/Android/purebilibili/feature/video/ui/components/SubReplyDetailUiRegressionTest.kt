@@ -5,11 +5,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -17,9 +14,6 @@ import com.android.purebilibili.data.model.response.ReplyContent
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyPicture
-import com.android.purebilibili.feature.video.ui.components.COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX
-import com.android.purebilibili.feature.video.ui.components.COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX
-import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import org.junit.Assert.assertEquals
@@ -28,10 +22,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 private const val SUB_REPLY_DETAIL_HEADER_TAG = "subreply_detail_header"
-private const val SUB_REPLY_DETAIL_CLOSE_TAG = "subreply_detail_close"
 private const val SUB_REPLY_DETAIL_ROOT_TAG = "subreply_detail_root"
 private const val SUB_REPLY_DETAIL_LIST_TAG = "subreply_detail_reply_list"
-private const val SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX = "subreply_detail_conversation_"
 
 @RunWith(AndroidJUnit4::class)
 class SubReplyDetailUiRegressionTest {
@@ -57,36 +49,8 @@ class SubReplyDetailUiRegressionTest {
         }
 
         composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_HEADER_TAG).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_CLOSE_TAG).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_ROOT_TAG).assertIsDisplayed()
         composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_LIST_TAG).assertIsDisplayed()
-        composeTestRule.onNodeWithText("相关回复共3条").assertIsDisplayed()
-    }
-
-    @Test
-    fun directedChildReply_showsConversationAffordance() {
-        composeTestRule.setContent {
-            MaterialTheme {
-                Box(
-                    modifier = Modifier.size(width = 390.dp, height = 844.dp)
-                ) {
-                    SubReplySheet(
-                        state = buildSubReplyState(),
-                        emoteMap = emptyMap(),
-                        onDismiss = {},
-                        onLoadMore = {}
-                    )
-                }
-            }
-        }
-
-        composeTestRule
-            .onNodeWithTag(SUB_REPLY_DETAIL_LIST_TAG)
-            .performScrollToNode(hasTestTag("${SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX}203"))
-
-        composeTestRule
-            .onNodeWithTag("${SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX}203")
-            .assertIsDisplayed()
     }
 
     @Test
@@ -117,57 +81,6 @@ class SubReplyDetailUiRegressionTest {
 
         composeTestRule.runOnIdle {
             assertEquals("https://example.com/reply-image.jpg", previewedImage)
-        }
-    }
-
-    @Test
-    fun clickingSubReplyPreview_opensRootReplyDetail() {
-        var openedReplyId: Long? = null
-
-        composeTestRule.setContent {
-            MaterialTheme {
-                ReplyItemView(
-                    item = buildReplyWithPreview(),
-                    emoteMap = emptyMap(),
-                    onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
-                    onAvatarClick = {}
-                )
-            }
-        }
-
-        composeTestRule
-            .onNodeWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301")
-            .performClick()
-
-        composeTestRule.runOnIdle {
-            assertEquals(100L, openedReplyId)
-        }
-    }
-
-    @Test
-    fun clickingViewAllRepliesEntry_opensRootReplyDetail() {
-        var openedReplyId: Long? = null
-
-        composeTestRule.setContent {
-            MaterialTheme {
-                ReplyItemView(
-                    item = buildReplyWithPreview(),
-                    emoteMap = emptyMap(),
-                    onClick = {},
-                    onSubClick = { openedReplyId = it.rpid },
-                    onAvatarClick = {}
-                )
-            }
-        }
-
-        composeTestRule
-            .onNodeWithTag("${COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX}100")
-            .assertIsDisplayed()
-            .performClick()
-
-        composeTestRule.runOnIdle {
-            assertEquals(100L, openedReplyId)
         }
     }
 
@@ -224,45 +137,6 @@ class SubReplyDetailUiRegressionTest {
                         uname = "ReplyTextOnly"
                     ),
                     content = ReplyContent(message = "plain reply")
-                ),
-                ReplyItem(
-                    rpid = 203L,
-                    mid = 14L,
-                    root = 101L,
-                    ctime = 1_700_000_120L,
-                    member = ReplyMember(
-                        mid = "14",
-                        uname = "ReplyDirected",
-                        garbCardNumber = "13992"
-                    ),
-                    content = ReplyContent(message = "回复 @ReplyTextOnly：没错")
-                )
-            )
-        )
-    }
-
-    private fun buildReplyWithPreview(): ReplyItem {
-        return ReplyItem(
-            rpid = 100L,
-            mid = 10L,
-            rcount = 5,
-            ctime = 1_700_000_000L,
-            member = ReplyMember(
-                mid = "10",
-                uname = "RootAuthor"
-            ),
-            content = ReplyContent(message = "root"),
-            replies = listOf(
-                ReplyItem(
-                    rpid = 301L,
-                    mid = 30L,
-                    root = 100L,
-                    ctime = 1_700_000_030L,
-                    member = ReplyMember(
-                        mid = "30",
-                        uname = "PreviewReply"
-                    ),
-                    content = ReplyContent(message = "preview child reply")
                 )
             )
         )

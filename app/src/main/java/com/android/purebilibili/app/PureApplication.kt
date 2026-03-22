@@ -22,7 +22,6 @@ import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.plugin.PluginManager
-import com.android.purebilibili.core.store.APP_ICON_COMPAT_ALIAS_CLASS_NAME
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
@@ -41,6 +40,25 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private const val TAG = "PureApplication"
+
+internal fun shouldBlockStartupForHomeVisualDefaultsMigration(): Boolean = false
+internal fun shouldDeferPlaylistRestoreAtStartup(): Boolean = true
+internal fun shouldDeferTelemetryInitAtStartup(): Boolean = true
+internal fun deferredNonCriticalStartupDelayMs(): Long = 900L
+internal fun shouldRequestDex2OatProfileInstall(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.N
+internal fun dex2OatProfileInstallDelayMs(): Long = 2_500L
+internal fun resolveImageMemoryCachePercent(): Double = 0.15
+internal fun shouldClearImageMemoryCacheOnTrimLevel(level: Int): Boolean {
+    return when (level) {
+        ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN,
+        ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+        ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
+        ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> true
+        else -> false
+    }
+}
+
 //  实现 ImageLoaderFactory 以提供自定义 Coil 配置
 //  实现 ComponentCallbacks2 响应系统内存警告
 class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
@@ -48,14 +66,23 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     //  保存 ImageLoader 引用以便在 onTrimMemory 中使用
     private var _imageLoader: ImageLoader? = null
 
-    private val telemetryListener =
-        PureApplicationRuntimeConfig.createTelemetryBackgroundStateListener()
+    private val telemetryListener = object : BackgroundManager.BackgroundStateListener {
+        override fun onEnterBackground() {
+            AnalyticsHelper.onAppBackground()
+            CrashReporter.setAppForegroundState(false)
+        }
+
+        override fun onEnterForeground() {
+            AnalyticsHelper.onAppForeground()
+            CrashReporter.setAppForegroundState(true)
+        }
+    }
 
     private val startupOrchestrator by lazy { AppStartupOrchestrator() }
     
     //  Coil 图片加载器 - 优化内存和磁盘缓存
     override fun newImageLoader(): ImageLoader {
-        val memoryCachePercent = PureApplicationRuntimeConfig.resolveImageMemoryCachePercent()
+        val memoryCachePercent = resolveImageMemoryCachePercent()
         val diskCacheBytes = 150L * 1024 * 1024
         return ImageLoader.Builder(this)
             .components {
@@ -99,7 +126,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
 
         // 启动即确保首页视觉默认值生效：底栏悬浮 + 液态玻璃 + 顶部模糊
         // 冷启动路径不阻塞主线程，迁移改为后台执行。
-        if (PureApplicationRuntimeConfig.shouldBlockStartupForHomeVisualDefaultsMigration()) {
+        if (shouldBlockStartupForHomeVisualDefaultsMigration()) {
             runBlocking(Dispatchers.IO) {
                 SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
             }
@@ -147,10 +174,10 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         PluginManager.register(DanmakuEnhancePlugin())
         PluginManager.register(EyeProtectionPlugin())
         PluginManager.register(TodayWatchPlugin())
-            Logger.d(PureApplicationRuntimeConfig.TAG, " Plugin system initialized with 5 built-in plugins")
+        Logger.d(TAG, " Plugin system initialized with 5 built-in plugins")
 
         com.android.purebilibili.core.plugin.json.JsonPluginManager.initialize(this)
-        Logger.d(PureApplicationRuntimeConfig.TAG, " JSON plugin system initialized")
+        Logger.d(TAG, " JSON plugin system initialized")
 
         com.android.purebilibili.feature.download.DownloadManager.init(this)
 
@@ -159,7 +186,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 .getSponsorBlockEnabled(this@PureApplication)
                 .first()
             PluginManager.setEnabled("sponsor_block", sponsorBlockEnabled)
-            Logger.d(PureApplicationRuntimeConfig.TAG, " SponsorBlock plugin synced: enabled=$sponsorBlockEnabled")
+            Logger.d(TAG, " SponsorBlock plugin synced: enabled=$sponsorBlockEnabled")
 
             SettingsManager.forceDanmakuDefaults(this@PureApplication)
         }
@@ -170,9 +197,9 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         AppScope.ioScope.launch {
             try {
                 WbiKeyManager.getWbiKeys()
-                Logger.d(PureApplicationRuntimeConfig.TAG, " WBI Keys preloaded successfully")
+                Logger.d(TAG, " WBI Keys preloaded successfully")
             } catch (e: Exception) {
-                android.util.Log.w(PureApplicationRuntimeConfig.TAG, " WBI Keys preload failed: ${e.message}")
+                android.util.Log.w(TAG, " WBI Keys preload failed: ${e.message}")
             }
         }
     }
@@ -181,9 +208,9 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         runCatching {
             ProfileInstaller.writeProfile(this)
         }.onSuccess {
-            Logger.d(PureApplicationRuntimeConfig.TAG, "📦 Requested ART profile installation for dex2oat")
+            Logger.d(TAG, "📦 Requested ART profile installation for dex2oat")
         }.onFailure { throwable ->
-            Logger.w(PureApplicationRuntimeConfig.TAG, "⚠️ ART profile installation request failed", throwable)
+            Logger.w(TAG, "⚠️ ART profile installation request failed", throwable)
         }
     }
 
@@ -215,9 +242,9 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 )
             }
             
-            Logger.d(PureApplicationRuntimeConfig.TAG, " Firebase Crashlytics initialized (enabled=$enabled)")
+            Logger.d(TAG, " Firebase Crashlytics initialized (enabled=$enabled)")
         } catch (e: Exception) {
-            android.util.Log.e(PureApplicationRuntimeConfig.TAG, "Failed to init Crashlytics", e)
+            android.util.Log.e(TAG, "Failed to init Crashlytics", e)
         }
     }
     
@@ -244,27 +271,27 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 AnalyticsHelper.logAppOpen()
             }
             
-            Logger.d(PureApplicationRuntimeConfig.TAG, " Firebase Analytics initialized (enabled=$enabled)")
+            Logger.d(TAG, " Firebase Analytics initialized (enabled=$enabled)")
         } catch (e: Exception) {
-            android.util.Log.e(PureApplicationRuntimeConfig.TAG, "Failed to init Analytics", e)
+            android.util.Log.e(TAG, "Failed to init Analytics", e)
         }
     }
     
     // � [后台内存优化] 响应系统内存警告
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (PureApplicationRuntimeConfig.shouldClearImageMemoryCacheOnTrimLevel(level)) {
+        if (shouldClearImageMemoryCacheOnTrimLevel(level)) {
             _imageLoader?.memoryCache?.clear()
             when (level) {
                 ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
-                    Logger.d(PureApplicationRuntimeConfig.TAG, " UI hidden, released image memory cache")
+                    Logger.d(TAG, " UI hidden, released image memory cache")
                 }
                 ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
-                    Logger.d(PureApplicationRuntimeConfig.TAG, "🚨 TRIM_MEMORY_COMPLETE, released image memory cache")
+                    Logger.d(TAG, "🚨 TRIM_MEMORY_COMPLETE, released image memory cache")
                 }
                 else -> {
                     System.gc()
-                    Logger.d(PureApplicationRuntimeConfig.TAG, " Low memory trim(level=$level), cleared image memory cache")
+                    Logger.d(TAG, " Low memory trim(level=$level), cleared image memory cache")
                 }
             }
         }
@@ -273,7 +300,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     override fun onLowMemory() {
         super.onLowMemory()
         _imageLoader?.memoryCache?.clear()
-        Logger.d(PureApplicationRuntimeConfig.TAG, "🚨 onLowMemory, cleared all caches")
+        Logger.d(TAG, "🚨 onLowMemory, cleared all caches")
     }
 
     private fun createNotificationChannel() {
@@ -319,7 +346,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         }
         
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(nightMode)
-        Logger.d(PureApplicationRuntimeConfig.TAG, " Applied theme mode: $themeModeValue -> nightMode=$nightMode")
+        Logger.d(TAG, " Applied theme mode: $themeModeValue -> nightMode=$nightMode")
     }
     
     /**
@@ -335,8 +362,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             try {
                 val pm = packageManager
                 val packageName = this@PureApplication.packageName
-                val compatAlias = android.content.ComponentName(packageName, APP_ICON_COMPAT_ALIAS_CLASS_NAME)
-                val defaultLauncherAlias = resolveAppIconLauncherAlias(packageName, "icon_3d")
+                val compatAlias = android.content.ComponentName(packageName, "${packageName}.MainActivityAlias3D")
                 
                 // 读取用户保存的图标偏好
                 val currentIcon = normalizeAppIconKey(
@@ -347,7 +373,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                     .edit()
                     .putString("current_icon", currentIcon)
                     .commit()
-                Logger.d(PureApplicationRuntimeConfig.TAG, " Synced app icon cache from DataStore: $currentIcon (success=$cacheSynced)")
+                Logger.d(TAG, " Synced app icon cache from DataStore: $currentIcon (success=$cacheSynced)")
 
                 val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
                 val targetAlias = resolveAppIconLauncherAlias(packageName, currentIcon)
@@ -364,26 +390,26 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 
                 // 如果目标alias是disabled（说明之前被禁用了，可能是重装），强制重置为默认(icon_3d)
                 if (currentIcon != "icon_3d" && targetState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-                    Logger.d(PureApplicationRuntimeConfig.TAG, " Detected reinstall: target icon '$currentIcon' is disabled, resetting to 'icon_3d'")
+                    Logger.d(TAG, " Detected reinstall: target icon '$currentIcon' is disabled, resetting to 'icon_3d'")
                     
                     SettingsManager.setAppIcon(this@PureApplication, "icon_3d")
                     
                     // 确保 3D 图标被启用
-                    val aliasDefault = android.content.ComponentName(packageName, defaultLauncherAlias)
+                    val aliasDefault = android.content.ComponentName(packageName, "${packageName}.MainActivityAlias3DLauncher")
                     pm.setComponentEnabledSetting(
                         aliasDefault,
                         android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                         android.content.pm.PackageManager.DONT_KILL_APP
                     )
                     // 禁用其他所有alias
-                    allUniqueAliases.filter { it != defaultLauncherAlias }.forEach { aliasFullName ->
+                    allUniqueAliases.filter { it != "${packageName}.MainActivityAlias3DLauncher" }.forEach { aliasFullName ->
                         pm.setComponentEnabledSetting(
                             android.content.ComponentName(packageName, aliasFullName),
                             android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                             android.content.pm.PackageManager.DONT_KILL_APP
                         )
                     }
-                    Logger.d(PureApplicationRuntimeConfig.TAG, " Reset to default 3D icon")
+                    Logger.d(TAG, " Reset to default 3D icon")
                     return@launch
                 }
                 
@@ -410,13 +436,13 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                         }
                     } catch (e: Exception) {
                         //  [容错] 忽略不存在的组件，防止崩溃
-                        Logger.d(PureApplicationRuntimeConfig.TAG, "⚠️ Component $aliasFullName not found, skipping")
+                        Logger.d(TAG, "⚠️ Component $aliasFullName not found, skipping")
                     }
                 }
                 
-                Logger.d(PureApplicationRuntimeConfig.TAG, " Synced app icon state: $currentIcon")
+                Logger.d(TAG, " Synced app icon state: $currentIcon")
             } catch (e: Exception) {
-                android.util.Log.e(PureApplicationRuntimeConfig.TAG, "Failed to sync app icon state", e)
+                android.util.Log.e(TAG, "Failed to sync app icon state", e)
             }
         }
     }

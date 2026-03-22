@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.download
 
-import java.io.File
-
 private val INVALID_FILE_NAME_CHARS = Regex("[\\\\/:*?\"<>|\\n\\r\\t]")
 private val MULTI_UNDERSCORE = Regex("_+")
 private val MULTI_SPACE = Regex("\\s+")
@@ -31,30 +29,6 @@ fun buildSafeExportDisplayName(
     val baseName = if (safeQuality.isBlank()) safeTitle else "${safeTitle}_$safeQuality"
     val safeExt = extension.trim().trimStart('.').ifBlank { "mp4" }
     return "$baseName.$safeExt"
-}
-
-fun resolveManagedDownloadDirectory(
-    filesDir: File,
-    externalFilesRoot: File?,
-    customPath: String?
-): File {
-    val defaultDir = (externalFilesRoot?.resolve("downloads") ?: File(filesDir, "downloads")).apply {
-        mkdirs()
-    }
-
-    if (customPath.isNullOrBlank()) return defaultDir
-
-    val sanitizedPath = sanitizeLegacyCustomPath(
-        customPath = customPath,
-        appScopedRoot = externalFilesRoot?.absolutePath.orEmpty()
-    ) ?: return defaultDir
-
-    val customDir = File(sanitizedPath)
-    return if ((customDir.exists() || customDir.mkdirs()) && customDir.canWrite()) {
-        customDir
-    } else {
-        defaultDir
-    }
 }
 
 private fun sanitizeFileNamePart(value: String): String {

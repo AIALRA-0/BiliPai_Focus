@@ -259,10 +259,7 @@ internal fun HomeCategoryPageContent(
                             cardId = video.bvid,
                             preset = DissolveAnimationPreset.TELEGRAM_FAST,
                             modifier = Modifier
-                                .jiggleOnDissolve(
-                                    cardId = video.bvid,
-                                    isCurrentCardDissolving = isDissolving
-                                )
+                                .jiggleOnDissolve(video.bvid)
                                 .then(if (index == 0) firstGridItemModifier else Modifier)
                         ) {
                             when (displayMode) {
@@ -439,7 +436,7 @@ private fun TodayWatchPlanCard(
 
             if (collapsed) {
                 Text(
-                    text = "已收起推荐单。展开后恢复自动更新；也可以直接点“刷新”换一批。",
+                    text = "已收起推荐单；展开后恢复自动更新；也可以直接点“刷新”换一批",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -463,7 +460,7 @@ private fun TodayWatchPlanCard(
                 }
             }
             Text(
-                text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”。",
+                text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

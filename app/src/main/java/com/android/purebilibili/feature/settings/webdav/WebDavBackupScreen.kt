@@ -378,7 +378,7 @@ fun WebDavBackupScreen(
             onDismissRequest = { showRestoreConfirm = false },
             title = { Text("确认恢复最新备份") },
             text = {
-                Text("恢复会覆盖当前本地设置与插件配置。建议先执行一次“立即备份”。")
+                Text("恢复会覆盖当前本地设置与插件配置；建议先执行一次“立即备份”")
             },
             confirmButton = {
                 IOSDialogAction(onClick = {

@@ -40,19 +40,6 @@ internal fun resolveBottomBarSelectionAction(
     }
 }
 
-internal fun shouldBypassNavigationDebounceForRoute(targetRoute: String): Boolean {
-    return targetRoute == ScreenRoutes.Home.route
-}
-
-internal fun canProceedWithNavigation(
-    currentTimeMillis: Long,
-    lastNavigationTimeMillis: Long,
-    debounceWindowMillis: Long,
-    bypassDebounce: Boolean
-): Boolean {
-    return bypassDebounce || currentTimeMillis - lastNavigationTimeMillis > debounceWindowMillis
-}
-
 internal fun shouldUseTopLevelNavigationFromProfile(targetRoute: String): Boolean {
     return targetRoute == ScreenRoutes.Settings.route ||
         targetRoute == ScreenRoutes.History.route ||

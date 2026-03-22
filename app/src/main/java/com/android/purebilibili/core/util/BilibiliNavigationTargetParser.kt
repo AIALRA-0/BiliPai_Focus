@@ -276,8 +276,8 @@ object BilibiliNavigationTargetParser {
             .mapNotNull { part ->
                 if (part.isBlank()) return@mapNotNull null
                 val pair = part.split("=", limit = 2)
-                val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8)
-                val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8)
+                val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8.name())
+                val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8.name())
                 key to value
             }
             .toMap()

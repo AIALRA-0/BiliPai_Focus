@@ -191,13 +191,7 @@ fun DanmakuSettingsPanel(
             progressPercent = smartOcclusionDownloadProgress
         )
     }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnClickOutside = false
-        )
-    ) {
+    val overlayContent: @Composable () -> Unit = {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = if (
@@ -586,6 +580,20 @@ fun DanmakuSettingsPanel(
                 }
             }
         }
+    }
+
+    if (isFullscreen) {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            overlayContent()
+        }
+    } else {
+        overlayContent()
     }
 }
 

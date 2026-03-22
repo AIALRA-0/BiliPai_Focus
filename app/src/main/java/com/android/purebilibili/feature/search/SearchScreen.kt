@@ -107,7 +107,7 @@ internal fun shouldShowSearchHotSection(
 internal fun shouldShowSearchHotHeader(
     hotItemCount: Int,
     hotSearchEnabled: Boolean
-): Boolean = hotItemCount > 0
+): Boolean = hotSearchEnabled && hotItemCount > 0
 
 internal data class SearchTopBarLayoutSpec(
     val showInlineHotToggle: Boolean,
@@ -249,7 +249,7 @@ fun SearchScreen(
         )
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
-    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = true)
+    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = false)
     val liquidGlassEnabled by SettingsManager.getLiquidGlassEnabled(context).collectAsState(initial = true)
     val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
     val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsState(initial = true)

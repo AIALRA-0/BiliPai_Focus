@@ -236,7 +236,7 @@ fun PermissionSettingsContent(
             item {
                 Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                     Text(
-                        text = "以下是应用所需的权限及其用途说明。普通权限在安装时自动授予，无需手动操作。",
+                        text = "以下是应用所需的权限及其用途说明；普通权限在安装时自动授予，无需手动操作",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -294,7 +294,7 @@ fun PermissionSettingsContent(
                     Column {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "BiliPai 仅在必要功能的前提下申请部分敏感权限。",
+                            text = "BiliPai 仅在必要功能的前提下申请部分敏感权限",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             modifier = Modifier.padding(horizontal = 16.dp)

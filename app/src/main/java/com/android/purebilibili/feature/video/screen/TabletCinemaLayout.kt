@@ -30,9 +30,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -129,6 +126,7 @@ fun TabletCinemaLayout(
     onAudioQualityChange: (Int) -> Unit = {},
     transitionEnabled: Boolean = false,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    showRelatedVideosSection: Boolean = true,
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode =
         com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
@@ -151,33 +149,25 @@ fun TabletCinemaLayout(
             .getOrDefault(resolveInitialCurtainState(configuration.screenWidthDp))
     }
     var selectedTab by rememberSaveable(bvid) { mutableIntStateOf(0) }
-    val curtainPagerState = rememberPagerState(
-        initialPage = selectedTab,
-        pageCount = { 2 }
-    )
     val curtainWidth by animateDpAsState(
         targetValue = resolveCurtainWidthDp(curtainState, policy).dp,
         animationSpec = tween(durationMillis = 240),
         label = "cinemaCurtainWidth"
     )
 
-    LaunchedEffect(success?.related?.size, commentState.replyCount, commentState.isRepliesLoading) {
+    LaunchedEffect(
+        success?.related?.size,
+        commentState.replyCount,
+        commentState.isRepliesLoading,
+        showRelatedVideosSection
+    ) {
         selectedTab = resolveCinemaSideCurtainSelectedTab(
             currentSelectedTab = selectedTab,
             replyCount = commentState.replyCount,
             isRepliesLoading = commentState.isRepliesLoading,
-            hasRelatedVideos = !success?.related.isNullOrEmpty()
+            hasRelatedVideos = !success?.related.isNullOrEmpty(),
+            showRelatedVideosSection = showRelatedVideosSection
         )
-    }
-    LaunchedEffect(selectedTab) {
-        if (curtainPagerState.currentPage != selectedTab) {
-            curtainPagerState.animateScrollToPage(selectedTab)
-        }
-    }
-    LaunchedEffect(curtainPagerState.currentPage) {
-        if (selectedTab != curtainPagerState.currentPage) {
-            selectedTab = curtainPagerState.currentPage
-        }
     }
 
     Box(
@@ -273,12 +263,11 @@ fun TabletCinemaLayout(
                 }
             }
 
-            CinemaSideCurtain(
-                state = curtainState,
-                width = curtainWidth,
-                selectedTab = selectedTab,
-                pagerState = curtainPagerState,
-                onToggle = {
+                CinemaSideCurtain(
+                    state = curtainState,
+                    width = curtainWidth,
+                    selectedTab = selectedTab,
+                    onToggle = {
                     curtainStateName = when (curtainState) {
                         TabletSideCurtainState.OPEN -> TabletSideCurtainState.PEEK.name
                         TabletSideCurtainState.PEEK -> TabletSideCurtainState.OPEN.name
@@ -293,13 +282,14 @@ fun TabletCinemaLayout(
                 commentState = commentState,
                 commentViewModel = commentViewModel,
                 viewModel = viewModel,
-                playerState = playerState,
-                onUpClick = onUpClick,
-                onRelatedVideoClick = onRelatedVideoClick,
-                context = context
-            )
+                    playerState = playerState,
+                    onUpClick = onUpClick,
+                    onRelatedVideoClick = onRelatedVideoClick,
+                    context = context,
+                    showRelatedVideosSection = showRelatedVideosSection
+                )
+            }
         }
-    }
 }
 
 @Composable
@@ -635,7 +625,6 @@ private fun CinemaSideCurtain(
     state: TabletSideCurtainState,
     width: Dp,
     selectedTab: Int,
-    pagerState: PagerState,
     onToggle: () -> Unit,
     onTabSelected: (Int) -> Unit,
     success: PlayerUiState.Success?,
@@ -645,9 +634,9 @@ private fun CinemaSideCurtain(
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    showRelatedVideosSection: Boolean
 ) {
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     Row(
         modifier = Modifier.fillMaxHeight(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -700,80 +689,64 @@ private fun CinemaSideCurtain(
                                 contentDescription = "comments"
                             )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        IconButton(onClick = { onTabSelected(1) }) {
-                            Icon(
-                                imageVector = Icons.Outlined.PlaylistPlay,
-                                contentDescription = "related videos"
-                            )
+                        if (showRelatedVideosSection) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            IconButton(onClick = { onTabSelected(1) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.PlaylistPlay,
+                                    contentDescription = "related videos"
+                                )
+                            }
                         }
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
                         TabRow(
-                            selectedTabIndex = pagerState.currentPage,
+                            selectedTabIndex = selectedTab,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Tab(
-                                selected = pagerState.currentPage == 0,
-                                onClick = {
-                                    onTabSelected(0)
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(0)
-                                    }
-                                },
+                                selected = selectedTab == 0,
+                                onClick = { onTabSelected(0) },
                                 text = {
                                     Text(
                                         text = "评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}"
                                     )
                                 }
                             )
-                            Tab(
-                                selected = pagerState.currentPage == 1,
-                                onClick = {
-                                    onTabSelected(1)
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(1)
-                                    }
-                                },
-                                text = { Text("相关推荐") }
-                            )
+                            if (showRelatedVideosSection) {
+                                Tab(
+                                    selected = selectedTab == 1,
+                                    onClick = { onTabSelected(1) },
+                                    text = { Text("相关推荐") }
+                                )
+                            }
                         }
 
-                        HorizontalPager(
-                            state = pagerState,
-                            userScrollEnabled = true,
-                            modifier = Modifier.fillMaxSize()
-                        ) { page ->
-                            when {
-                                success == null -> {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CupertinoActivityIndicator()
-                                    }
-                                }
-
-                                page == 0 -> {
-                                    CinemaCommentsPane(
-                                        success = success,
-                                        commentState = commentState,
-                                        commentViewModel = commentViewModel,
-                                        viewModel = viewModel,
-                                        playerState = playerState,
-                                        onUpClick = onUpClick,
-                                        context = context
-                                    )
-                                }
-
-                                else -> {
-                                    CinemaRelatedPane(
-                                        success = success,
-                                        onRelatedVideoClick = onRelatedVideoClick,
-                                        context = context
-                                    )
-                                }
+                        if (selectedTab == 0 && success != null) {
+                            CinemaCommentsPane(
+                                success = success,
+                                commentState = commentState,
+                                commentViewModel = commentViewModel,
+                                viewModel = viewModel,
+                                playerState = playerState,
+                                onUpClick = onUpClick,
+                                context = context,
+                                hasRelatedVideos = success.related.isNotEmpty(),
+                                showRelatedVideosSection = showRelatedVideosSection
+                            )
+                        } else if (showRelatedVideosSection && selectedTab == 1 && success != null) {
+                            CinemaRelatedPane(
+                                success = success,
+                                onRelatedVideoClick = onRelatedVideoClick,
+                                context = context
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CupertinoActivityIndicator()
                             }
                         }
                     }
@@ -791,7 +764,9 @@ private fun CinemaCommentsPane(
     viewModel: PlayerViewModel,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    hasRelatedVideos: Boolean,
+    showRelatedVideosSection: Boolean
 ) {
     val listState = rememberLazyListState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -870,7 +845,8 @@ private fun CinemaCommentsPane(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     shape = RoundedCornerShape(14.dp),
                     onClick = {
-                        viewModel.openRootCommentComposer()
+                        viewModel.clearReplyingTo()
+                        viewModel.showCommentInputDialog()
                     }
                 ) {
                     Text(
@@ -943,8 +919,12 @@ private fun CinemaCommentsPane(
                             .padding(horizontal = 20.dp, vertical = 28.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        val relatedHint = resolveVideoCommentEmptyStateHint(
+                            hasRelatedVideos = hasRelatedVideos,
+                            showRelatedVideosSection = showRelatedVideosSection
+                        )
                         Text(
-                            text = "还没有评论，先看看相关推荐",
+                            text = relatedHint?.let { "还没有评论，$it" } ?: "还没有评论",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

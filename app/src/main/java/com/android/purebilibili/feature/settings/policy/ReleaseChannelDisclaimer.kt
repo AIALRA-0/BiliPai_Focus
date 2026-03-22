@@ -30,10 +30,10 @@ fun ReleaseChannelDisclaimerDialog(
         },
         text = {
             Text(
-                text = "本应用仅用于学习与交流。\n\n" +
-                    "官方发布渠道仅有：GitHub 与 Telegram。\n" +
-                    "除上述渠道外，不存在任何其他官方发布途径。\n\n" +
-                    "请勿安装来源不明的安装包，以避免账号与设备安全风险。"
+                text = "本应用仅用于学习与交流\n\n" +
+                    "官方发布渠道仅有：GitHub 与 Telegram\n" +
+                    "除上述渠道外，不存在任何其他官方发布途径\n\n" +
+                    "请勿安装来源不明的安装包，以避免账号与设备安全风险"
             )
         },
         confirmButton = {

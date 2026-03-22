@@ -6,6 +6,7 @@ enum class SettingsSearchTarget {
     APPEARANCE,
     PLAYBACK,
     BOTTOM_BAR,
+    FOCUS,
     PERMISSION,
     BLOCKED_LIST,
     SETTINGS_SHARE,
@@ -78,6 +79,27 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = "自定义底栏项目",
         section = "常规",
         aliases = listOf("底栏", "标签栏", "导航栏", "tab")
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.FOCUS,
+        title = "Focus",
+        subtitle = "专注模式设置",
+        section = "常规",
+        aliases = listOf(
+            "focus",
+            "定制",
+            "首页入口",
+            "热门搜索",
+            "历史清空",
+            "推荐隐藏",
+            "分区按钮",
+            "相关推荐",
+            "关注分组",
+            "动态过滤",
+            "首页关注过滤",
+            "关注过滤",
+            "专注模式"
+        )
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PERMISSION,
@@ -269,3 +291,4 @@ private fun matchesSettingsSearchPinyin(value: String, query: String): Boolean {
         query = query
     )
 }
+

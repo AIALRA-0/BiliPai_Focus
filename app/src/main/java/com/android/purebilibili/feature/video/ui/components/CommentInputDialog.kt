@@ -72,9 +72,9 @@ internal fun resolveCommentInputDialogLayoutPolicy(
         )
     } else {
         CommentInputDialogLayoutPolicy(
-            inputBoxMinHeightDp = 84,
-            inputBoxMaxHeightDp = 136,
-            emojiPanelHeightDp = 220
+            inputBoxMinHeightDp = 100,
+            inputBoxMaxHeightDp = 180,
+            emojiPanelHeightDp = 280
         )
     }
 }
@@ -542,7 +542,7 @@ fun CommentInputDialog(
                                                 "╮(￣▽￣)╭", "( ´_ゝ｀)", "_(:3」∠)_", "(;¬_¬)",
                                                 "(ﾟДﾟ≡ﾟДﾟ)", "(ノ=Д=)ノ┻━┻", "Σ( ￣□￣||)", "(´；ω；`)",
                                                 "（/TДT)/", "(^・ω・^ )", "(●￣(ｴ)￣●)", "ε=ε=(ノ≧∇≦)ノ",
-                                                "( >﹏<。)", "( *・ω・)✄╰ひ╯", "(╬￣皿￣)凸", "⊙__⊙"
+                                                "( >﹏<)", "( *・ω・)✄╰ひ╯", "(╬￣皿￣)凸", "⊙__⊙"
                                             )
                                             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                                                 columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(80.dp),

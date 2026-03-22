@@ -171,6 +171,7 @@ internal fun applyPlaybackResolutionDebugInfo(
     return current.copy(resolution = "$width x $height")
 }
 
+@androidx.media3.common.util.UnstableApi
 internal fun applyVideoFormatDebugInfo(
     current: PlaybackDebugInfo,
     format: Format?,
@@ -194,6 +195,7 @@ internal fun applyVideoFormatDebugInfo(
     return updated
 }
 
+@androidx.media3.common.util.UnstableApi
 internal fun applyAudioFormatDebugInfo(
     current: PlaybackDebugInfo,
     format: Format?,

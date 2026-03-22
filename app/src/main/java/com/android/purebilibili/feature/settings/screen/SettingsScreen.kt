@@ -71,6 +71,7 @@ fun SettingsScreen(
     onOpenSourceLicensesClick: () -> Unit,
     onAppearanceClick: () -> Unit = {},
     onPlaybackClick: () -> Unit = {},
+    onFocusClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onPluginsClick: () -> Unit = {},
     onSettingsShareClick: () -> Unit = {},
@@ -368,7 +369,7 @@ fun SettingsScreen(
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { showEasterEggDialog = false; versionClickCount = 0 },
             title = { Text(" 你发现了彩蛋！", fontWeight = FontWeight.Bold) },
-            text = { Text("感谢你使用 BiliPai！这是一个用爱发电的开源项目。") },
+            text = { Text("感谢你使用 BiliPai！这是一个用爱发电的开源项目") },
             confirmButton = { com.android.purebilibili.core.ui.IOSDialogAction(onClick = { showEasterEggDialog = false; versionClickCount = 0 }) { Text("我知道了！") } }
         )
     }
@@ -593,6 +594,7 @@ fun SettingsScreen(
             SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
             SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
             SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
+            SettingsSearchTarget.FOCUS -> onFocusClick()
             SettingsSearchTarget.PERMISSION -> onPermissionClick()
             SettingsSearchTarget.BLOCKED_LIST -> onBlockedListClickAction()
             SettingsSearchTarget.SETTINGS_SHARE -> onSettingsShareClick()
@@ -630,6 +632,7 @@ fun SettingsScreen(
                     onBack = onBack,
                     onAppearanceClick = onAppearanceClick,
                     onPlaybackClick = onPlaybackClick,
+                    onFocusClick = onFocusClick,
                     onPermissionClick = onPermissionClick,
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
@@ -701,6 +704,7 @@ fun SettingsScreen(
                     onBack = onBack,
                     onAppearanceClick = onAppearanceClick,
                     onPlaybackClick = onPlaybackClick,
+                    onFocusClick = onFocusClick,
                     onPermissionClick = onPermissionClick,
                     onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
                     onPluginsClick = onPluginsClick,
@@ -823,6 +827,7 @@ private fun MobileSettingsLayout(
     // Callbacks
     onAppearanceClick: () -> Unit,
     onPlaybackClick: () -> Unit,
+    onFocusClick: () -> Unit,
     onPermissionClick: () -> Unit,
     onNavigateToBottomBarSettings: () -> Unit,
     onTipsClick: () -> Unit, // [Feature]
@@ -976,7 +981,8 @@ private fun MobileSettingsLayout(
                                     GeneralSection(
                                         onAppearanceClick = onAppearanceClick,
                                         onPlaybackClick = onPlaybackClick,
-                                        onBottomBarClick = onNavigateToBottomBarSettings
+                                        onBottomBarClick = onNavigateToBottomBarSettings,
+                                        onFocusClick = onFocusClick
                                     )
                                 }
                                 MobileSettingsRootSection.PRIVACY -> {
@@ -1123,3 +1129,4 @@ fun DonateDialog(onDismiss: () -> Unit) {
         }
     }
 }
+

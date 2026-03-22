@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.store.FocusSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,7 +42,7 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `custom order and visibility should be applied with recommend pinned`() {
+    fun `custom order and visibility should be applied without forcing recommend`() {
         val categories = resolveHomeTopCategories(
             customOrderIds = listOf("LIVE", "TECH", "RECOMMEND", "FOLLOW"),
             visibleIds = setOf("LIVE", "TECH", "FOLLOW")
@@ -49,7 +50,6 @@ class HomeTopCategoryPolicyTest {
 
         assertEquals(
             listOf(
-                HomeCategory.RECOMMEND,
                 HomeCategory.LIVE,
                 HomeCategory.TECH,
                 HomeCategory.FOLLOW
@@ -91,4 +91,57 @@ class HomeTopCategoryPolicyTest {
         assertEquals(HomeCategory.RECOMMEND.ordinal, resolveHomeTopCategoryKey(categories, 0))
         assertEquals(5, resolveHomeTopCategoryKey(categories, 5))
     }
+
+    @Test
+    fun `focus filters configured home tabs and keeps follow by default`() {
+        val categories = applyFocusHomeTopCategories(
+            categories = listOf(
+                HomeCategory.RECOMMEND,
+                HomeCategory.FOLLOW,
+                HomeCategory.POPULAR,
+                HomeCategory.LIVE,
+                HomeCategory.GAME
+            ),
+            settings = FocusSettings()
+        )
+
+        assertEquals(listOf(HomeCategory.FOLLOW), categories)
+    }
+
+    @Test
+    fun `focus fallback keeps home non empty when everything else is hidden`() {
+        val categories = applyFocusHomeTopCategories(
+            categories = listOf(HomeCategory.RECOMMEND, HomeCategory.POPULAR, HomeCategory.LIVE, HomeCategory.GAME),
+            settings = FocusSettings(),
+            fallbackCategory = HomeCategory.FOLLOW
+        )
+
+        assertEquals(listOf(HomeCategory.FOLLOW), categories)
+    }
+
+    @Test
+    fun `focus can selectively restore recommend and popular`() {
+        val categories = applyFocusHomeTopCategories(
+            categories = listOf(
+                HomeCategory.RECOMMEND,
+                HomeCategory.FOLLOW,
+                HomeCategory.POPULAR,
+                HomeCategory.LIVE
+            ),
+            settings = FocusSettings(
+                showHomeRecommendTab = true,
+                showHomePopularTab = true
+            )
+        )
+
+        assertEquals(
+            listOf(
+                HomeCategory.RECOMMEND,
+                HomeCategory.FOLLOW,
+                HomeCategory.POPULAR
+            ),
+            categories
+        )
+    }
 }
+

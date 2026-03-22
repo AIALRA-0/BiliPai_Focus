@@ -8,6 +8,9 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowGroupStore
+import com.android.purebilibili.core.store.FollowingCacheStore
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
@@ -69,11 +72,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val cachePrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_CACHE, Context.MODE_PRIVATE)
     private val userPrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_USERS, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
+    private var focusGroups: FocusFollowGroupConfig = FocusFollowGroupConfig()
 
     private var cachedLiveRooms: List<LiveRoom> = emptyList()
     
     //  [新增] 缓存关注列表
     private var cachedFollowings: List<FollowingUser> = emptyList()
+    private var hasCompleteFocusFollowingUsers: Boolean = false
+    private var focusFollowGroupFilteringEnabled: Boolean = true
     private var incrementalTimelineRefreshEnabled: Boolean = false
     private var lastFollowingsLoadMs: Long = 0L
     private var isFollowingsLoading: Boolean = false
@@ -115,11 +121,40 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _displayMode = MutableStateFlow(DynamicDisplayMode.SIDEBAR)
     val displayMode: StateFlow<DynamicDisplayMode> = _displayMode.asStateFlow()
 
+    private val _focusFollowGroupConfig = MutableStateFlow(FocusFollowGroupConfig())
+    val focusFollowGroupConfig: StateFlow<FocusFollowGroupConfig> = _focusFollowGroupConfig.asStateFlow()
+
+    private val _focusFollowingUsers = MutableStateFlow<List<FollowingUser>>(emptyList())
+    val focusFollowingUsers: StateFlow<List<FollowingUser>> = _focusFollowingUsers.asStateFlow()
+
+    private val _isFocusFollowingUsersLoading = MutableStateFlow(false)
+    val isFocusFollowingUsersLoading: StateFlow<Boolean> = _isFocusFollowingUsersLoading.asStateFlow()
+
+    private val _isFocusFollowGroupFilteringEnabled = MutableStateFlow(true)
+    val isFocusFollowGroupFilteringEnabled: StateFlow<Boolean> =
+        _isFocusFollowGroupFilteringEnabled.asStateFlow()
+
     init {
         val startupPlan = resolveDynamicStartupLoadPlan()
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(appContext).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
+            }
+        }
+        viewModelScope.launch {
+            FocusFollowGroupStore.getConfig(appContext).collect { config ->
+                focusGroups = config
+                _focusFollowGroupConfig.value = config
+                syncSelectedUserWithFocusFollowGroups(config)
+                rebuildFollowedUsers()
+            }
+        }
+        viewModelScope.launch {
+            SettingsManager.getFocusSettings(appContext).collect { settings ->
+                focusFollowGroupFilteringEnabled = settings.enableFollowGroupFiltering
+                _isFocusFollowGroupFilteringEnabled.value = settings.enableFollowGroupFiltering
+                syncSelectedUserWithFocusFollowGroups(focusGroups)
+                rebuildFollowedUsers()
             }
         }
         loadUserPreferences()
@@ -234,28 +269,53 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         pageLimit: Int = resolveDynamicFollowingsPageLimit(isStartupHydration = false)
     ) {
         if (isFollowingsLoading) return
-        val now = System.currentTimeMillis()
-        if (!force && !shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) {
-            return
-        }
         isFollowingsLoading = true
         try {
             // 先获取当前用户 mid
             val navResponse = NetworkModule.api.getNavInfo()
             val myMid = navResponse.data?.mid ?: return
+            val snapshot = FollowingCacheStore.getSnapshot(appContext, myMid)
+            if (snapshot != null && cachedFollowings.isEmpty()) {
+                cachedFollowings = snapshot.users
+                _focusFollowingUsers.value = cachedFollowings
+                hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
+                lastFollowingsLoadMs = snapshot.cachedAtMs
+                rebuildFollowedUsers()
+            }
+
+            val now = System.currentTimeMillis()
+            if (!force && !shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) {
+                return
+            }
             
+            val loadAllPages = pageLimit == FULL_FOLLOWINGS_PAGE_LIMIT
             val maxPages = pageLimit.coerceAtLeast(1)
             // 加载关注列表（首轮保守拉取，后续按需补齐）
             val allFollowings = mutableListOf<FollowingUser>()
-            for (page in 1..maxPages) {
+            var page = 1
+            var reportedTotal = 0
+            while (loadAllPages || page <= maxPages) {
                 val response = NetworkModule.api.getFollowings(vmid = myMid, pn = page, ps = 50)
+                reportedTotal = response.data?.total ?: reportedTotal
                 val users = response.data?.list ?: break
                 allFollowings.addAll(users)
                 if (users.size < 50) break // 没有更多了
+                page += 1
             }
             
-            cachedFollowings = allFollowings
+            cachedFollowings = allFollowings.distinctBy { it.mid }
+            _focusFollowingUsers.value = cachedFollowings
+            hasCompleteFocusFollowingUsers = loadAllPages || reportedTotal <= cachedFollowings.size
             lastFollowingsLoadMs = now
+            if (cachedFollowings.isNotEmpty()) {
+                FollowingCacheStore.saveSnapshot(
+                    context = appContext,
+                    mid = myMid,
+                    total = reportedTotal.coerceAtLeast(cachedFollowings.size),
+                    users = cachedFollowings,
+                    cachedAtMs = now
+                )
+            }
             rebuildFollowedUsers()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -328,7 +388,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             extractUsersFromLive(cachedLiveRooms),
             extractUsersFromFollowings(cachedFollowings)  //  [新增]
         )
-        _followedUsers.value = applyUserPreferences(mergedUsers)
+        val visibleUsers = filterSidebarUsersByFocusFollowGroups(
+            users = mergedUsers,
+            config = focusGroups,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
+        _followedUsers.value = applyUserPreferences(visibleUsers)
     }
     
     /**
@@ -573,6 +638,53 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             .putString(KEY_DISPLAY_MODE, mode.name)
             .apply()
     }
+
+    fun loadFocusFollowingUsersForSettings(force: Boolean = true) {
+        if (!force && hasCompleteFocusFollowingUsers && cachedFollowings.isNotEmpty()) {
+            return
+        }
+        viewModelScope.launch {
+            _isFocusFollowingUsersLoading.value = true
+            try {
+                loadAllFollowings(
+                    force = force,
+                    pageLimit = FULL_FOLLOWINGS_PAGE_LIMIT
+                )
+            } finally {
+                _isFocusFollowingUsersLoading.value = false
+            }
+        }
+    }
+
+    fun createFocusFollowGroup(name: String) {
+        viewModelScope.launch {
+            FocusFollowGroupStore.createGroup(appContext, name)
+        }
+    }
+
+    fun renameFocusFollowGroup(groupId: String, name: String) {
+        viewModelScope.launch {
+            FocusFollowGroupStore.renameGroup(appContext, groupId, name)
+        }
+    }
+
+    fun deleteFocusFollowGroup(groupId: String) {
+        viewModelScope.launch {
+            FocusFollowGroupStore.deleteGroup(appContext, groupId)
+        }
+    }
+
+    fun setFocusFollowGroupVisible(groupId: String, visible: Boolean) {
+        viewModelScope.launch {
+            FocusFollowGroupStore.setGroupVisible(appContext, groupId, visible)
+        }
+    }
+
+    fun assignFocusFollowingUserToGroup(mid: Long, groupId: String) {
+        viewModelScope.launch {
+            FocusFollowGroupStore.assignUserToGroup(appContext, mid, groupId)
+        }
+    }
     
     /**
      * 加载动态列表
@@ -667,6 +779,24 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         cacheSaveJob?.cancel()
         userDynamicsJob?.cancel()
         super.onCleared()
+    }
+
+    private fun syncSelectedUserWithFocusFollowGroups(config: FocusFollowGroupConfig) {
+        val resolvedSelection = resolveSelectedUserIdAfterFocusFollowGroupFilter(
+            selectedUserId = _selectedUserId.value,
+            config = config,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
+        if (resolvedSelection == _selectedUserId.value) return
+        userDynamicsJob?.cancel()
+        activeUserDynamicsRequestToken += 1L
+        _selectedUserId.value = resolvedSelection
+        _uiState.value = _uiState.value.copy(
+            userItems = emptyList(),
+            hasUserMore = true,
+            userIsLoading = false,
+            userError = null
+        )
     }
     
     // ====================  动态评论/点赞/转发功能 ====================
@@ -1019,6 +1149,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_HIDDEN_USERS = "dynamic_hidden_users"
         private const val KEY_DISPLAY_MODE = "dynamic_display_mode"
         private const val MAX_CACHE_ITEMS = 100
+        private const val FULL_FOLLOWINGS_PAGE_LIMIT = Int.MAX_VALUE
     }
 }
 

@@ -112,6 +112,15 @@ internal fun resolveFavoritePlayAllItems(
     return candidateItems.filter { !it.isCollectionResource && it.bvid.isNotBlank() }
 }
 
+internal fun shouldShowHistoryClearAllAction(
+    hasHistoryViewModel: Boolean,
+    hasItems: Boolean,
+    settingEnabled: Boolean,
+    isBatchMode: Boolean
+): Boolean {
+    return hasHistoryViewModel && hasItems && settingEnabled && !isBatchMode
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommonListScreen(
@@ -131,6 +140,9 @@ fun CommonListScreen(
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
+    val focusSettings by SettingsManager.getFocusSettings(context).collectAsState(
+        initial = com.android.purebilibili.core.store.FocusSettings()
+    )
     val uiPreset = LocalUiPreset.current
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
@@ -154,11 +166,12 @@ fun CommonListScreen(
     val favoriteViewModel = viewModel as? FavoriteViewModel
     val historyViewModel = viewModel as? HistoryViewModel
     val seasonSeriesDetailViewModel = viewModel as? SeasonSeriesDetailViewModel
-    val historyDeleteSession by historyViewModel?.deleteSession?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<HistoryDeleteSession?>(null) }
+    val historyDissolvingIds by historyViewModel?.dissolvingIds?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet()) }
     var isHistoryBatchMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var selectedHistoryKeys by rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<String>()) }
     var showHistoryBatchDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var showHistoryClearAllConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var pendingHistorySingleDeleteKey by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.items, historyViewModel, isHistoryBatchMode) {
@@ -582,7 +595,7 @@ fun CommonListScreen(
                         onUnfavorite = if (favoriteViewModel != null) { 
                             { favoriteViewModel.removeVideo(it) } 
                         } else null,
-                        historyDeleteSession = historyDeleteSession,
+                        historyDissolvingIds = historyDissolvingIds,
                         historyBatchMode = historyViewModel != null && isHistoryBatchMode,
                         historySelectedKeys = selectedHistoryKeys,
                         resolveHistoryItemKey = if (historyViewModel != null) {
@@ -706,6 +719,19 @@ fun CommonListScreen(
                                         Text("完成")
                                     }
                                 } else {
+                                    if (shouldShowHistoryClearAllAction(
+                                            hasHistoryViewModel = true,
+                                            hasItems = state.items.isNotEmpty(),
+                                            settingEnabled = focusSettings.showHistoryClearAllAction,
+                                            isBatchMode = isHistoryBatchMode
+                                        )
+                                    ) {
+                                        TextButton(
+                                            onClick = { showHistoryClearAllConfirm = true }
+                                        ) {
+                                            Text("清空全部")
+                                        }
+                                    }
                                     TextButton(
                                         onClick = {
                                             isHistoryBatchMode = true
@@ -816,15 +842,7 @@ fun CommonListScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val targetKeys = selectedHistoryKeys
-                        when (resolveHistoryDeleteAnimationMode(targetKeys.size)) {
-                            HistoryDeleteAnimationMode.SINGLE_DISSOLVE -> {
-                                targetKeys.firstOrNull()?.let(historyViewModel::startVideoDissolve)
-                            }
-                            HistoryDeleteAnimationMode.BATCH_DISSOLVE -> {
-                                historyViewModel.startBatchVideoDissolve(targetKeys)
-                            }
-                        }
+                        historyViewModel.startBatchVideoDissolve(selectedHistoryKeys)
                         selectedHistoryKeys = emptySet()
                         isHistoryBatchMode = false
                         showHistoryBatchDeleteConfirm = false
@@ -835,6 +853,31 @@ fun CommonListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showHistoryBatchDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (showHistoryClearAllConfirm && historyViewModel != null) {
+        AlertDialog(
+            onDismissRequest = { showHistoryClearAllConfirm = false },
+            title = { Text("清空全部历史") },
+            text = { Text("确认一键清除所有历史记录吗？此操作不可撤销") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        selectedHistoryKeys = emptySet()
+                        isHistoryBatchMode = false
+                        historyViewModel.clearAllHistory()
+                        showHistoryClearAllConfirm = false
+                    }
+                ) {
+                    Text("清空")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHistoryClearAllConfirm = false }) {
                     Text("取消")
                 }
             }
@@ -883,7 +926,7 @@ private fun CommonListContent(
     onCollectionClick: ((Long, Long, String) -> Unit)? = null,
     onLoadMore: () -> Unit,
     onUnfavorite: ((com.android.purebilibili.data.model.response.VideoItem) -> Unit)?,
-    historyDeleteSession: HistoryDeleteSession? = null,
+    historyDissolvingIds: Set<String> = emptySet(),
     historyBatchMode: Boolean = false,
     historySelectedKeys: Set<String> = emptySet(),
     resolveHistoryItemKey: (com.android.purebilibili.data.model.response.VideoItem) -> String = { video ->
@@ -970,13 +1013,8 @@ private fun CommonListContent(
                 ) { index, video ->
                     val historyKey = resolveHistoryItemKey(video)
                     val supportsHistoryDissolve = onHistoryLongDelete != null && onHistoryDissolveComplete != null
-                    val isDissolving = supportsHistoryDissolve &&
-                        historyKey in resolveActiveHistoryDeleteKeys(historyDeleteSession)
-                    val shouldKeepPlaceholderHidden = supportsHistoryDissolve &&
-                        shouldKeepHistoryDeletePlaceholderHidden(historyDeleteSession, historyKey)
+                    val isDissolving = supportsHistoryDissolve && historyKey in historyDissolvingIds
                     val isSelected = historyBatchMode && historyKey in historySelectedKeys
-                    val historyDeleteAnimationMode = historyDeleteSession?.animationMode
-                        ?: HistoryDeleteAnimationMode.SINGLE_DISSOLVE
 
                     val cardContent: @Composable () -> Unit = {
                         Box {
@@ -1063,13 +1101,8 @@ private fun CommonListContent(
                             onDissolveComplete = { onHistoryDissolveComplete?.invoke(historyKey) },
                             cardId = historyKey,
                             preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                            collapseAfterDissolve = shouldCollapseHistoryDeleteCard(historyDeleteAnimationMode),
-                            publishGlobalDissolveState = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),
-                            keepInvisibleAfterDissolve = shouldKeepPlaceholderHidden ||
-                                historyDeleteAnimationMode == HistoryDeleteAnimationMode.BATCH_DISSOLVE,
                             modifier = Modifier.jiggleOnDissolve(
                                 cardId = historyKey,
-                                enabled = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),
                                 isCurrentCardDissolving = isDissolving
                             )
                         ) {
@@ -1288,3 +1321,4 @@ private fun FavoriteCollectionRow(
         }
     }
 }
+

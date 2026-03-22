@@ -402,7 +402,7 @@ fun PluginsContent(
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "插件可以扩展应用功能，如自动跳过广告、过滤推荐内容等。\n启用插件后可点击展开查看详细设置。",
+                    text = "插件可以扩展应用功能，如自动跳过广告、过滤推荐内容等\n启用插件后可点击展开查看详细设置",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = 32.dp)

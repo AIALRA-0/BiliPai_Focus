@@ -139,12 +139,14 @@ fun FollowAuthorSection(
 fun GeneralSection(
     onAppearanceClick: () -> Unit,
     onPlaybackClick: () -> Unit,
-    onBottomBarClick: () -> Unit
+    onBottomBarClick: () -> Unit,
+    onFocusClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
     val appearanceVisual = rememberSettingsEntryVisual(SettingsSearchTarget.APPEARANCE, uiPreset)
     val playbackVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLAYBACK, uiPreset)
     val bottomBarVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BOTTOM_BAR, uiPreset)
+    val focusVisual = rememberSettingsEntryVisual(SettingsSearchTarget.FOCUS, uiPreset)
 
     SettingsCardGroup {
         SettingClickableItem(
@@ -172,6 +174,15 @@ fun GeneralSection(
             value = "自定义底栏项目",
             onClick = onBottomBarClick,
             iconTint = bottomBarVisual.iconTint
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = focusVisual.icon,
+            iconPainter = focusVisual.iconResId?.let { painterResource(id = it) },
+            title = "Focus",
+            value = "专注模式设置",
+            onClick = onFocusClick,
+            iconTint = focusVisual.iconTint
         )
     }
 }
@@ -239,7 +250,7 @@ fun ReleaseChannelPinnedCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "不存在其他官方发布渠道，请注意安装来源安全。",
+                        text = "不存在其他官方发布渠道，请注意安装来源安全",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -802,3 +813,4 @@ fun AboutSection(
         )
     }
 }
+

@@ -72,8 +72,8 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     private val _historyItemsMap = mutableMapOf<String, com.android.purebilibili.data.model.response.HistoryItem>()
     private val _historyItemsByRenderKey = mutableMapOf<String, com.android.purebilibili.data.model.response.HistoryItem>()
 
-    private val _deleteSession = MutableStateFlow<HistoryDeleteSession?>(null)
-    internal val deleteSession = _deleteSession.asStateFlow()
+    private val _dissolvingIds = MutableStateFlow<Set<String>>(emptySet())
+    val dissolvingIds = _dissolvingIds.asStateFlow()
     
     /**
      * 根据 bvid 获取历史记录项的导航信息
@@ -103,31 +103,21 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     }
 
     fun startVideoDissolve(renderKey: String) {
-        startDeleteSession(setOf(renderKey))
+        val key = renderKey.trim()
+        if (key.isEmpty()) return
+        _dissolvingIds.value = _dissolvingIds.value + key
     }
 
     fun startBatchVideoDissolve(renderKeys: Set<String>) {
-        startDeleteSession(renderKeys)
-    }
-
-    private fun startDeleteSession(renderKeys: Set<String>) {
-        val session = createHistoryDeleteSession(renderKeys) ?: return
-        _deleteSession.value = session
+        if (renderKeys.isEmpty()) return
+        _dissolvingIds.value = _dissolvingIds.value + renderKeys
     }
 
     fun completeVideoDissolve(renderKey: String) {
         val key = renderKey.trim()
         if (key.isEmpty()) return
-        val currentSession = _deleteSession.value ?: return
-        if (key !in currentSession.targetKeys) return
-
-        val nextSession = reduceHistoryDeleteSessionOnAnimationComplete(currentSession, key)
-        if (shouldFinalizeHistoryDeleteSession(nextSession)) {
-            deleteHistoryItems(nextSession.targetKeys)
-            _deleteSession.value = null
-        } else {
-            _deleteSession.value = nextSession
-        }
+        _dissolvingIds.value = _dissolvingIds.value - key
+        deleteHistoryItems(setOf(key))
     }
 
     private fun enrichHistoryProgress(
@@ -163,7 +153,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         cursorBusiness = ""
         _historyItemsMap.clear()
         _historyItemsByRenderKey.clear()
-        _deleteSession.value = null
+        _dissolvingIds.value = emptySet()
         
         val result = com.android.purebilibili.data.repository.HistoryRepository.getHistoryList(
             ps = 30,
@@ -347,6 +337,80 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 android.widget.Toast.makeText(
                     getApplication(),
                     "删除历史失败: ${e.message ?: "请稍后重试"}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    fun clearAllHistory() {
+        val snapshotItems = _uiState.value.items
+        val snapshotRenderMap = HashMap(_historyItemsByRenderKey)
+        val snapshotBvidMap = HashMap(_historyItemsMap)
+        val snapshotHasMore = hasMore
+        val snapshotCursorMax = cursorMax
+        val snapshotCursorViewAt = cursorViewAt
+        val snapshotCursorBusiness = cursorBusiness
+        val snapshotDissolvingIds = _dissolvingIds.value
+        if (snapshotItems.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(items = emptyList())
+        _historyItemsByRenderKey.clear()
+        _historyItemsMap.clear()
+        _dissolvingIds.value = emptySet()
+        hasMore = false
+        _hasMoreState.value = false
+        cursorMax = 0L
+        cursorViewAt = 0L
+        cursorBusiness = ""
+
+        viewModelScope.launch {
+            try {
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
+                if (csrf.isBlank()) {
+                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                    _dissolvingIds.value = snapshotDissolvingIds
+                    hasMore = snapshotHasMore
+                    _hasMoreState.value = snapshotHasMore
+                    cursorMax = snapshotCursorMax
+                    cursorViewAt = snapshotCursorViewAt
+                    cursorBusiness = snapshotCursorBusiness
+                    android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                val result = com.android.purebilibili.data.repository.HistoryRepository.clearHistory(csrf)
+                if (result.isSuccess) {
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "已清空全部历史记录",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                    _dissolvingIds.value = snapshotDissolvingIds
+                    hasMore = snapshotHasMore
+                    _hasMoreState.value = snapshotHasMore
+                    cursorMax = snapshotCursorMax
+                    cursorViewAt = snapshotCursorViewAt
+                    cursorBusiness = snapshotCursorBusiness
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "清空历史失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                _dissolvingIds.value = snapshotDissolvingIds
+                hasMore = snapshotHasMore
+                _hasMoreState.value = snapshotHasMore
+                cursorMax = snapshotCursorMax
+                cursorViewAt = snapshotCursorViewAt
+                cursorBusiness = snapshotCursorBusiness
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    "清空历史失败: ${e.message ?: "请稍后重试"}",
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
             }

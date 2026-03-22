@@ -6,9 +6,11 @@ cd "$ROOT_DIR"
 
 OUTPUT_DIR="baselineprofile/build/outputs"
 TARGET_FILE="app/src/main/baseline-prof.txt"
+GRADLE_FLAGS=(--no-parallel --max-workers=2)
+MANAGED_DEVICE_NAME="${MANAGED_DEVICE_NAME:-pixel6Api31}"
 
-echo "[1/3] Running baseline profile generation on connected device..."
-./gradlew :baselineprofile:connectedReleaseAndroidTest
+echo "[1/3] Running baseline profile generation on managed device ${MANAGED_DEVICE_NAME}..."
+./gradlew "${GRADLE_FLAGS[@]}" ":baselineprofile:${MANAGED_DEVICE_NAME}BenchmarkAndroidTest"
 
 echo "[2/3] Locating generated baseline-prof.txt..."
 PROFILE_FILE="$(find "$OUTPUT_DIR" -type f -name '*baseline-prof.txt' | head -n 1)"

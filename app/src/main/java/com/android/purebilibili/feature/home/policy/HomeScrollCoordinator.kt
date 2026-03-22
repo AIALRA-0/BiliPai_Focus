@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.home.policy
 
 import com.android.purebilibili.feature.home.resolveNextHomeGlobalScrollOffset
-import kotlin.math.abs
 
 internal enum class BottomBarVisibilityIntent {
     SHOW,
@@ -13,32 +12,6 @@ internal data class HomeScrollUpdate(
     val bottomBarVisibilityIntent: BottomBarVisibilityIntent?,
     val globalScrollOffset: Float?
 )
-
-internal data class HomeHeaderSettleTransition(
-    val targetOffsetPx: Float,
-    val shouldAnimate: Boolean
-)
-
-internal fun shouldHandleHomeVerticalPreScroll(
-    deltaX: Float,
-    deltaY: Float,
-    minimumVerticalDeltaPx: Float = 0.5f
-): Boolean {
-    val absoluteDeltaY = abs(deltaY)
-    if (absoluteDeltaY < minimumVerticalDeltaPx) return false
-    return absoluteDeltaY >= abs(deltaX)
-}
-
-internal fun resolveHomeHeaderSettleTransition(
-    currentHeaderOffsetPx: Float,
-    targetHeaderOffsetPx: Float,
-    animationThresholdPx: Float = 0.5f
-): HomeHeaderSettleTransition {
-    return HomeHeaderSettleTransition(
-        targetOffsetPx = targetHeaderOffsetPx,
-        shouldAnimate = abs(currentHeaderOffsetPx - targetHeaderOffsetPx) > animationThresholdPx
-    )
-}
 
 internal fun shouldExpandHomeHeaderForSettledPage(
     currentHeaderOffsetPx: Float,

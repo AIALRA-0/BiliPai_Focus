@@ -5,10 +5,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.FileInputStream
 
+@Ignore("Use the :baselineprofile managed-device tasks for benchmark verification.")
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
 

@@ -69,8 +69,8 @@ android {
         }
     }
 
-    buildTypes {
-        release {
+        buildTypes {
+            release {
             // Disable PNG crunching to avoid AAPT errors
             isCrunchPngs = false
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "false")
@@ -89,7 +89,7 @@ android {
             // Debug 构建保持快速编译
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            resValue("string", "app_name", "BiliPai Debug")
+            resValue("string", "app_name", "BliPai Focus")
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
             buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", debugVerboseLogsEnabled.toString())
             buildConfigField(
@@ -99,6 +99,17 @@ android {
             )
             isMinifyEnabled = false
             isShrinkResources = false
+        }
+        create("benchmark") {
+            // Release-like benchmark build for Macrobenchmark / Baseline Profile.
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            resValue("string", "app_name", "BiliPai Benchmark")
+            ndk {
+                abiFilters.clear()
+                abiFilters += listOf("x86_64")
+            }
         }
         create("dev") {
             // Dev 保持“接近发布”的验证语义，不用于日常本地快速迭代。
@@ -301,6 +312,8 @@ dependencies {
     
     // --- 10. ProfileInstaller (启动优化) ---
     implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    add("benchmarkImplementation", "androidx.tracing:tracing-perfetto:1.0.0")
+    add("benchmarkImplementation", "androidx.tracing:tracing-perfetto-binary:1.0.0")
     
     // --- 11. Firebase (崩溃追踪和分析) ---
     implementation(platform("com.google.firebase:firebase-bom:33.11.0"))

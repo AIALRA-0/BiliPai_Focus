@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -52,6 +51,7 @@ import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.settings.GITHUB_URL
+import com.android.purebilibili.core.store.FocusSettings
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
 import com.android.purebilibili.core.store.HomeTopTabSettings
 import com.android.purebilibili.core.store.AppNavigationSettings
@@ -78,8 +78,6 @@ import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeig
 import com.android.purebilibili.feature.home.policy.BottomBarVisibilityIntent
 import com.android.purebilibili.feature.home.policy.HomeBottomBarScrollState
 import com.android.purebilibili.feature.home.policy.reduceHomePreScroll
-import com.android.purebilibili.feature.home.policy.resolveHomeHeaderSettleTransition
-import com.android.purebilibili.feature.home.policy.shouldHandleHomeVerticalPreScroll
 import com.android.purebilibili.feature.home.policy.reduceHomeBottomBarListScroll
 import com.android.purebilibili.feature.home.policy.resolveHomeBottomBarBaseVisibility
 import com.android.purebilibili.feature.home.policy.resolveHomeHeaderOffsetForSettledPage
@@ -187,43 +185,9 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
     // [Header] 首页重选/双击回顶时需要强制恢复顶部，避免自动收缩后残留空白区域
     var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    var headerSettleAnimationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var delayTopTabsUntilCardSettled by remember { mutableStateOf(false) }
     var hideTopTabsForForwardDetailNav by remember { mutableStateOf(false) }
     var returnAnimationStartElapsedMs by remember { mutableLongStateOf(0L) }
-
-    fun setHeaderOffsetImmediate(value: Float) {
-        headerSettleAnimationJob?.cancel()
-        headerSettleAnimationJob = null
-        headerOffsetHeightPx = value
-    }
-
-    fun animateHeaderOffsetTo(targetValue: Float) {
-        val transition = resolveHomeHeaderSettleTransition(
-            currentHeaderOffsetPx = headerOffsetHeightPx,
-            targetHeaderOffsetPx = targetValue
-        )
-        if (!transition.shouldAnimate) {
-            setHeaderOffsetImmediate(transition.targetOffsetPx)
-            return
-        }
-        headerSettleAnimationJob?.cancel()
-        headerSettleAnimationJob = coroutineScope.launch {
-            animate(
-                initialValue = headerOffsetHeightPx,
-                targetValue = transition.targetOffsetPx,
-                animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing)
-            ) { value, _ ->
-                headerOffsetHeightPx = value
-            }
-        }.also { job ->
-            job.invokeOnCompletion {
-                if (headerSettleAnimationJob === job) {
-                    headerSettleAnimationJob = null
-                }
-            }
-        }
-    }
 
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
@@ -231,7 +195,7 @@ fun HomeScreen(
         scrollChannel?.receiveAsFlow()?.collect {
             launch {
                 // 双击首页回顶时强制展开顶部，避免收缩头部与回顶状态错位导致空白
-                setHeaderOffsetImmediate(0f)
+                headerOffsetHeightPx = 0f
                 val gridState = gridStates[state.currentCategory]
                 val isAtTop = gridState == null || (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50)
 
@@ -248,7 +212,7 @@ fun HomeScreen(
                     }
                     listState.animateScrollToItem(plan.animateTargetIndex)
                 }
-                setHeaderOffsetImmediate(0f)
+                headerOffsetHeightPx = 0f
             }
         }
     }
@@ -261,12 +225,18 @@ fun HomeScreen(
             visibleIds = defaultTopTabIds.toSet()
         )
     )
+    val focusSettings by SettingsManager.getFocusSettings(context).collectAsState(
+        initial = FocusSettings()
+    )
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 iOSHomeHeader
-    val topCategories = remember(topTabSettings) {
-        resolveHomeTopCategories(
-            customOrderIds = topTabSettings.orderIds,
-            visibleIds = topTabSettings.visibleIds
+    val topCategories = remember(topTabSettings, focusSettings) {
+        applyFocusHomeTopCategories(
+            categories = resolveHomeTopCategories(
+                customOrderIds = topTabSettings.orderIds,
+                visibleIds = topTabSettings.visibleIds
+            ),
+            settings = focusSettings
         )
     }
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
@@ -489,7 +459,7 @@ fun HomeScreen(
             },
             text = { 
                 Text(
-                    "关闭后下拉刷新将不再显示趣味消息。\n\n你可以在「设置」中随时重新开启。",
+                    "关闭后下拉刷新将不再显示趣味消息\n\n你可以在「设置」中随时重新开启",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ) 
             },
@@ -751,7 +721,7 @@ fun HomeScreen(
         when (item) {
             BottomNavItem.HOME -> {
                 coroutineScope.launch { 
-                    setHeaderOffsetImmediate(0f)
+                    headerOffsetHeightPx = 0f
                     val gridState = gridStates[state.currentCategory]
                     val isAtTop = gridState == null || (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50)
                     
@@ -765,7 +735,7 @@ fun HomeScreen(
                         }
                         listState.animateScrollToItem(0)
                     } 
-                    setHeaderOffsetImmediate(0f)
+                    headerOffsetHeightPx = 0f
                 }
             }
             BottomNavItem.DYNAMIC -> onDynamicClick()
@@ -938,7 +908,7 @@ fun HomeScreen(
                     maxHeaderCollapsePx = searchCollapseDistancePx
                 )
                 if (kotlin.math.abs(headerOffsetHeightPx - settledHeaderOffsetPx) > 0.5f) {
-                    animateHeaderOffsetTo(settledHeaderOffsetPx)
+                    headerOffsetHeightPx = settledHeaderOffsetPx
                 }
             }
     }
@@ -971,11 +941,6 @@ fun HomeScreen(
     ) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (!shouldHandleHomeVerticalPreScroll(deltaX = available.x, deltaY = available.y)) {
-                    return Offset.Zero
-                }
-                headerSettleAnimationJob?.cancel()
-                headerSettleAnimationJob = null
                 val scrollUpdate = reduceHomePreScroll(
                     currentHeaderOffsetPx = headerOffsetHeightPx,
                     deltaY = available.y,
@@ -1050,12 +1015,12 @@ fun HomeScreen(
 
         when (decision) {
             TodayWatchStartupRevealDecision.REVEAL -> {
-                setHeaderOffsetImmediate(0f)
+                headerOffsetHeightPx = 0f
                 if (recommendGridState.firstVisibleItemIndex > 12) {
                     recommendGridState.scrollToItem(12)
                 }
                 recommendGridState.animateScrollToItem(0)
-                setHeaderOffsetImmediate(0f)
+                headerOffsetHeightPx = 0f
                 todayWatchStartupRevealHandled = true
             }
             TodayWatchStartupRevealDecision.SKIP -> {
@@ -1370,6 +1335,7 @@ fun HomeScreen(
             },
             onPartitionClick = onPartitionClick,
             onLiveClick = onLiveListClick,  // [修复] 直播分区点击导航到独立页面
+            showPartitionButton = focusSettings.showHomePartitionButton,
             // isScrollingUp = isHeaderVisible, // [Removed] logic moved to offset
             hazeState = if (topChromeMaterialMode != com.android.purebilibili.feature.home.components.TopTabMaterialMode.PLAIN) {
                 hazeState
@@ -1379,7 +1345,7 @@ fun HomeScreen(
             onStatusBarDoubleTap = {
                 coroutineScope.launch {
                     gridStates[state.currentCategory]?.animateScrollToItem(0)
-                    setHeaderOffsetImmediate(0f) // [Refinement] Reset header on double tap
+                    headerOffsetHeightPx = 0f // [Refinement] Reset header on double tap
                 }
             },
             isRefreshing = isRefreshing,
@@ -1777,8 +1743,11 @@ fun HomeScreen(
 
     //  [修复] 如果当前在直播分类（非关注空列表情况），返回时切换到推荐
     val isLiveCategoryNotHome = state.currentCategory == HomeCategory.LIVE && !isEmptyLiveFollowed
+    val liveCategoryBackTarget = remember(topCategories) {
+        topCategories.firstOrNull { it != HomeCategory.LIVE } ?: topCategories.firstOrNull() ?: HomeCategory.FOLLOW
+    }
     androidx.activity.compose.BackHandler(enabled = isLiveCategoryNotHome) {
-        viewModel.switchCategory(HomeCategory.RECOMMEND)
+        viewModel.switchCategory(liveCategoryBackTarget)
     }
     
 // [Removed] Animation logic moved inside HorizontalPager where the active state exists
@@ -1814,9 +1783,9 @@ fun HomeScreen(
                 firstItemModifier = Modifier,
                 onHomeDoubleTap = {
                     coroutineScope.launch {
-                        setHeaderOffsetImmediate(0f)
+                        headerOffsetHeightPx = 0f
                         gridStates[state.currentCategory]?.animateScrollToItem(0)
-                        setHeaderOffsetImmediate(0f)
+                        headerOffsetHeightPx = 0f
                     }
                 },
                 hazeState = if (isBottomBarBlurEnabled) hazeState else null,
@@ -1889,3 +1858,4 @@ internal fun resolveBottomBarRestoreDelayMs(
     if (isQuickReturnFromDetail) return 300L
     return 360L
 }
+

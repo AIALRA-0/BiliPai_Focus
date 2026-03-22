@@ -587,7 +587,7 @@ class EyeProtectionPlugin : Plugin {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             Text(
-                text = "当前页面是实时预览；离开设置后按“立即开启护眼/定时护眼”规则生效。",
+                text = "当前页面是实时预览；离开设置后按“立即开启护眼/定时护眼”规则生效",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -672,7 +672,7 @@ class EyeProtectionPlugin : Plugin {
             )
 
             Text(
-                text = "护眼滤镜不影响触摸操作。建议搭配夜间模式与定时休息。",
+                text = "护眼滤镜不影响触摸操作；建议搭配夜间模式与定时休息",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp)
@@ -690,7 +690,7 @@ class EyeProtectionPlugin : Plugin {
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = "照顾好自己，视频永远看得完。",
+                    text = "照顾好自己，视频永远看得完",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

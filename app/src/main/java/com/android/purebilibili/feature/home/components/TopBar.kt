@@ -55,6 +55,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -406,6 +410,7 @@ fun CategoryTabRow(
     onCategorySelected: (Int) -> Unit = {},
     onPartitionClick: () -> Unit = {},
     onLiveClick: () -> Unit = {},  // [新增] 直播分区点击回调
+    showPartitionButton: Boolean = true,
     pagerState: androidx.compose.foundation.pager.PagerState? = null, // [New] PagerState for sync
     labelMode: Int = 2,
     isLiquidGlassEnabled: Boolean = false,
@@ -458,6 +463,7 @@ fun CategoryTabRow(
             onCategorySelected = onCategorySelected,
             onPartitionClick = onPartitionClick,
             onLiveClick = onLiveClick,
+            showPartitionButton = showPartitionButton,
             pagerState = pagerState,
             labelMode = labelMode,
             isFloatingStyle = isFloatingStyle
@@ -777,30 +783,31 @@ fun CategoryTabRow(
             }
         }
         
-        Spacer(modifier = Modifier.width(4.dp))
-        
-        //  分区按钮
-        Box(
-            modifier = Modifier
-                .size(actionButtonSize)
-                .clip(RoundedCornerShape(actionButtonCorner))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                resolveTopTabPartitionIcon(uiPreset),
-                contentDescription = "浏览全部分区",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.size(actionIconSize)
-            )
+        if (showPartitionButton) {
+            Spacer(modifier = Modifier.width(4.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(actionButtonSize)
+                    .clip(RoundedCornerShape(actionButtonCorner))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    resolveTopTabPartitionIcon(uiPreset),
+                    contentDescription = "浏览全部分区",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.size(actionIconSize)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
         }
-        
-        Spacer(modifier = Modifier.width(8.dp))
     }
 }
 
@@ -811,6 +818,7 @@ private fun Md3CategoryTabRow(
     onCategorySelected: (Int) -> Unit,
     onPartitionClick: () -> Unit,
     onLiveClick: () -> Unit,
+    showPartitionButton: Boolean,
     pagerState: androidx.compose.foundation.pager.PagerState?,
     labelMode: Int,
     isFloatingStyle: Boolean
@@ -991,31 +999,33 @@ private fun Md3CategoryTabRow(
             }
         }
 
-        Spacer(modifier = Modifier.width(4.dp))
+        if (showPartitionButton) {
+            Spacer(modifier = Modifier.width(4.dp))
 
-        Box(
-            modifier = Modifier
-                .width(actionButtonSize)
-                .fillMaxHeight()
-                .padding(bottom = actionContentBottomPadding)
-                .clip(RoundedCornerShape(actionButtonCorner))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = LocalIndication.current
-                ) {
-                    performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                resolveTopTabPartitionIcon(uiPreset),
-                contentDescription = "浏览全部分区",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(actionIconSize)
-            )
+            Box(
+                modifier = Modifier
+                    .width(actionButtonSize)
+                    .fillMaxHeight()
+                    .padding(bottom = actionContentBottomPadding)
+                    .clip(RoundedCornerShape(actionButtonCorner))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = LocalIndication.current
+                    ) {
+                        performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    resolveTopTabPartitionIcon(uiPreset),
+                    contentDescription = "浏览全部分区",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(actionIconSize)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
         }
-
-        Spacer(modifier = Modifier.width(8.dp))
     }
 }
 
@@ -1120,6 +1130,10 @@ fun CategoryTabItem(
 
      Box(
          modifier = Modifier
+             .semantics(mergeDescendants = true) {
+                 contentDescription = category
+                 role = Role.Tab
+             }
              .clip(RoundedCornerShape(16.dp)) 
              .combinedClickable(
                  interactionSource = remember { MutableInteractionSource() },

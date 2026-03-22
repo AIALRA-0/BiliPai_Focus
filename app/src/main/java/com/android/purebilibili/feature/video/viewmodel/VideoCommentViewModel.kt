@@ -283,65 +283,6 @@ class VideoCommentViewModel : ViewModel() {
         _subReplyState.value = _subReplyState.value.copy(visible = false)
     }
 
-    fun onExternalCommentSent(aid: Long, newReply: ReplyItem?) {
-        if (currentAid != aid || aid <= 0L) return
-
-        val current = _commentState.value
-        val subState = _subReplyState.value
-        val activeRootReply = subState.rootReply
-
-        if (newReply == null) {
-            if (subState.visible && activeRootReply != null) {
-                _subReplyState.value = subState.copy(
-                    items = emptyList(),
-                    page = 1,
-                    isEnd = false,
-                    isLoading = true,
-                    error = null
-                )
-                loadSubReplies(activeRootReply.oid, activeRootReply.rpid, 1)
-            } else {
-                reloadCommentsFromStart()
-            }
-            return
-        }
-
-        val updatedAllReplies = when {
-            newReply.root == 0L -> {
-                (listOf(newReply) + allReplies).distinctBy { it.rpid }
-            }
-            else -> {
-                allReplies.map { rootReply ->
-                    if (rootReply.rpid != newReply.root) return@map rootReply
-                    val updatedPreviewReplies = (listOf(newReply) + rootReply.replies.orEmpty())
-                        .distinctBy { it.rpid }
-                    rootReply.copy(
-                        count = rootReply.count + 1,
-                        rcount = rootReply.rcount + 1,
-                        replies = updatedPreviewReplies
-                    )
-                }
-            }
-        }
-        allReplies = updatedAllReplies
-
-        val filteredReplies = if (current.upOnlyFilter && current.upMid > 0) {
-            updatedAllReplies.filter { it.mid == current.upMid }
-        } else {
-            updatedAllReplies
-        }
-        _commentState.value = current.copy(
-            replies = filteredReplies,
-            replyCount = current.replyCount + 1
-        )
-
-        if (subState.visible && activeRootReply != null && newReply.root == activeRootReply.rpid) {
-            _subReplyState.value = subState.copy(
-                items = (listOf(newReply) + subState.items).distinctBy { it.rpid }
-            )
-        }
-    }
-
     fun loadMoreSubReplies() {
         val state = _subReplyState.value
         if (state.isLoading || state.isEnd || state.rootReply == null) return
@@ -640,17 +581,5 @@ class VideoCommentViewModel : ViewModel() {
                 android.util.Log.e("CommentVM", "Delete sub-comment failed for $rpid: ${e.message}")
             }
         }
-    }
-
-    private fun reloadCommentsFromStart() {
-        allReplies = emptyList()
-        _commentState.value = _commentState.value.copy(
-            replies = emptyList(),
-            nextPage = 1,
-            isRepliesEnd = false,
-            isRepliesLoading = false,
-            repliesError = null
-        )
-        loadComments()
     }
 }

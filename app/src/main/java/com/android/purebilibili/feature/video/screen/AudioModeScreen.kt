@@ -791,7 +791,7 @@ private fun AudioModeSleepTimerDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
-                    text = "选择常用时长，或输入分钟数 / 小时:分钟，例如 90、1:30。",
+                    text = "选择常用时长，或输入分钟数 / 小时:分钟，例如 90、1:30",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
@@ -836,7 +836,7 @@ private fun AudioModeSleepTimerDialog(
                     isError = showCustomError,
                     supportingText = {
                         if (showCustomError) {
-                            Text("请输入正整数分钟，或 小时:分钟，分钟需在 0-59。")
+                            Text("请输入正整数分钟，或 小时:分钟，分钟需在 0-59")
                         } else if (parsedCustomMinutes != null) {
                             Text("将于 ${formatAudioModeSleepTimerButtonLabel(parsedCustomMinutes)}后暂停播放")
                         }

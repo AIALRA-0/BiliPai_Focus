@@ -310,8 +310,6 @@ fun VideoCommentSheetHost(
                                     isEnd = subReplyState.isEnd,
                                     emoteMap = emoteMap,
                                     onLoadMore = { commentViewModel.loadMoreSubReplies() },
-                                    onDismiss = { commentViewModel.closeSubReply() },
-                                    onRootCommentClick = onRootCommentClick,
                                     onTimestampClick = onTimestampClick,
                                     upMid = subReplyState.upMid,
                                     showUpFlag = commentState.showUpFlag,

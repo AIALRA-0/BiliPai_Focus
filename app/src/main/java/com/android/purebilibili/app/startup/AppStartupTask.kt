@@ -28,36 +28,36 @@ internal data class AppStartupTask(
 
 internal fun defaultAppStartupTasks(
     sdkInt: Int = Build.VERSION.SDK_INT,
-    deferredDelayMs: Long = PureApplicationRuntimeConfig.deferredNonCriticalStartupDelayMs(),
-    dex2OatDelayMs: Long = PureApplicationRuntimeConfig.dex2OatProfileInstallDelayMs()
+    deferredDelayMs: Long = deferredNonCriticalStartupDelayMs(),
+    dex2OatDelayMs: Long = dex2OatProfileInstallDelayMs()
 ): List<AppStartupTask> {
-    val playlistPhase = if (PureApplicationRuntimeConfig.shouldDeferPlaylistRestoreAtStartup()) {
+    val playlistPhase = if (shouldDeferPlaylistRestoreAtStartup()) {
         StartupPhase.AFTER_FIRST_INTERACTIVE
     } else {
         StartupPhase.BEFORE_FIRST_INTERACTIVE
     }
-    val playlistThread = if (PureApplicationRuntimeConfig.shouldDeferPlaylistRestoreAtStartup()) {
+    val playlistThread = if (shouldDeferPlaylistRestoreAtStartup()) {
         StartupThread.MAIN_DELAYED
     } else {
         StartupThread.MAIN
     }
-    val playlistCriticality = if (PureApplicationRuntimeConfig.shouldDeferPlaylistRestoreAtStartup()) {
+    val playlistCriticality = if (shouldDeferPlaylistRestoreAtStartup()) {
         StartupCriticality.DEFERRED
     } else {
         StartupCriticality.REQUIRED
     }
 
-    val telemetryPhase = if (PureApplicationRuntimeConfig.shouldDeferTelemetryInitAtStartup()) {
+    val telemetryPhase = if (shouldDeferTelemetryInitAtStartup()) {
         StartupPhase.AFTER_FIRST_INTERACTIVE
     } else {
         StartupPhase.BEFORE_FIRST_INTERACTIVE
     }
-    val telemetryThread = if (PureApplicationRuntimeConfig.shouldDeferTelemetryInitAtStartup()) {
+    val telemetryThread = if (shouldDeferTelemetryInitAtStartup()) {
         StartupThread.MAIN_DELAYED
     } else {
         StartupThread.MAIN
     }
-    val telemetryCriticality = if (PureApplicationRuntimeConfig.shouldDeferTelemetryInitAtStartup()) {
+    val telemetryCriticality = if (shouldDeferTelemetryInitAtStartup()) {
         StartupCriticality.DEFERRED
     } else {
         StartupCriticality.REQUIRED
@@ -122,7 +122,7 @@ internal fun defaultAppStartupTasks(
         )
     )
 
-    if (PureApplicationRuntimeConfig.shouldRequestDex2OatProfileInstall(sdkInt)) {
+    if (shouldRequestDex2OatProfileInstall(sdkInt)) {
         tasks += AppStartupTask(
             id = "dex2oat_profile_install",
             phase = StartupPhase.AFTER_FIRST_INTERACTIVE,

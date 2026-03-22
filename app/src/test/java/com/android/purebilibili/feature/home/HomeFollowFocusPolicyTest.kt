@@ -1,0 +1,68 @@
+package com.android.purebilibili.feature.home
+
+import com.android.purebilibili.core.store.FocusFollowGroup
+import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.data.model.response.Owner
+import com.android.purebilibili.data.model.response.VideoItem
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class HomeFollowFocusPolicyTest {
+
+    @Test
+    fun filterHomeFollowVideosByFocusFollowGroups_respectsGroupVisibility() {
+        val config = FocusFollowGroupConfig(
+            groups = listOf(
+                FocusFollowGroup(id = "default", name = "默认分组", visible = true),
+                FocusFollowGroup(id = "quiet", name = "静音", visible = false)
+            ),
+            assignments = mapOf("2002" to "quiet")
+        )
+
+        val result = filterHomeFollowVideosByFocusFollowGroups(
+            videos = listOf(
+                videoItem(mid = 2001L),
+                videoItem(mid = 2002L)
+            ),
+            config = config
+        )
+
+        assertEquals(listOf(2001L), result.map { it.owner.mid })
+    }
+
+    @Test
+    fun resolveHomeFollowEmptyMessage_distinguishesEmptyFromFullyHidden() {
+        assertEquals("当前 Focus 关注分组已隐藏全部内容", resolveHomeFollowEmptyMessage(0, 3))
+        assertEquals("暂无关注动态，请先关注一些UP主", resolveHomeFollowEmptyMessage(0, 0))
+        assertEquals(null, resolveHomeFollowEmptyMessage(2, 5))
+    }
+
+    @Test
+    fun filterHomeFollowVideosByFocusFollowGroups_bypassesWhenDisabled() {
+        val config = FocusFollowGroupConfig(
+            groups = listOf(
+                FocusFollowGroup(id = "default", name = "默认分组", visible = true),
+                FocusFollowGroup(id = "quiet", name = "静音", visible = false)
+            ),
+            assignments = mapOf("2002" to "quiet")
+        )
+
+        val result = filterHomeFollowVideosByFocusFollowGroups(
+            videos = listOf(
+                videoItem(mid = 2001L),
+                videoItem(mid = 2002L)
+            ),
+            config = config,
+            filterEnabled = false
+        )
+
+        assertEquals(listOf(2001L, 2002L), result.map { it.owner.mid })
+    }
+
+    private fun videoItem(mid: Long): VideoItem {
+        return VideoItem(
+            bvid = "BV$mid",
+            owner = Owner(mid = mid, name = "UP-$mid")
+        )
+    }
+}

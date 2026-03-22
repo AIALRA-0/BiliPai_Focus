@@ -41,6 +41,7 @@ fun DynamicTopBarWithTabs(
     tabs: List<String>,
     onTabSelected: (Int) -> Unit,
     displayMode: DynamicDisplayMode = DynamicDisplayMode.SIDEBAR,
+    onSettingsClick: () -> Unit = {},
     onDisplayModeChange: (DynamicDisplayMode) -> Unit = {},
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
@@ -83,6 +84,18 @@ fun DynamicTopBarWithTabs(
                 )
                 
                 Spacer(modifier = Modifier.weight(1f))
+
+                IconButton(
+                    onClick = onSettingsClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Gear,
+                        contentDescription = "关注分组设置",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
                 
                 //  布局模式切换按钮
                 IconButton(

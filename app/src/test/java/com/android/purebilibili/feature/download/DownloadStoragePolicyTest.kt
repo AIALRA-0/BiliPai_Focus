@@ -1,14 +1,13 @@
 package com.android.purebilibili.feature.download
 
-import java.io.File
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
 
 class DownloadStoragePolicyTest {
 
     @Test
-    fun legacyCustomPath_outsideAppScopedRoot_shouldBeRejected() {
+    fun `legacy custom path outside app scoped root should be rejected`() {
         val sanitized = sanitizeLegacyCustomPath(
             customPath = "/storage/emulated/0/Download/BiliPai",
             appScopedRoot = "/storage/emulated/0/Android/data/com.android.purebilibili/files"
@@ -18,7 +17,7 @@ class DownloadStoragePolicyTest {
     }
 
     @Test
-    fun legacyCustomPath_insideAppScopedRoot_shouldBeKept() {
+    fun `legacy custom path inside app scoped root should be kept`() {
         val sanitized = sanitizeLegacyCustomPath(
             customPath = "/storage/emulated/0/Android/data/com.android.purebilibili/files/downloads",
             appScopedRoot = "/storage/emulated/0/Android/data/com.android.purebilibili/files"
@@ -31,7 +30,7 @@ class DownloadStoragePolicyTest {
     }
 
     @Test
-    fun exportDisplayName_shouldSanitizeInvalidCharacters() {
+    fun `export display name should sanitize invalid characters`() {
         val displayName = buildSafeExportDisplayName(
             title = "A/B:C*D?E\"F<G>H|I",
             qualityDesc = "1080P",
@@ -39,38 +38,5 @@ class DownloadStoragePolicyTest {
         )
 
         assertEquals("A_B_C_D_E_F_G_H_I_1080P.mp4", displayName)
-    }
-
-    @Test
-    fun resolveManagedDownloadDirectory_fallsBackToInternalFilesDirWhenExternalRootMissing() {
-        val filesDir = File("/data/user/0/com.android.purebilibili.debug/files")
-
-        val resolved = resolveManagedDownloadDirectory(
-            filesDir = filesDir,
-            externalFilesRoot = null,
-            customPath = null
-        )
-
-        assertEquals(
-            File(filesDir, "downloads").absolutePath,
-            resolved.absolutePath
-        )
-    }
-
-    @Test
-    fun resolveManagedDownloadDirectory_rejectsLegacyCustomPathOutsideManagedRoot() {
-        val filesDir = File("/data/user/0/com.android.purebilibili.debug/files")
-        val externalRoot = File("/storage/emulated/0/Android/data/com.android.purebilibili.debug/files")
-
-        val resolved = resolveManagedDownloadDirectory(
-            filesDir = filesDir,
-            externalFilesRoot = externalRoot,
-            customPath = "/storage/emulated/0/Download"
-        )
-
-        assertEquals(
-            File(externalRoot, "downloads").absolutePath,
-            resolved.absolutePath
-        )
     }
 }

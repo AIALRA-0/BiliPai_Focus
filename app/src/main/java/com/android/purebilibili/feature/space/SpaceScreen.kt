@@ -281,7 +281,7 @@ fun SpaceScreen(
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { showBlockConfirmDialog = false },
             title = { Text(if (isBlocked) "解除屏蔽" else "屏蔽 UP 主") },
-            text = { Text(if (isBlocked) "确定要解除对 $userName 的屏蔽吗？" else "屏蔽后，将不再推荐 $userName 的视频。\n确定要屏蔽吗？") },
+            text = { Text(if (isBlocked) "确定要解除对 $userName 的屏蔽吗？" else "屏蔽后，将不再推荐 $userName 的视频\n确定要屏蔽吗？") },
             confirmButton = {
                 com.android.purebilibili.core.ui.IOSDialogAction(
                     onClick = {
@@ -360,7 +360,7 @@ fun SpaceScreen(
                             }
                         }
                         Text(
-                            text = "可多选，确定后覆盖原分组设置。",
+                            text = "可多选，确定后覆盖原分组设置",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 8.dp)

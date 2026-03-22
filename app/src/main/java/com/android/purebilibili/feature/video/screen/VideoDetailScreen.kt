@@ -433,7 +433,6 @@ fun VideoDetailScreen(
     transitionEnterDurationMillis: Int = 320,
     transitionMaxBlurRadiusPx: Float = 20f,
     onBack: () -> Unit,
-    onHomeClick: () -> Unit = onBack,
     onNavigateToAudioMode: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onVideoClick: (String, android.os.Bundle?) -> Unit,
@@ -575,6 +574,13 @@ fun VideoDetailScreen(
             initialValue = true,
             lifecycle = lifecycleOwner.lifecycle
         )
+    val focusSettings by com.android.purebilibili.core.store.SettingsManager
+        .getFocusSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.FocusSettings(),
+            lifecycle = lifecycleOwner.lifecycle
+        )
+    val showRelatedVideosSection = focusSettings.showVideoRelatedVideosSection
     val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsStateWithLifecycle()
     val favoriteFolders by viewModel.favoriteFolders.collectAsStateWithLifecycle()
     val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsStateWithLifecycle()
@@ -769,16 +775,15 @@ fun VideoDetailScreen(
         isExitTransitionInProgress = isExitTransitionInProgress
     )
 
-    val handleTopBarAction = remember(
+    val handleBack = remember(
         onBack,
-        onHomeClick,
         miniPlayerManager,
         currentBvid,
         coverTakeoverBeforeBackDelayMillis,
         backNavigationScope
     ) {
-        action@{ action: VideoDetailTopBarAction ->
-            if (isActuallyLeaving) return@action
+        back@{
+            if (isActuallyLeaving) return@back
             isActuallyLeaving = true // 标记确实是用户通过点击或返回键离开
             isScreenActive = false  // 标记页面正在退出
             forceCoverOnlyOnReturn = true
@@ -793,16 +798,8 @@ fun VideoDetailScreen(
                 if (coverTakeoverBeforeBackDelayMillis > 0L) {
                     kotlinx.coroutines.delay(coverTakeoverBeforeBackDelayMillis)
                 }
-                when (action) {
-                    VideoDetailTopBarAction.BACK -> onBack()
-                    VideoDetailTopBarAction.HOME -> onHomeClick()
-                }
+                onBack() // 执行实际的返回导航
             }
-        }
-    }
-    val handleBack = remember(handleTopBarAction) {
-        {
-            handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = false))
         }
     }
 
@@ -1767,9 +1764,6 @@ fun VideoDetailScreen(
                 onToggleFullscreen = { toggleFullscreen() },
                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                 onBack = { toggleFullscreen() },
-                onHomeClick = {
-                    handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
-                },
                 onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                 // 🔗 [新增] 分享功能
                 bvid = bvid,
@@ -1927,6 +1921,7 @@ fun VideoDetailScreen(
                         currentAudioQuality = audioQualityPreference,
                         onAudioQualityChange = { viewModel.setAudioQuality(it) },
                         onRelatedVideoClick = navigateToRelatedVideo,
+                        showRelatedVideosSection = showRelatedVideosSection,
                         // 🔁 [新增] 播放模式
                         currentPlayMode = currentPlayMode,
                         onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() },
@@ -2149,9 +2144,6 @@ fun VideoDetailScreen(
                                 onToggleFullscreen = { toggleFullscreen() },
                                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                                 onBack = handleBack,
-                                onHomeClick = {
-                                    handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
-                                },
                                 onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                                 // 🔗 [新增] 分享功能
                                 bvid = bvid,
@@ -2312,6 +2304,7 @@ fun VideoDetailScreen(
                                                     VideoContentSection(
                                                         info = success.info,
                                                         relatedVideos = success.related,
+                                                        showRelatedVideosSection = showRelatedVideosSection,
                                                         replies = commentState.replies,
                                                         replyCount = commentState.replyCount,
                                                         emoteMap = success.emoteMap,
@@ -2363,10 +2356,7 @@ fun VideoDetailScreen(
                                                         onRelatedVideoClick = navigateToRelatedVideo,
                                                         onSubReplyClick = { commentViewModel.openSubReply(it) },
                                                         onRootCommentClick = {
-                                                            viewModel.openRootCommentComposer()
-                                                        },
-                                                        onCommentReplyClick = { replyItem ->
-                                                            viewModel.setReplyingTo(replyItem)
+                                                            viewModel.clearReplyingTo()
                                                             viewModel.showCommentInputDialog()
                                                         },
                                                         onLoadMoreReplies = { commentViewModel.loadComments() },
@@ -2446,7 +2436,8 @@ fun VideoDetailScreen(
                                                             },
                                                             onCommentClick = {
                                                                 android.util.Log.d("VideoDetailScreen", "📝 Comment input clicked!")
-                                                                viewModel.openRootCommentComposer()
+                                                                viewModel.clearReplyingTo()
+                                                                viewModel.showCommentInputDialog()
                                                             },
                                                             hazeState = hazeState
                                                         )
@@ -2605,10 +2596,11 @@ fun VideoDetailScreen(
                 initialBvid = portraitInitialBvid,
                 initialInfo = success.info,
                 recommendations = success.related,
+                showRelatedVideosSection = showRelatedVideosSection,
                 onBack = { isPortraitFullscreen = false },
                 onHomeClick = {
                     isPortraitFullscreen = false
-                    handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
+                    handleBack()
                 },
                 onVideoChange = { newBvid ->
                     // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
@@ -2780,7 +2772,7 @@ fun VideoDetailScreen(
                                 }
                             }
                             Text(
-                                text = "可多选，确定后覆盖原分组设置。",
+                                text = "可多选，确定后覆盖原分组设置",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(top = 8.dp)
@@ -3231,7 +3223,10 @@ fun VideoDetailScreen(
             upMid = commentState.upMid,
             expectedReplyCount = commentState.replyCount,
             emoteMap = successState?.emoteMap ?: emptyMap(),
-            onRootCommentClick = { viewModel.openRootCommentComposer() },
+            onRootCommentClick = {
+                viewModel.clearReplyingTo()
+                viewModel.showCommentInputDialog()
+            },
             onReplyClick = { replyItem ->
                 android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
                 viewModel.setReplyingTo(replyItem)
@@ -3881,3 +3876,4 @@ internal fun resolvePreferredHighRefreshModeId(
 
 // VideoContentSection 已提取到 VideoContentSection.kt
 // VideoTagsRow 和 VideoTagChip 也已提取到 VideoContentSection.kt
+

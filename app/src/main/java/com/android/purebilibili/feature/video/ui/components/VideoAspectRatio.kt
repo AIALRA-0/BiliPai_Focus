@@ -17,9 +17,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.ui.AspectRatioFrameLayout
 import kotlin.math.roundToInt
 //  已改用 MaterialTheme.colorScheme.primary
+
+private const val RESIZE_MODE_FIT = 0
+private const val RESIZE_MODE_FIXED_WIDTH = 1
+private const val RESIZE_MODE_FIXED_HEIGHT = 2
+private const val RESIZE_MODE_FILL = 3
+private const val RESIZE_MODE_ZOOM = 4
 
 /**
  * 视频比例枚举
@@ -31,21 +36,21 @@ enum class VideoAspectRatio(
     val targetAspectRatio: Float? = null,
     val playerResizeMode: Int = resizeMode
 ) {
-    FIT("适应", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-    FILL("填充", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+    FIT("适应", RESIZE_MODE_FIT),
+    FILL("填充", RESIZE_MODE_ZOOM),
     RATIO_16_9(
         "16:9",
-        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
+        RESIZE_MODE_FIXED_WIDTH,
         targetAspectRatio = 16f / 9f,
-        playerResizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        playerResizeMode = RESIZE_MODE_ZOOM
     ),
     RATIO_4_3(
         "4:3",
-        AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT,
+        RESIZE_MODE_FIXED_HEIGHT,
         targetAspectRatio = 4f / 3f,
-        playerResizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        playerResizeMode = RESIZE_MODE_ZOOM
     ),
-    STRETCH("拉伸", AspectRatioFrameLayout.RESIZE_MODE_FILL);
+    STRETCH("拉伸", RESIZE_MODE_FILL);
     
     companion object {
         fun fromResizeMode(mode: Int): VideoAspectRatio {

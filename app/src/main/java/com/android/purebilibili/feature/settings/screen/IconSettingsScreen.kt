@@ -186,7 +186,7 @@ fun IconSettingsContent(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "图标切换可能需要几秒钟生效，系统可能会短暂卡顿。",
+                        text = "图标切换可能需要几秒钟生效，系统可能会短暂卡顿",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

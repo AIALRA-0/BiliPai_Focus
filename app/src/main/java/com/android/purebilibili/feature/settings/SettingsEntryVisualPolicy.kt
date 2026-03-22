@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Widgets
@@ -133,6 +134,7 @@ private fun resolveMd3SettingsEntryTintRole(
     target: SettingsSearchTarget
 ): SettingsEntryTintRole = when (target) {
     SettingsSearchTarget.APPEARANCE,
+    SettingsSearchTarget.FOCUS,
     SettingsSearchTarget.PLUGINS,
     SettingsSearchTarget.OPEN_SOURCE_HOME,
     SettingsSearchTarget.REPLAY_ONBOARDING,
@@ -191,6 +193,10 @@ internal fun resolveSettingsEntryVisual(
             )
             SettingsSearchTarget.BOTTOM_BAR -> SettingsEntryVisual(
                 icon = Icons.Outlined.Widgets,
+                iconTint = iconTint
+            )
+            SettingsSearchTarget.FOCUS -> SettingsEntryVisual(
+                icon = Icons.Outlined.Tune,
                 iconTint = iconTint
             )
             SettingsSearchTarget.PERMISSION -> SettingsEntryVisual(
@@ -285,6 +291,10 @@ internal fun resolveSettingsEntryVisual(
             icon = CupertinoIcons.Default.SquareStack3dUp,
             iconTint = iOSBlue
         )
+        SettingsSearchTarget.FOCUS -> SettingsEntryVisual(
+            icon = Icons.Outlined.Tune,
+            iconTint = iOSTeal
+        )
         SettingsSearchTarget.PERMISSION -> SettingsEntryVisual(
             icon = CupertinoIcons.Default.Lock,
             iconTint = iOSTeal
@@ -363,3 +373,4 @@ internal fun resolveSettingsEntryVisual(
         )
     }
 }
+

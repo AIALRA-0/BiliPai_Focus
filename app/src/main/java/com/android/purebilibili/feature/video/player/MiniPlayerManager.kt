@@ -377,6 +377,7 @@ internal fun resolveQueueNavigationCommandIds(
     return commands
 }
 
+@androidx.media3.common.util.UnstableApi
 internal fun buildQueueAwarePlayerCommands(
     baseCommands: Player.Commands,
     hasNext: Boolean,

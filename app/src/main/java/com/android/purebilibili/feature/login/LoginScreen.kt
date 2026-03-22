@@ -30,7 +30,7 @@ enum class LoginMethod {
 internal fun resolveAvailableLoginMethods(): List<LoginMethod> = listOf(LoginMethod.QR_CODE)
 
 internal fun resolveQrLoginReason(): String {
-    return "当前仅保留扫码登录，因为只有扫码能稳定获取完整登录态，并解锁高画质播放能力（4K/HDR/1080P60）。"
+    return "当前仅保留扫码登录，因为只有扫码能稳定获取完整登录态，并解锁高画质播放能力（4K/HDR/1080P60）"
 }
 
 @Composable
@@ -236,7 +236,7 @@ private fun WideLoginSheetContent(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "继续即表示你同意用户协议与隐私政策。",
+                text = "继续即表示你同意用户协议与隐私政策",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
             )
@@ -258,7 +258,9 @@ fun LoginContentArea(
         },
         label = "login_content",
         modifier = modifier
-    ) {
-        QrCodeLoginContent(state, onRefreshQr)
+    ) { method ->
+        when (method) {
+            LoginMethod.QR_CODE -> QrCodeLoginContent(state, onRefreshQr)
+        }
     }
 }

@@ -27,7 +27,7 @@ fun WelcomeDialog(githubUrl: String, onConfirm: () -> Unit) {
         title = { Text("欢迎") },
         text = {
             Column {
-                Text("本应用仅供学习使用。")
+                Text("本应用仅供学习使用")
                 TextButton(onClick = { uriHandler.openUri(githubUrl) }) {
                     Text("开源地址: $githubUrl", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }

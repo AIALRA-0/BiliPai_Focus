@@ -354,10 +354,6 @@ internal fun resolveHomeTopContinuousSlabOverlap(uiPreset: UiPreset = UiPreset.I
     return if (uiPreset == UiPreset.MD3) 24.dp else 0.dp
 }
 
-internal fun resolveHomeTopContinuousSlabShape(uiPreset: UiPreset = UiPreset.IOS): Shape {
-    return RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
-}
-
 internal fun resolveHomeTopReservedListPadding(
     statusBarHeight: Dp,
     searchBarHeight: Dp,
@@ -780,6 +776,7 @@ fun iOSHomeHeader(
     onCategorySelected: (Int) -> Unit,
     onPartitionClick: () -> Unit = {},  //  新增：分区按钮回调
     onLiveClick: () -> Unit = {},  // [新增] 直播分区点击回调
+    showPartitionButton: Boolean = true,
     hazeState: HazeState? = null,  // 保留参数兼容性，但不用于模糊
     onStatusBarDoubleTap: () -> Unit = {},
     //  [新增] 下拉刷新状态
@@ -1157,7 +1154,7 @@ fun iOSHomeHeader(
                     .height(continuousSlabHeight)
                     .homeTopChromeSurface(
                         renderMode = effectiveContinuousSlabRenderMode,
-                        shape = resolveHomeTopContinuousSlabShape(uiPreset),
+                        shape = androidx.compose.ui.graphics.RectangleShape,
                         surfaceColor = resolveHomeTopContinuousSlabSurfaceColor(
                             baseColor = headerChromeColors.containerColor,
                             blurAlpha = backgroundAlpha,
@@ -1611,6 +1608,7 @@ fun iOSHomeHeader(
                             onLiveClick = {
                                 if (topTabsVisible) onLiveClick()
                             },
+                            showPartitionButton = showPartitionButton,
                             pagerState = pagerState,
                             labelMode = homeSettings?.topTabLabelMode
                                 ?: com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY,

@@ -57,6 +57,7 @@ sealed class ScreenRoutes(val route: String) {
         }
     }
     object BottomBarSettings : ScreenRoutes("bottom_bar_settings")  //  底栏管理
+    object FocusSettings : ScreenRoutes("focus_settings")
     object SettingsShare : ScreenRoutes("settings_share")
     object WebDavBackup : ScreenRoutes("webdav_backup") // WebDAV 备份中心
     object TipsSettings : ScreenRoutes("tips_settings") // [Feature] 小贴士 & 隐藏操作
@@ -164,3 +165,4 @@ sealed class ScreenRoutes(val route: String) {
         }
     }
 }
+

@@ -830,7 +830,7 @@ fun MobileProfileContent(
             },
             text = {
                 Text(
-                    "将打开系统相册选择一张照片作为背景。\n\n" +
+                    "将打开系统相册选择一张照片作为背景\n\n" +
                         "📸 仅获取您选中照片的访问权限\n" +
                         "🔒 不会访问您的其他照片",
                     style = MaterialTheme.typography.bodyMedium

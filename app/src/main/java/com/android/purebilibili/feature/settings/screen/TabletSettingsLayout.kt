@@ -57,6 +57,7 @@ fun TabletSettingsLayout(
     onBack: () -> Unit,
     onAppearanceClick: () -> Unit,
     onPlaybackClick: () -> Unit,
+    onFocusClick: () -> Unit,
     onPermissionClick: () -> Unit,
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit,
@@ -414,7 +415,8 @@ fun TabletSettingsLayout(
                                     GeneralSection(
                                         onAppearanceClick = { activeDetail = SettingsDetail.APPEARANCE },
                                         onPlaybackClick = { activeDetail = SettingsDetail.PLAYBACK },
-                                        onBottomBarClick = { activeDetail = SettingsDetail.BOTTOM_BAR }
+                                        onBottomBarClick = { activeDetail = SettingsDetail.BOTTOM_BAR },
+                                        onFocusClick = onFocusClick
                                     )
                                 }
                                 SettingsCategory.PRIVACY -> PrivacySection(
@@ -501,3 +503,4 @@ fun TabletSettingsLayout(
 enum class SettingsDetail {
     APPEARANCE, ICONS, ANIMATION, PLAYBACK, BOTTOM_BAR, PERMISSION, PLUGINS, BLOCKED_LIST // [New]
 }
+

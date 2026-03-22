@@ -319,7 +319,7 @@ class TodayWatchPlugin : Plugin {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "会清空本地学习到的偏好与不感兴趣反馈，推荐会回到冷启动状态。",
+                text = "会清空本地学习到的偏好与不感兴趣反馈，推荐会回到冷启动状态",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -339,7 +339,7 @@ class TodayWatchPlugin : Plugin {
 
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "所有设置仅在本地生效，不上传你的历史记录。",
+                text = "所有设置仅在本地生效，不上传你的历史记录",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -349,7 +349,7 @@ class TodayWatchPlugin : Plugin {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
                 title = { Text("清空推荐画像") },
-                text = { Text("确定清空本地推荐画像与不感兴趣反馈吗？该操作不可恢复。") },
+                text = { Text("确定清空本地推荐画像与不感兴趣反馈吗？该操作不可恢复") },
                 confirmButton = {
                     TextButton(
                         onClick = {

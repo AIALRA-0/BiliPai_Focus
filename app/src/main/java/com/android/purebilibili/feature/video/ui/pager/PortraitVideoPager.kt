@@ -78,7 +78,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
-import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -136,6 +135,7 @@ fun PortraitVideoPager(
     initialBvid: String,
     initialInfo: ViewInfo,
     recommendations: List<RelatedVideo>,
+    showRelatedVideosSection: Boolean = true,
     onBack: () -> Unit,
     onHomeClick: () -> Unit = onBack,
     onVideoChange: (String) -> Unit,
@@ -787,6 +787,7 @@ fun PortraitVideoPager(
                 onProgressUpdate = onProgressUpdate,
                 watchLaterVideos = watchLaterVideos,
                 recommendationVideos = recommendationItems,
+                showRelatedVideosSection = showRelatedVideosSection,
                 hasRenderedFirstFrame = (renderedFirstFrameGeneration == activeLoadGeneration),
                 initialProgressPositionMs = resolvePortraitInitialProgressPosition(
                     isFirstPage = page == 0,
@@ -841,6 +842,7 @@ private fun VideoPageItem(
     onProgressUpdate: (String, Long, Long) -> Unit,
     watchLaterVideos: List<RelatedVideo>,
     recommendationVideos: List<RelatedVideo>,
+    showRelatedVideosSection: Boolean,
     hasRenderedFirstFrame: Boolean,
     initialProgressPositionMs: Long,
     onCurrentPageScaleChange: (Float) -> Unit,
@@ -1599,7 +1601,7 @@ private fun VideoPageItem(
             },
             onSeek = {
                 if (isCurrentPage) {
-                    seekPlayerFromUserAction(exoPlayer, it)
+                    exoPlayer.seekTo(it)
                     danmakuManager.seekTo(it)
                 }
             },
@@ -1636,43 +1638,8 @@ private fun VideoPageItem(
             aid = aid,
             upMid = authorMid,
             expectedReplyCount = if (isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
-            emoteMap = currentSuccess?.emoteMap ?: emptyMap(),
-            onRootCommentClick = { viewModel.openRootCommentComposer() },
-            onReplyClick = { reply ->
-                viewModel.setReplyingTo(reply)
-                viewModel.showCommentInputDialog()
-            },
             onUserClick = onUserClick
         )
-
-        if (isCurrentPage) {
-            val showCommentInput by viewModel.showCommentDialog.collectAsState()
-            val isSendingComment by viewModel.isSendingComment.collectAsState()
-            val replyingToComment by viewModel.replyingToComment.collectAsState()
-            val emotePackages by viewModel.emotePackages.collectAsState()
-            val commentState by commentViewModel.commentState.collectAsState()
-
-            LaunchedEffect(aid) {
-                viewModel.commentSentEvent.collect { reply ->
-                    commentViewModel.onExternalCommentSent(aid = aid, newReply = reply)
-                }
-            }
-
-            com.android.purebilibili.feature.video.ui.components.CommentInputDialog(
-                visible = showCommentInput,
-                onDismiss = { viewModel.hideCommentInputDialog() },
-                isSending = isSendingComment,
-                replyToName = replyingToComment?.member?.uname,
-                inputHint = if (replyingToComment != null) commentState.childInputHint else commentState.rootInputHint,
-                canUploadImage = commentState.canUploadImage,
-                canInputComment = commentState.canInputComment,
-                emotePackages = emotePackages,
-                onSend = { message, imageUris ->
-                    viewModel.sendComment(message, imageUris)
-                    viewModel.hideCommentInputDialog()
-                }
-            )
-        }
         
         PortraitDetailSheet(
             visible = showDetailSheet,
@@ -1683,6 +1650,7 @@ private fun VideoPageItem(
             info = portraitDetailInfo,
             recommendationTitle = detailSheetTitle,
             recommendations = detailSheetVideos,
+            showRecommendationsSection = showRelatedVideosSection,
             onRecommendationClick = { targetBvid ->
                 showDetailSheet = false
                 detailSheetUpOnlyMode = false

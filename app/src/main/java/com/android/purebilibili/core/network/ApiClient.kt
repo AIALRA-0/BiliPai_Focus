@@ -75,6 +75,12 @@ interface BilibiliApi {
         @retrofit2.http.Field("csrf") csrf: String
     ): SimpleApiResponse
 
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/v2/history/clear")
+    suspend fun clearHistory(
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
     @GET("x/v3/fav/folder/created/list-all")
     suspend fun getFavFolders(
         @Query("up_mid") mid: Long,

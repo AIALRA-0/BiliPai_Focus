@@ -558,10 +558,7 @@ fun WatchLaterScreen(
                                 onDissolveComplete = { viewModel.completeVideoDissolve(item.bvid) },
                                 cardId = item.bvid,
                                 preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                                modifier = Modifier.jiggleOnDissolve(
-                                    cardId = item.bvid,
-                                    isCurrentCardDissolving = isDissolving
-                                )
+                                modifier = Modifier.jiggleOnDissolve(item.bvid)
                             ) {
                                 Box {
                                     ElegantVideoCard(

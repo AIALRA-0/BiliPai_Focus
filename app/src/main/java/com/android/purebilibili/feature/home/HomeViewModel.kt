@@ -5,6 +5,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowGroupStore
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TodayWatchFeedbackStore
 import com.android.purebilibili.core.store.TodayWatchProfileStore
@@ -141,6 +143,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // [Feature] Blocked UPs
     private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
     private var blockedMids: Set<Long> = emptySet()
+    private var focusFollowGroupConfig: FocusFollowGroupConfig = FocusFollowGroupConfig()
+    private var focusFollowGroupFilteringEnabled: Boolean = true
+    private var rawFollowFeedVideos: List<VideoItem> = emptyList()
     private var historySampleCache: List<VideoItem> = emptyList()
     private var historySampleLoadedAtMs: Long = 0L
     private val todayConsumedBvids = mutableSetOf<String>()
@@ -160,6 +165,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             blockedUpRepository.getAllBlockedUps().collect { list ->
                 blockedMids = list.map { it.mid }.toSet()
+                reFilterAllContent()
+            }
+        }
+        viewModelScope.launch {
+            FocusFollowGroupStore.getConfig(getApplication()).collect { config ->
+                focusFollowGroupConfig = config
+                reFilterAllContent()
+            }
+        }
+        viewModelScope.launch {
+            SettingsManager.getFocusSettings(getApplication()).collect { settings ->
+                focusFollowGroupFilteringEnabled = settings.enableFollowGroupFiltering
                 reFilterAllContent()
             }
         }
@@ -205,9 +222,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // [Feature] Re-filter all content when block list changes
     private fun reFilterAllContent() {
         val oldState = _uiState.value
-        val newCategoryStates = oldState.categoryStates.mapValues { (_, content) ->
+        val newCategoryStates = oldState.categoryStates.mapValues { (category, content) ->
+            val sourceVideos = if (category == HomeCategory.FOLLOW && rawFollowFeedVideos.isNotEmpty()) {
+                rawFollowFeedVideos
+            } else {
+                content.videos
+            }
             content.copy(
-                videos = content.videos.filter { it.owner.mid !in blockedMids },
+                videos = applyHomeVideoFilters(category, sourceVideos),
                 // Filter live rooms if possible (assuming uid matches mid)
                 liveRooms = content.liveRooms.filter { it.uid !in blockedMids },
                 followedLiveRooms = content.followedLiveRooms.filter { it.uid !in blockedMids }
@@ -237,6 +259,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ) {
                 rebuildTodayWatchPlan()
             }
+        }
+    }
+
+    private fun applyHomeVideoFilters(
+        category: HomeCategory,
+        videos: List<VideoItem>
+    ): List<VideoItem> {
+        val blockedFiltered = videos.filter { it.owner.mid !in blockedMids }
+        return if (category == HomeCategory.FOLLOW) {
+            filterHomeFollowVideosByFocusFollowGroups(
+                videos = blockedFiltered,
+                config = focusFollowGroupConfig,
+                filterEnabled = focusFollowGroupFilteringEnabled
+            )
+        } else {
+            blockedFiltered
         }
     }
 
@@ -1032,6 +1070,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     //  [新增] 获取关注动态列表
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
+            rawFollowFeedVideos = emptyList()
              updateCategoryState(HomeCategory.FOLLOW) { oldState ->
                 oldState.copy(
                     isLoading = false,
@@ -1059,10 +1098,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         result.onSuccess { items ->
             //  将 DynamicItem 转换为首页卡片：
             // - 仅保留可直接跳转的视频动态，避免与“动态”页图文流重复
-            val videos = items.mapNotNull { item ->
-                // Check if author is blocked
-                if ((item.modules.module_author?.mid ?: 0) in blockedMids) return@mapNotNull null
-
+            val rawVideos = items.mapNotNull { item ->
                 val archive = item.modules.module_dynamic?.major?.archive ?: return@mapNotNull null
                 if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
                     return@mapNotNull null
@@ -1091,18 +1127,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
             }
+            val mergedRawVideos = when {
+                isLoadMore -> appendDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
+                incrementalTimelineRefreshEnabled -> prependDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
+                else -> rawVideos
+            }
+            rawFollowFeedVideos = mergedRawVideos
+            val visibleVideos = applyHomeVideoFilters(
+                category = HomeCategory.FOLLOW,
+                videos = mergedRawVideos
+            )
             
             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                val mergedVideos = when {
-                    isLoadMore -> appendDistinctByKey(oldState.videos, videos, ::videoItemKey)
-                    incrementalTimelineRefreshEnabled -> prependDistinctByKey(oldState.videos, videos, ::videoItemKey)
-                    else -> videos
-                }
                 oldState.copy(
-                    videos = mergedVideos,
+                    videos = visibleVideos,
                     liveRooms = emptyList(),
                     isLoading = false,
-                    error = if (!isLoadMore && mergedVideos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null,
+                    error = if (!isLoadMore) {
+                        resolveHomeFollowEmptyMessage(
+                            visibleVideoCount = visibleVideos.size,
+                            rawVideoCount = mergedRawVideos.size
+                        )
+                    } else {
+                        null
+                    },
                     hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
                         com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
                     )

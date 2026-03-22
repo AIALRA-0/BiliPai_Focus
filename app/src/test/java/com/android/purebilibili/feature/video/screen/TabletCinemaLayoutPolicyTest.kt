@@ -122,7 +122,8 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 0,
                 replyCount = 0,
                 isRepliesLoading = true,
-                hasRelatedVideos = true
+                hasRelatedVideos = true,
+                showRelatedVideosSection = true
             )
         )
     }
@@ -135,7 +136,8 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 0,
                 replyCount = 0,
                 isRepliesLoading = false,
-                hasRelatedVideos = true
+                hasRelatedVideos = true,
+                showRelatedVideosSection = true
             )
         )
     }
@@ -148,7 +150,8 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 0,
                 replyCount = 12,
                 isRepliesLoading = false,
-                hasRelatedVideos = true
+                hasRelatedVideos = true,
+                showRelatedVideosSection = true
             )
         )
     }
@@ -161,7 +164,22 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 1,
                 replyCount = 0,
                 isRepliesLoading = false,
-                hasRelatedVideos = true
+                hasRelatedVideos = true,
+                showRelatedVideosSection = true
+            )
+        )
+    }
+
+    @Test
+    fun relatedTab_isForcedBackToCommentsWhenSectionHidden() {
+        assertEquals(
+            0,
+            resolveCinemaSideCurtainSelectedTab(
+                currentSelectedTab = 1,
+                replyCount = 0,
+                isRepliesLoading = false,
+                hasRelatedVideos = true,
+                showRelatedVideosSection = false
             )
         )
     }

@@ -331,7 +331,7 @@ fun BottomBarSettingsContent(
             item {
                 Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                     Text(
-                        text = "选择要在底栏显示的项目，最少 2 个，最多 5 个。",
+                        text = "选择要在底栏显示的项目，最少 2 个，最多 5 个",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -696,7 +696,7 @@ fun BottomBarSettingsContent(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "推荐固定显示。可调整其余标签的显示/隐藏与顺序。",
+                                text = "推荐固定显示；可调整其余标签的显示/隐藏与顺序",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -9,21 +9,21 @@ class StartupInitPolicyTest {
 
     @Test
     fun homeVisualDefaultsMigrationDoesNotBlockColdStart() {
-        assertFalse(PureApplicationRuntimeConfig.shouldBlockStartupForHomeVisualDefaultsMigration())
+        assertFalse(shouldBlockStartupForHomeVisualDefaultsMigration())
     }
 
     @Test
     fun defersPlaylistRestoreAtStartup() {
-        assertTrue(PureApplicationRuntimeConfig.shouldDeferPlaylistRestoreAtStartup())
+        assertTrue(shouldDeferPlaylistRestoreAtStartup())
     }
 
     @Test
     fun defersTelemetryInitializationAtStartup() {
-        assertTrue(PureApplicationRuntimeConfig.shouldDeferTelemetryInitAtStartup())
+        assertTrue(shouldDeferTelemetryInitAtStartup())
     }
 
     @Test
     fun usesStableDeferredStartupDelayWindow() {
-        assertEquals(900L, PureApplicationRuntimeConfig.deferredNonCriticalStartupDelayMs())
+        assertEquals(900L, deferredNonCriticalStartupDelayMs())
     }
 }

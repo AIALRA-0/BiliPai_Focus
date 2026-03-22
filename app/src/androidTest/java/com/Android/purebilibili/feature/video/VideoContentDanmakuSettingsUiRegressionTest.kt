@@ -1,6 +1,9 @@
 package com.Android.purebilibili.feature.video
 
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,14 +12,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
@@ -32,6 +35,22 @@ class VideoContentDanmakuSettingsUiRegressionTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    private fun injectScreenTap(x: Float, y: Float) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val downTime = SystemClock.uptimeMillis()
+        val downEvent = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+        val upEvent = MotionEvent.obtain(downTime, downTime + 50L, MotionEvent.ACTION_UP, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+        instrumentation.uiAutomation.injectInputEvent(downEvent, true)
+        instrumentation.uiAutomation.injectInputEvent(upEvent, true)
+        downEvent.recycle()
+        upEvent.recycle()
+        instrumentation.waitForIdleSync()
+    }
 
     @Test
     fun openingDanmakuSettings_blocksTouchesFromReachingRelatedVideoContent() {
@@ -100,11 +119,9 @@ class VideoContentDanmakuSettingsUiRegressionTest {
             .onNodeWithContentDescription("弹幕设置")
             .performClick()
 
-        composeTestRule
-            .onRoot()
-            .performTouchInput {
-                click(relatedTitleCenter)
-            }
+        composeTestRule.onNodeWithText("弹幕设置").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+        injectScreenTap(relatedTitleCenter.x, relatedTitleCenter.y)
 
         composeTestRule.runOnIdle {
             assertNull(clickedBvid)

@@ -275,15 +275,70 @@ fun OnboardingBottomSheet(
                     //  GitHub 链接
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "github.com/jay3-yy/BiliPai",
+                        "GitHub",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        modifier = Modifier.clickable {
-                            uriHandler.openUri("https://github.com/jay3-yy/BiliPai")
-                        }
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        GithubLinkCard(
+                            title = "官方",
+                            path = "jay3-yy/BiliPai",
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                uriHandler.openUri("https://github.com/jay3-yy/BiliPai")
+                            }
+                        )
+                        GithubLinkCard(
+                            title = "Focus",
+                            path = "AIALRA-0/BiliPai_Focus",
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                uriHandler.openUri("https://github.com/AIALRA-0/BiliPai_Focus")
+                            }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GithubLinkCard(
+    title: String,
+    path: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "github.com/$path",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f)
+            )
         }
     }
 }
@@ -418,7 +473,7 @@ private fun WelcomePage(hazeState: HazeState) {
             }
         ) {
             Text(
-                "本应用仅供学习交流，所有内容版权归 Bilibili 及原作者。",
+                "本应用仅供学习交流，所有内容版权归 Bilibili 及原作者",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,

@@ -45,6 +45,7 @@ fun PortraitDetailSheet(
     info: ViewInfo?,
     recommendationTitle: String = "推荐视频",
     recommendations: List<RelatedVideo> = emptyList(),
+    showRecommendationsSection: Boolean = true,
     onRecommendationClick: (String) -> Unit = {},
     onAuthorClick: (Long) -> Unit = {},
     danmakuEnabled: Boolean = true,
@@ -175,7 +176,7 @@ fun PortraitDetailSheet(
                                 com.android.purebilibili.core.ui.IOSAlertDialog(
                                     onDismissRequest = { showBlockConfirmDialog = false },
                                     title = { Text(if (isBlocked) "解除屏蔽" else "屏蔽 UP 主") },
-                                    text = { Text(if (isBlocked) "确定要解除对 ${info.owner.name} 的屏蔽吗？" else "屏蔽后，将不再推荐该 UP 主的视频。\n确定要屏蔽 ${info.owner.name} 吗？") },
+                                    text = { Text(if (isBlocked) "确定要解除对 ${info.owner.name} 的屏蔽吗？" else "屏蔽后，将不再推荐该 UP 主的视频\n确定要屏蔽 ${info.owner.name} 吗？") },
                                     confirmButton = {
                                         com.android.purebilibili.core.ui.IOSDialogAction(
                                             onClick = {
@@ -267,7 +268,7 @@ fun PortraitDetailSheet(
                                 modifier = Modifier.padding(bottom = 16.dp)
                             )
 
-                            if (recommendations.isNotEmpty()) {
+                            if (showRecommendationsSection && recommendations.isNotEmpty()) {
                                 Text(
                                     text = recommendationTitle,
                                     fontSize = 15.sp,

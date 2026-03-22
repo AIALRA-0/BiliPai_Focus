@@ -186,7 +186,7 @@ fun PlaybackSettingsContent(
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { showPipPermissionDialog = false },
             title = { Text("权限申请", color = MaterialTheme.colorScheme.onSurface) },
-            text = { Text("检测到未开启「画中画」权限。请在设置中开启该权限，否则无法使用小窗播放。", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            text = { Text("检测到未开启「画中画」权限；请在设置中开启该权限，否则无法使用小窗播放", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 com.android.purebilibili.core.ui.IOSDialogAction(
                     onClick = {
@@ -702,7 +702,7 @@ fun PlaybackSettingsContent(
                                 }
                             )
                             Text(
-                                text = "稍后再看推荐选择“顺序播放”即可连续播放下一条，不需要退出重选。",
+                                text = "稍后再看推荐选择“顺序播放”即可连续播放下一条，不需要退出重选",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

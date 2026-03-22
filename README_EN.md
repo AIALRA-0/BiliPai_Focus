@@ -1,11 +1,11 @@
-# BiliPai <img src="docs/images/233娘.jpeg" height="80" align="center">
+# BiliPai Focus <img src="docs/images/233娘.jpeg" height="80" align="center">
 
 <p align="center">
-  <strong>Native, Pure, Extensible — Redefining your Bilibili experience</strong>
+  <strong>Native, Pure, Extensible — a Focus-tailored fork built on top of BiliPai</strong>
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-22 · Synced to v7.1.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-22 · Synced to v7.1.0 (source of truth: upstream <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
@@ -31,15 +31,30 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Download Releases](https://github.com/jay3-yy/BiliPai/releases) · [Changelog](CHANGELOG.md) |
+| Get Started | [Download Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
-> [!CAUTION]
-> `README`, `AI.txt`, `llm.txt`, `llms.txt`, and the Wiki are maintained periodically, but fast-moving main-branch changes can still make parts of them stale. Treat them as reference only; verify current behavior with source, `CHANGELOG.md`, and real builds.
+## 🧩 Focus Edition
 
-> [!CAUTION]
-> The history list's "Delete All" action currently has a known issue. Avoid using it for now; prefer single-item deletion or careful batch cleanup.
+This fork keeps upstream features and mergeability intact, while shipping a more controlled default surface for Focus usage.
+
+### Default customizations
+
+| Item | Default |
+| --- | --- |
+| Home Recommend / Popular / Live / Game tabs | Hidden |
+| Home Partition button | Hidden |
+| Related videos below video detail | Hidden |
+| Search hot list | Disabled, while keeping suggestions, discovery, results, and search history |
+| Watch history | Adds a one-tap clear-all action |
+| Settings entry | `Settings -> General -> Focus` |
+
+### Screenshot placeholders
+
+- `docs/images/focus-home-placeholder.png`
+- `docs/images/focus-settings-placeholder.png`
+- `docs/images/focus-history-placeholder.png`
 
 ## 📸 Preview
 
@@ -227,7 +242,6 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 |-----|-----|
 | **Bangumi Home** | Hot recommendations, schedule, categorical browsing |
 | **Episode Selection** | Official style bottom sheet for switching episodes/seasons |
-| **Landscape Top Bar Actions** | Like / coin / share are now available in landscape/fullscreen and stay closer to the regular video player behavior |
 | **Tracking** | Watch list management and progress synchronization |
 | **Danmaku** | Full danmaku support for anime |
 
@@ -364,7 +378,6 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 📚 Wiki
 
 - AI / LLM Entry: [`llms.txt`](llms.txt)
-- Compatibility aliases: `AI.txt` / `llm.txt`
 - AI Navigation Guide: [`docs/wiki/AI.md`](docs/wiki/AI.md)
 - Wiki Home: [`docs/wiki/README.md`](docs/wiki/README.md)
 - Feature Matrix: [`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
@@ -376,9 +389,6 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ## 🗺️ Roadmap
 
-> [!TIP]
-> Roadmap last refreshed on 2026-03-22 (v7.1.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
-
 ### ✅ Completed
 
 - [x] Home Waterfall Feed
@@ -388,7 +398,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] Live Streaming
 - [x] Dynamic Feed (with fast-switch stability improvements)
 - [x] Offline Download + current-video batch caching
-- [x] Search + History (avoid "Delete All" for now)
+- [x] Search + History (with bulk delete)
 - [x] Material You + Dark Mode
 - [x] TV Login + first-play quality auth fixes for logged-in non-premium users
 - [x] Landscape player controls upgrade (subtitle panel + more panel + play-order quick switch)
@@ -418,20 +428,49 @@ See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ### Latest (v7.1.0 · 2026-03-22)
 
-- 📺 **Bangumi controls move closer to the regular video player**: the bangumi landscape/fullscreen experience now reuses more shared overlay behavior and feels more unified overall.
-- 👍 **Landscape top-bar actions are now fully wired up**: like, coin, and share work for bangumi instead of showing partially implemented buttons.
-- 🔗 **Bangumi sharing is more complete**: shares now use bangumi-specific links and automatically combine the series title with the current episode title.
-- 🔄 **State feedback is more accurate**: like state, coin state, coin balance queries, and coin-result feedback now stay aligned with the real bangumi status.
-- ⚠️ **History bulk delete remains a known issue**: until that fix lands, prefer deleting items one by one or in careful smaller batches.
+- 🎞️ **Upstream bangumi overlay actions are synced**: the bangumi player now matches upstream `v7.1.0` for share, interaction, and control-overlay behavior.
+- 🧭 **Focus naming is now unified**: settings entry points, settings search, README copy, and the standalone changelog no longer mix the old `AIALRA` label.
+- 🧱 **Windows verification is less fragile**: `ci_verify_windows.ps1` now auto-detects `Java 21` and the Android SDK before invoking Gradle.
+- 📘 **Focus changes now use versioned changelog sections**: `FOCUS_CHANGLOG.md` follows the same release-style structure as the upstream `CHANGELOG.md`.
 
 ---
 
 ## 🏗️ Build
 
 ```bash
-git clone https://github.com/jay3-yy/BiliPai.git
-cd BiliPai
+git clone git@github.com:AIALRA-0/BiliPai_Focus.git
+cd BiliPai_Focus
 ./gradlew assembleDebug
+```
+
+### Windows local build
+
+```powershell
+winget install --id GitHub.cli -e
+winget install --id EclipseAdoptium.Temurin.21.JDK -e
+winget install --id Google.AndroidStudio -e
+
+$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot"
+$env:ANDROID_SDK_ROOT="$env:LOCALAPPDATA\Android\Sdk"
+$env:Path="$env:JAVA_HOME\bin;$env:ANDROID_SDK_ROOT\platform-tools;$env:Path"
+
+.\scripts\ci_verify_windows.ps1
+.\scripts\ci_verify_windows.ps1 -IncludeConnectedAndroidTests
+.\scripts\ci_verify_windows.ps1 -IncludeBaselineProfile
+```
+
+- The script runs `:app:testDebugUnitTest`, `:app:lintDebug`, `:app:assembleDebug`, and `:app:assembleRelease` in a stable sequential order.
+- `-IncludeConnectedAndroidTests` adds `:app:connectedDebugAndroidTest`.
+- `-IncludeBaselineProfile` adds `:baselineprofile:pixel6Api31BenchmarkAndroidTest`.
+- The managed-device baselineprofile path uses `Pixel 6 / API 31 / AOSP image / x86_64 testedAbi`, while the app's dedicated `benchmark` variant emits an `x86_64` test APK. The real release APK policy still stays `arm64-v8a only`.
+
+### Sync with upstream
+
+```bash
+git remote add upstream https://github.com/jay3-yy/BiliPai.git
+git fetch upstream
+git checkout main
+git merge upstream/main
 ```
 
 ---
@@ -481,3 +520,4 @@ If you like BiliPai, buy me a coffee ☕
 <p align="center">
   <img src="docs/donate.jpg" alt="Donation" width="300">
 </p>
+
