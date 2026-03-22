@@ -95,11 +95,43 @@
 - Focus 开关优先于首页顶部标签最终展示结果，但不会破坏原有顶栏管理/底栏管理页。
 - 如果首页顶部项被全部隐藏，会自动回退到 `关注`，避免首页出现空白。
 
-### 截图占位
+### Focus 功能截图
 
-- `docs/images/focus-home-placeholder.png`
-- `docs/images/focus-settings-placeholder.png`
-- `docs/images/focus-history-placeholder.png`
+#### 专注模式入口与设置
+
+<p align="center">
+  <img src="docs/images/focus/focus-settings-entry.jpg" alt="Focus 设置入口" height="500">
+  <img src="docs/images/focus/focus-settings-1.jpg" alt="Focus 设置页一" height="500">
+  <img src="docs/images/focus/focus-settings-2.jpg" alt="Focus 设置页二" height="500">
+</p>
+
+<p align="center">
+  <sub>展示设置入口、Focus 专注模式总览，以及首页 / 搜索 / 历史 / 详情相关默认开关</sub>
+</p>
+
+#### 首页、搜索与详情过滤
+
+<p align="center">
+  <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus 首页过滤" height="500">
+  <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus 搜索过滤" height="500">
+  <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus 相关推荐过滤" height="500">
+</p>
+
+<p align="center">
+  <sub>展示首页顶部入口过滤、搜索热搜过滤，以及视频详情页下方相关推荐过滤后的实际效果</sub>
+</p>
+
+#### 关注分组管理
+
+<p align="center">
+  <img src="docs/images/focus/focus-follow-groups-entry.jpg" alt="关注分组入口" height="500">
+  <img src="docs/images/focus/focus-follow-groups-1.jpg" alt="关注分组管理一" height="500">
+  <img src="docs/images/focus/focus-follow-groups-2.jpg" alt="关注分组管理二" height="500">
+</p>
+
+<p align="center">
+  <sub>展示动态页分组入口、分组管理展开，以及关注对象按单归属分组管理的实际界面</sub>
+</p>
 
 ## 📸 应用预览
 

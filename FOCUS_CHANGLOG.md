@@ -58,6 +58,7 @@
 - `2026-03-22T13:27:25.4201280-04:00` 同步将 Focus 发布版本提升到 `7.1.0-focus.2 / 125`，补齐 `CHANGELOG.md` 顶部 Focus 发布入口、README / README_EN 的当前版本与 release notes 入口，并新增可直接用于 GitHub Release 的中英文说明文件。
 - `2026-03-22T13:48:53.3817710-04:00` 重新使用更高 Gradle JVM 内存完成 `7.1.0-focus.2` 的发布验证，确认 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 通过，并已将 `BliPai-Focus-debug-7.1.0-focus.2-debug.apk` 覆盖安装到真机。
 - `2026-03-22T14:12:14.0000000-04:00` 将 Focus 发布版本提升到 `7.1.0-focus.3 / 126`，把首页顶部分类在 Focus 过滤后的剩余项改为严格居中对称排布，补齐 README / CHANGELOG / Release Notes 的 `focus.3` 发布入口，并为 iOS 风格与 MD3 风格新增对称居中策略测试；随后完成 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 验证，并已将 `BliPai-Focus-debug-7.1.0-focus.3-debug.apk` 覆盖安装到真机。
+- `2026-03-22T14:20:48.0000000-04:00` 将用户提供的 Focus 功能截图复制进仓库 `docs/images/focus`，把中英文 README 的 Focus 区块同步改成真实截图展示；同时确认本机 Git Credential Manager 中已有 PAT，现已接入 `gh auth login --with-token --insecure-storage`，CLI 端登录状态恢复正常，可继续发布 GitHub Release。
 
 ## v7.0.2 Focus (2026-03-22)
 

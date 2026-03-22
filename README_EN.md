@@ -78,11 +78,43 @@ This fork keeps upstream features and mergeability intact, while shipping a more
 - Follow assignments are shown per group and expanded on demand, so large follow lists no longer render as one long flat block.
 - Dynamic follow users now restore from local cache first and hydrate in parallel during startup, instead of waiting for the primary feed to finish first.
 
-### Screenshot placeholders
+### Focus feature screenshots
 
-- `docs/images/focus-home-placeholder.png`
-- `docs/images/focus-settings-placeholder.png`
-- `docs/images/focus-history-placeholder.png`
+#### Focus entry and settings
+
+<p align="center">
+  <img src="docs/images/focus/focus-settings-entry.jpg" alt="Focus settings entry" height="500">
+  <img src="docs/images/focus/focus-settings-1.jpg" alt="Focus settings screen 1" height="500">
+  <img src="docs/images/focus/focus-settings-2.jpg" alt="Focus settings screen 2" height="500">
+</p>
+
+<p align="center">
+  <sub>Shows the settings entry, the Focus overview, and the default switches for home, search, history, and detail refinements</sub>
+</p>
+
+#### Home, search, and detail filtering
+
+<p align="center">
+  <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus home filtering" height="500">
+  <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus search filtering" height="500">
+  <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus related video filtering" height="500">
+</p>
+
+<p align="center">
+  <sub>Shows the filtered home top surface, disabled search hot list, and hidden related-video area beneath video detail</sub>
+</p>
+
+#### Follow-group management
+
+<p align="center">
+  <img src="docs/images/focus/focus-follow-groups-entry.jpg" alt="Follow-group entry" height="500">
+  <img src="docs/images/focus/focus-follow-groups-1.jpg" alt="Follow-group management 1" height="500">
+  <img src="docs/images/focus/focus-follow-groups-2.jpg" alt="Follow-group management 2" height="500">
+</p>
+
+<p align="center">
+  <sub>Shows the Dynamic entry point, expanded group management, and single-group assignment for followed creators</sub>
+</p>
 
 ## 📸 Preview
 
