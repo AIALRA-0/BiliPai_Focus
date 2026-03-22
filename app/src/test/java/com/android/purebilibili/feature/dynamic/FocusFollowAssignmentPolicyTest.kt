@@ -64,4 +64,31 @@ class FocusFollowAssignmentPolicyTest {
         assertEquals(listOf(2001L, 2002L), result.first().members.map { it.mid })
         assertEquals(emptyList(), result.last().members)
     }
+
+    @Test
+    fun filterFocusFollowAssignmentSections_limitsMembersToSearchMatches() {
+        val sections = listOf(
+            FocusFollowAssignmentSection(
+                group = FocusFollowGroup(id = DEFAULT_FOCUS_FOLLOW_GROUP_ID, name = "默认分组", visible = true),
+                members = listOf(
+                    FollowingUser(mid = 1001L, uname = "Alpha"),
+                    FollowingUser(mid = 1002L, uname = "Beta")
+                )
+            ),
+            FocusFollowAssignmentSection(
+                group = FocusFollowGroup(id = "friends", name = "朋友", visible = true),
+                members = listOf(
+                    FollowingUser(mid = 2001L, uname = "Gamma")
+                )
+            )
+        )
+
+        val result = filterFocusFollowAssignmentSections(
+            sections = sections,
+            query = "alp"
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(listOf(1001L), result.first().members.map { it.mid })
+    }
 }

@@ -32,3 +32,24 @@ internal fun buildFocusFollowAssignmentSections(
         )
     }
 }
+
+internal fun filterFocusFollowAssignmentSections(
+    sections: List<FocusFollowAssignmentSection>,
+    query: String
+): List<FocusFollowAssignmentSection> {
+    val normalizedQuery = query.trim().lowercase()
+    if (normalizedQuery.isBlank()) return sections
+
+    return sections.mapNotNull { section ->
+        val filteredMembers = section.members.filter { user ->
+            val normalizedName = user.uname.trim().lowercase()
+            normalizedName.contains(normalizedQuery) ||
+                user.mid.toString().contains(normalizedQuery)
+        }
+        if (filteredMembers.isEmpty()) {
+            null
+        } else {
+            section.copy(members = filteredMembers)
+        }
+    }
+}

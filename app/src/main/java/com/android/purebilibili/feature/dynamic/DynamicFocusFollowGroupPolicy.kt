@@ -36,3 +36,12 @@ internal fun resolveSelectedUserIdAfterFocusFollowGroupFilter(
     val uid = selectedUserId ?: return null
     return uid.takeIf { isFocusFollowUserVisible(config, it) }
 }
+
+internal fun resolveDynamicFollowUserEmptyMessage(
+    visibleUserCount: Int,
+    isLoading: Boolean,
+    error: String?
+): String? {
+    if (visibleUserCount > 0 || isLoading || !error.isNullOrBlank()) return null
+    return "没有可用关注对象"
+}

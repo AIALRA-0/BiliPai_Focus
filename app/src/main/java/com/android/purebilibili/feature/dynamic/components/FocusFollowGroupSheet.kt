@@ -20,10 +20,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -64,6 +66,7 @@ import com.android.purebilibili.core.ui.IOSModalBottomSheet
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.feature.dynamic.FocusFollowAssignmentSection
 import com.android.purebilibili.feature.dynamic.buildFocusFollowAssignmentSections
+import com.android.purebilibili.feature.dynamic.filterFocusFollowAssignmentSections
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +82,9 @@ fun FocusFollowGroupSheet(
     onSetGroupVisible: (String, Boolean) -> Unit,
     onAssignUserToGroup: (Long, String) -> Unit
 ) {
+    val inputHeight = 56.dp
     var newGroupName by rememberSaveable { mutableStateOf("") }
+    var followSearchQuery by rememberSaveable { mutableStateOf("") }
     var renameTargetGroup by remember { mutableStateOf<FocusFollowGroup?>(null) }
     var renameDraft by rememberSaveable { mutableStateOf("") }
     var deleteTargetGroupId by remember { mutableStateOf<String?>(null) }
@@ -91,6 +96,12 @@ fun FocusFollowGroupSheet(
         buildFocusFollowAssignmentSections(
             followings = followings,
             config = config
+        )
+    }
+    val filteredAssignmentSections = remember(assignmentSections, followSearchQuery) {
+        filterFocusFollowAssignmentSections(
+            sections = assignmentSections,
+            query = followSearchQuery
         )
     }
 
@@ -167,20 +178,24 @@ fun FocusFollowGroupSheet(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
                                 value = newGroupName,
                                 onValueChange = { newGroupName = it },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(inputHeight),
                                 singleLine = true,
                                 shape = RoundedCornerShape(26.dp),
                                 label = { Text("新分组名称") },
                                 placeholder = { Text("例如：高优先、朋友、暂时隐藏") }
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
                             Button(
+                                modifier = Modifier.height(inputHeight),
                                 enabled = canCreateFocusFollowGroup(newGroupName, config.groups),
+                                shape = RoundedCornerShape(20.dp),
                                 onClick = {
                                     onCreateGroup(newGroupName)
                                     newGroupName = ""
@@ -195,6 +210,36 @@ fun FocusFollowGroupSheet(
                                 Text("添加")
                             }
                         }
+
+                        OutlinedTextField(
+                            value = followSearchQuery,
+                            onValueChange = { followSearchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(inputHeight),
+                            singleLine = true,
+                            shape = RoundedCornerShape(26.dp),
+                            label = { Text("搜索关注对象") },
+                            placeholder = { Text("搜索 UP 名称或 UID") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = null
+                                )
+                            },
+                            trailingIcon = if (followSearchQuery.isNotBlank()) {
+                                {
+                                    IconButton(onClick = { followSearchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Close,
+                                            contentDescription = "清除搜索"
+                                        )
+                                    }
+                                }
+                            } else {
+                                null
+                            }
+                        )
                     }
                 }
             }
@@ -207,37 +252,56 @@ fun FocusFollowGroupSheet(
                 )
             }
 
-            items(assignmentSections, key = { section -> "group_manager_${section.group.id}" }) { section ->
-                FocusFollowGroupManagementCard(
-                    section = section,
-                    groups = config.groups,
-                    expanded = expandedGroupId == section.group.id,
-                    onToggleExpanded = {
-                        expandedGroupId = if (expandedGroupId == section.group.id) {
+            if (followSearchQuery.isNotBlank() && filteredAssignmentSections.isEmpty()) {
+                item("group_search_empty") {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        tonalElevation = 1.dp,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow
+                    ) {
+                        Text(
+                            text = "没有找到匹配的关注对象",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                items(filteredAssignmentSections, key = { section -> "group_manager_${section.group.id}" }) { section ->
+                    FocusFollowGroupManagementCard(
+                        section = section,
+                        groups = config.groups,
+                        expanded = expandedGroupId == section.group.id,
+                        onToggleExpanded = {
+                            expandedGroupId = if (expandedGroupId == section.group.id) {
+                                null
+                            } else {
+                                section.group.id
+                            }
+                        },
+                        onToggleVisible = { visible ->
+                            onSetGroupVisible(section.group.id, visible)
+                        },
+                        onRename = if (section.group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
                             null
                         } else {
-                            section.group.id
-                        }
-                    },
-                    onToggleVisible = { visible ->
-                        onSetGroupVisible(section.group.id, visible)
-                    },
-                    onRename = if (section.group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
-                        null
-                    } else {
-                        {
-                            renameTargetGroup = section.group
-                            renameDraft = section.group.name
-                        }
-                    },
-                    onDelete = if (section.group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
-                        null
-                    } else {
-                        { deleteTargetGroupId = section.group.id }
-                    },
-                    onAssignUserToGroup = onAssignUserToGroup,
-                    resolveCurrentGroup = { mid -> resolveFocusFollowGroupForUser(config, mid) }
-                )
+                            {
+                                renameTargetGroup = section.group
+                                renameDraft = section.group.name
+                            }
+                        },
+                        onDelete = if (section.group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
+                            null
+                        } else {
+                            { deleteTargetGroupId = section.group.id }
+                        },
+                        onAssignUserToGroup = onAssignUserToGroup,
+                        resolveCurrentGroup = { mid -> resolveFocusFollowGroupForUser(config, mid) }
+                    )
+                }
             }
         }
     }

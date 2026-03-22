@@ -228,11 +228,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 content.videos
             }
+            val filteredVideos = applyHomeVideoFilters(category, sourceVideos)
             content.copy(
-                videos = applyHomeVideoFilters(category, sourceVideos),
+                videos = filteredVideos,
                 // Filter live rooms if possible (assuming uid matches mid)
                 liveRooms = content.liveRooms.filter { it.uid !in blockedMids },
-                followedLiveRooms = content.followedLiveRooms.filter { it.uid !in blockedMids }
+                followedLiveRooms = content.followedLiveRooms.filter { it.uid !in blockedMids },
+                error = if (category == HomeCategory.FOLLOW && !content.error.orEmpty().contains("未登录")) {
+                    resolveHomeFollowEmptyMessage(
+                        visibleVideoCount = filteredVideos.size
+                    )
+                } else {
+                    content.error
+                }
             )
         }
         
@@ -1145,8 +1153,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     isLoading = false,
                     error = if (!isLoadMore) {
                         resolveHomeFollowEmptyMessage(
-                            visibleVideoCount = visibleVideos.size,
-                            rawVideoCount = mergedRawVideos.size
+                            visibleVideoCount = visibleVideos.size
                         )
                     } else {
                         null

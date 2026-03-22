@@ -67,6 +67,25 @@ class DynamicFocusFollowGroupPolicyTest {
         assertEquals(1002L, resolveSelectedUserIdAfterFocusFollowGroupFilter(1002L, config, filterEnabled = false))
     }
 
+    @Test
+    fun resolveDynamicFollowUserEmptyMessage_returnsStableMessageWhenNoUsersRemain() {
+        assertEquals(
+            "没有可用关注对象",
+            resolveDynamicFollowUserEmptyMessage(
+                visibleUserCount = 0,
+                isLoading = false,
+                error = null
+            )
+        )
+        assertNull(
+            resolveDynamicFollowUserEmptyMessage(
+                visibleUserCount = 0,
+                isLoading = true,
+                error = null
+            )
+        )
+    }
+
     private fun dynamicItem(mid: Long): DynamicItem {
         return DynamicItem(
             id_str = mid.toString(),

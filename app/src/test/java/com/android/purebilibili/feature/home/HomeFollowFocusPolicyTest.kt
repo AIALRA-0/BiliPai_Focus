@@ -31,10 +31,9 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
-    fun resolveHomeFollowEmptyMessage_distinguishesEmptyFromFullyHidden() {
-        assertEquals("当前 Focus 关注分组已隐藏全部内容", resolveHomeFollowEmptyMessage(0, 3))
-        assertEquals("暂无关注动态，请先关注一些UP主", resolveHomeFollowEmptyMessage(0, 0))
-        assertEquals(null, resolveHomeFollowEmptyMessage(2, 5))
+    fun resolveHomeFollowEmptyMessage_returnsStableMessageWhenNoVisibleFollowVideosRemain() {
+        assertEquals("没有可用关注对象", resolveHomeFollowEmptyMessage(0))
+        assertEquals(null, resolveHomeFollowEmptyMessage(2))
     }
 
     @Test

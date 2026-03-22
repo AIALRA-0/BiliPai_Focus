@@ -57,6 +57,7 @@ fun DynamicSidebar(
     selectedUserId: Long?,
     isExpanded: Boolean,
     userListState: androidx.compose.foundation.lazy.LazyListState,
+    emptyMessage: String?,
     onUserClick: (Long?) -> Unit,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
@@ -135,6 +136,23 @@ fun DynamicSidebar(
                 }
 
                 // 关注的UP主列表 - 带瀑布入场动画
+                if (users.isEmpty() && !emptyMessage.isNullOrBlank()) {
+                    item(key = "empty_state") {
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = emptyMessage,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 itemsIndexed(users, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
                     CascadeSidebarItem(
                         index = index,

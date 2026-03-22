@@ -3,9 +3,9 @@
 > [!NOTE]
 > 当前仓库继续保留上游 `BiliPai` 的版本记录；Focus 定制版单独维护发布线。
 > 
-> - 最新 Focus 发布：`v7.1.0-focus.4`
+> - 最新 Focus 发布：`v7.1.0-focus.5`
 > - Focus 变更日志：[FOCUS_CHANGLOG.md](FOCUS_CHANGLOG.md)
-> - Focus Release Notes：[docs/releases/focus-7.1.0-focus.4.md](docs/releases/focus-7.1.0-focus.4.md)
+> - Focus Release Notes：[docs/releases/focus-7.1.0-focus.5.md](docs/releases/focus-7.1.0-focus.5.md)
 > - 下方正文仍对应上游官方版本演进
 
 

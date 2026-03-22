@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -222,6 +223,13 @@ fun DynamicScreen(
             selectedUserId = selectedUserId
         )
     }
+    val emptyFollowUserMessage = remember(followedUsers, activeLoading, activeError, isFocusFollowingUsersLoading) {
+        resolveDynamicFollowUserEmptyMessage(
+            visibleUserCount = followedUsers.size,
+            isLoading = activeLoading || isFocusFollowingUsersLoading,
+            error = activeError
+        )
+    }
 
     var handledUserListRefreshBoundary by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(
@@ -372,6 +380,7 @@ fun DynamicScreen(
                             selectedUserId = selectedUserId,
                             isExpanded = isSidebarExpanded,
                             userListState = sidebarUserListState,
+                            emptyMessage = emptyFollowUserMessage,
                             onUserClick = { clickedUserId ->
                                 viewModel.selectUser(
                                     resolveDynamicSelectedUserIdAfterClick(
@@ -405,6 +414,12 @@ fun DynamicScreen(
                                     activeError = activeError,
                                     hasMore = currentHasMore,
                                     filteredItems = filteredItems,
+                                    emptyMessage = emptyFollowUserMessage ?: "暂无动态",
+                                    emptyActionText = if (emptyFollowUserMessage == null) {
+                                        "登录后查看关注 UP主 的动态"
+                                    } else {
+                                        null
+                                    },
                                     listState = listState,
                                     statusBarHeight = statusBarHeight,
                                     topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
@@ -476,6 +491,12 @@ fun DynamicScreen(
                                  activeError = activeError,
                                  hasMore = currentHasMore,
                                  filteredItems = filteredItems,
+                                 emptyMessage = emptyFollowUserMessage ?: "暂无动态",
+                                 emptyActionText = if (emptyFollowUserMessage == null) {
+                                     "登录后查看关注 UP主 的动态"
+                                 } else {
+                                     null
+                                 },
                                  listState = listState,
                                  statusBarHeight = statusBarHeight,
                                  topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
@@ -534,6 +555,7 @@ fun DynamicScreen(
                                          users = followedUsers,
                                          selectedUserId = selectedUserId,
                                          listState = horizontalUserListState,
+                                         emptyMessage = emptyFollowUserMessage,
                                          showHiddenUsers = showHiddenUsers,
                                          hiddenCount = hiddenUserIds.size,
                                          onUserClick = { clickedUserId ->
@@ -626,6 +648,8 @@ private fun DynamicList(
     activeError: String?,
     hasMore: Boolean,
     filteredItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
+    emptyMessage: String,
+    emptyActionText: String?,
     listState: androidx.compose.foundation.lazy.LazyListState,
     statusBarHeight: androidx.compose.ui.unit.Dp,
     topPaddingExtra: androidx.compose.ui.unit.Dp,
@@ -656,8 +680,9 @@ private fun DynamicList(
         if (filteredItems.isEmpty() && !activeLoading && activeError == null) {
             item {
                 EmptyState(
-                    message = "暂无动态",
-                    actionText = "登录后查看关注 UP主 的动态",
+                    message = emptyMessage,
+                    actionText = emptyActionText,
+                    onAction = if (emptyActionText != null) onLoginClick else null,
                     modifier = Modifier.height(300.dp)
                 )
             }
@@ -744,6 +769,7 @@ private fun HorizontalUserList(
     users: List<SidebarUser>,
     selectedUserId: Long?,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    emptyMessage: String?,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
     onUserClick: (Long?) -> Unit,
@@ -796,6 +822,23 @@ private fun HorizontalUserList(
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            if (users.isEmpty() && !emptyMessage.isNullOrBlank()) {
+                item(key = "empty_state") {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        tonalElevation = 1.dp
+                    ) {
+                        Text(
+                            text = emptyMessage,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
