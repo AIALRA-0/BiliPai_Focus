@@ -104,33 +104,6 @@
 - Focus 尽量与主项目保持相同主版本号，目前暂定只跟进上游大版本，再在同一上游基线上滚动维护 Focus 子版本。
 - 当前测试设备仅覆盖 `真我 Neo 7` 与 `联想 Y700 2023`；如果你在其他设备上遇到兼容性或行为问题，请到仓库提交 [Issue](https://github.com/AIALRA-0/BiliPai_Focus/issues)。
 
-### 与官方的主要 diff 文件
-
-以下只列 Focus 维护线最核心的新增和改动入口，完整差异以仓库提交历史为准。
-
-| 类型 | 文件 | 作用 |
-| --- | --- | --- |
-| 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.0-focus.4.md` | Focus `focus.4` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.0-focus.4-en.md` | Focus `focus.4` 英文发布说明 |
-| 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
-| 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
-| 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus 设置页入口与专注模式开关 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Focus 设置搜索索引与设置入口文案 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | 首页顶部分类过滤、居中对称布局与边界留白 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | 顶部分类指示器偏移与居中补偿 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | 首页“关注”数据过滤与本地缓存投影 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | 动态页关注对象预热、分组过滤与显示策略 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | 关注分组管理、分组展开与单归属迁移 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | 动态页分组入口与交互承接 |
-| 修改 | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | 历史记录清空 API 接入 |
-| 修改 | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | 历史记录清空仓储链路 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | 历史记录一键清空状态与交互回写 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | 首次使用页的官方 / Focus GitHub 入口 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | 应用内更新检查切换到 Focus 仓库 |
-| 修改 | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus 文档入口、版本线、截图与发布说明 |
-
 ### Focus 功能截图
 
 #### 专注模式入口与设置
@@ -178,6 +151,33 @@
 <p align="center">
   <sub>动态页分组入口、分组管理展开，以及关注对象按单归属分组管理的实际界面，点击动态页面右上角小齿轮进入分组管理</sub>
 </p>
+
+### 与官方的主要 diff 文件
+
+以下只列 Focus 维护线最核心的新增和改动入口，完整差异以仓库提交历史为准。
+
+| 类型 | 文件 | 作用 |
+| --- | --- | --- |
+| 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
+| 新增 | `docs/releases/focus-7.1.0-focus.4.md` | Focus `focus.4` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.0-focus.4-en.md` | Focus `focus.4` 英文发布说明 |
+| 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
+| 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
+| 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus 设置页入口与专注模式开关 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Focus 设置搜索索引与设置入口文案 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | 首页顶部分类过滤、居中对称布局与边界留白 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | 顶部分类指示器偏移与居中补偿 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | 首页“关注”数据过滤与本地缓存投影 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | 动态页关注对象预热、分组过滤与显示策略 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | 关注分组管理、分组展开与单归属迁移 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | 动态页分组入口与交互承接 |
+| 修改 | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | 历史记录清空 API 接入 |
+| 修改 | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | 历史记录清空仓储链路 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | 历史记录一键清空状态与交互回写 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | 首次使用页的官方 / Focus GitHub 入口 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | 应用内更新检查切换到 Focus 仓库 |
+| 修改 | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus 文档入口、版本线、截图与发布说明 |
 
 ## 📸 官方应用预览
 

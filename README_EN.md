@@ -87,33 +87,6 @@ From the perspective of attention psychology and behavioral design, recommendati
 - Focus tries to stay on the same upstream major version. For now, the plan is to follow upstream major releases first, then roll Focus sub-versions on top of that baseline.
 - Testing is currently performed only on `realme Neo 7` and `Lenovo Y700 2023`. If you hit compatibility or behavior issues on other devices, please open an [issue](https://github.com/AIALRA-0/BiliPai_Focus/issues).
 
-### Main diff files against upstream
-
-This list only covers the main Focus-maintained entry points; use the repository history for the full diff.
-
-| Type | File | Purpose |
-| --- | --- | --- |
-| Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.0-focus.4.md` | Chinese release notes for `focus.4` |
-| Added | `docs/releases/focus-7.1.0-focus.4-en.md` | English release notes for `focus.4` |
-| Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
-| Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
-| Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus settings entry and Quiet Mode switches |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Settings search indexing and Focus entry copy |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | Home top-tab filtering, centered layout, and viewport spacing |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | Indicator offset and centered compensation |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | Home Follow projection and local cache filtering |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | Dynamic follow hydration, grouping, and visibility policy |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | Follow-group management, expansion flow, and single-group assignment |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | Dynamic group entry and interaction handoff |
-| Modified | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | Watch-history clear-all API integration |
-| Modified | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | Watch-history clear-all repository flow |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | Watch-history clear-all state and UI feedback |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | Official / Focus GitHub links on first-use onboarding |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | In-app update source switched to the Focus repository |
-| Modified | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus docs entry points, version line, screenshots, and release notes |
-
 ### Focus feature screenshots
 
 #### Focus entry and settings
@@ -161,6 +134,33 @@ This list only covers the main Focus-maintained entry points; use the repository
 <p align="center">
   <sub>Shows the Dynamic entry point, expanded group management, and single-group assignment for followed creators</sub>
 </p>
+
+### Main diff files against upstream
+
+This list only covers the main Focus-maintained entry points; use the repository history for the full diff.
+
+| Type | File | Purpose |
+| --- | --- | --- |
+| Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
+| Added | `docs/releases/focus-7.1.0-focus.4.md` | Chinese release notes for `focus.4` |
+| Added | `docs/releases/focus-7.1.0-focus.4-en.md` | English release notes for `focus.4` |
+| Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
+| Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
+| Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus settings entry and Quiet Mode switches |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Settings search indexing and Focus entry copy |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | Home top-tab filtering, centered layout, and viewport spacing |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | Indicator offset and centered compensation |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | Home Follow projection and local cache filtering |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | Dynamic follow hydration, grouping, and visibility policy |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | Follow-group management, expansion flow, and single-group assignment |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | Dynamic group entry and interaction handoff |
+| Modified | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | Watch-history clear-all API integration |
+| Modified | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | Watch-history clear-all repository flow |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | Watch-history clear-all state and UI feedback |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | Official / Focus GitHub links on first-use onboarding |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | In-app update source switched to the Focus repository |
+| Modified | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus docs entry points, version line, screenshots, and release notes |
 
 ## 📸 Official app preview
 
