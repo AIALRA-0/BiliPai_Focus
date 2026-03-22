@@ -201,6 +201,7 @@ fun SettingsScreen(
     val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
     val onTwitterClick: () -> Unit = { uriHandler.openUri("https://x.com/YangY_0x00") }
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
+    val onFocusGithubClick: () -> Unit = { uriHandler.openUri(FOCUS_GITHUB_URL) }
     val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
     suspend fun runUpdateCheck(
@@ -382,6 +383,7 @@ fun SettingsScreen(
         ReleaseChannelDisclaimerDialog(
             onDismiss = { showReleaseDisclaimerDialog = false },
             onOpenGithub = onGithubClick,
+            onOpenFocusGithub = onFocusGithubClick,
             onOpenTelegram = onTelegramClick
         )
     }

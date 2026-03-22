@@ -35,6 +35,7 @@ import com.android.purebilibili.feature.profile.ProfileScreen
 import com.android.purebilibili.feature.search.SearchScreen
 import com.android.purebilibili.feature.settings.SettingsScreen
 import com.android.purebilibili.feature.settings.AppearanceSettingsScreen
+import com.android.purebilibili.feature.settings.FOCUS_GITHUB_URL
 import com.android.purebilibili.feature.settings.PlaybackSettingsScreen
 import com.android.purebilibili.feature.settings.OFFICIAL_GITHUB_URL
 import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_URL
@@ -1949,6 +1950,7 @@ fun AppNavigation(
                         welcomePrefs.edit().putBoolean(RELEASE_DISCLAIMER_ACK_KEY, true).apply()
                     },
                     onOpenGithub = { uriHandler.openUri(OFFICIAL_GITHUB_URL) },
+                    onOpenFocusGithub = { uriHandler.openUri(FOCUS_GITHUB_URL) },
                     onOpenTelegram = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
                 )
             }

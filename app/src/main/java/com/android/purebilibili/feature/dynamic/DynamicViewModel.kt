@@ -12,6 +12,7 @@ import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.FocusFollowGroupStore
 import com.android.purebilibili.core.store.FollowingCacheStore
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
@@ -52,8 +53,8 @@ internal fun resolveDynamicStartupLoadPlan(): DynamicStartupLoadPlan {
     return DynamicStartupLoadPlan(
         refreshFeedImmediately = true,
         loadLiveStatusImmediately = true,
-        loadFollowingsImmediately = false,
-        followingsHydrationDelayMs = 1_200L,
+        loadFollowingsImmediately = true,
+        followingsHydrationDelayMs = 0L,
         initialFollowingsPageLimit = 1
     )
 }
@@ -159,6 +160,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
         loadUserPreferences()
         loadCachedDynamics()
+        hydrateFollowingsFromLocalCache()
         rebuildFollowedUsers()
         refreshInBackground(startupPlan)
     }
@@ -222,6 +224,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         startupPlan: DynamicStartupLoadPlan = resolveDynamicStartupLoadPlan()
     ) {
         viewModelScope.launch {
+            if (startupPlan.loadFollowingsImmediately) {
+                launch {
+                    loadAllFollowings(
+                        force = false,
+                        pageLimit = startupPlan.initialFollowingsPageLimit
+                    )
+                }
+            }
             refreshData(showRefreshIndicator = false)
             scheduleStartupFollowingsHydration(startupPlan)
         }
@@ -271,17 +281,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         if (isFollowingsLoading) return
         isFollowingsLoading = true
         try {
-            // 先获取当前用户 mid
-            val navResponse = NetworkModule.api.getNavInfo()
-            val myMid = navResponse.data?.mid ?: return
-            val snapshot = FollowingCacheStore.getSnapshot(appContext, myMid)
-            if (snapshot != null && cachedFollowings.isEmpty()) {
-                cachedFollowings = snapshot.users
-                _focusFollowingUsers.value = cachedFollowings
-                hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
-                lastFollowingsLoadMs = snapshot.cachedAtMs
-                rebuildFollowedUsers()
-            }
+            val myMid = resolveCurrentUserMid() ?: return
+            hydrateFollowingsFromLocalCache(mid = myMid)
 
             val now = System.currentTimeMillis()
             if (!force && !shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) {
@@ -432,6 +433,24 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         return merged.values.toList()
+    }
+
+    private fun hydrateFollowingsFromLocalCache(mid: Long? = TokenManager.midCache) {
+        val cachedMid = mid ?: return
+        val snapshot = FollowingCacheStore.getSnapshot(appContext, cachedMid) ?: return
+        if (snapshot.users.isEmpty()) return
+        cachedFollowings = snapshot.users
+        _focusFollowingUsers.value = snapshot.users
+        hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
+        lastFollowingsLoadMs = snapshot.cachedAtMs
+    }
+
+    private suspend fun resolveCurrentUserMid(): Long? {
+        TokenManager.midCache?.takeIf { it > 0L }?.let { return it }
+        val navResponse = NetworkModule.api.getNavInfo()
+        val mid = navResponse.data?.mid?.takeIf { it > 0L } ?: return null
+        TokenManager.saveMid(appContext, mid)
+        return mid
     }
 
     private fun applyUserPreferences(users: List<SidebarUser>): List<SidebarUser> {

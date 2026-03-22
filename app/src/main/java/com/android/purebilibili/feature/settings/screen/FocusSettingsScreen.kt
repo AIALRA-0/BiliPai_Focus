@@ -82,27 +82,12 @@ fun FocusSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Column {
-                    Text(
-                        text = "Focus 定制项会覆盖首页最终展示结果\n不会删除底层路由、搜索链路或数据能力",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 22.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "当前默认值\n" +
-                            "- 隐藏首页推荐 / 热门 / 直播 / 游戏 / 分区\n" +
-                            "- 隐藏视频相关推荐\n" +
-                            "- 保留搜索链路，仅关闭热门搜索\n\n" +
-                            "关注过滤\n" +
-                            "- 可在这里总开关\n" +
-                            "- 分组管理入口在动态页顶部",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 20.sp
-                    )
-                }
+                Text(
+                    text = "Focus 会默认收紧首页、搜索、历史与详情入口\n关注分组管理入口在动态页顶部",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 22.sp
+                )
             }
 
             item {

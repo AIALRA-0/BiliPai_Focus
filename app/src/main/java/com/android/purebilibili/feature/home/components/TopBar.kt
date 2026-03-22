@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
@@ -104,6 +105,17 @@ internal fun resolveTopTabRowHorizontalPaddingDp(
 ): Float {
     if (edgeToEdge) return 0f
     return if (isFloatingStyle) 0f else 4f
+}
+
+internal fun resolveTopTabViewportPaddingDp(
+    isFloatingStyle: Boolean,
+    edgeToEdge: Boolean = false
+): Dp {
+    return when {
+        edgeToEdge -> 12.dp
+        isFloatingStyle -> 8.dp
+        else -> 0.dp
+    }
 }
 
 internal fun resolveTopTabVisibleSlots(categoryCount: Int): Int {
@@ -440,6 +452,10 @@ fun CategoryTabRow(
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
     val coroutineScope = rememberCoroutineScope()
     val tabRowHeight = if (isFloatingStyle) 62.dp else 48.dp
+    val viewportPadding = resolveTopTabViewportPaddingDp(
+        isFloatingStyle = isFloatingStyle,
+        edgeToEdge = edgeToEdge
+    )
     val actionButtonSize = if (isFloatingStyle) 50.dp else 44.dp
     val actionButtonCorner = if (isFloatingStyle) 22.dp else 22.dp
     val actionIconSize = if (isFloatingStyle) 22.dp else 20.dp
@@ -486,9 +502,11 @@ fun CategoryTabRow(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .clipToBounds()
         ) {
+            val tabViewportWidth = (maxWidth - viewportPadding * 2).coerceAtLeast(0.dp)
             val tabWidth = resolveTopTabItemWidthDp(
-                containerWidthDp = maxWidth.value,
+                containerWidthDp = tabViewportWidth.value,
                 categoryCount = categories.size,
                 isFloatingStyle = isFloatingStyle
             ).dp
@@ -625,7 +643,12 @@ fun CategoryTabRow(
                     }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = viewportPadding)
+                    .clipToBounds()
+            ) {
                 val tabContentBackdrop = rememberLayerBackdrop()
                 val shouldRefract = shouldTopTabIndicatorUseRefraction(
                     position = currentPosition,
@@ -736,6 +759,7 @@ fun CategoryTabRow(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .clipToBounds()
                         .then(if (effectiveLiquidGlassEnabled) Modifier.layerBackdrop(tabContentBackdrop) else Modifier)
                 ) {
                     LazyRow(
@@ -832,6 +856,7 @@ private fun Md3CategoryTabRow(
     val actionButtonCorner = resolveMd3TopTabActionButtonCorner(isFloatingStyle)
     val actionIconSize = resolveMd3TopTabActionIconSize(isFloatingStyle)
     val actionContentBottomPadding = resolveMd3TopTabActionContentBottomPadding()
+    val viewportPadding = resolveTopTabViewportPaddingDp(isFloatingStyle = isFloatingStyle)
     val normalizedLabelMode = resolveMd3TopTabLabelMode(labelMode)
     val viewportAnchorIndex by remember(pagerState, selectedIndex) {
         derivedStateOf {
@@ -886,16 +911,23 @@ private fun Md3CategoryTabRow(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .clipToBounds()
         ) {
+            val availableWidth = (maxWidth - viewportPadding * 2).coerceAtLeast(0.dp)
             val slotCount = visibleIndices.size.coerceAtLeast(1)
-            val slotWidth = maxWidth / slotCount
+            val slotWidth = availableWidth / slotCount
             val indicatorWidth = (slotWidth * 0.34f).coerceIn(24.dp, 32.dp)
             val animatedIndicatorOffset by animateDpAsState(
                 targetValue = slotWidth * currentVisiblePosition + ((slotWidth - indicatorWidth) / 2f),
                 label = "md3TopTabIndicatorOffset"
             )
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = viewportPadding)
+                    .clipToBounds()
+            ) {
                 val selectedContainerColor = resolveMd3TopTabSelectedContainerColor(
                     colorScheme = MaterialTheme.colorScheme
                 )

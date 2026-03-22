@@ -58,7 +58,6 @@ import com.android.purebilibili.core.store.DEFAULT_FOCUS_FOLLOW_GROUP_ID
 import com.android.purebilibili.core.store.FocusFollowGroup
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.canCreateFocusFollowGroup
-import com.android.purebilibili.core.store.countFocusFollowGroupMembers
 import com.android.purebilibili.core.store.normalizeFocusFollowGroupName
 import com.android.purebilibili.core.store.resolveFocusFollowGroupForUser
 import com.android.purebilibili.core.ui.IOSModalBottomSheet
@@ -84,17 +83,10 @@ fun FocusFollowGroupSheet(
     var renameTargetGroup by remember { mutableStateOf<FocusFollowGroup?>(null) }
     var renameDraft by rememberSaveable { mutableStateOf("") }
     var deleteTargetGroupId by remember { mutableStateOf<String?>(null) }
-    val assignmentGroupStateKey = remember(config.groups) {
+    val groupStateKey = remember(config.groups) {
         config.groups.joinToString(separator = "|") { group -> group.id }
     }
-    var expandedAssignmentGroupId by rememberSaveable(assignmentGroupStateKey) { mutableStateOf<String?>(null) }
-
-    val groupCounts = remember(followings, config) {
-        countFocusFollowGroupMembers(
-            followingMids = followings.map { it.mid },
-            config = config
-        )
-    }
+    var expandedGroupId by rememberSaveable(groupStateKey) { mutableStateOf<String?>(null) }
     val assignmentSections = remember(followings, config) {
         buildFocusFollowAssignmentSections(
             followings = followings,
@@ -116,12 +108,7 @@ fun FocusFollowGroupSheet(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "这里的可见性会同时影响\n" +
-                            "- 动态页\n" +
-                            "- 首页“关注”分组流\n\n" +
-                            "默认规则\n" +
-                            "- 所有关注对象默认进入“默认分组”\n" +
-                            "- 每位对象只能属于一个分组",
+                        text = "这里的可见性会影响首页关注分组和动态页",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 20.sp
@@ -214,81 +201,39 @@ fun FocusFollowGroupSheet(
 
             item {
                 Text(
-                    text = "分组可见性",
+                    text = "分组管理",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
             }
 
-            items(config.groups, key = { it.id }) { group ->
-                FocusFollowGroupRow(
-                    group = group,
-                    memberCount = groupCounts[group.id] ?: 0,
-                    onToggleVisible = { visible ->
-                        onSetGroupVisible(group.id, visible)
-                    },
-                    onRename = if (group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
-                        null
-                    } else {
-                        {
-                            renameTargetGroup = group
-                            renameDraft = group.name
-                        }
-                    },
-                    onDelete = if (group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
-                        null
-                    } else {
-                        { deleteTargetGroupId = group.id }
-                    }
-                )
-            }
-
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "关注对象归属",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "点开某个分组后\n再调整这组里的关注对象归属",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            if (!isLoading && assignmentSections.all { it.members.isEmpty() }) {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        tonalElevation = 1.dp,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow
-                    ) {
-                        Text(
-                            text = "还没有载入完整关注列表；点上面的“刷新”后，就可以按分组查看并调整每位关注对象的归属",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            items(assignmentSections, key = { it.group.id }) { section ->
-                FocusFollowAssignmentSectionCard(
+            items(assignmentSections, key = { section -> "group_manager_${section.group.id}" }) { section ->
+                FocusFollowGroupManagementCard(
                     section = section,
                     groups = config.groups,
-                    expanded = expandedAssignmentGroupId == section.group.id,
+                    expanded = expandedGroupId == section.group.id,
                     onToggleExpanded = {
-                        expandedAssignmentGroupId = if (expandedAssignmentGroupId == section.group.id) {
+                        expandedGroupId = if (expandedGroupId == section.group.id) {
                             null
                         } else {
                             section.group.id
                         }
+                    },
+                    onToggleVisible = { visible ->
+                        onSetGroupVisible(section.group.id, visible)
+                    },
+                    onRename = if (section.group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
+                        null
+                    } else {
+                        {
+                            renameTargetGroup = section.group
+                            renameDraft = section.group.name
+                        }
+                    },
+                    onDelete = if (section.group.id == DEFAULT_FOCUS_FOLLOW_GROUP_ID) {
+                        null
+                    } else {
+                        { deleteTargetGroupId = section.group.id }
                     },
                     onAssignUserToGroup = onAssignUserToGroup,
                     resolveCurrentGroup = { mid -> resolveFocusFollowGroupForUser(config, mid) }
@@ -359,11 +304,14 @@ fun FocusFollowGroupSheet(
 }
 
 @Composable
-private fun FocusFollowAssignmentSectionCard(
+private fun FocusFollowGroupManagementCard(
     section: FocusFollowAssignmentSection,
     groups: List<FocusFollowGroup>,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
+    onToggleVisible: (Boolean) -> Unit,
+    onRename: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     onAssignUserToGroup: (Long, String) -> Unit,
     resolveCurrentGroup: (Long) -> FocusFollowGroup
 ) {
@@ -375,27 +323,55 @@ private fun FocusFollowAssignmentSectionCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggleExpanded)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpanded),
+                verticalAlignment = Alignment.Top
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = section.group.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (section.group.visible) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHighest
+                            }
+                        ) {
+                            Text(
+                                text = if (section.group.visible) "可见" else "隐藏",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (section.group.visible) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    }
                     Text(
-                        text = section.group.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "${section.members.size} 位关注对象 · ${if (section.group.visible) "动态和首页当前可见" else "动态和首页当前隐藏"}",
+                        text = "${section.members.size} 位关注对象 · ${if (section.group.visible) "动态与首页可见" else "动态与首页隐藏"}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
                     )
                 }
                 Icon(
@@ -405,11 +381,61 @@ private fun FocusFollowAssignmentSectionCard(
                         Icons.AutoMirrored.Outlined.KeyboardArrowRight
                     },
                     contentDescription = if (expanded) "收起分组成员" else "展开分组成员",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp, top = 2.dp)
                 )
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "显示",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = section.group.visible,
+                            onCheckedChange = onToggleVisible
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                onRename?.let {
+                    IconButton(onClick = it) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "重命名分组"
+                        )
+                    }
+                }
+                onDelete?.let {
+                    IconButton(onClick = it) {
+                        Icon(
+                            imageVector = Icons.Outlined.DeleteOutline,
+                            contentDescription = "删除分组"
+                        )
+                    }
+                }
+            }
+
             if (expanded) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                )
                 if (section.members.isEmpty()) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -437,64 +463,6 @@ private fun FocusFollowAssignmentSectionCard(
                             )
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FocusFollowGroupRow(
-    group: FocusFollowGroup,
-    memberCount: Int,
-    onToggleVisible: (Boolean) -> Unit,
-    onRename: (() -> Unit)?,
-    onDelete: (() -> Unit)?
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = group.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "${memberCount} 位关注对象 · ${if (group.visible) "当前可见" else "当前隐藏"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Switch(
-                checked = group.visible,
-                onCheckedChange = onToggleVisible
-            )
-            onRename?.let {
-                IconButton(onClick = it) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = "重命名分组"
-                    )
-                }
-            }
-            onDelete?.let {
-                IconButton(onClick = it) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = "删除分组"
-                    )
                 }
             }
         }
