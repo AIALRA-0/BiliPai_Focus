@@ -145,6 +145,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var focusFollowGroupConfig: FocusFollowGroupConfig = FocusFollowGroupConfig()
     private var focusFollowGroupFilteringEnabled: Boolean = true
     private var rawFollowFeedVideos: List<VideoItem> = emptyList()
+    private var hasResolvedFollowFeedOnce: Boolean = false
     private var historySampleCache: List<VideoItem> = emptyList()
     private var historySampleLoadedAtMs: Long = 0L
     private val todayConsumedBvids = mutableSetOf<String>()
@@ -233,9 +234,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // Filter live rooms if possible (assuming uid matches mid)
                 liveRooms = content.liveRooms.filter { it.uid !in blockedMids },
                 followedLiveRooms = content.followedLiveRooms.filter { it.uid !in blockedMids },
-                error = if (category == HomeCategory.FOLLOW && !content.error.orEmpty().contains("未登录")) {
-                    resolveHomeFollowEmptyMessage(
-                        visibleVideoCount = filteredVideos.size
+                error = if (category == HomeCategory.FOLLOW) {
+                    resolveHomeFollowErrorAfterRefilter(
+                        visibleVideoCount = filteredVideos.size,
+                        hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce,
+                        existingError = content.error
                     )
                 } else {
                     content.error
@@ -251,7 +254,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             newState = newState.copy(
                 videos = currentContent.videos,
                 liveRooms = currentContent.liveRooms,
-                followedLiveRooms = currentContent.followedLiveRooms
+                followedLiveRooms = currentContent.followedLiveRooms,
+                isLoading = currentContent.isLoading,
+                error = currentContent.error
             )
         }
         
@@ -1143,6 +1148,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoadMore = isLoadMore
         )
         rawFollowFeedVideos = mergedRawVideos
+        hasResolvedFollowFeedOnce = true
         val visibleVideos = applyHomeVideoFilters(
             category = HomeCategory.FOLLOW,
             videos = mergedRawVideos
@@ -1153,7 +1159,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoading = false,
             error = if (!isLoadMore) {
                 resolveHomeFollowEmptyMessage(
-                    visibleVideoCount = visibleVideos.size
+                    visibleVideoCount = visibleVideos.size,
+                    hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
                 )
             } else {
                 null
@@ -1165,6 +1172,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
             rawFollowFeedVideos = emptyList()
+            hasResolvedFollowFeedOnce = false
             updateFollowFeedCategoryState(
                 videos = emptyList(),
                 isLoading = false,
@@ -1195,7 +1203,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             category = HomeCategory.FOLLOW,
             videos = baselineRawVideos
         ).size
-        var workingRawVideos = baselineRawVideos
+        var roundRawVideos = emptyList<VideoItem>()
         var targetRawIncrement: Int? = null
         var continuationFetches = 0
         var refreshRequest = !isLoadMore
@@ -1214,21 +1222,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
             val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
-            val previousRawVideos = workingRawVideos
-            val mergedRawVideos = mergeFollowFeedRawVideos(
-                existingRawVideos = previousRawVideos,
+            val previousRoundRawVideos = roundRawVideos
+            val mergedRoundRawVideos = accumulateHomeFollowRoundRawVideos(
+                existingRoundRawVideos = previousRoundRawVideos,
                 incomingRawVideos = rawVideos,
-                isLoadMore = isLoadMore
+                keySelector = ::videoItemKey
             )
-            val rawIncrement = (mergedRawVideos.size - previousRawVideos.size).coerceAtLeast(0)
+            val rawIncrement = (mergedRoundRawVideos.size - previousRoundRawVideos.size).coerceAtLeast(0)
             if (targetRawIncrement == null && rawIncrement > 0) {
                 targetRawIncrement = rawIncrement
             }
-            workingRawVideos = mergedRawVideos
+            roundRawVideos = mergedRoundRawVideos
+            val presentedRawVideos = resolveHomeFollowPresentedRawVideos(
+                baselineRawVideos = baselineRawVideos,
+                roundRawVideos = roundRawVideos,
+                isLoadMore = isLoadMore,
+                incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+                keySelector = ::videoItemKey
+            )
 
             val visibleVideos = applyHomeVideoFilters(
                 category = HomeCategory.FOLLOW,
-                videos = mergedRawVideos
+                videos = presentedRawVideos
             )
             val visibleIncrement = resolveHomeFollowVisibleIncrement(
                 baselineVisibleCount = baselineVisibleCount,
@@ -1244,13 +1259,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     continuationFetches = continuationFetches
                 )
             ) {
-                rawFollowFeedVideos = workingRawVideos
+                rawFollowFeedVideos = presentedRawVideos
+                hasResolvedFollowFeedOnce = true
                 updateFollowFeedCategoryState(
                     videos = visibleVideos,
                     isLoading = false,
                     error = if (!isLoadMore) {
                         resolveHomeFollowEmptyMessage(
-                            visibleVideoCount = visibleVideos.size
+                            visibleVideoCount = visibleVideos.size,
+                            hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
                         )
                     } else {
                         null

@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-23 · Upstream base v7.1.1 · Current Focus release v7.1.1-focus.1</sub>
+  <sub>Last updated: 2026-03-23 · Upstream base v7.1.1 · Current Focus release v7.1.1-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.1--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.1--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.1-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -32,7 +32,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.1-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.1-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -49,18 +49,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.1-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.1-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.1-focus.1` |
+| Focus version | `7.1.1-focus.2` |
 | Upstream base | `7.1.1` |
-| Release tag | `v7.1.1-focus.1` |
-| Release notes | [docs/releases/focus-7.1.1-focus.1-en.md](docs/releases/focus-7.1.1-focus.1-en.md) |
-| Main refinements | Merges upstream `v7.1.1` language-switch and immersive inset fixes; Home Follow now keeps the official `HOME_FOLLOW` pagination and only supplements until the Focus-filtered visible delta matches the current official chunk, avoiding false empty states and unstable `1-2` item outputs; top insets also return to the upstream `7.1.1` baseline to reduce gaps above the header on some systems |
-| APK names | `BliPai-Focus-debug-7.1.1-focus.1-debug.apk` · `BliPai-Focus-release-7.1.1-focus.1.apk` |
+| Release tag | `v7.1.1-focus.2` |
+| Release notes | [docs/releases/focus-7.1.1-focus.2-en.md](docs/releases/focus-7.1.1-focus.2-en.md) |
+| Main refinements | Keeps the upstream `v7.1.1` baseline and focuses on a Home Follow hotfix: Focus-filtered continuation pages now accumulate within the current refresh round before projection, and the “no available followed creators” empty state no longer appears before the first successful follow-feed resolution |
+| APK names | `BliPai-Focus-debug-7.1.1-focus.2-debug.apk` · `BliPai-Focus-release-7.1.1-focus.2.apk` |
 
 ### Default customizations
 
@@ -147,8 +147,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.1-focus.1.md` | Chinese release notes for `v7.1.1-focus.1` |
-| Added | `docs/releases/focus-7.1.1-focus.1-en.md` | English release notes for `v7.1.1-focus.1` |
+| Added | `docs/releases/focus-7.1.1-focus.2.md` | Chinese release notes for `v7.1.1-focus.2` |
+| Added | `docs/releases/focus-7.1.1-focus.2-en.md` | English release notes for `v7.1.1-focus.2` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |

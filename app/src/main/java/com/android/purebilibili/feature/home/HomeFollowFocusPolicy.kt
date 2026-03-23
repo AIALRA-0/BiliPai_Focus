@@ -2,9 +2,12 @@ package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
+import com.android.purebilibili.core.util.appendDistinctByKey
+import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.VideoItem
 
 private const val HOME_FOLLOW_FILTER_COMPLETION_FETCH_LIMIT = 8
+private const val HOME_FOLLOW_EMPTY_MESSAGE = "没有可用关注对象"
 
 internal fun filterHomeFollowVideosByFocusFollowGroups(
     videos: List<VideoItem>,
@@ -18,10 +21,25 @@ internal fun filterHomeFollowVideosByFocusFollowGroups(
 }
 
 internal fun resolveHomeFollowEmptyMessage(
-    visibleVideoCount: Int
+    visibleVideoCount: Int,
+    hasResolvedFollowFeedOnce: Boolean = true
 ): String? {
-    if (visibleVideoCount > 0) return null
-    return "没有可用关注对象"
+    if (!hasResolvedFollowFeedOnce || visibleVideoCount > 0) return null
+    return HOME_FOLLOW_EMPTY_MESSAGE
+}
+
+internal fun resolveHomeFollowErrorAfterRefilter(
+    visibleVideoCount: Int,
+    hasResolvedFollowFeedOnce: Boolean,
+    existingError: String?
+): String? {
+    if (!existingError.isNullOrBlank() && existingError != HOME_FOLLOW_EMPTY_MESSAGE) {
+        return existingError
+    }
+    return resolveHomeFollowEmptyMessage(
+        visibleVideoCount = visibleVideoCount,
+        hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
+    )
 }
 
 internal fun resolveHomeFollowVisibleIncrement(
@@ -43,4 +61,26 @@ internal fun shouldContinueHomeFollowFetchAfterFocusFilter(
 
     val requiredVisibleIncrement = targetRawIncrement ?: 1
     return visibleIncrement < requiredVisibleIncrement
+}
+
+internal fun accumulateHomeFollowRoundRawVideos(
+    existingRoundRawVideos: List<VideoItem>,
+    incomingRawVideos: List<VideoItem>,
+    keySelector: (VideoItem) -> String
+): List<VideoItem> {
+    return appendDistinctByKey(existingRoundRawVideos, incomingRawVideos, keySelector)
+}
+
+internal fun resolveHomeFollowPresentedRawVideos(
+    baselineRawVideos: List<VideoItem>,
+    roundRawVideos: List<VideoItem>,
+    isLoadMore: Boolean,
+    incrementalTimelineRefreshEnabled: Boolean,
+    keySelector: (VideoItem) -> String
+): List<VideoItem> {
+    return when {
+        isLoadMore -> appendDistinctByKey(baselineRawVideos, roundRawVideos, keySelector)
+        incrementalTimelineRefreshEnabled -> prependDistinctByKey(baselineRawVideos, roundRawVideos, keySelector)
+        else -> roundRawVideos
+    }
 }
