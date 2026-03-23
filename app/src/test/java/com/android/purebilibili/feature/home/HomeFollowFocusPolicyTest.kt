@@ -64,8 +64,14 @@ class HomeFollowFocusPolicyTest {
     fun resolveHomeFollowPrefetchPlan_usesAggressiveQuotaForRefresh() {
         assertEquals(
             HomeFollowPrefetchPlan(
-                minVisibleCount = 18,
-                maxExtraPages = 12
+                foregroundBudget = HomeFollowPrefetchBudget(
+                    minVisibleCount = 6,
+                    maxExtraPages = 2
+                ),
+                backgroundBudget = HomeFollowPrefetchBudget(
+                    minVisibleCount = 12,
+                    maxExtraPages = 6
+                )
             ),
             resolveHomeFollowPrefetchPlan(isLoadMore = false)
         )
@@ -75,8 +81,10 @@ class HomeFollowFocusPolicyTest {
     fun resolveHomeFollowPrefetchPlan_usesSmallerQuotaForAppend() {
         assertEquals(
             HomeFollowPrefetchPlan(
-                minVisibleCount = 8,
-                maxExtraPages = 4
+                foregroundBudget = HomeFollowPrefetchBudget(
+                    minVisibleCount = 8,
+                    maxExtraPages = 4
+                )
             ),
             resolveHomeFollowPrefetchPlan(isLoadMore = true)
         )
@@ -89,15 +97,15 @@ class HomeFollowFocusPolicyTest {
                 visibleVideoCount = 5,
                 hasMore = true,
                 extraPagesFetched = 0,
-                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
+                budget = resolveHomeFollowPrefetchPlan(isLoadMore = false).foregroundBudget
             )
         )
         assertFalse(
             shouldPrefetchMoreHomeFollowVideos(
-                visibleVideoCount = 18,
+                visibleVideoCount = 6,
                 hasMore = true,
                 extraPagesFetched = 0,
-                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
+                budget = resolveHomeFollowPrefetchPlan(isLoadMore = false).foregroundBudget
             )
         )
         assertFalse(
@@ -105,15 +113,35 @@ class HomeFollowFocusPolicyTest {
                 visibleVideoCount = 5,
                 hasMore = false,
                 extraPagesFetched = 0,
-                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
+                budget = resolveHomeFollowPrefetchPlan(isLoadMore = false).foregroundBudget
             )
         )
         assertFalse(
             shouldPrefetchMoreHomeFollowVideos(
                 visibleVideoCount = 5,
                 hasMore = true,
-                extraPagesFetched = 12,
-                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
+                extraPagesFetched = 2,
+                budget = resolveHomeFollowPrefetchPlan(isLoadMore = false).foregroundBudget
+            )
+        )
+    }
+
+    @Test
+    fun shouldPrefetchMoreHomeFollowVideos_allowsBackgroundCompletionAfterFastFirstPaint() {
+        assertTrue(
+            shouldPrefetchMoreHomeFollowVideos(
+                visibleVideoCount = 7,
+                hasMore = true,
+                extraPagesFetched = 2,
+                budget = resolveHomeFollowPrefetchPlan(isLoadMore = false).backgroundBudget!!
+            )
+        )
+        assertFalse(
+            shouldPrefetchMoreHomeFollowVideos(
+                visibleVideoCount = 12,
+                hasMore = true,
+                extraPagesFetched = 2,
+                budget = resolveHomeFollowPrefetchPlan(isLoadMore = false).backgroundBudget!!
             )
         )
     }

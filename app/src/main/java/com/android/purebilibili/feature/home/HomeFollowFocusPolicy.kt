@@ -4,14 +4,21 @@ import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.data.model.response.VideoItem
 
-private const val MIN_VISIBLE_HOME_FOLLOW_REFRESH_VIDEOS = 18
+private const val MIN_VISIBLE_HOME_FOLLOW_INITIAL_REFRESH_VIDEOS = 6
+private const val MIN_VISIBLE_HOME_FOLLOW_TOTAL_REFRESH_VIDEOS = 12
 private const val MIN_VISIBLE_HOME_FOLLOW_APPEND_VIDEOS = 8
-private const val MAX_HOME_FOLLOW_REFRESH_PREFETCH_PAGES = 12
+private const val MAX_HOME_FOLLOW_INITIAL_REFRESH_PREFETCH_PAGES = 2
+private const val MAX_HOME_FOLLOW_TOTAL_REFRESH_PREFETCH_PAGES = 6
 private const val MAX_HOME_FOLLOW_APPEND_PREFETCH_PAGES = 4
 
-internal data class HomeFollowPrefetchPlan(
+internal data class HomeFollowPrefetchBudget(
     val minVisibleCount: Int,
     val maxExtraPages: Int
+)
+
+internal data class HomeFollowPrefetchPlan(
+    val foregroundBudget: HomeFollowPrefetchBudget,
+    val backgroundBudget: HomeFollowPrefetchBudget? = null
 )
 
 internal fun filterHomeFollowVideosByFocusFollowGroups(
@@ -35,13 +42,21 @@ internal fun resolveHomeFollowEmptyMessage(
 internal fun resolveHomeFollowPrefetchPlan(isLoadMore: Boolean): HomeFollowPrefetchPlan {
     return if (isLoadMore) {
         HomeFollowPrefetchPlan(
-            minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_APPEND_VIDEOS,
-            maxExtraPages = MAX_HOME_FOLLOW_APPEND_PREFETCH_PAGES
+            foregroundBudget = HomeFollowPrefetchBudget(
+                minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_APPEND_VIDEOS,
+                maxExtraPages = MAX_HOME_FOLLOW_APPEND_PREFETCH_PAGES
+            )
         )
     } else {
         HomeFollowPrefetchPlan(
-            minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_REFRESH_VIDEOS,
-            maxExtraPages = MAX_HOME_FOLLOW_REFRESH_PREFETCH_PAGES
+            foregroundBudget = HomeFollowPrefetchBudget(
+                minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_INITIAL_REFRESH_VIDEOS,
+                maxExtraPages = MAX_HOME_FOLLOW_INITIAL_REFRESH_PREFETCH_PAGES
+            ),
+            backgroundBudget = HomeFollowPrefetchBudget(
+                minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_TOTAL_REFRESH_VIDEOS,
+                maxExtraPages = MAX_HOME_FOLLOW_TOTAL_REFRESH_PREFETCH_PAGES
+            )
         )
     }
 }
@@ -50,9 +65,9 @@ internal fun shouldPrefetchMoreHomeFollowVideos(
     visibleVideoCount: Int,
     hasMore: Boolean,
     extraPagesFetched: Int,
-    plan: HomeFollowPrefetchPlan
+    budget: HomeFollowPrefetchBudget
 ): Boolean {
     if (!hasMore) return false
-    if (visibleVideoCount >= plan.minVisibleCount.coerceAtLeast(1)) return false
-    return extraPagesFetched < plan.maxExtraPages.coerceAtLeast(0)
+    if (visibleVideoCount >= budget.minVisibleCount.coerceAtLeast(1)) return false
+    return extraPagesFetched < budget.maxExtraPages.coerceAtLeast(0)
 }

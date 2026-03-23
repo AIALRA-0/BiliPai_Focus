@@ -139,6 +139,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var _undoSnapshot: HomeRefreshUndoSnapshot? = null
     private var undoDismissJob: Job? = null
     private var userInfoRefreshJob: Job? = null
+    private var followFeedPrefetchJob: Job? = null
+    private var followFeedRequestToken: Long = 0L
 
     // [Feature] Blocked UPs
     private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
@@ -1074,18 +1076,137 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = newState
     }
 
+    private fun homeFollowHasMoreData(): Boolean {
+        return com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
+            com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+        )
+    }
+
+    private fun updateFollowFeedCategoryState(
+        videos: List<com.android.purebilibili.data.model.response.VideoItem>,
+        isLoading: Boolean,
+        error: String?,
+        hasMore: Boolean
+    ) {
+        updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+            oldState.copy(
+                videos = videos,
+                liveRooms = emptyList(),
+                isLoading = isLoading,
+                error = error,
+                hasMore = hasMore
+            )
+        }
+    }
+
+    private fun shouldContinueHomeFollowBackgroundPrefetch(
+        visibleVideoCount: Int,
+        extraPagesFetched: Int,
+        budget: HomeFollowPrefetchBudget?
+    ): Boolean {
+        val effectiveBudget = budget ?: return false
+        return shouldPrefetchMoreHomeFollowVideos(
+            visibleVideoCount = visibleVideoCount,
+            hasMore = homeFollowHasMoreData(),
+            extraPagesFetched = extraPagesFetched,
+            budget = effectiveBudget
+        )
+    }
+
+    private fun scheduleHomeFollowBackgroundPrefetch(
+        requestToken: Long,
+        mergedRawVideos: List<com.android.purebilibili.data.model.response.VideoItem>,
+        extraPagesFetched: Int,
+        budget: HomeFollowPrefetchBudget
+    ) {
+        followFeedPrefetchJob?.cancel()
+        followFeedPrefetchJob = viewModelScope.launch {
+            var currentRawVideos = mergedRawVideos
+            var currentVisibleVideos = applyHomeVideoFilters(
+                category = HomeCategory.FOLLOW,
+                videos = currentRawVideos
+            )
+            var fetchedExtraPages = extraPagesFetched
+
+            try {
+                while (
+                    requestToken == followFeedRequestToken &&
+                    shouldPrefetchMoreHomeFollowVideos(
+                        visibleVideoCount = currentVisibleVideos.size,
+                        hasMore = homeFollowHasMoreData(),
+                        extraPagesFetched = fetchedExtraPages,
+                        budget = budget
+                    )
+                ) {
+                    val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
+                        refresh = false,
+                        scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+                    )
+                    val extraItems = extraResult.getOrNull() ?: break
+                    if (extraItems.isEmpty()) break
+
+                    currentRawVideos = appendDistinctByKey(
+                        currentRawVideos,
+                        mapFollowDynamicItemsToHomeVideos(extraItems),
+                        ::videoItemKey
+                    )
+                    currentVisibleVideos = applyHomeVideoFilters(
+                        category = HomeCategory.FOLLOW,
+                        videos = currentRawVideos
+                    )
+                    fetchedExtraPages += 1
+                    rawFollowFeedVideos = currentRawVideos
+
+                    if (requestToken != followFeedRequestToken) return@launch
+
+                    updateFollowFeedCategoryState(
+                        videos = currentVisibleVideos,
+                        isLoading = shouldPrefetchMoreHomeFollowVideos(
+                            visibleVideoCount = currentVisibleVideos.size,
+                            hasMore = homeFollowHasMoreData(),
+                            extraPagesFetched = fetchedExtraPages,
+                            budget = budget
+                        ),
+                        error = null,
+                        hasMore = homeFollowHasMoreData()
+                    )
+                }
+
+                if (requestToken != followFeedRequestToken) return@launch
+
+                rawFollowFeedVideos = currentRawVideos
+                updateFollowFeedCategoryState(
+                    videos = currentVisibleVideos,
+                    isLoading = false,
+                    error = resolveHomeFollowEmptyMessage(
+                        visibleVideoCount = currentVisibleVideos.size
+                    ),
+                    hasMore = homeFollowHasMoreData()
+                )
+            } finally {
+                if (requestToken == followFeedRequestToken) {
+                    followFeedPrefetchJob = null
+                }
+            }
+        }
+    }
+
     //  [新增] 获取关注动态列表
     //  [新增] 获取关注动态列表
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
+        followFeedRequestToken += 1L
+        val requestToken = followFeedRequestToken
+        followFeedPrefetchJob?.cancel()
+        followFeedPrefetchJob = null
+
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
             rawFollowFeedVideos = emptyList()
-             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                oldState.copy(
-                    isLoading = false,
-                    error = "未登录，请先登录以查看关注内容",
-                    videos = emptyList() // Ensure empty to trigger error state
-                )
-            }
+            updateFollowFeedCategoryState(
+                videos = emptyList(),
+                isLoading = false,
+                error = "未登录，请先登录以查看关注内容",
+                hasMore = false
+            )
             return
         }
 
@@ -1119,11 +1240,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val prefetchPlan = resolveHomeFollowPrefetchPlan(isLoadMore)
             while (shouldPrefetchMoreHomeFollowVideos(
                     visibleVideoCount = visibleVideos.size,
-                    hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
-                        com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
-                    ),
+                    hasMore = homeFollowHasMoreData(),
                     extraPagesFetched = extraPagesFetched,
-                    plan = prefetchPlan
+                    budget = prefetchPlan.foregroundBudget
                 )
             ) {
                 val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
@@ -1146,26 +1265,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             rawFollowFeedVideos = mergedRawVideos
-            
-            updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                oldState.copy(
-                    videos = visibleVideos,
-                    liveRooms = emptyList(),
-                    isLoading = false,
-                    error = if (!isLoadMore) {
-                        resolveHomeFollowEmptyMessage(
-                            visibleVideoCount = visibleVideos.size
-                        )
-                    } else {
-                        null
-                    },
-                    hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
-                        com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+
+            val shouldContinueInBackground = !isLoadMore &&
+                shouldContinueHomeFollowBackgroundPrefetch(
+                    visibleVideoCount = visibleVideos.size,
+                    extraPagesFetched = extraPagesFetched,
+                    budget = prefetchPlan.backgroundBudget
+                )
+
+            updateFollowFeedCategoryState(
+                videos = visibleVideos,
+                isLoading = shouldContinueInBackground,
+                error = if (!isLoadMore && !shouldContinueInBackground) {
+                    resolveHomeFollowEmptyMessage(
+                        visibleVideoCount = visibleVideos.size
                     )
+                } else {
+                    null
+                },
+                hasMore = homeFollowHasMoreData()
+            )
+
+            if (shouldContinueInBackground && requestToken == followFeedRequestToken) {
+                scheduleHomeFollowBackgroundPrefetch(
+                    requestToken = requestToken,
+                    mergedRawVideos = mergedRawVideos,
+                    extraPagesFetched = extraPagesFetched,
+                    budget = prefetchPlan.backgroundBudget!!
                 )
             }
         }.onFailure { error ->
-             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+            updateCategoryState(HomeCategory.FOLLOW) { oldState ->
                 oldState.copy(
                     isLoading = false,
                     error = if (!isLoadMore && oldState.videos.isEmpty()) error.message ?: "请先登录" else null
