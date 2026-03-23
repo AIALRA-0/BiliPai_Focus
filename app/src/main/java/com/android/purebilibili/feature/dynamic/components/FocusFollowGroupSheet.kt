@@ -83,7 +83,7 @@ fun FocusFollowGroupSheet(
     onAssignUserToGroup: (Long, String) -> Unit
 ) {
     val inputHeight = 60.dp
-    val actionButtonHeight = 56.dp
+    val actionButtonHeight = 52.dp
     val inputShape = RoundedCornerShape(26.dp)
     val actionButtonContentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp)
     var newGroupName by rememberSaveable { mutableStateOf("") }
@@ -170,7 +170,9 @@ fun FocusFollowGroupSheet(
                             }
                             FilledTonalButton(
                                 onClick = onRefreshFollowings,
-                                modifier = Modifier.height(actionButtonHeight),
+                                modifier = Modifier
+                                    .align(Alignment.Bottom)
+                                    .height(actionButtonHeight),
                                 shape = inputShape,
                                 contentPadding = actionButtonContentPadding
                             ) {
@@ -201,7 +203,9 @@ fun FocusFollowGroupSheet(
                                 placeholder = { Text("例如：高优先、朋友、暂时隐藏") }
                             )
                             FilledTonalButton(
-                                modifier = Modifier.height(actionButtonHeight),
+                                modifier = Modifier
+                                    .align(Alignment.Bottom)
+                                    .height(actionButtonHeight),
                                 enabled = canCreateFocusFollowGroup(newGroupName, config.groups),
                                 shape = inputShape,
                                 contentPadding = actionButtonContentPadding,
