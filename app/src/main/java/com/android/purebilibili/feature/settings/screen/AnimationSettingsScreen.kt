@@ -17,9 +17,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.store.LiquidGlassMode
@@ -51,6 +53,8 @@ fun AnimationSettingsScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val screenTitle = stringResource(R.string.animation_effects_title)
+    val backLabel = stringResource(R.string.common_back)
     val scope = rememberCoroutineScope()
     val blurLevel = when (state.blurIntensity) {
         BlurIntensity.THIN -> 0.5f
@@ -68,10 +72,10 @@ fun AnimationSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("动画与效果", fontWeight = FontWeight.SemiBold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

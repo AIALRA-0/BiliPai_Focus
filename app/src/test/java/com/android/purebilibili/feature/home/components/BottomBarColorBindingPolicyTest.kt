@@ -30,6 +30,17 @@ class BottomBarColorBindingPolicyTest {
     }
 
     @Test
+    fun `resolves custom color by legacy chinese alias`() {
+        val binding = resolveBottomBarItemColorBinding(
+            item = BottomNavItem.WATCHLATER,
+            itemColorIndices = mapOf("稍后再看" to 5)
+        )
+
+        assertEquals(5, binding.colorIndex)
+        assertTrue(binding.hasCustomAccent)
+    }
+
+    @Test
     fun `falls back to default when no key matches`() {
         val binding = resolveBottomBarItemColorBinding(
             item = BottomNavItem.DYNAMIC,

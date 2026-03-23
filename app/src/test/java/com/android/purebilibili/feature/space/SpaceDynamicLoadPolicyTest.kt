@@ -15,6 +15,31 @@ import kotlin.test.assertIs
 class SpaceDynamicLoadPolicyTest {
 
     @Test
+    fun shouldRequestInitialSpaceDynamicLoad_onlyTriggersBeforeFirstCompletedLoad() {
+        assertEquals(
+            true,
+            shouldRequestInitialSpaceDynamicLoad(
+                hasLoadedOnce = false,
+                isLoading = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldRequestInitialSpaceDynamicLoad(
+                hasLoadedOnce = false,
+                isLoading = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldRequestInitialSpaceDynamicLoad(
+                hasLoadedOnce = true,
+                isLoading = false
+            )
+        )
+    }
+
+    @Test
     fun resolveSpaceDynamicPresentationState_treatsUntouchedEmptyStateAsLoading() {
         assertEquals(
             SpaceDynamicPresentationState.LOADING,

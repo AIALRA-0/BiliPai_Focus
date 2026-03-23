@@ -29,6 +29,8 @@ data class SettingsUiState(
     val uiPreset: UiPreset = UiPreset.IOS,
     val hwDecode: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
+    val darkThemeStyle: DarkThemeStyle = DarkThemeStyle.DEFAULT,
+    val appLanguage: AppLanguage = AppLanguage.FOLLOW_SYSTEM,
     val dynamicColor: Boolean = true,
     val appFontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
     val appUiScalePreset: AppUiScalePreset = AppUiScalePreset.STANDARD,
@@ -78,6 +80,8 @@ private data class CoreSettings(
     val uiPreset: UiPreset,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
+    val darkThemeStyle: DarkThemeStyle,
+    val appLanguage: AppLanguage,
     val dynamicColor: Boolean,
     val bgPlay: Boolean
 )
@@ -126,6 +130,8 @@ private data class BaseSettings(
     val uiPreset: UiPreset,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
+    val darkThemeStyle: DarkThemeStyle,
+    val appLanguage: AppLanguage,
     val dynamicColor: Boolean,
     val appFontSizePreset: AppFontSizePreset,
     val appUiScalePreset: AppUiScalePreset,
@@ -177,13 +183,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     //  [核心修复] 分步合并，解决 combine 参数限制报错
     // 第 1 步：合并前 4 个设置
     private val coreSettingsFlow = combine(
-        SettingsManager.getUiPreset(context),
-        SettingsManager.getHwDecode(context),
-        SettingsManager.getThemeMode(context),
-        SettingsManager.getDynamicColor(context),
-        SettingsManager.getBgPlay(context)
-    ) { uiPreset, hwDecode, themeMode, dynamicColor, bgPlay ->
-        CoreSettings(uiPreset, hwDecode, themeMode, dynamicColor, bgPlay)
+        SettingsManager.getUiPreset(context).asAnyFlow(),
+        SettingsManager.getHwDecode(context).asAnyFlow(),
+        SettingsManager.getThemeMode(context).asAnyFlow(),
+        SettingsManager.getDarkThemeStyle(context).asAnyFlow(),
+        SettingsManager.getAppLanguage(context).asAnyFlow(),
+        SettingsManager.getDynamicColor(context).asAnyFlow(),
+        SettingsManager.getBgPlay(context).asAnyFlow()
+    ) { values ->
+        CoreSettings(
+            uiPreset = values[0] as UiPreset,
+            hwDecode = values[1] as Boolean,
+            themeMode = values[2] as AppThemeMode,
+            darkThemeStyle = values[3] as DarkThemeStyle,
+            appLanguage = values[4] as AppLanguage,
+            dynamicColor = values[5] as Boolean,
+            bgPlay = values[6] as Boolean
+        )
     }
     
     // 第 2 步：合并界面设置 (分两组，每组最多5个)
@@ -353,6 +369,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             uiPreset = core.uiPreset,
             hwDecode = core.hwDecode,
             themeMode = core.themeMode,
+            darkThemeStyle = core.darkThemeStyle,
+            appLanguage = core.appLanguage,
             dynamicColor = core.dynamicColor,
             appFontSizePreset = extra.appFontSizePreset,
             appUiScalePreset = extra.appUiScalePreset,
@@ -398,6 +416,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             uiPreset = settings.uiPreset,
             hwDecode = settings.hwDecode,
             themeMode = settings.themeMode,
+            darkThemeStyle = settings.darkThemeStyle,
+            appLanguage = settings.appLanguage,
             dynamicColor = settings.dynamicColor,
             appFontSizePreset = settings.appFontSizePreset,
             appUiScalePreset = settings.appUiScalePreset,
@@ -478,6 +498,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { 
             SettingsManager.setThemeMode(context, mode)
         } 
+    }
+    fun setDarkThemeStyle(style: DarkThemeStyle) {
+        viewModelScope.launch {
+            SettingsManager.setDarkThemeStyle(context, style)
+        }
+    }
+    fun setAppLanguage(appLanguage: AppLanguage) {
+        viewModelScope.launch {
+            SettingsManager.setAppLanguage(context, appLanguage)
+        }
     }
     fun toggleDynamicColor(value: Boolean) { viewModelScope.launch { SettingsManager.setDynamicColor(context, value) } }
     fun setAppFontSizePreset(preset: AppFontSizePreset) {

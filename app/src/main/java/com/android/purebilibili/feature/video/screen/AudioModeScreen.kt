@@ -44,6 +44,7 @@ import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.ui.AppIcons
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.components.CoinDialog
 import com.android.purebilibili.feature.video.player.PlayMode
@@ -206,6 +207,10 @@ fun AudioModeScreen(
     // 📂 [新增] 合集弹窗状态
     var showCollectionSheet by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
+    val controlsBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 24.dp
+    )
 
     DisposableEffect(viewModel) {
         viewModel.setAudioMode(true)
@@ -282,7 +287,7 @@ fun AudioModeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 32.dp),
+                            .padding(start = 32.dp, end = 32.dp, bottom = controlsBottomPadding),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Spacer(modifier = Modifier.height(30.dp))

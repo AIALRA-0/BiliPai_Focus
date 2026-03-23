@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.*
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.Info
@@ -96,16 +98,18 @@ fun IconSettingsScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
+    val screenTitle = stringResource(R.string.icon_settings_title)
+    val backLabel = stringResource(R.string.common_back)
     
     val iconGroups = getIconGroups()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("应用图标", fontWeight = FontWeight.SemiBold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -146,6 +150,10 @@ fun IconSettingsContent(
 ) {
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
+    val contentBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 24.dp
+    )
     
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 100.dp),
@@ -159,7 +167,7 @@ fun IconSettingsContent(
             // then `LazyVerticalGrid` starts BELOW the TopBar.
             // So `contentPadding.top` should just be the extra spacing (16.dp).
             
-            bottom = 24.dp, // Similarly for bottom
+            bottom = contentBottomPadding,
             start = 16.dp,
             end = 16.dp
         ),

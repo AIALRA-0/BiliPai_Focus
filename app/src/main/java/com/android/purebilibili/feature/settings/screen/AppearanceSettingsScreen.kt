@@ -29,9 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.SettingsManager
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.theme.*
@@ -61,7 +63,13 @@ fun AppearanceSettingsScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
-    
+    val coroutineScope = rememberCoroutineScope()
+    var pendingLanguageRestart by remember { mutableStateOf<AppLanguage?>(null) }
+    val backLabel = stringResource(R.string.common_back)
+    val screenTitle = stringResource(R.string.appearance_settings_title)
+    val restartDialogTitle = stringResource(R.string.app_language_restart_dialog_title)
+    val restartDialogMessage = stringResource(R.string.app_language_restart_dialog_message)
+    val restartDialogConfirm = stringResource(R.string.app_language_restart_dialog_confirm)
 
     val displayLevel = when (state.displayMode) {
         0 -> 0.35f
@@ -95,10 +103,10 @@ fun AppearanceSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("外观设置", fontWeight = FontWeight.SemiBold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -117,7 +125,41 @@ fun AppearanceSettingsScreen(
             onNavigateToIconSettings = onNavigateToIconSettings,
             onNavigateToAnimationSettings = onNavigateToAnimationSettings,
             viewModel = viewModel,
-            context = context
+            context = context,
+            onAppLanguageChange = { language ->
+                if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                    pendingLanguageRestart = language
+                }
+            }
+        )
+    }
+
+    pendingLanguageRestart?.let { pendingLanguage ->
+        AlertDialog(
+            onDismissRequest = { pendingLanguageRestart = null },
+            title = { Text(restartDialogTitle) },
+            text = { Text(restartDialogMessage) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingLanguageRestart = null
+                        coroutineScope.launch {
+                            persistAndApplyAppLanguageBeforeRestart(
+                                appLanguage = pendingLanguage,
+                                persist = { SettingsManager.setAppLanguage(context, it) },
+                                restart = { restartApp(context) }
+                            )
+                        }
+                    }
+                ) {
+                    Text(restartDialogConfirm)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingLanguageRestart = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
         )
     }
 }
@@ -131,7 +173,8 @@ fun AppearanceSettingsContent(
     onNavigateToIconSettings: () -> Unit,
     onNavigateToAnimationSettings: () -> Unit,
     viewModel: SettingsViewModel,
-    context: android.content.Context
+    context: android.content.Context,
+    onAppLanguageChange: (AppLanguage) -> Unit
 ) {
     // Animation Trigger
     var isVisible by remember { mutableStateOf(false) }
@@ -156,6 +199,75 @@ fun AppearanceSettingsContent(
         )
     }
     val scope = rememberCoroutineScope()
+    val themeSectionTitle = stringResource(R.string.appearance_theme_color_section)
+    val uiPresetTitle = stringResource(R.string.appearance_ui_preset_title)
+    val uiPresetSubtitle = stringResource(R.string.appearance_ui_preset_subtitle)
+    val uiPresetIosLabel = stringResource(R.string.ui_preset_ios)
+    val uiPresetAndroidLabel = stringResource(R.string.ui_preset_android_native)
+    val uiPresetOptions = remember(uiPresetIosLabel, uiPresetAndroidLabel) {
+        resolveUiPresetSegmentOptions(
+            iosLabel = uiPresetIosLabel,
+            androidNativeLabel = uiPresetAndroidLabel
+        )
+    }
+    val selectedUiPresetLabel =
+        uiPresetOptions.firstOrNull { it.value == state.uiPreset }?.label ?: state.uiPreset.label
+    val themeModeTitle = stringResource(R.string.appearance_theme_mode_title)
+    val themeModeSubtitle = stringResource(R.string.appearance_theme_mode_subtitle)
+    val themeModeFollowSystemLabel = stringResource(R.string.theme_mode_follow_system)
+    val themeModeLightLabel = stringResource(R.string.theme_mode_light)
+    val themeModeDarkLabel = stringResource(R.string.theme_mode_dark)
+    val themeModeOptions = remember(
+        themeModeFollowSystemLabel,
+        themeModeLightLabel,
+        themeModeDarkLabel
+    ) {
+        resolveThemeModeSegmentOptions(
+            followSystemLabel = themeModeFollowSystemLabel,
+            lightLabel = themeModeLightLabel,
+            darkLabel = themeModeDarkLabel
+        )
+    }
+    val selectedThemeModeLabel =
+        themeModeOptions.firstOrNull { it.value == state.themeMode }?.label ?: state.themeMode.label
+    val darkThemeStyleTitle = stringResource(R.string.appearance_dark_theme_style_title)
+    val darkThemeStyleSubtitle = stringResource(R.string.appearance_dark_theme_style_subtitle)
+    val darkThemeStyleDefaultLabel = stringResource(R.string.dark_theme_style_default)
+    val darkThemeStyleAmoledLabel = stringResource(R.string.dark_theme_style_amoled)
+    val darkThemeStyleOptions = remember(
+        darkThemeStyleDefaultLabel,
+        darkThemeStyleAmoledLabel
+    ) {
+        resolveDarkThemeStyleSegmentOptions(
+            defaultLabel = darkThemeStyleDefaultLabel,
+            amoledLabel = darkThemeStyleAmoledLabel
+        )
+    }
+    val selectedDarkThemeStyleLabel = darkThemeStyleOptions
+        .firstOrNull { it.value == state.darkThemeStyle }
+        ?.label ?: state.darkThemeStyle.label
+    val appLanguageTitle = stringResource(R.string.appearance_app_language_title)
+    val appLanguageSubtitle = stringResource(R.string.appearance_app_language_subtitle)
+    val appLanguageFollowSystemLabel = stringResource(R.string.app_language_follow_system)
+    val appLanguageSimplifiedLabel = stringResource(R.string.app_language_simplified_chinese)
+    val appLanguageTraditionalLabel = stringResource(R.string.app_language_traditional_chinese)
+    val appLanguageEnglishLabel = stringResource(R.string.app_language_english)
+    val appLanguageOptions = remember(
+        appLanguageFollowSystemLabel,
+        appLanguageSimplifiedLabel,
+        appLanguageTraditionalLabel,
+        appLanguageEnglishLabel
+    ) {
+        resolveAppLanguageSegmentOptions(
+            followSystemLabel = appLanguageFollowSystemLabel,
+            simplifiedChineseLabel = appLanguageSimplifiedLabel,
+            traditionalChineseLabel = appLanguageTraditionalLabel,
+            englishLabel = appLanguageEnglishLabel
+        )
+    }
+    val selectedAppLanguageLabel = appLanguageOptions
+        .firstOrNull { it.value == state.appLanguage }
+        ?.label ?: state.appLanguage.name
     val navigationBarBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val contentBottomPadding = resolveAppearanceBottomPadding(
         navigationBarsBottom = navigationBarBottomPadding,
@@ -181,7 +293,7 @@ fun AppearanceSettingsContent(
         //  主题与颜色
         item { 
             Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
-                IOSSectionTitle("主题与颜色") 
+                IOSSectionTitle(themeSectionTitle) 
             }
         }
         item {
@@ -190,9 +302,9 @@ fun AppearanceSettingsContent(
                     // 主题模式选择 (横向卡片)
                     Column(modifier = Modifier.padding(16.dp)) {
                         IOSSlidingSegmentedSetting(
-                            title = "界面预设：${state.uiPreset.label}",
-                            subtitle = "在 iOS 与安卓原生视觉之间无缝切换",
-                            options = resolveUiPresetSegmentOptions(),
+                            title = "${uiPresetTitle}：$selectedUiPresetLabel",
+                            subtitle = uiPresetSubtitle,
+                            options = uiPresetOptions,
                             selectedValue = state.uiPreset,
                             onSelectionChange = { preset ->
                                 viewModel.setUiPreset(preset)
@@ -204,12 +316,46 @@ fun AppearanceSettingsContent(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         IOSSlidingSegmentedSetting(
-                            title = "主题模式：${state.themeMode.label}",
-                            subtitle = "支持点击或左右滑动切换",
-                            options = resolveThemeModeSegmentOptions(),
+                            title = "${themeModeTitle}：$selectedThemeModeLabel",
+                            subtitle = themeModeSubtitle,
+                            options = themeModeOptions,
                             selectedValue = state.themeMode,
                             onSelectionChange = { mode ->
                                 viewModel.setThemeMode(mode)
+                            }
+                        )
+
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = state.themeMode != AppThemeMode.LIGHT,
+                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 16.dp)) {
+                                IOSDivider()
+                                Spacer(modifier = Modifier.height(8.dp))
+                                IOSSlidingSegmentedSetting(
+                                    title = "${darkThemeStyleTitle}：$selectedDarkThemeStyleLabel",
+                                    subtitle = darkThemeStyleSubtitle,
+                                    options = darkThemeStyleOptions,
+                                    selectedValue = state.darkThemeStyle,
+                                    onSelectionChange = { style ->
+                                        viewModel.setDarkThemeStyle(style)
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        IOSDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        IOSSlidingSegmentedSetting(
+                            title = "${appLanguageTitle}：$selectedAppLanguageLabel",
+                            subtitle = appLanguageSubtitle,
+                            options = appLanguageOptions,
+                            selectedValue = state.appLanguage,
+                            onSelectionChange = { language ->
+                                onAppLanguageChange(language)
                             }
                         )
                         
@@ -1048,6 +1194,13 @@ fun AppearanceSettingsContent(
         
 
     }
+}
+
+internal fun restartApp(context: android.content.Context) {
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
+    launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    (context as? android.app.Activity)?.finishAffinity()
+    context.startActivity(launchIntent)
 }
 
 

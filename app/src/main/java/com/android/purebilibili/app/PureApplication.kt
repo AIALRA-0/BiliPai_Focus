@@ -30,6 +30,9 @@ import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
 import com.android.purebilibili.core.util.AnalyticsHelper
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.feature.settings.applyAppLanguage
+import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.resolveThemeModePreference
 import com.android.purebilibili.feature.plugin.AdFilterPlugin
 import com.android.purebilibili.feature.plugin.DanmakuEnhancePlugin
 import com.android.purebilibili.feature.plugin.EyeProtectionPlugin
@@ -336,17 +339,21 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         // 同步读取保存的主题设置（必须同步，因为 Splash Screen 马上就会显示）
         val prefs = getSharedPreferences("theme_cache", Context.MODE_PRIVATE)
         val themeModeValue = prefs.getInt("theme_mode", 0)  // 0 = FOLLOW_SYSTEM
+        val appLanguage = SettingsManager.getAppLanguageSync(this)
+        val themeMode = resolveThemeModePreference(themeModeValue)
         
-        val nightMode = when (themeModeValue) {
-            0 -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM  // 跟随系统
-            1 -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO             // 浅色
-            2 -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES            // 深色
-            3 -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES            // AMOLED 纯黑
-            else -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        val nightMode = when (themeMode) {
+            AppThemeMode.FOLLOW_SYSTEM -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            AppThemeMode.LIGHT -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+            AppThemeMode.DARK -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
         }
         
+        applyAppLanguage(appLanguage)
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(nightMode)
-        Logger.d(TAG, " Applied theme mode: $themeModeValue -> nightMode=$nightMode")
+        Logger.d(
+            PureApplicationRuntimeConfig.TAG,
+            " Applied launch preferences: themeMode=$themeModeValue -> resolvedMode=$themeMode, nightMode=$nightMode, appLanguage=${appLanguage.name}"
+        )
     }
     
     /**

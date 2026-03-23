@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
@@ -187,6 +188,32 @@ class PortraitPagerSwitchPolicyTest {
                 isPlayerReadyForThisVideo = true,
                 hasRenderedFirstFrame = true
             )
+        )
+    }
+
+    @Test
+    fun portraitCover_usesVideoViewportSizingBeforeFirstFrame() {
+        assertTrue(
+            shouldUseViewportBoundPortraitCover(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasRenderedFirstFrame = false
+            )
+        )
+        assertFalse(
+            shouldUseViewportBoundPortraitCover(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasRenderedFirstFrame = true
+            )
+        )
+    }
+
+    @Test
+    fun portraitCover_prefersFitScaleToAvoidTemporaryCropJump() {
+        assertEquals(
+            ContentScale.Fit,
+            resolvePortraitCoverContentScale()
         )
     }
 

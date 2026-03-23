@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
@@ -241,7 +242,7 @@ internal fun HomeCategoryPageContent(
                             FilterChip(
                                 selected = popularSubCategory == subCategory,
                                 onClick = { onPopularSubCategoryChange(subCategory) },
-                                label = { Text(subCategory.label) }
+                                label = { Text(stringResource(resolvePopularSubCategoryLabelRes(subCategory))) }
                             )
                         }
                     }
@@ -479,7 +480,13 @@ private fun TodayWatchPlanCard(
                     FilterChip(
                         selected = selectedMode == mode,
                         onClick = { onModeChange(mode) },
-                        label = { Text(mode.label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        label = {
+                            Text(
+                                stringResource(resolveTodayWatchModeLabelRes(mode)),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     )
                 }
             }

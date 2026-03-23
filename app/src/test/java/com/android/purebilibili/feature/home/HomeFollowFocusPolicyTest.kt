@@ -58,6 +58,43 @@ class HomeFollowFocusPolicyTest {
         assertEquals(listOf(2001L, 2002L), result.map { it.owner.mid })
     }
 
+    @Test
+    fun resolveHomeFollowVisibleIncrement_usesCurrentRoundDeltaInsteadOfTotalCount() {
+        assertEquals(0, resolveHomeFollowVisibleIncrement(baselineVisibleCount = 5, currentVisibleCount = 4))
+        assertEquals(2, resolveHomeFollowVisibleIncrement(baselineVisibleCount = 5, currentVisibleCount = 7))
+    }
+
+    @Test
+    fun shouldContinueHomeFollowFetchAfterFocusFilter_waitsUntilFilteredDeltaMatchesOfficialChunkDelta() {
+        assertEquals(
+            true,
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                targetRawIncrement = 4,
+                visibleIncrement = 1,
+                hasMore = true,
+                continuationFetches = 1
+            )
+        )
+        assertEquals(
+            false,
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                targetRawIncrement = 4,
+                visibleIncrement = 4,
+                hasMore = true,
+                continuationFetches = 2
+            )
+        )
+        assertEquals(
+            false,
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                targetRawIncrement = null,
+                visibleIncrement = 0,
+                hasMore = false,
+                continuationFetches = 1
+            )
+        )
+    }
+
     private fun videoItem(mid: Long): VideoItem {
         return VideoItem(
             bvid = "BV$mid",

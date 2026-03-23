@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.android.purebilibili.R
 //  已改用 MaterialTheme.colorScheme.primary
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -102,6 +104,12 @@ fun SpaceScreen(
     var showBlockConfirmDialog by remember { mutableStateOf(false) }
     var showTopPhotoPreview by remember(mid) { mutableStateOf(false) }
     var showRepostDialog by remember { mutableStateOf<String?>(null) }
+    val screenTitle = stringResource(R.string.space_title)
+    val backLabel = stringResource(R.string.common_back)
+    val moreLabel = stringResource(R.string.common_more)
+    val retryLabel = stringResource(R.string.common_retry)
+    val blockUserLabel = stringResource(R.string.space_block_user)
+    val unblockUserLabel = stringResource(R.string.space_unblock_user)
     
     // [Blur] Haze State
     val hazeState = rememberRecoverableHazeState()
@@ -124,11 +132,11 @@ fun SpaceScreen(
             ) {
                 TopAppBar(
                     title = { 
-                        Text("空间", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(rememberAppBackIcon(), contentDescription = "返回")
+                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -138,7 +146,7 @@ fun SpaceScreen(
                     scrollBehavior = scrollBehavior,
                     actions = {
                         IconButton(onClick = { showBlockMenu = true }) {
-                            Icon(rememberAppMoreIcon(), contentDescription = "更多")
+                            Icon(rememberAppMoreIcon(), contentDescription = moreLabel)
                         }
                         
                         DropdownMenu(
@@ -147,7 +155,7 @@ fun SpaceScreen(
                             modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                         ) {
                             DropdownMenuItem(
-                                text = { Text(if (isBlocked) "解除屏蔽" else "屏蔽 UP 主") },
+                                text = { Text(if (isBlocked) unblockUserLabel else blockUserLabel) },
                                 onClick = { 
                                     showBlockMenu = false
                                     showBlockConfirmDialog = true
@@ -192,7 +200,7 @@ fun SpaceScreen(
                             Text(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(16.dp))
                             Button(onClick = { viewModel.loadSpaceInfo(mid) }) {
-                                Text("重试")
+                                Text(retryLabel)
                             }
                         }
                     }
@@ -472,6 +480,18 @@ private fun SpaceContent(
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) {
             onLoadMore()
+        }
+    }
+
+    LaunchedEffect(selectedTab, state.hasLoadedDynamicsOnce, state.isLoadingDynamics) {
+        if (
+            selectedTab == 1 &&
+            shouldRequestInitialSpaceDynamicLoad(
+                hasLoadedOnce = state.hasLoadedDynamicsOnce,
+                isLoading = state.isLoadingDynamics
+            )
+        ) {
+            onLoadDynamic()
         }
     }
     
@@ -884,11 +904,7 @@ private fun SpaceContent(
                     hasLoadedOnce = state.hasLoadedDynamicsOnce,
                     lastLoadFailed = state.lastDynamicLoadFailed
                 )
-                // 触发加载
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    LaunchedEffect(Unit) { onLoadDynamic() }
-                }
-                
+
                 // 动态列表
                 if (dynamicPresentationState == SpaceDynamicPresentationState.EMPTY) {
                     item(span = { GridItemSpan(maxLineSpan) }) {

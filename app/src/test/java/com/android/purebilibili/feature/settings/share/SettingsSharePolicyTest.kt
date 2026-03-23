@@ -15,13 +15,23 @@ class SettingsSharePolicyTest {
             appVersion = "6.8.2",
             exportedAtIso = "2026-03-07T13:00:00Z",
             rawSettings = mapOf(
+                "app_language_v1" to JsonPrimitive(3),
                 "theme_mode_v2" to JsonPrimitive(2),
+                "dark_theme_style_v1" to JsonPrimitive(1),
                 "auto_play" to JsonPrimitive(true),
                 "download_path" to JsonPrimitive("/storage/emulated/0/Download/BiliPai")
             ),
             definitions = listOf(
                 SettingsShareEntryDefinition(
+                    storageKey = "app_language_v1",
+                    section = SettingsShareSection.APPEARANCE
+                ),
+                SettingsShareEntryDefinition(
                     storageKey = "theme_mode_v2",
+                    section = SettingsShareSection.APPEARANCE
+                ),
+                SettingsShareEntryDefinition(
+                    storageKey = "dark_theme_style_v1",
                     section = SettingsShareSection.APPEARANCE
                 ),
                 SettingsShareEntryDefinition(
@@ -32,7 +42,9 @@ class SettingsSharePolicyTest {
         )
 
         assertEquals("我的设置", profile.profileName)
+        assertEquals(JsonPrimitive(3), profile.sections.appearance["app_language_v1"])
         assertEquals(JsonPrimitive(2), profile.sections.appearance["theme_mode_v2"])
+        assertEquals(JsonPrimitive(1), profile.sections.appearance["dark_theme_style_v1"])
         assertEquals(JsonPrimitive(true), profile.sections.playback["auto_play"])
         assertFalse(profile.sections.appearance.containsKey("download_path"))
         assertTrue(profile.sections.gesture.isEmpty())

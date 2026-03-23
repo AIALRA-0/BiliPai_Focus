@@ -11,8 +11,9 @@ class TopTabLayoutPolicyTest {
     fun `visible slot count should stay in compact range`() {
         assertEquals(4, resolveTopTabVisibleSlots(1))
         assertEquals(4, resolveTopTabVisibleSlots(4))
-        assertEquals(5, resolveTopTabVisibleSlots(5))
-        assertEquals(5, resolveTopTabVisibleSlots(8))
+        assertEquals(5, resolveTopTabVisibleSlots(5, longestLabelLength = 6))
+        assertEquals(4, resolveTopTabVisibleSlots(5, longestLabelLength = 9))
+        assertEquals(4, resolveTopTabVisibleSlots(8, longestLabelLength = 10))
     }
 
     @Test
@@ -39,10 +40,11 @@ class TopTabLayoutPolicyTest {
     }
 
     @Test
-    fun `live route decision should follow category label not fixed index`() {
-        assertTrue(shouldRouteTopTabToLivePage("直播"))
-        assertFalse(shouldRouteTopTabToLivePage("推荐"))
-        assertFalse(shouldRouteTopTabToLivePage("LIVE"))
+    fun `live route decision should follow category key not localized label`() {
+        assertTrue(shouldRouteTopTabToLivePage("LIVE"))
+        assertTrue(shouldRouteTopTabToLivePage("live"))
+        assertFalse(shouldRouteTopTabToLivePage("直播"))
+        assertFalse(shouldRouteTopTabToLivePage("RECOMMEND"))
     }
 
     @Test

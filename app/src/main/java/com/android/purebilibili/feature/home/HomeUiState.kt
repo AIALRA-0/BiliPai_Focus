@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.home
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import com.android.purebilibili.R
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.LiveRoom
 
@@ -60,6 +61,34 @@ enum class PopularSubCategory(val label: String) {
 enum class TodayWatchMode(val label: String) {
     RELAX("今晚轻松看"),
     LEARN("深度学习看")
+}
+
+internal fun resolveHomeCategoryLabelRes(category: HomeCategory): Int = when (category) {
+    HomeCategory.RECOMMEND -> R.string.home_category_recommend
+    HomeCategory.FOLLOW -> R.string.home_category_follow
+    HomeCategory.POPULAR -> R.string.home_category_popular
+    HomeCategory.LIVE -> R.string.home_category_live
+    HomeCategory.ANIME -> R.string.home_category_anime
+    HomeCategory.GAME -> R.string.home_category_game
+    HomeCategory.KNOWLEDGE -> R.string.home_category_knowledge
+    HomeCategory.TECH -> R.string.home_category_tech
+}
+
+internal fun resolveLiveSubCategoryLabelRes(subCategory: LiveSubCategory): Int = when (subCategory) {
+    LiveSubCategory.FOLLOWED -> R.string.home_live_subcategory_followed
+    LiveSubCategory.POPULAR -> R.string.home_live_subcategory_popular
+}
+
+internal fun resolvePopularSubCategoryLabelRes(subCategory: PopularSubCategory): Int = when (subCategory) {
+    PopularSubCategory.COMPREHENSIVE -> R.string.home_popular_subcategory_comprehensive
+    PopularSubCategory.RANKING -> R.string.home_popular_subcategory_ranking
+    PopularSubCategory.WEEKLY -> R.string.home_popular_subcategory_weekly
+    PopularSubCategory.PRECIOUS -> R.string.home_popular_subcategory_precious
+}
+
+internal fun resolveTodayWatchModeLabelRes(mode: TodayWatchMode): Int = when (mode) {
+    TodayWatchMode.RELAX -> R.string.home_today_watch_mode_relax
+    TodayWatchMode.LEARN -> R.string.home_today_watch_mode_learn
 }
 
 @Immutable

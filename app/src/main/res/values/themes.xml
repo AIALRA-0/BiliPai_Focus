@@ -15,7 +15,7 @@
     </style>
     
     <!-- 主应用主题 (浅色模式) -->
-    <style name="Theme.PureBiliBili.Main" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.PureBiliBili.Main" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:colorBackground">@android:color/white</item>
         <item name="android:navigationBarColor">@android:color/white</item>

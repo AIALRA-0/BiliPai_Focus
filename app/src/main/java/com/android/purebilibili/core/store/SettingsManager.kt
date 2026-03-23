@@ -20,7 +20,12 @@ import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
 import com.android.purebilibili.feature.settings.share.SettingsShareSection
+import com.android.purebilibili.feature.settings.AppLanguage
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.DarkThemeStyle
+import com.android.purebilibili.feature.settings.resolveAppLanguagePreference
+import com.android.purebilibili.feature.settings.resolveDarkThemeStylePreference
+import com.android.purebilibili.feature.settings.resolveThemeModePreference
 import com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuOpacity
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
@@ -421,6 +426,8 @@ object SettingsManager {
     private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
     private val KEY_HW_DECODE = booleanPreferencesKey("hw_decode")
     private val KEY_THEME_MODE = intPreferencesKey("theme_mode_v2")
+    private val KEY_DARK_THEME_STYLE = intPreferencesKey("dark_theme_style_v1")
+    private val KEY_APP_LANGUAGE = intPreferencesKey("app_language_v1")
     private val KEY_UI_PRESET = intPreferencesKey("ui_preset")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
@@ -847,15 +854,41 @@ object SettingsManager {
     fun getThemeMode(context: Context): Flow<AppThemeMode> = context.settingsDataStore.data
         .map { preferences ->
             val modeInt = preferences[KEY_THEME_MODE] ?: AppThemeMode.FOLLOW_SYSTEM.value
-            AppThemeMode.fromValue(modeInt)
+            resolveThemeModePreference(modeInt)
+        }
+
+    fun getAppLanguage(context: Context): Flow<AppLanguage> = context.settingsDataStore.data
+        .map { preferences ->
+            resolveAppLanguagePreference(preferences[KEY_APP_LANGUAGE])
+        }
+
+    fun getDarkThemeStyle(context: Context): Flow<DarkThemeStyle> = context.settingsDataStore.data
+        .map { preferences ->
+            resolveDarkThemeStylePreference(
+                darkThemeStyleValue = preferences[KEY_DARK_THEME_STYLE],
+                legacyThemeModeValue = preferences[KEY_THEME_MODE]
+            )
         }
 
     suspend fun setThemeMode(context: Context, mode: AppThemeMode) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_THEME_MODE] = mode.value }
+        var resolvedDarkThemeStyle = DarkThemeStyle.DEFAULT
+        context.settingsDataStore.edit { preferences ->
+            resolvedDarkThemeStyle = resolveDarkThemeStylePreference(
+                darkThemeStyleValue = preferences[KEY_DARK_THEME_STYLE],
+                legacyThemeModeValue = preferences[KEY_THEME_MODE]
+            )
+            if (preferences[KEY_DARK_THEME_STYLE] == null) {
+                preferences[KEY_DARK_THEME_STYLE] = resolvedDarkThemeStyle.value
+            }
+            preferences[KEY_THEME_MODE] = mode.value
+        }
         //  同步到 SharedPreferences，供 PureApplication 同步读取使用
         // 使用 commit() 确保立即写入
         val success = context.getSharedPreferences("theme_cache", Context.MODE_PRIVATE)
-            .edit().putInt("theme_mode", mode.value).commit()
+            .edit()
+            .putInt("theme_mode", mode.value)
+            .putInt("dark_theme_style", resolvedDarkThemeStyle.value)
+            .commit()
         com.android.purebilibili.core.util.Logger.d("SettingsManager", " Theme mode saved: ${mode.value} (${mode.label}), success=$success")
         
         //  同时应用到 AppCompatDelegate，使当前运行时生效
@@ -863,9 +896,34 @@ object SettingsManager {
             AppThemeMode.FOLLOW_SYSTEM -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
             AppThemeMode.LIGHT -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
             AppThemeMode.DARK -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
-            AppThemeMode.AMOLED -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
         }
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(nightMode)
+    }
+
+    suspend fun setAppLanguage(context: Context, appLanguage: AppLanguage) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_LANGUAGE] = appLanguage.value
+        }
+        context.getSharedPreferences("theme_cache", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("app_language", appLanguage.value)
+            .commit()
+    }
+
+    fun getAppLanguageSync(context: Context): AppLanguage {
+        val rawValue = context.getSharedPreferences("theme_cache", Context.MODE_PRIVATE)
+            .getInt("app_language", AppLanguage.FOLLOW_SYSTEM.value)
+        return resolveAppLanguagePreference(rawValue)
+    }
+
+    suspend fun setDarkThemeStyle(context: Context, style: DarkThemeStyle) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_DARK_THEME_STYLE] = style.value }
+        val success = context.getSharedPreferences("theme_cache", Context.MODE_PRIVATE)
+            .edit().putInt("dark_theme_style", style.value).commit()
+        com.android.purebilibili.core.util.Logger.d(
+            "SettingsManager",
+            " Dark theme style saved: ${style.value} (${style.label}), success=$success"
+        )
     }
 
     fun getUiPreset(context: Context): Flow<UiPreset> = context.settingsDataStore.data
@@ -3165,6 +3223,8 @@ object SettingsManager {
         listOf(
             IntShareablePreferenceDefinition(KEY_UI_PRESET, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_MODE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_DARK_THEME_STYLE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_APP_LANGUAGE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_DYNAMIC_COLOR, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_COLOR_INDEX, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_ICON, SettingsShareSection.APPEARANCE),

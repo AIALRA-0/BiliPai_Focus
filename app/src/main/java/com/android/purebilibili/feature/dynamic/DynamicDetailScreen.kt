@@ -27,9 +27,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
+import com.android.purebilibili.R
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.DynamicItem
@@ -55,6 +57,10 @@ fun DynamicDetailScreen(
 ) {
     val interactionViewModel: DynamicViewModel = viewModel()
     var retryToken by rememberSaveable { mutableIntStateOf(0) }
+    val screenTitle = stringResource(R.string.dynamic_detail_title)
+    val backLabel = stringResource(R.string.common_back)
+    val retryLabel = stringResource(R.string.common_retry)
+    val loadFailedMessage = stringResource(R.string.dynamic_detail_load_failed)
     val uiState by produceState<DynamicDetailUiState>(
         initialValue = DynamicDetailUiState.Loading,
         key1 = dynamicId,
@@ -64,7 +70,7 @@ fun DynamicDetailScreen(
         value = DynamicRepository.getDynamicDetail(dynamicId).fold(
             onSuccess = { item -> DynamicDetailUiState.Success(item) },
             onFailure = { error ->
-                DynamicDetailUiState.Error(error.message ?: "动态详情加载失败")
+                DynamicDetailUiState.Error(error.message ?: loadFailedMessage)
             }
         )
     }
@@ -77,10 +83,10 @@ fun DynamicDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("动态详情") },
+                title = { Text(screenTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 }
             )
@@ -114,7 +120,7 @@ fun DynamicDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Button(onClick = { retryToken++ }) {
-                            Text("重试")
+                            Text(retryLabel)
                         }
                     }
                 }

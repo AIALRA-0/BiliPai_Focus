@@ -50,5 +50,34 @@ class VideoDetailSystemBarsPolicyTest {
     fun restorePolicy_alwaysShowsSystemBarsOnExit() {
         assertTrue(shouldShowSystemBarsOnVideoDetailExit())
     }
-}
 
+    @Test
+    fun restorePolicy_restoresSystemBarsAsSoonAsExitTransitionStarts() {
+        assertTrue(
+            shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+                isExitTransitionInProgress = true,
+                isActuallyLeaving = false
+            )
+        )
+    }
+
+    @Test
+    fun restorePolicy_skipsDuplicateRestoreWhenExitWasAlreadyHandledExplicitly() {
+        assertTrue(
+            !shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+                isExitTransitionInProgress = true,
+                isActuallyLeaving = true
+            )
+        )
+    }
+
+    @Test
+    fun restorePolicy_doesNotRestoreBeforeExitTransitionBegins() {
+        assertTrue(
+            !shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+                isExitTransitionInProgress = false,
+                isActuallyLeaving = false
+            )
+        )
+    }
+}

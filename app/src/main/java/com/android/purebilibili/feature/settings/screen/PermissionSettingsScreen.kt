@@ -29,9 +29,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
@@ -59,13 +61,15 @@ import com.android.purebilibili.core.theme.LocalUiPreset
 fun PermissionSettingsScreen(
     onBack: () -> Unit
 ) {
+    val screenTitle = stringResource(R.string.permission_management_title)
+    val backLabel = stringResource(R.string.common_back)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("权限管理", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

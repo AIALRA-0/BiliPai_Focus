@@ -9,9 +9,9 @@ import android.os.Bundle
 import android.util.Rational
 import android.widget.ImageView
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -64,7 +64,10 @@ import com.android.purebilibili.feature.settings.AppUpdateChecker
 import com.android.purebilibili.feature.settings.AppUpdateDownloadState
 import com.android.purebilibili.feature.settings.AppUpdateDownloadStatus
 import com.android.purebilibili.feature.settings.AppUpdateInstallAction
+import com.android.purebilibili.feature.settings.AppLanguage
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.DarkThemeStyle
+import com.android.purebilibili.feature.settings.applyAppLanguage
 import com.android.purebilibili.core.theme.resolveEffectiveDynamicColorEnabled
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
@@ -76,6 +79,7 @@ import com.android.purebilibili.feature.settings.resolveAppUpdateDialogTextColor
 import com.android.purebilibili.feature.settings.resolveUpdateReleaseNotesText
 import com.android.purebilibili.feature.settings.selectPreferredAppUpdateAsset
 import com.android.purebilibili.feature.settings.shouldRunAppEntryAutoCheck
+import com.android.purebilibili.feature.settings.resolveThemePreferenceState
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
@@ -412,6 +416,8 @@ internal fun shouldApplySplashRealtimeBlur(
     return useRealtimeBlur && progress > 0f
 }
 
+internal fun shouldRunColdStartSplash(savedInstanceStatePresent: Boolean): Boolean = !savedInstanceStatePresent
+
 internal fun splashExitDurationMs(): Long = 920L
 internal fun splashExitTranslateYDp(): Float = 220f
 internal fun splashExitScaleEnd(): Float = 1.12f
@@ -511,7 +517,7 @@ internal fun shouldLogWarmResume(
 }
 
 @OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     
     //  PiP 状态
     var isInPipMode by mutableStateOf(false)
@@ -528,10 +534,12 @@ class MainActivity : ComponentActivity() {
     private var splashExitCallbackTriggered = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyAppLanguage(SettingsManager.getAppLanguageSync(this))
         //  安装 SplashScreen
         val splashScreen = installSplashScreen()
+        val runColdStartSplash = shouldRunColdStartSplash(savedInstanceStatePresent = savedInstanceState != null)
         val welcomePrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val splashFlyoutEnabled = shouldEnableSplashFlyoutAnimation(
+        val splashFlyoutEnabled = runColdStartSplash && shouldEnableSplashFlyoutAnimation(
             sdkInt = Build.VERSION.SDK_INT,
             hasCompletedOnboarding = welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false),
             hasAcceptedReleaseDisclaimer = welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false),
@@ -541,7 +549,7 @@ class MainActivity : ComponentActivity() {
         splashFlyoutEnabledAtCreate = splashFlyoutEnabled
         Logger.d(
             TAG,
-            "🚀 Splash setup. flyoutEnabled=$splashFlyoutEnabled, firstLaunchShown=${welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false)}, disclaimerAck=${welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)}, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
+            "🚀 Splash setup. coldStart=$runColdStartSplash, flyoutEnabled=$splashFlyoutEnabled, firstLaunchShown=${welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false)}, disclaimerAck=${welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)}, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
         )
         
         //  🚀 [启动优化] 立即开始预加载首页数据
@@ -560,6 +568,10 @@ class MainActivity : ComponentActivity() {
         val startTime = System.currentTimeMillis()
         
         splashScreen.setKeepOnScreenCondition {
+            if (!runColdStartSplash) {
+                return@setKeepOnScreenCondition false
+            }
+
             // 检查数据是否就绪
             if (com.android.purebilibili.data.repository.VideoRepository.isHomeDataReady()) {
                 isDataReady = true
@@ -870,6 +882,10 @@ class MainActivity : ComponentActivity() {
             // 1. 获取存储的模式 (默认为跟随系统)
             val uiPreset by SettingsManager.getUiPreset(context).collectAsState(initial = UiPreset.IOS)
             val themeMode by SettingsManager.getThemeMode(context).collectAsState(initial = AppThemeMode.FOLLOW_SYSTEM)
+            val darkThemeStyle by SettingsManager.getDarkThemeStyle(context).collectAsState(initial = DarkThemeStyle.DEFAULT)
+            val appLanguage by SettingsManager.getAppLanguage(context).collectAsState(
+                initial = SettingsManager.getAppLanguageSync(context)
+            )
 
             //  检查并请求所有文件访问权限 (Android 11+)
             //  检查并请求所有文件访问权限 (已移除启动时强制检查，改为按需申请)
@@ -892,13 +908,13 @@ class MainActivity : ComponentActivity() {
             val systemInDark = isSystemInDarkTheme()
 
             // 5. 根据枚举值决定是否开启 DarkTheme
-            val useDarkTheme = when (themeMode) {
-                AppThemeMode.FOLLOW_SYSTEM -> systemInDark // 跟随系统：系统黑则黑，系统白则白
-                AppThemeMode.LIGHT -> false                // 强制浅色
-                AppThemeMode.DARK -> true                  // 强制深色
-                AppThemeMode.AMOLED -> true                // 强制纯黑
-            }
-            val useAmoledDarkTheme = themeMode == AppThemeMode.AMOLED
+            val themePreferenceState = resolveThemePreferenceState(
+                themeMode = themeMode,
+                darkThemeStyle = darkThemeStyle,
+                systemInDark = systemInDark
+            )
+            val useDarkTheme = themePreferenceState.useDarkTheme
+            val useAmoledDarkTheme = themePreferenceState.useAmoledDarkTheme
             val effectiveDynamicColor = resolveEffectiveDynamicColorEnabled(
                 dynamicColorEnabled = dynamicColor,
                 amoledDarkTheme = useAmoledDarkTheme
@@ -917,7 +933,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
-            
+
             //  全局 Haze 状态，用于实现毛玻璃效果
             // 强制启用 blur，避免部分设备（如 Android 12）默认降级为仅半透明遮罩
             val mainHazeState = rememberRecoverableHazeState(initialBlurEnabled = true)
@@ -1102,8 +1118,8 @@ class MainActivity : ComponentActivity() {
                             tabletBias = tabletBias
                         )
                     }
-                    val showCustomSplashInitially = remember(splashUri) {
-                        shouldShowCustomSplashOverlay(
+                    val showCustomSplashInitially = remember(runColdStartSplash, splashUri) {
+                        runColdStartSplash && shouldShowCustomSplashOverlay(
                             customSplashEnabled = SettingsManager.isSplashEnabledSync(context),
                             splashUri = splashUri
                         )

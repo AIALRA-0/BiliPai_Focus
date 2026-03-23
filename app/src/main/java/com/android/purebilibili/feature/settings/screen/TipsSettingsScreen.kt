@@ -12,15 +12,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
@@ -49,6 +52,8 @@ fun TipsSettingsScreen(
         isVisible = true
     }
     val context = LocalContext.current
+    val screenTitle = stringResource(R.string.tips_title)
+    val backLabel = stringResource(R.string.common_back)
     val windowSizeClass = LocalWindowSizeClass.current
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = false)
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
@@ -62,6 +67,10 @@ fun TipsSettingsScreen(
             animationEnabled = cardAnimationEnabled
         )
     }
+    val contentBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 32.dp
+    )
 
     val basicTips = remember {
         listOf(
@@ -153,10 +162,10 @@ fun TipsSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("小贴士", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "Back")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -173,7 +182,7 @@ fun TipsSettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp)
+            contentPadding = PaddingValues(bottom = contentBottomPadding)
         ) {
             item {
                 Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {

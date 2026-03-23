@@ -7,7 +7,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.ui.components.IOSClickableItem
@@ -23,7 +25,7 @@ internal fun SettingsSearchBarSection(
     IOSSearchBar(
         query = query,
         onQueryChange = onQueryChange,
-        placeholder = "搜索设置功能",
+        placeholder = stringResource(R.string.settings_search_placeholder),
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
     )
 }
@@ -34,13 +36,13 @@ internal fun SettingsSearchResultsSection(
     onResultClick: (SettingsSearchTarget) -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
-    SettingsCategoryHeader("搜索结果")
+    SettingsCategoryHeader(stringResource(R.string.settings_search_results_title))
     IOSGroup {
         if (results.isEmpty()) {
             IOSClickableItem(
                 icon = rememberAppSettingsIcon(),
-                title = "未找到匹配项",
-                subtitle = "试试其他关键词",
+                title = stringResource(R.string.settings_search_empty_title),
+                subtitle = stringResource(R.string.settings_search_empty_subtitle),
                 onClick = null,
                 showChevron = false,
                 iconTint = MaterialTheme.colorScheme.onSurfaceVariant

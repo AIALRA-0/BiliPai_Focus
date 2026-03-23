@@ -21,9 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -41,14 +43,14 @@ import com.android.purebilibili.core.theme.iOSTeal
 import kotlinx.coroutines.launch
 
 enum class SettingsCategory(
-    val title: String,
+    val titleResId: Int,
     val color: Color
 ) {
-    GENERAL("常规", iOSPink),
-    PRIVACY("隐私与安全", iOSPurple),
-    STORAGE("内容与存储", iOSBlue),
-    DEVELOPER("开发者选项", iOSTeal),
-    ABOUT("关于", iOSOrange)
+    GENERAL(R.string.settings_section_general, iOSPink),
+    PRIVACY(R.string.settings_section_privacy, iOSPurple),
+    STORAGE(R.string.settings_section_storage, iOSBlue),
+    DEVELOPER(R.string.settings_section_developer, iOSTeal),
+    ABOUT(R.string.settings_section_about, iOSOrange)
 }
 
 @Composable
@@ -114,8 +116,13 @@ fun TabletSettingsLayout(
     modifier: Modifier = Modifier
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.GENERAL) }
+    val coroutineScope = rememberCoroutineScope()
+    var pendingLanguageRestart by remember { mutableStateOf<AppLanguage?>(null) }
     val uiPreset = com.android.purebilibili.core.theme.LocalUiPreset.current
     val configuration = LocalConfiguration.current
+    val restartDialogTitle = stringResource(R.string.app_language_restart_dialog_title)
+    val restartDialogMessage = stringResource(R.string.app_language_restart_dialog_message)
+    val restartDialogConfirm = stringResource(R.string.app_language_restart_dialog_confirm)
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveSettingsTabletLayoutPolicy(
             widthDp = configuration.screenWidthDp
@@ -194,7 +201,7 @@ fun TabletSettingsLayout(
                         SettingsCategory.ABOUT -> aboutIcon
                     }
                     NavigationDrawerItem(
-                        label = { Text(category.title) },
+                        label = { Text(stringResource(category.titleResId)) },
                         selected = isSelected,
                         onClick = { 
                             selectedCategory = category 
@@ -277,7 +284,12 @@ fun TabletSettingsLayout(
                                 viewModel = viewModel,
                                 context = context,
                                 onNavigateToIconSettings = { activeDetail = SettingsDetail.ICONS },
-                                onNavigateToAnimationSettings = { activeDetail = SettingsDetail.ANIMATION }
+                                onNavigateToAnimationSettings = { activeDetail = SettingsDetail.ANIMATION },
+                                onAppLanguageChange = { language ->
+                                    if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                                        pendingLanguageRestart = language
+                                    }
+                                }
                             )
                             SettingsDetail.ICONS -> {
                                 // Need to recreate the data here or reuse helper?
@@ -404,7 +416,7 @@ fun TabletSettingsLayout(
                     ) { category ->
                         Column(modifier = Modifier.widthIn(max = layoutPolicy.rootPanelMaxWidthDp.dp)) {
                             Text(
-                                text = category.title,
+                                text = stringResource(category.titleResId),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(bottom = 24.dp, start = 16.dp)
@@ -489,11 +501,40 @@ fun TabletSettingsLayout(
                                         onTipsClick = onTipsClick,
                                         onOpenLinksClick = onOpenLinksClick
                                     )
-                                }
-                            }
+                }
+            }
+        }
+    }
+
+    pendingLanguageRestart?.let { pendingLanguage ->
+        AlertDialog(
+            onDismissRequest = { pendingLanguageRestart = null },
+            title = { Text(restartDialogTitle) },
+            text = { Text(restartDialogMessage) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingLanguageRestart = null
+                        coroutineScope.launch {
+                            persistAndApplyAppLanguageBeforeRestart(
+                                appLanguage = pendingLanguage,
+                                persist = { SettingsManager.setAppLanguage(context, it) },
+                                restart = { restartApp(context) }
+                            )
                         }
                     }
+                ) {
+                    Text(restartDialogConfirm)
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingLanguageRestart = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+}
                 }
             }
         }

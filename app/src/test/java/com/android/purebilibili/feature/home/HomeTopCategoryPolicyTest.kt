@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.FocusSettings
+import com.android.purebilibili.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -142,6 +143,15 @@ class HomeTopCategoryPolicyTest {
             ),
             categories
         )
+    }
+
+    @Test
+    fun `home top categories should map to localized string resources`() {
+        assertEquals(R.string.home_category_recommend, resolveHomeCategoryLabelRes(HomeCategory.RECOMMEND))
+        assertEquals(R.string.home_category_follow, resolveHomeCategoryLabelRes(HomeCategory.FOLLOW))
+        assertEquals(R.string.home_category_popular, resolveHomeCategoryLabelRes(HomeCategory.POPULAR))
+        assertEquals(R.string.home_category_live, resolveHomeCategoryLabelRes(HomeCategory.LIVE))
+        assertEquals(R.string.home_category_game, resolveHomeCategoryLabelRes(HomeCategory.GAME))
     }
 }
 

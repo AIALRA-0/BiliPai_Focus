@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -87,7 +88,7 @@ fun LiveSubCategoryRow(
             FilterChip(
                 selected = isSelected,
                 onClick = { onSubCategorySelected(subCategory) },
-                label = { Text(subCategory.label) },
+                label = { Text(stringResource(resolveLiveSubCategoryLabelRes(subCategory))) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primary,  //  使用主题色
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary     //  使用主题对应的前景色

@@ -19,9 +19,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.R
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.HapticType
@@ -106,6 +108,7 @@ fun FrostedSideBar(
             // 导航项列表
             visibleItems.forEachIndexed { itemIndex, item ->
                 val isSelected = item == currentItem
+                val itemLabel = resolveBottomNavItemLabel(item)
                 
                 // 动画状态
                 var isPending by remember { mutableStateOf(false) }
@@ -198,7 +201,7 @@ fun FrostedSideBar(
                     Spacer(modifier = Modifier.height(4.dp))
                     
                     Text(
-                        text = item.label,
+                        text = itemLabel,
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 10.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
@@ -213,6 +216,7 @@ fun FrostedSideBar(
             
             // 📱 [平板适配] 切换到底栏按钮 (底部)
             if (onToggleSidebar != null) {
+                val sidebarLabel = stringResource(R.string.sidebar_toggle)
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -225,7 +229,7 @@ fun FrostedSideBar(
                 ) {
                     Icon(
                         CupertinoIcons.Outlined.SidebarRight, // 使用 SidebarRight 表示关闭侧边栏/切换到底栏
-                        contentDescription = "切换到底栏",
+                        contentDescription = sidebarLabel,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(22.dp)
                     )

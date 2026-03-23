@@ -253,6 +253,15 @@ internal fun shouldShowSystemBarsOnVideoDetailExit(): Boolean {
     return true
 }
 
+internal fun shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+    isExitTransitionInProgress: Boolean,
+    isActuallyLeaving: Boolean
+): Boolean {
+    if (!isExitTransitionInProgress) return false
+    if (isActuallyLeaving) return false
+    return true
+}
+
 internal fun shouldShowWatchLaterQueueBarByPolicy(
     isExternalPlaylist: Boolean,
     externalPlaylistSource: ExternalPlaylistSource,
@@ -801,6 +810,19 @@ fun VideoDetailScreen(
                 onBack() // 执行实际的返回导航
             }
         }
+    }
+
+    LaunchedEffect(isExitTransitionInProgress, isActuallyLeaving) {
+        if (!shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+                isExitTransitionInProgress = isExitTransitionInProgress,
+                isActuallyLeaving = isActuallyLeaving
+            )
+        ) {
+            return@LaunchedEffect
+        }
+
+        isScreenActive = false
+        restoreStatusBar()
     }
 
     LaunchedEffect(currentBvid) {

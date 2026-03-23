@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
@@ -49,6 +50,19 @@ internal fun shouldShowPortraitCover(
     if (!hasRenderedFirstFrame) return true
     return false
 }
+
+internal fun shouldUseViewportBoundPortraitCover(
+    isCurrentPage: Boolean,
+    isPlayerReadyForThisVideo: Boolean,
+    hasRenderedFirstFrame: Boolean
+): Boolean {
+    if (!isCurrentPage) return true
+    if (!isPlayerReadyForThisVideo) return true
+    if (!hasRenderedFirstFrame) return true
+    return false
+}
+
+internal fun resolvePortraitCoverContentScale(): ContentScale = ContentScale.Fit
 
 internal fun shouldShowPortraitPauseIcon(
     isCurrentPage: Boolean,

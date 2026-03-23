@@ -26,6 +26,13 @@ enum class SpaceDynamicPresentationState {
     ERROR
 }
 
+internal fun shouldRequestInitialSpaceDynamicLoad(
+    hasLoadedOnce: Boolean,
+    isLoading: Boolean
+): Boolean {
+    return !hasLoadedOnce && !isLoading
+}
+
 fun resolveSpaceDynamicPresentationState(
     itemCount: Int,
     isLoading: Boolean,

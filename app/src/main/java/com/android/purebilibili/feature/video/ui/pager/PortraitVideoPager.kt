@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -236,6 +237,13 @@ fun PortraitVideoPager(
         mutableStateListOf<Any>().apply {
             add(initialInfo)
             addAll(baseRecommendations)
+        }
+    }
+    val knownVideoAspectRatios = remember(initialInfo.bvid) {
+        mutableStateMapOf<String, Float>().apply {
+            resolveAspectRatioFromDimension(initialInfo.dimension)?.let { aspectRatio ->
+                put(initialInfo.bvid, aspectRatio)
+            }
         }
     }
     var watchLaterVideos by remember { mutableStateOf<List<RelatedVideo>>(emptyList()) }
@@ -660,6 +668,9 @@ fun PortraitVideoPager(
                                     return@fold
                                 }
 
+                                resolveAspectRatioFromDimension(info.dimension)?.let { aspectRatio ->
+                                    knownVideoAspectRatios[bvid] = aspectRatio
+                                }
                                 currentPlayingCid = info.cid
                                 currentPlayingAid = info.aid
                                 exoPlayer.playWhenReady = true
@@ -764,6 +775,11 @@ fun PortraitVideoPager(
         }
         
         if (item != null) {
+            val itemBvid = when (item) {
+                is ViewInfo -> item.bvid
+                is RelatedVideo -> item.bvid
+                else -> ""
+            }
             VideoPageItem(
                 item = item,
                 isCurrentPage = page == pagerState.currentPage,
@@ -788,6 +804,8 @@ fun PortraitVideoPager(
                 watchLaterVideos = watchLaterVideos,
                 recommendationVideos = recommendationItems,
                 showRelatedVideosSection = showRelatedVideosSection,
+                knownVideoAspectRatio = knownVideoAspectRatios[itemBvid]
+                    ?: (item as? ViewInfo)?.dimension?.let(::resolveAspectRatioFromDimension),
                 hasRenderedFirstFrame = (renderedFirstFrameGeneration == activeLoadGeneration),
                 initialProgressPositionMs = resolvePortraitInitialProgressPosition(
                     isFirstPage = page == 0,
@@ -843,6 +861,7 @@ private fun VideoPageItem(
     watchLaterVideos: List<RelatedVideo>,
     recommendationVideos: List<RelatedVideo>,
     showRelatedVideosSection: Boolean,
+    knownVideoAspectRatio: Float?,
     hasRenderedFirstFrame: Boolean,
     initialProgressPositionMs: Long,
     onCurrentPageScaleChange: (Float) -> Unit,
@@ -862,13 +881,14 @@ private fun VideoPageItem(
     
     // [修复] 手动监听 ExoPlayer 播放状态，确保 UI 及时更新
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
-    var currentVideoAspect by remember(bvid, currentPlayingBvid) {
+    var currentVideoAspect by remember(bvid, currentPlayingBvid, knownVideoAspectRatio) {
         mutableFloatStateOf(
             resolvePortraitInitialVideoAspectRatio(
                 itemBvid = bvid,
                 currentPlayingBvid = currentPlayingBvid,
                 playerVideoWidth = exoPlayer.videoSize.width,
-                playerVideoHeight = exoPlayer.videoSize.height
+                playerVideoHeight = exoPlayer.videoSize.height,
+                knownVideoAspectRatio = knownVideoAspectRatio
             )
         )
     }
@@ -1281,20 +1301,43 @@ private fun VideoPageItem(
         )
         
         if (showCover) {
-            AsyncImage(
-                model = FormatUtils.fixImageUrl(cover),
-                contentDescription = null,
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black), // 避免透明底
-                contentScale = ContentScale.Crop
-            )
-            
-            if (isLoading && isCurrentPage) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color.White
-                )
+                    .background(Color.Black)
+            ) {
+                if (shouldUseViewportBoundPortraitCover(
+                        isCurrentPage = isCurrentPage,
+                        isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+                        hasRenderedFirstFrame = hasRenderedFirstFrame
+                    )
+                ) {
+                    PortraitVideoViewportContainer(
+                        currentVideoAspect = currentVideoAspect,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        AsyncImage(
+                            model = FormatUtils.fixImageUrl(cover),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = resolvePortraitCoverContentScale()
+                        )
+                    }
+                } else {
+                    AsyncImage(
+                        model = FormatUtils.fixImageUrl(cover),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = resolvePortraitCoverContentScale()
+                    )
+                }
+
+                if (isLoading && isCurrentPage) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color.White
+                    )
+                }
             }
         }
 
@@ -1723,8 +1766,12 @@ internal fun resolvePortraitInitialVideoAspectRatio(
     itemBvid: String,
     currentPlayingBvid: String?,
     playerVideoWidth: Int,
-    playerVideoHeight: Int
+    playerVideoHeight: Int,
+    knownVideoAspectRatio: Float? = null
 ): Float {
+    knownVideoAspectRatio
+        ?.takeIf { it > 0f }
+        ?.let { return it }
     val hasValidPlayerSize = playerVideoWidth > 0 && playerVideoHeight > 0
     return if (itemBvid == currentPlayingBvid && hasValidPlayerSize) {
         playerVideoWidth.toFloat() / playerVideoHeight.toFloat()
@@ -1738,6 +1785,19 @@ internal fun resolvePortraitInitialRenderedFirstFrameGeneration(
     sharedPlayerHasFrameAtEntry: Boolean
 ): Int {
     return if (useSharedPlayer && sharedPlayerHasFrameAtEntry) 0 else -1
+}
+
+internal fun resolveAspectRatioFromDimension(
+    dimension: com.android.purebilibili.data.model.response.Dimension?
+): Float? {
+    val source = dimension ?: return null
+    if (source.width <= 0 || source.height <= 0) return null
+    val normalizedRotate = ((source.rotate % 360) + 360) % 360
+    val shouldSwap = normalizedRotate == 90 || normalizedRotate == 270
+    val effectiveWidth = if (shouldSwap) source.height else source.width
+    val effectiveHeight = if (shouldSwap) source.width else source.height
+    if (effectiveWidth <= 0 || effectiveHeight <= 0) return null
+    return effectiveWidth.toFloat() / effectiveHeight.toFloat()
 }
 
 internal fun shouldRebindSharedPlayerSurfaceOnAttach(

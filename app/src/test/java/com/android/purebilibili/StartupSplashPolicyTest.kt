@@ -152,4 +152,10 @@ class StartupSplashPolicyTest {
             )
         )
     }
+
+    @Test
+    fun coldStartSplash_runsOnlyWithoutSavedInstanceState() {
+        assertTrue(shouldRunColdStartSplash(savedInstanceStatePresent = false))
+        assertFalse(shouldRunColdStartSplash(savedInstanceStatePresent = true))
+    }
 }

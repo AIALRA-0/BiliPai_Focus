@@ -45,6 +45,7 @@ import com.android.purebilibili.core.ui.BiliGradientButton
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.feature.dynamic.resolveDynamicFeedMaxWidth
 import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserListHorizontalPadding
@@ -131,6 +132,10 @@ fun DynamicScreen(
     
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
+    val dynamicListBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 120.dp
+    )
     val pullRefreshState = rememberPullToRefreshState()
     
     // GIF 图片加载器
@@ -431,6 +436,7 @@ fun DynamicScreen(
                                     topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
                                         isHorizontalMode = false
                                     ).dp,
+                                    bottomPadding = dynamicListBottomPadding,
                                     oldContentDividerIndex = oldContentDividerIndex,
                                     oldContentDividerLabel = oldContentDividerLabel,
                                     onVideoClick = onVideoClick,
@@ -505,11 +511,12 @@ fun DynamicScreen(
                                  },
                                  keepEmptyStateVisibleWhileLoading = !emptyFollowUserMessage.isNullOrBlank(),
                                  listState = listState,
-                                 statusBarHeight = statusBarHeight,
-                                 topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
-                                     isHorizontalMode = true
-                                 ).dp,
-                                 oldContentDividerIndex = oldContentDividerIndex,
+                                    statusBarHeight = statusBarHeight,
+                                    topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
+                                        isHorizontalMode = true
+                                    ).dp,
+                                    bottomPadding = dynamicListBottomPadding,
+                                    oldContentDividerIndex = oldContentDividerIndex,
                                  oldContentDividerLabel = oldContentDividerLabel,
                                  onVideoClick = onVideoClick,
                                  onDynamicDetailClick = onDynamicDetailClick,
@@ -661,6 +668,7 @@ private fun DynamicList(
     listState: androidx.compose.foundation.lazy.LazyListState,
     statusBarHeight: androidx.compose.ui.unit.Dp,
     topPaddingExtra: androidx.compose.ui.unit.Dp,
+    bottomPadding: androidx.compose.ui.unit.Dp,
     oldContentDividerIndex: Int,
     oldContentDividerLabel: String,
     onVideoClick: (String) -> Unit,
@@ -680,7 +688,7 @@ private fun DynamicList(
         state = listState,
         contentPadding = PaddingValues(
             top = statusBarHeight + topPaddingExtra,
-            bottom = 120.dp // [Modified] Increased to avoid occlusion by persistent BottomBar
+            bottom = bottomPadding
         ),
         modifier = modifier.fillMaxSize().responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth())
     ) {

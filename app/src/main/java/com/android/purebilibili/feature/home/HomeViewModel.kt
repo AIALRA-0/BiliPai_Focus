@@ -1096,8 +1096,72 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    //  [新增] 获取关注动态列表
-    //  [新增] 获取关注动态列表
+    private fun mergeFollowFeedRawVideos(
+        existingRawVideos: List<VideoItem>,
+        incomingRawVideos: List<VideoItem>,
+        isLoadMore: Boolean
+    ): List<VideoItem> {
+        return when {
+            isLoadMore -> appendDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
+            incrementalTimelineRefreshEnabled -> prependDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
+            else -> incomingRawVideos
+        }
+    }
+
+    private fun handleFollowFeedFetchFailure(
+        isLoadMore: Boolean,
+        error: Throwable
+    ) {
+        updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+            oldState.copy(
+                isLoading = false,
+                error = if (!isLoadMore && oldState.videos.isEmpty()) {
+                    error.message ?: "请先登录"
+                } else {
+                    null
+                }
+            )
+        }
+    }
+
+    private suspend fun fetchFollowFeedSinglePass(isLoadMore: Boolean) {
+        val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
+            refresh = !isLoadMore,
+            scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+        )
+
+        if (isLoadMore) delay(100)
+
+        val items = result.getOrElse { error ->
+            handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
+            return
+        }
+        val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
+        val mergedRawVideos = mergeFollowFeedRawVideos(
+            existingRawVideos = rawFollowFeedVideos,
+            incomingRawVideos = rawVideos,
+            isLoadMore = isLoadMore
+        )
+        rawFollowFeedVideos = mergedRawVideos
+        val visibleVideos = applyHomeVideoFilters(
+            category = HomeCategory.FOLLOW,
+            videos = mergedRawVideos
+        )
+
+        updateFollowFeedCategoryState(
+            videos = visibleVideos,
+            isLoading = false,
+            error = if (!isLoadMore) {
+                resolveHomeFollowEmptyMessage(
+                    visibleVideoCount = visibleVideos.size
+                )
+            } else {
+                null
+            },
+            hasMore = homeFollowHasMoreData()
+        )
+    }
+
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
             rawFollowFeedVideos = emptyList()
@@ -1116,45 +1180,84 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
             )
         }
-        
-        val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
-            refresh = !isLoadMore,
-            scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
-        )
-        
-        if (isLoadMore) delay(100)
-        
-        result.onSuccess { items ->
-            val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
-            val mergedRawVideos = when {
-                isLoadMore -> appendDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
-                incrementalTimelineRefreshEnabled -> prependDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
-                else -> rawVideos
+
+        if (!focusFollowGroupFilteringEnabled) {
+            fetchFollowFeedSinglePass(isLoadMore = isLoadMore)
+            return
+        }
+
+        val baselineRawVideos = when {
+            isLoadMore -> rawFollowFeedVideos
+            incrementalTimelineRefreshEnabled -> rawFollowFeedVideos
+            else -> emptyList()
+        }
+        val baselineVisibleCount = applyHomeVideoFilters(
+            category = HomeCategory.FOLLOW,
+            videos = baselineRawVideos
+        ).size
+        var workingRawVideos = baselineRawVideos
+        var targetRawIncrement: Int? = null
+        var continuationFetches = 0
+        var refreshRequest = !isLoadMore
+
+        while (true) {
+            val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
+                refresh = refreshRequest,
+                scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+            )
+            refreshRequest = false
+
+            if (isLoadMore) delay(100)
+
+            val items = result.getOrElse { error ->
+                handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
+                return
             }
-            rawFollowFeedVideos = mergedRawVideos
+            val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
+            val previousRawVideos = workingRawVideos
+            val mergedRawVideos = mergeFollowFeedRawVideos(
+                existingRawVideos = previousRawVideos,
+                incomingRawVideos = rawVideos,
+                isLoadMore = isLoadMore
+            )
+            val rawIncrement = (mergedRawVideos.size - previousRawVideos.size).coerceAtLeast(0)
+            if (targetRawIncrement == null && rawIncrement > 0) {
+                targetRawIncrement = rawIncrement
+            }
+            workingRawVideos = mergedRawVideos
+
             val visibleVideos = applyHomeVideoFilters(
                 category = HomeCategory.FOLLOW,
                 videos = mergedRawVideos
             )
-
-            updateFollowFeedCategoryState(
-                videos = visibleVideos,
-                isLoading = false,
-                error = if (!isLoadMore) {
-                    resolveHomeFollowEmptyMessage(
-                        visibleVideoCount = visibleVideos.size
-                    )
-                } else {
-                    null
-                },
-                hasMore = homeFollowHasMoreData()
+            val visibleIncrement = resolveHomeFollowVisibleIncrement(
+                baselineVisibleCount = baselineVisibleCount,
+                currentVisibleCount = visibleVideos.size
             )
-        }.onFailure { error ->
-            updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                oldState.copy(
-                    isLoading = false,
-                    error = if (!isLoadMore && oldState.videos.isEmpty()) error.message ?: "请先登录" else null
+            continuationFetches += 1
+            val hasMore = homeFollowHasMoreData()
+
+            if (!shouldContinueHomeFollowFetchAfterFocusFilter(
+                    targetRawIncrement = targetRawIncrement,
+                    visibleIncrement = visibleIncrement,
+                    hasMore = hasMore,
+                    continuationFetches = continuationFetches
                 )
+            ) {
+                rawFollowFeedVideos = workingRawVideos
+                updateFollowFeedCategoryState(
+                    videos = visibleVideos,
+                    isLoading = false,
+                    error = if (!isLoadMore) {
+                        resolveHomeFollowEmptyMessage(
+                            visibleVideoCount = visibleVideos.size
+                        )
+                    } else {
+                        null
+                    },
+                    hasMore = hasMore
+                )
+                return
             }
         }
     }

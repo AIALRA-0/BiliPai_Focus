@@ -43,8 +43,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.HomeHeaderBlurMode
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.BottomBarColors  //  统一底栏颜色配置
@@ -181,13 +183,15 @@ internal fun resolveAllTopTabs(uiPreset: UiPreset = UiPreset.IOS): List<TopTabCo
 fun BottomBarSettingsScreen(
     onBack: () -> Unit
 ) {
+    val screenTitle = stringResource(R.string.bottom_bar_management_title)
+    val backLabel = stringResource(R.string.common_back)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("底栏管理", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

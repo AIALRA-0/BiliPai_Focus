@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.home.components
 
 // Duplicate import removed
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.core.animateDpAsState
@@ -42,10 +43,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer  //  晃动动画
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.android.purebilibili.R
 import com.android.purebilibili.feature.home.components.LiquidIndicator
 import com.android.purebilibili.navigation.ScreenRoutes
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -111,63 +115,114 @@ import kotlin.math.sign
  */
 enum class BottomNavItem(
     val label: String,
+    @StringRes val labelRes: Int,
+    @StringRes val contentDescriptionRes: Int,
+    val legacyAliases: List<String> = emptyList(),
     val selectedIcon: @Composable () -> Unit,
     val unselectedIcon: @Composable () -> Unit,
     val route: String // [新增] 路由地址
 ) {
     HOME(
         "首页",
-        { Icon(CupertinoIcons.Outlined.House, contentDescription = "首页") },
-        { Icon(CupertinoIcons.Outlined.House, contentDescription = "首页") },
+        R.string.bottom_nav_home,
+        R.string.bottom_nav_home,
+        emptyList(),
+        { Icon(CupertinoIcons.Outlined.House, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.House, contentDescription = null) },
         ScreenRoutes.Home.route
     ),
     DYNAMIC(
         "动态",
-        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = "动态") },
-        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = "动态") },
+        R.string.bottom_nav_dynamic,
+        R.string.bottom_nav_dynamic,
+        emptyList(),
+        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = null) },
         ScreenRoutes.Dynamic.route
     ),
     STORY(
         "短视频",
-        { Icon(CupertinoIcons.Filled.PlayCircle, contentDescription = "短视频") },
-        { Icon(CupertinoIcons.Outlined.PlayCircle, contentDescription = "短视频") },
+        R.string.bottom_nav_story,
+        R.string.bottom_nav_story,
+        emptyList(),
+        { Icon(CupertinoIcons.Filled.PlayCircle, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.PlayCircle, contentDescription = null) },
         ScreenRoutes.Story.route
     ),
     HISTORY(
         "历史",
-        { Icon(CupertinoIcons.Filled.Clock, contentDescription = "历史记录") },
-        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = "历史记录") },
+        R.string.bottom_nav_history,
+        R.string.bottom_nav_history_desc,
+        listOf("历史记录"),
+        { Icon(CupertinoIcons.Filled.Clock, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = null) },
         ScreenRoutes.History.route
     ),
     PROFILE(
         "我的",
-        { Icon(CupertinoIcons.Outlined.Person, contentDescription = "个人中心") },
-        { Icon(CupertinoIcons.Outlined.Person, contentDescription = "个人中心") },
+        R.string.bottom_nav_profile,
+        R.string.bottom_nav_profile_desc,
+        listOf("个人中心"),
+        { Icon(CupertinoIcons.Outlined.Person, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.Person, contentDescription = null) },
         ScreenRoutes.Profile.route
     ),
     FAVORITE(
         "收藏",
-        { Icon(CupertinoIcons.Filled.Star, contentDescription = "收藏夹") },
-        { Icon(CupertinoIcons.Outlined.Star, contentDescription = "收藏夹") },
+        R.string.bottom_nav_favorite,
+        R.string.bottom_nav_favorite_desc,
+        listOf("收藏夹"),
+        { Icon(CupertinoIcons.Filled.Star, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.Star, contentDescription = null) },
         ScreenRoutes.Favorite.route
     ),
     LIVE(
         "直播",
-        { Icon(CupertinoIcons.Filled.Video, contentDescription = "直播") },
-        { Icon(CupertinoIcons.Outlined.Video, contentDescription = "直播") },
+        R.string.bottom_nav_live,
+        R.string.bottom_nav_live,
+        emptyList(),
+        { Icon(CupertinoIcons.Filled.Video, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.Video, contentDescription = null) },
         ScreenRoutes.LiveList.route
     ),
     WATCHLATER(
         "稍后看",
-        { Icon(CupertinoIcons.Filled.Bookmark, contentDescription = "稍后再看") },
-        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = "稍后再看") },
+        R.string.bottom_nav_watch_later,
+        R.string.bottom_nav_watch_later_desc,
+        listOf("稍后再看"),
+        { Icon(CupertinoIcons.Filled.Bookmark, contentDescription = null) },
+        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = null) },
         ScreenRoutes.WatchLater.route
     ),
     SETTINGS(
         "设置",
-        { Icon(CupertinoIcons.Filled.Gearshape, contentDescription = "设置") },
-        { Icon(CupertinoIcons.Default.Gearshape, contentDescription = "设置") },
+        R.string.bottom_nav_settings,
+        R.string.bottom_nav_settings,
+        emptyList(),
+        { Icon(CupertinoIcons.Filled.Gearshape, contentDescription = null) },
+        { Icon(CupertinoIcons.Default.Gearshape, contentDescription = null) },
         ScreenRoutes.Settings.route
+    )
+}
+
+@Composable
+internal fun resolveBottomNavItemLabel(item: BottomNavItem): String = stringResource(item.labelRes)
+
+@Composable
+internal fun resolveBottomNavItemContentDescription(item: BottomNavItem): String =
+    stringResource(item.contentDescriptionRes)
+
+internal fun resolveBottomNavItemLookupKeys(item: BottomNavItem): Set<String> {
+    return linkedSetOf(
+        item.name,
+        item.name.lowercase(),
+        item.name.uppercase(),
+        item.route,
+        item.route.lowercase(),
+        item.route.uppercase(),
+        item.label,
+        item.label.lowercase(),
+        *item.legacyAliases.toTypedArray()
     )
 }
 
@@ -1030,6 +1085,8 @@ private fun MaterialBottomBar(
             modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
         ) {
             visibleItems.forEach { item ->
+                val itemLabel = resolveBottomNavItemLabel(item)
+                val itemContentDescription = resolveBottomNavItemContentDescription(item)
                 NavigationBarItem(
                     selected = currentItem == item,
                     onClick = {
@@ -1042,14 +1099,14 @@ private fun MaterialBottomBar(
                         if (showIcon) {
                             Icon(
                                 imageVector = resolveMaterialBottomBarIcon(item = item, selected = currentItem == item),
-                                contentDescription = item.label
+                                contentDescription = itemContentDescription
                             )
                         } else {
                             Spacer(modifier = Modifier.size(0.dp))
                         }
                     },
                     label = if (showText) {
-                        { Text(item.label) }
+                        { Text(itemLabel) }
                     } else {
                         null
                     },
@@ -1065,6 +1122,7 @@ private fun MaterialBottomBar(
             }
 
             if (isTablet && onToggleSidebar != null) {
+                val sidebarLabel = stringResource(R.string.sidebar_toggle)
                 NavigationBarItem(
                     selected = false,
                     onClick = {
@@ -1077,14 +1135,14 @@ private fun MaterialBottomBar(
                         if (showIcon) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
-                                contentDescription = "侧边栏"
+                                contentDescription = sidebarLabel
                             )
                         } else {
                             Spacer(modifier = Modifier.size(0.dp))
                         }
                     },
                     label = if (showText) {
-                        { Text("侧边栏") }
+                        { Text(sidebarLabel) }
                     } else {
                         null
                     },
@@ -1217,17 +1275,7 @@ internal fun resolveBottomBarItemColorBinding(
         return BottomBarItemColorBinding(colorIndex = 0, hasCustomAccent = false)
     }
 
-    val candidates = linkedSetOf(
-        item.name,
-        item.name.lowercase(),
-        item.name.uppercase(),
-        item.route,
-        item.route.lowercase(),
-        item.route.uppercase(),
-        item.label,
-        item.label.lowercase()
-    )
-    val match = candidates.firstNotNullOfOrNull { key ->
+    val match = resolveBottomNavItemLookupKeys(item).firstNotNullOfOrNull { key ->
         itemColorIndices[key]
     }
     return if (match != null) {
@@ -1318,7 +1366,8 @@ private fun BottomBarContent(
         if (isTablet && onToggleSidebar != null) {
             // ... (复制原有逻辑)
             // 简单复制：
-             var isPending by remember { mutableStateOf(false) }
+            val sidebarLabel = stringResource(R.string.sidebar_toggle)
+            var isPending by remember { mutableStateOf(false) }
             val primaryColor = MaterialTheme.colorScheme.primary
             val unselectedColor = if (hazeState != null) {
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -1351,12 +1400,12 @@ private fun BottomBarContent(
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
                 Box(modifier = Modifier.size(26.dp)) {
-                    Icon(imageVector = CupertinoIcons.Outlined.SidebarLeft, contentDescription = "侧边栏", tint = iconColor, modifier = Modifier.fillMaxSize())
+                    Icon(imageVector = CupertinoIcons.Outlined.SidebarLeft, contentDescription = sidebarLabel, tint = iconColor, modifier = Modifier.fillMaxSize())
                 }
                 if (labelMode == 0) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "侧边栏",
+                        text = sidebarLabel,
                         style = MaterialTheme.typography.labelSmall,
                         color = iconColor,
                         fontWeight = FontWeight.Medium,
@@ -1394,6 +1443,8 @@ private fun BottomBarItem(
 ) {
     val scope = rememberCoroutineScope()
     var isPending by remember { mutableStateOf(false) }
+    val itemLabel = resolveBottomNavItemLabel(item)
+    val itemContentDescription = resolveBottomNavItemContentDescription(item)
     
     val primaryColor = MaterialTheme.colorScheme.primary
     
@@ -1489,6 +1540,9 @@ private fun BottomBarItem(
         modifier = modifier
             .fillMaxHeight()
             .offset(y = contentVerticalOffset)
+            .clearAndSetSemantics {
+                contentDescription = itemContentDescription
+            }
             .then(
                 // 仅当“当前已在首页”时保留双击手势，避免从其他页切首页产生点击延迟
                 if (shouldUseBottomReselectCombinedClickable(item, isSelected)) {
@@ -1573,7 +1627,7 @@ private fun BottomBarItem(
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = item.label,
+                    text = itemLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = iconColor,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
@@ -1584,7 +1638,7 @@ private fun BottomBarItem(
             }
             2 -> { // Text Only
                 Text(
-                    text = item.label,
+                    text = itemLabel,
                     fontSize = if (isTablet) 16.sp else 14.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = iconColor,

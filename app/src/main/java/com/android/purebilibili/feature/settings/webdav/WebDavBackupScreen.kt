@@ -43,9 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
@@ -72,6 +74,11 @@ fun WebDavBackupScreen(
     onBack: () -> Unit,
     viewModel: WebDavBackupViewModel = viewModel()
 ) {
+    val screenTitle = stringResource(R.string.webdav_backup_title)
+    val backLabel = stringResource(R.string.common_back)
+    val refreshLabel = stringResource(R.string.common_refresh)
+    val saveLabel = stringResource(R.string.common_save)
+    val cancelLabel = stringResource(R.string.common_cancel)
     val uiState by viewModel.uiState.collectAsState()
 
     val listState = rememberLazyListState()
@@ -253,13 +260,13 @@ fun WebDavBackupScreen(
         }
 
         iOSLargeTitleBar(
-            title = "WebDAV 云备份",
+            title = screenTitle,
             scrollOffset = scrollOffset,
             leadingContent = {
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回"
+                        contentDescription = backLabel
                     )
                 }
             },
@@ -267,7 +274,7 @@ fun WebDavBackupScreen(
                 IconButton(onClick = { viewModel.refreshRemoteBackups() }) {
                     Icon(
                         imageVector = Icons.Filled.Refresh,
-                        contentDescription = "刷新"
+                        contentDescription = refreshLabel
                     )
                 }
             },
@@ -362,12 +369,12 @@ fun WebDavBackupScreen(
                     )
                     showEditDialog = false
                 }) {
-                    Text("保存")
+                    Text(saveLabel)
                 }
             },
             dismissButton = {
                 IOSDialogAction(onClick = { showEditDialog = false }) {
-                    Text("取消")
+                    Text(cancelLabel)
                 }
             }
         )
@@ -390,7 +397,7 @@ fun WebDavBackupScreen(
             },
             dismissButton = {
                 IOSDialogAction(onClick = { showRestoreConfirm = false }) {
-                    Text("取消")
+                    Text(cancelLabel)
                 }
             }
         )

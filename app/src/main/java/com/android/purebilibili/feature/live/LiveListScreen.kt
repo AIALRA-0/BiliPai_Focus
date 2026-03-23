@@ -50,6 +50,7 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 
 
 // 辅助函数：格式化数字
@@ -287,6 +288,10 @@ fun LiveListScreen(
             2
         }
     }
+    val gridBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 92.dp
+    )
 
     Scaffold(
         topBar = {
@@ -377,6 +382,7 @@ fun LiveListScreen(
                             0 -> RecommendTab(
                                 items = state.recommendItems,
                                 gridColumns = gridColumns,
+                                bottomPadding = gridBottomPadding,
                                 onLiveClick = onLiveClick
                             )
                             1 -> AreaTab(
@@ -385,12 +391,14 @@ fun LiveListScreen(
                                 areaItems = state.areaItems,
                                 isLoading = state.isAreaLoading,
                                 gridColumns = gridColumns,
+                                bottomPadding = gridBottomPadding,
                                 onAreaSelected = { viewModel.loadAreaLive(it) },
                                 onLiveClick = onLiveClick
                             )
                             2 -> FollowTab(
                                 items = state.followItems,
                                 gridColumns = gridColumns,
+                                bottomPadding = gridBottomPadding,
                                 onLiveClick = onLiveClick
                             )
                         }
@@ -465,6 +473,7 @@ private fun LiveListSegmentedTabs(
 private fun RecommendTab(
     items: List<LiveRoomItem>,
     gridColumns: Int,
+    bottomPadding: androidx.compose.ui.unit.Dp,
     onLiveClick: (Long, String, String) -> Unit
 ) {
     if (items.isEmpty()) {
@@ -472,7 +481,7 @@ private fun RecommendTab(
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(gridColumns),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + 80.dp), // [新增]
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -496,6 +505,7 @@ private fun AreaTab(
     areaItems: List<LiveRoomItem>,
     isLoading: Boolean,
     gridColumns: Int,
+    bottomPadding: androidx.compose.ui.unit.Dp,
     onAreaSelected: (Int) -> Unit,
     onLiveClick: (Long, String, String) -> Unit
 ) {
@@ -548,7 +558,7 @@ private fun AreaTab(
             else -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + 80.dp), // [新增]
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -571,6 +581,7 @@ private fun AreaTab(
 private fun FollowTab(
     items: List<LiveRoomItem>,
     gridColumns: Int,
+    bottomPadding: androidx.compose.ui.unit.Dp,
     onLiveClick: (Long, String, String) -> Unit
 ) {
     if (items.isEmpty()) {
@@ -578,7 +589,7 @@ private fun FollowTab(
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(gridColumns),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + 80.dp), // [新增]
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

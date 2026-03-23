@@ -16,9 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 
 /**
@@ -145,14 +148,20 @@ fun OpenSourceLicensesScreen(
     onBack: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
+    val screenTitle = stringResource(R.string.open_source_licenses_title)
+    val backLabel = stringResource(R.string.common_back)
+    val contentBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 16.dp
+    )
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("开源许可证", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "Back")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -170,7 +179,12 @@ fun OpenSourceLicensesScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 16.dp,
+                end = 16.dp,
+                bottom = contentBottomPadding
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
