@@ -139,9 +139,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var _undoSnapshot: HomeRefreshUndoSnapshot? = null
     private var undoDismissJob: Job? = null
     private var userInfoRefreshJob: Job? = null
-    private var followFeedPrefetchJob: Job? = null
-    private var followFeedRequestToken: Long = 0L
-
     // [Feature] Blocked UPs
     private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
     private var blockedMids: Set<Long> = emptySet()
@@ -1099,109 +1096,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun shouldContinueHomeFollowBackgroundPrefetchLocally(
-        extraPagesFetched: Int,
-        plan: HomeFollowBackgroundPrefetchPlan?
-    ): Boolean {
-        return shouldContinueHomeFollowBackgroundPrefetch(
-            hasMore = homeFollowHasMoreData(),
-            extraPagesFetched = extraPagesFetched,
-            plan = plan
-        )
-    }
-
-    private fun scheduleHomeFollowBackgroundPrefetch(
-        requestToken: Long,
-        mergedRawVideos: List<com.android.purebilibili.data.model.response.VideoItem>,
-        extraPagesFetched: Int,
-        plan: HomeFollowBackgroundPrefetchPlan
-    ) {
-        followFeedPrefetchJob?.cancel()
-        followFeedPrefetchJob = viewModelScope.launch {
-            var currentRawVideos = mergedRawVideos
-            var currentVisibleVideos = applyHomeVideoFilters(
-                category = HomeCategory.FOLLOW,
-                videos = currentRawVideos
-            )
-            var fetchedExtraPages = extraPagesFetched
-            var publishedVisibleCount = currentVisibleVideos.size
-
-            try {
-                while (
-                    requestToken == followFeedRequestToken &&
-                    shouldContinueHomeFollowBackgroundPrefetchLocally(
-                        extraPagesFetched = fetchedExtraPages,
-                        plan = plan
-                    )
-                ) {
-                    val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
-                        refresh = false,
-                        scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
-                    )
-                    val extraItems = extraResult.getOrNull() ?: break
-                    if (extraItems.isEmpty()) break
-
-                    currentRawVideos = appendDistinctByKey(
-                        currentRawVideos,
-                        mapFollowDynamicItemsToHomeVideos(extraItems),
-                        ::videoItemKey
-                    )
-                    currentVisibleVideos = applyHomeVideoFilters(
-                        category = HomeCategory.FOLLOW,
-                        videos = currentRawVideos
-                    )
-                    fetchedExtraPages += 1
-                    rawFollowFeedVideos = currentRawVideos
-
-                    if (requestToken != followFeedRequestToken) return@launch
-
-                    if (shouldPublishHomeFollowPrefetchBatch(
-                            visibleVideoCount = currentVisibleVideos.size,
-                            publishedVisibleCount = publishedVisibleCount,
-                            hasMore = homeFollowHasMoreData(),
-                            batchSize = plan.publishBatchSize
-                        )
-                    ) {
-                        publishedVisibleCount = currentVisibleVideos.size
-                        updateFollowFeedCategoryState(
-                            videos = currentVisibleVideos,
-                            isLoading = shouldContinueHomeFollowBackgroundPrefetchLocally(
-                                extraPagesFetched = fetchedExtraPages,
-                                plan = plan
-                            ),
-                            error = null,
-                            hasMore = homeFollowHasMoreData()
-                        )
-                    }
-                }
-
-                if (requestToken != followFeedRequestToken) return@launch
-
-                rawFollowFeedVideos = currentRawVideos
-                updateFollowFeedCategoryState(
-                    videos = currentVisibleVideos,
-                    isLoading = false,
-                    error = resolveHomeFollowEmptyMessage(
-                        visibleVideoCount = currentVisibleVideos.size
-                    ),
-                    hasMore = homeFollowHasMoreData()
-                )
-            } finally {
-                if (requestToken == followFeedRequestToken) {
-                    followFeedPrefetchJob = null
-                }
-            }
-        }
-    }
-
     //  [新增] 获取关注动态列表
     //  [新增] 获取关注动态列表
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
-        followFeedRequestToken += 1L
-        val requestToken = followFeedRequestToken
-        followFeedPrefetchJob?.cancel()
-        followFeedPrefetchJob = null
-
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
             rawFollowFeedVideos = emptyList()
             updateFollowFeedCategoryState(
@@ -1228,65 +1125,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (isLoadMore) delay(100)
         
         result.onSuccess { items ->
-            val existingVisibleCount = if (isLoadMore) {
-                _uiState.value.categoryStates[HomeCategory.FOLLOW]?.videos?.size ?: 0
-            } else {
-                0
-            }
             val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
-            var mergedRawVideos = when {
+            val mergedRawVideos = when {
                 isLoadMore -> appendDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
                 incrementalTimelineRefreshEnabled -> prependDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
                 else -> rawVideos
             }
-            var visibleVideos = applyHomeVideoFilters(
+            rawFollowFeedVideos = mergedRawVideos
+            val visibleVideos = applyHomeVideoFilters(
                 category = HomeCategory.FOLLOW,
                 videos = mergedRawVideos
             )
 
-            var extraPagesFetched = 0
-            val prefetchPlan = resolveHomeFollowPrefetchPlan(
-                isLoadMore = isLoadMore,
-                currentVisibleCount = existingVisibleCount
-            )
-            while (shouldPrefetchMoreHomeFollowVideos(
-                    visibleVideoCount = visibleVideos.size,
-                    hasMore = homeFollowHasMoreData(),
-                    extraPagesFetched = extraPagesFetched,
-                    budget = prefetchPlan.foregroundBudget
-                )
-            ) {
-                val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
-                    refresh = false,
-                    scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
-                )
-                val extraItems = extraResult.getOrNull() ?: break
-                if (extraItems.isEmpty()) break
-
-                mergedRawVideos = appendDistinctByKey(
-                    mergedRawVideos,
-                    mapFollowDynamicItemsToHomeVideos(extraItems),
-                    ::videoItemKey
-                )
-                visibleVideos = applyHomeVideoFilters(
-                    category = HomeCategory.FOLLOW,
-                    videos = mergedRawVideos
-                )
-                extraPagesFetched += 1
-            }
-
-            rawFollowFeedVideos = mergedRawVideos
-
-            val shouldContinueInBackground = !isLoadMore &&
-                shouldContinueHomeFollowBackgroundPrefetchLocally(
-                    extraPagesFetched = extraPagesFetched,
-                    plan = prefetchPlan.backgroundPlan
-                )
-
             updateFollowFeedCategoryState(
                 videos = visibleVideos,
-                isLoading = shouldContinueInBackground,
-                error = if (!isLoadMore && !shouldContinueInBackground) {
+                isLoading = false,
+                error = if (!isLoadMore) {
                     resolveHomeFollowEmptyMessage(
                         visibleVideoCount = visibleVideos.size
                     )
@@ -1295,15 +1149,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 hasMore = homeFollowHasMoreData()
             )
-
-            if (shouldContinueInBackground && requestToken == followFeedRequestToken) {
-                scheduleHomeFollowBackgroundPrefetch(
-                    requestToken = requestToken,
-                    mergedRawVideos = mergedRawVideos,
-                    extraPagesFetched = extraPagesFetched,
-                    plan = prefetchPlan.backgroundPlan!!
-                )
-            }
         }.onFailure { error ->
             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
                 oldState.copy(
