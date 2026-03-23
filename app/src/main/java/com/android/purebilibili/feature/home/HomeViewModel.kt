@@ -146,6 +146,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var focusFollowGroupFilteringEnabled: Boolean = true
     private var rawFollowFeedVideos: List<VideoItem> = emptyList()
     private var hasResolvedFollowFeedOnce: Boolean = false
+    private var followFeedFocusRefreshJob: Job? = null
     private var historySampleCache: List<VideoItem> = emptyList()
     private var historySampleLoadedAtMs: Long = 0L
     private val todayConsumedBvids = mutableSetOf<String>()
@@ -171,12 +172,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             FocusFollowGroupStore.getConfig(getApplication()).collect { config ->
                 focusFollowGroupConfig = config
+                requestFollowFeedRefreshAfterFocusConfigChange()
                 reFilterAllContent()
             }
         }
         viewModelScope.launch {
             SettingsManager.getFocusSettings(getApplication()).collect { settings ->
                 focusFollowGroupFilteringEnabled = settings.enableFollowGroupFiltering
+                requestFollowFeedRefreshAfterFocusConfigChange()
                 reFilterAllContent()
             }
         }
@@ -1126,6 +1129,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     null
                 }
             )
+        }
+    }
+
+    private fun requestFollowFeedRefreshAfterFocusConfigChange() {
+        if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) return
+
+        val followState = _uiState.value.categoryStates[HomeCategory.FOLLOW] ?: CategoryContent()
+        val shouldReload =
+            hasResolvedFollowFeedOnce ||
+            rawFollowFeedVideos.isNotEmpty() ||
+            followState.videos.isNotEmpty() ||
+            _uiState.value.currentCategory == HomeCategory.FOLLOW
+        if (!shouldReload) return
+
+        followFeedFocusRefreshJob?.cancel()
+        rawFollowFeedVideos = emptyList()
+        hasResolvedFollowFeedOnce = false
+        com.android.purebilibili.data.repository.DynamicRepository.resetPagination(
+            com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+        )
+        updateFollowFeedCategoryState(
+            videos = emptyList(),
+            isLoading = true,
+            error = null,
+            hasMore = true
+        )
+        followFeedFocusRefreshJob = viewModelScope.launch {
+            fetchFollowFeed(isLoadMore = false)
         }
     }
 

@@ -139,7 +139,14 @@ internal fun HomeCategoryPageContent(
             )
         }
     }
-    LaunchedEffect(shouldLoadMore) {
+    LaunchedEffect(
+        shouldLoadMore,
+        categoryState.videos.size,
+        categoryState.liveRooms.size,
+        categoryState.followedLiveRooms.size,
+        categoryState.isLoading,
+        categoryState.hasMore
+    ) {
         if (shouldLoadMore) onLoadMore()
     }
 
