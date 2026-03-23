@@ -6,6 +6,8 @@ import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class HomeFollowFocusPolicyTest {
 
@@ -59,32 +61,59 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
-    fun shouldPrefetchMoreFocusFollowVideos_requestsExtraPagesWhenVisibleVideosAreTooFew() {
+    fun resolveHomeFollowPrefetchPlan_usesAggressiveQuotaForRefresh() {
         assertEquals(
-            true,
-            shouldPrefetchMoreFocusFollowVideos(
-                visibleVideoCount = 2,
+            HomeFollowPrefetchPlan(
+                minVisibleCount = 18,
+                maxExtraPages = 12
+            ),
+            resolveHomeFollowPrefetchPlan(isLoadMore = false)
+        )
+    }
+
+    @Test
+    fun resolveHomeFollowPrefetchPlan_usesSmallerQuotaForAppend() {
+        assertEquals(
+            HomeFollowPrefetchPlan(
+                minVisibleCount = 8,
+                maxExtraPages = 4
+            ),
+            resolveHomeFollowPrefetchPlan(isLoadMore = true)
+        )
+    }
+
+    @Test
+    fun shouldPrefetchMoreHomeFollowVideos_requestsExtraPagesWhenVisibleVideosAreBelowQuota() {
+        assertTrue(
+            shouldPrefetchMoreHomeFollowVideos(
+                visibleVideoCount = 5,
                 hasMore = true,
-                filterEnabled = true,
-                extraPagesFetched = 0
+                extraPagesFetched = 0,
+                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
             )
         )
-        assertEquals(
-            false,
-            shouldPrefetchMoreFocusFollowVideos(
-                visibleVideoCount = 6,
+        assertFalse(
+            shouldPrefetchMoreHomeFollowVideos(
+                visibleVideoCount = 18,
                 hasMore = true,
-                filterEnabled = true,
-                extraPagesFetched = 0
+                extraPagesFetched = 0,
+                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
             )
         )
-        assertEquals(
-            false,
-            shouldPrefetchMoreFocusFollowVideos(
-                visibleVideoCount = 2,
+        assertFalse(
+            shouldPrefetchMoreHomeFollowVideos(
+                visibleVideoCount = 5,
+                hasMore = false,
+                extraPagesFetched = 0,
+                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
+            )
+        )
+        assertFalse(
+            shouldPrefetchMoreHomeFollowVideos(
+                visibleVideoCount = 5,
                 hasMore = true,
-                filterEnabled = false,
-                extraPagesFetched = 0
+                extraPagesFetched = 12,
+                plan = resolveHomeFollowPrefetchPlan(isLoadMore = false)
             )
         )
     }

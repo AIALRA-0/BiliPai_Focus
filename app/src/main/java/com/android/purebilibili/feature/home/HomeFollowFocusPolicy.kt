@@ -4,8 +4,15 @@ import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.data.model.response.VideoItem
 
-private const val MIN_VISIBLE_HOME_FOLLOW_VIDEOS_AFTER_FOCUS_FILTER = 6
-private const val MAX_HOME_FOLLOW_PREFETCH_PAGES = 3
+private const val MIN_VISIBLE_HOME_FOLLOW_REFRESH_VIDEOS = 18
+private const val MIN_VISIBLE_HOME_FOLLOW_APPEND_VIDEOS = 8
+private const val MAX_HOME_FOLLOW_REFRESH_PREFETCH_PAGES = 12
+private const val MAX_HOME_FOLLOW_APPEND_PREFETCH_PAGES = 4
+
+internal data class HomeFollowPrefetchPlan(
+    val minVisibleCount: Int,
+    val maxExtraPages: Int
+)
 
 internal fun filterHomeFollowVideosByFocusFollowGroups(
     videos: List<VideoItem>,
@@ -25,16 +32,27 @@ internal fun resolveHomeFollowEmptyMessage(
     return "没有可用关注对象"
 }
 
-internal fun shouldPrefetchMoreFocusFollowVideos(
+internal fun resolveHomeFollowPrefetchPlan(isLoadMore: Boolean): HomeFollowPrefetchPlan {
+    return if (isLoadMore) {
+        HomeFollowPrefetchPlan(
+            minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_APPEND_VIDEOS,
+            maxExtraPages = MAX_HOME_FOLLOW_APPEND_PREFETCH_PAGES
+        )
+    } else {
+        HomeFollowPrefetchPlan(
+            minVisibleCount = MIN_VISIBLE_HOME_FOLLOW_REFRESH_VIDEOS,
+            maxExtraPages = MAX_HOME_FOLLOW_REFRESH_PREFETCH_PAGES
+        )
+    }
+}
+
+internal fun shouldPrefetchMoreHomeFollowVideos(
     visibleVideoCount: Int,
     hasMore: Boolean,
-    filterEnabled: Boolean,
     extraPagesFetched: Int,
-    minVisibleCount: Int = MIN_VISIBLE_HOME_FOLLOW_VIDEOS_AFTER_FOCUS_FILTER,
-    maxExtraPages: Int = MAX_HOME_FOLLOW_PREFETCH_PAGES
+    plan: HomeFollowPrefetchPlan
 ): Boolean {
-    if (!filterEnabled) return false
     if (!hasMore) return false
-    if (visibleVideoCount >= minVisibleCount.coerceAtLeast(1)) return false
-    return extraPagesFetched < maxExtraPages.coerceAtLeast(0)
+    if (visibleVideoCount >= plan.minVisibleCount.coerceAtLeast(1)) return false
+    return extraPagesFetched < plan.maxExtraPages.coerceAtLeast(0)
 }

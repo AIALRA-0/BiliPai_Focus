@@ -15,12 +15,12 @@ class DynamicStartupPolicyTest {
         assertTrue(plan.loadLiveStatusImmediately)
         assertTrue(plan.loadFollowingsImmediately)
         assertEquals(0L, plan.followingsHydrationDelayMs)
-        assertEquals(1, plan.initialFollowingsPageLimit)
+        assertEquals(20, plan.initialFollowingsPageLimit)
     }
 
     @Test
-    fun followingsPageBudget_isConservativeDuringStartupHydration() {
-        assertEquals(1, resolveDynamicFollowingsPageLimit(isStartupHydration = true))
-        assertEquals(3, resolveDynamicFollowingsPageLimit(isStartupHydration = false))
+    fun followingsPageBudget_defaultsToSyncingUpToOneThousandCreators() {
+        assertEquals(20, resolveDynamicFollowingsPageLimit(isStartupHydration = true))
+        assertEquals(20, resolveDynamicFollowingsPageLimit(isStartupHydration = false))
     }
 }

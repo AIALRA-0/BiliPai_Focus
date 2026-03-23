@@ -47,9 +47,19 @@ internal fun resolveOldContentDividerIndex(
 internal fun shouldReloadFollowings(
     nowMs: Long,
     lastLoadMs: Long,
+    cachedUsersCount: Int = 0,
+    preferredUserCount: Int = 0,
+    hasCompleteSnapshot: Boolean = false,
     ttlMs: Long = FOLLOWINGS_REFRESH_TTL_MS
 ): Boolean {
     if (lastLoadMs <= 0L) return true
+    if (
+        !hasCompleteSnapshot &&
+        preferredUserCount > 0 &&
+        cachedUsersCount in 1 until preferredUserCount
+    ) {
+        return true
+    }
     return nowMs - lastLoadMs >= ttlMs
 }
 

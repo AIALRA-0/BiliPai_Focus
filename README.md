@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-22 · 上游基线 v7.1.0 · 当前 Focus 发布 v7.1.0-focus.7</sub>
+  <sub>最后更新：2026-03-22 · 上游基线 v7.1.0 · 当前 Focus 发布 v7.1.0-focus.8</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.7-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.8-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.0-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.7.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.8.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.7.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.8.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.0-focus.7` |
+| Focus 版本 | `7.1.0-focus.8` |
 | 上游基线 | `7.1.0` |
-| 发布标签 | `v7.1.0-focus.7` |
-| Release Notes | [docs/releases/focus-7.1.0-focus.7.md](docs/releases/focus-7.1.0-focus.7.md) |
-| 主要收口 | 把分组管理顶部的刷新/添加按钮高度重新压低到更贴近搜索框的视觉高度，继续保持圆角与布局一致 |
-| APK 命名 | `BliPai-Focus-debug-7.1.0-focus.7-debug.apk` · `BliPai-Focus-release-7.1.0-focus.7.apk` |
+| 发布标签 | `v7.1.0-focus.8` |
+| Release Notes | [docs/releases/focus-7.1.0-focus.8.md](docs/releases/focus-7.1.0-focus.8.md) |
+| 主要收口 | 首页“关注”首屏在过滤后会主动补满到更稳定的数量级；动态页关注对象默认同步预算提升到最多 1000 位，不再默认只停在 50 |
+| APK 命名 | `BliPai-Focus-debug-7.1.0-focus.8-debug.apk` · `BliPai-Focus-release-7.1.0-focus.8.apk` |
 
 ### 默认定制项
 
@@ -100,6 +100,7 @@
 - 分组管理中的新分组输入框、关注对象搜索框、添加按钮和刷新按钮现在统一成更高的点击热区和同一套圆角样式，交互区更整齐。
 - 动态页关注列表会优先使用本地缓存回填，并在页面启动时并行预热，不再必须等主动态先加载完才补全关注对象。
 - 动态页与首页“关注”在 Focus 过滤后会主动继续补页，尽量先把可见内容补到更稳定的数量级后再展示，减少刷新后条目数量反复跳变。
+- 动态页关注对象默认会优先同步到最多 `1000` 位；如果实际关注数不足 `1000`，就直接同步实际数量，不再默认只停在 `50` 位。
 - Focus 开关优先于首页顶部标签最终展示结果，但不会破坏原有顶栏管理/底栏管理页。
 - 如果首页顶部项被全部隐藏，会自动回退到 `关注`，避免首页出现空白。
 
@@ -163,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.0-focus.7.md` | Focus `focus.7` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.0-focus.7-en.md` | Focus `focus.7` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.0-focus.8.md` | Focus `focus.8` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.0-focus.8-en.md` | Focus `focus.8` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |

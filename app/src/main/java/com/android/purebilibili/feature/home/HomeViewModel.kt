@@ -1116,13 +1116,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             var extraPagesFetched = 0
-            while (shouldPrefetchMoreFocusFollowVideos(
+            val prefetchPlan = resolveHomeFollowPrefetchPlan(isLoadMore)
+            while (shouldPrefetchMoreHomeFollowVideos(
                     visibleVideoCount = visibleVideos.size,
                     hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
                         com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
                     ),
-                    filterEnabled = focusFollowGroupFilteringEnabled,
-                    extraPagesFetched = extraPagesFetched
+                    extraPagesFetched = extraPagesFetched,
+                    plan = prefetchPlan
                 )
             ) {
                 val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(

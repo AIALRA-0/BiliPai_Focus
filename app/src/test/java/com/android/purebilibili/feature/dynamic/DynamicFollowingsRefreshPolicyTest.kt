@@ -38,4 +38,32 @@ class DynamicFollowingsRefreshPolicyTest {
             )
         )
     }
+
+    @Test
+    fun shouldReloadFollowings_returnsTrueForIncompleteCacheBelowPreferredCount() {
+        assertTrue(
+            shouldReloadFollowings(
+                nowMs = 120_000L,
+                lastLoadMs = 100_000L,
+                cachedUsersCount = 50,
+                preferredUserCount = 1_000,
+                hasCompleteSnapshot = false,
+                ttlMs = 300_000L
+            )
+        )
+    }
+
+    @Test
+    fun shouldReloadFollowings_returnsFalseForIncompleteCacheThatAlreadyMeetsPreferredCountWithinTtl() {
+        assertFalse(
+            shouldReloadFollowings(
+                nowMs = 120_000L,
+                lastLoadMs = 100_000L,
+                cachedUsersCount = 1_000,
+                preferredUserCount = 1_000,
+                hasCompleteSnapshot = false,
+                ttlMs = 300_000L
+            )
+        )
+    }
 }

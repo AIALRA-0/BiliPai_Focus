@@ -41,6 +41,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.math.max
 
+private const val DYNAMIC_FOLLOWINGS_API_PAGE_SIZE = 50
+private const val DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT = 1_000
+private const val DYNAMIC_DEFAULT_FOLLOWINGS_PAGE_LIMIT =
+    (DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT + DYNAMIC_FOLLOWINGS_API_PAGE_SIZE - 1) /
+        DYNAMIC_FOLLOWINGS_API_PAGE_SIZE
+
 internal data class DynamicStartupLoadPlan(
     val refreshFeedImmediately: Boolean,
     val loadLiveStatusImmediately: Boolean,
@@ -55,12 +61,12 @@ internal fun resolveDynamicStartupLoadPlan(): DynamicStartupLoadPlan {
         loadLiveStatusImmediately = true,
         loadFollowingsImmediately = true,
         followingsHydrationDelayMs = 0L,
-        initialFollowingsPageLimit = 1
+        initialFollowingsPageLimit = DYNAMIC_DEFAULT_FOLLOWINGS_PAGE_LIMIT
     )
 }
 
 internal fun resolveDynamicFollowingsPageLimit(isStartupHydration: Boolean): Int {
-    return if (isStartupHydration) 1 else 3
+    return DYNAMIC_DEFAULT_FOLLOWINGS_PAGE_LIMIT
 }
 
 /**
@@ -294,22 +300,34 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             hydrateFollowingsFromLocalCache(mid = myMid)
 
             val now = System.currentTimeMillis()
-            if (!force && !shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) {
+            if (
+                !force && !shouldReloadFollowings(
+                    nowMs = now,
+                    lastLoadMs = lastFollowingsLoadMs,
+                    cachedUsersCount = cachedFollowings.size,
+                    preferredUserCount = DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT,
+                    hasCompleteSnapshot = hasCompleteFocusFollowingUsers
+                )
+            ) {
                 return
             }
             
             val loadAllPages = pageLimit == FULL_FOLLOWINGS_PAGE_LIMIT
             val maxPages = pageLimit.coerceAtLeast(1)
-            // 加载关注列表（首轮保守拉取，后续按需补齐）
+            // 默认优先同步到 1000 位关注对象，不足时继续拉到实际总数；进入设置页时再允许全量补齐
             val allFollowings = mutableListOf<FollowingUser>()
             var page = 1
             var reportedTotal = 0
             while (loadAllPages || page <= maxPages) {
-                val response = NetworkModule.api.getFollowings(vmid = myMid, pn = page, ps = 50)
+                val response = NetworkModule.api.getFollowings(
+                    vmid = myMid,
+                    pn = page,
+                    ps = DYNAMIC_FOLLOWINGS_API_PAGE_SIZE
+                )
                 reportedTotal = response.data?.total ?: reportedTotal
                 val users = response.data?.list ?: break
                 allFollowings.addAll(users)
-                if (users.size < 50) break // 没有更多了
+                if (users.size < DYNAMIC_FOLLOWINGS_API_PAGE_SIZE) break // 没有更多了
                 page += 1
             }
             
@@ -337,7 +355,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
     private fun requestFollowingsRefreshIfStale() {
         val now = System.currentTimeMillis()
-        if (!shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) return
+        if (
+            !shouldReloadFollowings(
+                nowMs = now,
+                lastLoadMs = lastFollowingsLoadMs,
+                cachedUsersCount = cachedFollowings.size,
+                preferredUserCount = DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT,
+                hasCompleteSnapshot = hasCompleteFocusFollowingUsers
+            )
+        ) return
         viewModelScope.launch {
             loadAllFollowings(force = true)
         }

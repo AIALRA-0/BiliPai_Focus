@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-22 · Upstream base v7.1.0 · Current Focus release v7.1.0-focus.7</sub>
+  <sub>Last updated: 2026-03-22 · Upstream base v7.1.0 · Current Focus release v7.1.0-focus.8</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.7-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.0--focus.8-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.0-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -32,7 +32,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.7-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.0-focus.8-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -49,18 +49,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.7-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.0-focus.8-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.0-focus.7` |
+| Focus version | `7.1.0-focus.8` |
 | Upstream base | `7.1.0` |
-| Release tag | `v7.1.0-focus.7` |
-| Release notes | [docs/releases/focus-7.1.0-focus.7-en.md](docs/releases/focus-7.1.0-focus.7-en.md) |
-| Main refinements | trims the top `Refresh / Add` buttons in group management so they visually line up better with the search field while keeping the same rounded style |
-| APK names | `BliPai-Focus-debug-7.1.0-focus.7-debug.apk` · `BliPai-Focus-release-7.1.0-focus.7.apk` |
+| Release tag | `v7.1.0-focus.8` |
+| Release notes | [docs/releases/focus-7.1.0-focus.8-en.md](docs/releases/focus-7.1.0-focus.8-en.md) |
+| Main refinements | makes Home Follow actively fill the first visible result set after filtering and raises the default followed-creator sync budget to up to 1000 instead of stopping at 50 |
+| APK names | `BliPai-Focus-debug-7.1.0-focus.8-debug.apk` · `BliPai-Focus-release-7.1.0-focus.8.apk` |
 
 ### Default customizations
 
@@ -85,6 +85,7 @@ From the perspective of attention psychology and behavioral design, recommendati
 - The new-group field, creator-search field, add button, and refresh button now share a taller tap target and the same rounded style, making the control area feel more consistent.
 - Dynamic follow users now restore from local cache first and hydrate in parallel during startup, instead of waiting for the primary feed to finish first.
 - Dynamic and Home Follow now proactively fetch extra pages after Focus filtering so the first visible result set stabilizes sooner, instead of slowly growing from 1 item to 3 items after refresh.
+- Dynamic follow-user sync now targets up to `1000` creators by default; if you follow fewer than `1000`, it syncs the actual count instead of stopping at the first `50`.
 
 ### Maintenance cadence and test scope
 
@@ -146,8 +147,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.0-focus.7.md` | Chinese release notes for `focus.7` |
-| Added | `docs/releases/focus-7.1.0-focus.7-en.md` | English release notes for `focus.7` |
+| Added | `docs/releases/focus-7.1.0-focus.8.md` | Chinese release notes for `focus.8` |
+| Added | `docs/releases/focus-7.1.0-focus.8-en.md` | English release notes for `focus.8` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
