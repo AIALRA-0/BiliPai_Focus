@@ -1099,17 +1099,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun shouldContinueHomeFollowBackgroundPrefetch(
-        visibleVideoCount: Int,
+    private fun shouldContinueHomeFollowBackgroundPrefetchLocally(
         extraPagesFetched: Int,
-        budget: HomeFollowPrefetchBudget?
+        plan: HomeFollowBackgroundPrefetchPlan?
     ): Boolean {
-        val effectiveBudget = budget ?: return false
-        return shouldPrefetchMoreHomeFollowVideos(
-            visibleVideoCount = visibleVideoCount,
+        return shouldContinueHomeFollowBackgroundPrefetch(
             hasMore = homeFollowHasMoreData(),
             extraPagesFetched = extraPagesFetched,
-            budget = effectiveBudget
+            plan = plan
         )
     }
 
@@ -1117,7 +1114,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         requestToken: Long,
         mergedRawVideos: List<com.android.purebilibili.data.model.response.VideoItem>,
         extraPagesFetched: Int,
-        budget: HomeFollowPrefetchBudget
+        plan: HomeFollowBackgroundPrefetchPlan
     ) {
         followFeedPrefetchJob?.cancel()
         followFeedPrefetchJob = viewModelScope.launch {
@@ -1127,15 +1124,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 videos = currentRawVideos
             )
             var fetchedExtraPages = extraPagesFetched
+            var publishedVisibleCount = currentVisibleVideos.size
 
             try {
                 while (
                     requestToken == followFeedRequestToken &&
-                    shouldPrefetchMoreHomeFollowVideos(
-                        visibleVideoCount = currentVisibleVideos.size,
-                        hasMore = homeFollowHasMoreData(),
+                    shouldContinueHomeFollowBackgroundPrefetchLocally(
                         extraPagesFetched = fetchedExtraPages,
-                        budget = budget
+                        plan = plan
                     )
                 ) {
                     val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
@@ -1159,17 +1155,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                     if (requestToken != followFeedRequestToken) return@launch
 
-                    updateFollowFeedCategoryState(
-                        videos = currentVisibleVideos,
-                        isLoading = shouldPrefetchMoreHomeFollowVideos(
+                    if (shouldPublishHomeFollowPrefetchBatch(
                             visibleVideoCount = currentVisibleVideos.size,
+                            publishedVisibleCount = publishedVisibleCount,
                             hasMore = homeFollowHasMoreData(),
-                            extraPagesFetched = fetchedExtraPages,
-                            budget = budget
-                        ),
-                        error = null,
-                        hasMore = homeFollowHasMoreData()
-                    )
+                            batchSize = plan.publishBatchSize
+                        )
+                    ) {
+                        publishedVisibleCount = currentVisibleVideos.size
+                        updateFollowFeedCategoryState(
+                            videos = currentVisibleVideos,
+                            isLoading = shouldContinueHomeFollowBackgroundPrefetchLocally(
+                                extraPagesFetched = fetchedExtraPages,
+                                plan = plan
+                            ),
+                            error = null,
+                            hasMore = homeFollowHasMoreData()
+                        )
+                    }
                 }
 
                 if (requestToken != followFeedRequestToken) return@launch
@@ -1225,6 +1228,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (isLoadMore) delay(100)
         
         result.onSuccess { items ->
+            val existingVisibleCount = if (isLoadMore) {
+                _uiState.value.categoryStates[HomeCategory.FOLLOW]?.videos?.size ?: 0
+            } else {
+                0
+            }
             val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
             var mergedRawVideos = when {
                 isLoadMore -> appendDistinctByKey(rawFollowFeedVideos, rawVideos, ::videoItemKey)
@@ -1237,7 +1245,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             var extraPagesFetched = 0
-            val prefetchPlan = resolveHomeFollowPrefetchPlan(isLoadMore)
+            val prefetchPlan = resolveHomeFollowPrefetchPlan(
+                isLoadMore = isLoadMore,
+                currentVisibleCount = existingVisibleCount
+            )
             while (shouldPrefetchMoreHomeFollowVideos(
                     visibleVideoCount = visibleVideos.size,
                     hasMore = homeFollowHasMoreData(),
@@ -1267,10 +1278,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             rawFollowFeedVideos = mergedRawVideos
 
             val shouldContinueInBackground = !isLoadMore &&
-                shouldContinueHomeFollowBackgroundPrefetch(
-                    visibleVideoCount = visibleVideos.size,
+                shouldContinueHomeFollowBackgroundPrefetchLocally(
                     extraPagesFetched = extraPagesFetched,
-                    budget = prefetchPlan.backgroundBudget
+                    plan = prefetchPlan.backgroundPlan
                 )
 
             updateFollowFeedCategoryState(
@@ -1291,7 +1301,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     requestToken = requestToken,
                     mergedRawVideos = mergedRawVideos,
                     extraPagesFetched = extraPagesFetched,
-                    budget = prefetchPlan.backgroundBudget!!
+                    plan = prefetchPlan.backgroundPlan!!
                 )
             }
         }.onFailure { error ->
