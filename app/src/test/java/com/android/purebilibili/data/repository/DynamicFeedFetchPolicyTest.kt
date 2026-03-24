@@ -75,4 +75,31 @@ class DynamicFeedFetchPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `continue loading until minimum visible item count is reached`() {
+        assertTrue(
+            shouldContinueDynamicFetchAfterFilter(
+                accumulatedVisibleCount = 4,
+                hasMore = true,
+                previousOffset = "100",
+                nextOffset = "200",
+                pagesFetched = 2,
+                minimumVisibleCount = 8,
+                maxPages = 6
+            )
+        )
+
+        assertFalse(
+            shouldContinueDynamicFetchAfterFilter(
+                accumulatedVisibleCount = 8,
+                hasMore = true,
+                previousOffset = "100",
+                nextOffset = "200",
+                pagesFetched = 2,
+                minimumVisibleCount = 8,
+                maxPages = 6
+            )
+        )
+    }
 }

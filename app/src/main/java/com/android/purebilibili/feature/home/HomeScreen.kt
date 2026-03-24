@@ -1124,7 +1124,7 @@ fun HomeScreen(
                         
                         ComfortablePullToRefreshBox(
                             isRefreshing = isRefreshing && state.currentCategory == category,
-                            onRefresh = { viewModel.refresh() },
+                            onRefresh = { viewModel.refresh(category) },
                             state = pullRefreshState,
                             modifier = Modifier.fillMaxSize(),
                              //  iOS 风格下拉刷新指示器 (位于内容上方)
@@ -1191,18 +1191,43 @@ fun HomeScreen(
                                  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                      ModernErrorState(
                                          message = categoryState.error,
-                                         onRetry = { viewModel.refresh() }
+                                         onRetry = { viewModel.refresh(category) }
                                      )
                                  }
                              } else {
                                  // Data Content
                                  // [性能优化] Stabilize event callbacks to prevent recomposition on scroll
-                                 val onLoadMoreCallback = remember(viewModel) { { viewModel.loadMore() } }
-                                 val onDismissVideoCallback = remember(viewModel) { { bvid: String -> viewModel.startVideoDissolve(bvid) } }
+                                 val onLoadMoreCallback = remember(viewModel, category) {
+                                     { viewModel.loadMore(category) }
+                                 }
+                                 val onDismissVideoCallback = remember(viewModel, category) {
+                                     { bvid: String ->
+                                         viewModel.rememberInteractedCategory(category)
+                                         viewModel.startVideoDissolve(bvid)
+                                     }
+                                 }
                                  val onWatchLaterCallback = remember(viewModel) { { bvid: String, aid: Long -> viewModel.addToWatchLater(bvid, aid) } }
-                                 val onDissolveCompleteCallback = remember(viewModel) { { bvid: String -> viewModel.completeVideoDissolve(bvid) } }
-                                 val onLongPressCallback = remember(targetVideoItemState) { { item: VideoItem -> targetVideoItemState.value = item } }
-                                 val onLiveClickCallback = remember(onLiveClick) { onLiveClick }
+                                 val onDissolveCompleteCallback = remember(viewModel, category) {
+                                     { bvid: String -> viewModel.completeVideoDissolve(bvid, category) }
+                                 }
+                                 val onLongPressCallback = remember(targetVideoItemState, viewModel, category) {
+                                     { item: VideoItem ->
+                                         viewModel.rememberInteractedCategory(category)
+                                         targetVideoItemState.value = item
+                                     }
+                                 }
+                                 val onLiveClickCallback = remember(onLiveClick, viewModel, category) {
+                                     { roomId: Long, title: String, uname: String ->
+                                         viewModel.rememberInteractedCategory(category)
+                                         onLiveClick(roomId, title, uname)
+                                     }
+                                 }
+                                 val onVideoClickCallback = remember(viewModel, category, wrappedOnVideoClick) {
+                                     { request: HomeVideoClickRequest ->
+                                         viewModel.rememberInteractedCategory(category)
+                                         wrappedOnVideoClick(request)
+                                     }
+                                 }
                                  val onTodayWatchModeChange = remember(viewModel) { { mode: TodayWatchMode -> viewModel.switchTodayWatchMode(mode) } }
                                  val onTodayWatchCollapsedChange = remember(viewModel) { { collapsed: Boolean -> viewModel.setTodayWatchCollapsed(collapsed) } }
                                  val onTodayWatchRefresh = remember(viewModel) { { viewModel.refreshTodayWatchOnly() } }
@@ -1221,7 +1246,7 @@ fun HomeScreen(
                                      ),
                                      dissolvingVideos = state.dissolvingVideos,
                                      followingMids = state.followingMids,
-                                     onVideoClick = wrappedOnVideoClick,
+                                     onVideoClick = onVideoClickCallback,
                                      onLiveClick = onLiveClickCallback,
                                      onLoadMore = onLoadMoreCallback,
                                      onDismissVideo = onDismissVideoCallback,

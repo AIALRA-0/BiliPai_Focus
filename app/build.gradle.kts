@@ -52,13 +52,13 @@ android {
         (project.findProperty("castServiceProcess") as String?) ?: ":cast"
 
     defaultConfig {
-        applicationId = "com.android.purebilibili"
+        applicationId = "com.android.purebilibili.focus"
         minSdk = 26
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：官方主版本 + Focus 子版本
         // 更新日志：CHANGELOG.md
-        versionCode = 139
-        versionName = "7.1.2-focus.2"
+        versionCode = 140
+        versionName = "7.1.2-focus.3"
         resValue("string", "app_name", "BliPai Focus")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

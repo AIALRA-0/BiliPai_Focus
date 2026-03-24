@@ -30,8 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
+import com.android.purebilibili.feature.settings.FOCUS_GITHUB_URL
+import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_URL
 
 @Composable
 fun OnboardingScreen(
@@ -408,6 +411,7 @@ fun FeaturesPage() {
 // --- Page 4: Get Started (Ready?) ---
 @Composable
 fun GetStartedPage(onFinish: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -444,8 +448,25 @@ fun GetStartedPage(onFinish: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) },
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Text("Telegram 群")
+            }
+            TextButton(onClick = { uriHandler.openUri(FOCUS_GITHUB_URL) }) {
+                Text("Focus GitHub")
+            }
+        }
         
         // Spacer to push content up slightly to leave room for the button
-        Spacer(modifier = Modifier.height(80.dp))
+        Spacer(modifier = Modifier.height(52.dp))
     }
 }

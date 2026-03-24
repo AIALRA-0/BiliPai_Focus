@@ -8,9 +8,10 @@ internal fun shouldContinueDynamicFetchAfterFilter(
     previousOffset: String,
     nextOffset: String,
     pagesFetched: Int,
+    minimumVisibleCount: Int = 1,
     maxPages: Int = DYNAMIC_EMPTY_PAGE_FETCH_LIMIT
 ): Boolean {
-    if (accumulatedVisibleCount > 0) return false
+    if (accumulatedVisibleCount >= minimumVisibleCount.coerceAtLeast(1)) return false
     if (!hasMore) return false
     if (pagesFetched >= maxPages) return false
 

@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-23 · 上游基线 v7.1.2 · 当前 Focus 发布 v7.1.2-focus.2</sub>
+  <sub>最后更新：2026-03-24 · 上游基线 v7.1.2 · 当前 Focus 发布 v7.1.2-focus.3</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.2--focus.2-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.2--focus.3-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.2-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.2-focus.2.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.2-focus.3.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.2-focus.2.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.2-focus.3.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.2-focus.2` |
+| Focus 版本 | `7.1.2-focus.3` |
 | 上游基线 | `7.1.2` |
-| 发布标签 | `v7.1.2-focus.2` |
-| Release Notes | [docs/releases/focus-7.1.2-focus.2.md](docs/releases/focus-7.1.2-focus.2.md) |
-| 主要收口 | 在上游 `v7.1.2` 基线上继续收口 Focus 首页开关：移除 `追番 / 知识 / 科技` 的 Focus 独立开关，首页 `关注` 过滤刷新提速，并在所有 Focus 首页入口都关闭时安全回退到单 `推荐`，避免崩溃 |
-| APK 命名 | `BliPai-Focus-debug-7.1.2-focus.2-debug.apk` · `BliPai-Focus-release-7.1.2-focus.2.apk` |
+| 发布标签 | `v7.1.2-focus.3` |
+| Release Notes | [docs/releases/focus-7.1.2-focus.3.md](docs/releases/focus-7.1.2-focus.3.md) |
+| 主要收口 | 补回首次引导 `Telegram 群` 入口，修复首页 `关注` 的批量加载 / 底部续拉 / 刷新保留与随机化排序，统一顶部标签进入视频后的返回落点，并将 Focus 改成可与官方原版共存安装且只跟随 Focus 分支更新 |
+| APK 命名 | `BliPai-Focus-debug-7.1.2-focus.3-debug.apk` · `BliPai-Focus-release-7.1.2-focus.3.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.2-focus.2.md` | Focus `v7.1.2-focus.2` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.2-focus.2-en.md` | Focus `v7.1.2-focus.2` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.2-focus.3.md` | Focus `v7.1.2-focus.3` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.2-focus.3-en.md` | Focus `v7.1.2-focus.3` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |

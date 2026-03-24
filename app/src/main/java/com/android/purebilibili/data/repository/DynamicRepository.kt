@@ -16,6 +16,8 @@ import kotlinx.coroutines.withContext
 object DynamicRepository {
     private val feedPagination = DynamicFeedPaginationRegistry()
     private val userFeedPagination = DynamicUserPaginationRegistry()
+    private const val HOME_FOLLOW_MIN_VISIBLE_ITEMS_PER_REQUEST = 8
+    private const val HOME_FOLLOW_MAX_PAGES_PER_REQUEST = 6
     
     /**
      * 获取动态列表
@@ -36,6 +38,8 @@ object DynamicRepository {
 
             val visibleItems = mutableListOf<DynamicItem>()
             var pagesFetched = 0
+            val minimumVisibleItems = resolveDynamicFeedMinimumVisibleItems(scope)
+            val maxPages = resolveDynamicFeedMaxPages(scope)
             while (true) {
                 val previousOffset = feedPagination.offset(scope)
                 val response = fetchDynamicFeedPageWithRetry {
@@ -65,7 +69,9 @@ object DynamicRepository {
                         hasMore = data.has_more,
                         previousOffset = previousOffset,
                         nextOffset = data.offset,
-                        pagesFetched = pagesFetched
+                        pagesFetched = pagesFetched,
+                        minimumVisibleCount = minimumVisibleItems,
+                        maxPages = maxPages
                     )
                 ) {
                     break
@@ -278,6 +284,20 @@ object DynamicRepository {
         }
         val message = resolveDynamicFriendlyErrorMessage(code = -1, message = lastError?.message.orEmpty())
         return Result.failure(Exception(message, lastError))
+    }
+
+    private fun resolveDynamicFeedMinimumVisibleItems(scope: DynamicFeedScope): Int {
+        return when (scope) {
+            DynamicFeedScope.HOME_FOLLOW -> HOME_FOLLOW_MIN_VISIBLE_ITEMS_PER_REQUEST
+            DynamicFeedScope.DYNAMIC_SCREEN -> 1
+        }
+    }
+
+    private fun resolveDynamicFeedMaxPages(scope: DynamicFeedScope): Int {
+        return when (scope) {
+            DynamicFeedScope.HOME_FOLLOW -> HOME_FOLLOW_MAX_PAGES_PER_REQUEST
+            DynamicFeedScope.DYNAMIC_SCREEN -> DYNAMIC_EMPTY_PAGE_FETCH_LIMIT
+        }
     }
 }
 

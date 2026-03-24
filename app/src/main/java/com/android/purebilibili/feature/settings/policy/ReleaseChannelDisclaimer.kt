@@ -35,6 +35,7 @@ fun ReleaseChannelDisclaimerDialog(
                 text = "本应用仅用于学习与交流\n\n" +
                     "官方原版发布渠道：GitHub 与 Telegram\n" +
                     "Focus 定制版发布渠道：Focus GitHub\n" +
+                    "Focus 版本只会跟随 Focus 分支检查与接收更新，不会接收官方原版更新推送\n" +
                     "除上述渠道外，不存在任何其他发布途径\n\n" +
                     "请勿安装来源不明的安装包，以避免账号与设备安全风险"
             )

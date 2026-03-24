@@ -147,6 +147,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var rawFollowFeedVideos: List<VideoItem> = emptyList()
     private var hasResolvedFollowFeedOnce: Boolean = false
     private var followFeedFocusRefreshJob: Job? = null
+    private var followFeedShuffleSeed: Long = System.currentTimeMillis()
     private var historySampleCache: List<VideoItem> = emptyList()
     private var historySampleLoadedAtMs: Long = 0L
     private val todayConsumedBvids = mutableSetOf<String>()
@@ -508,42 +509,58 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    //  [新增] 切换分类
-    fun switchCategory(category: HomeCategory) {
+    private fun resolveSelectedLiveSubCategory(
+        currentState: HomeUiState,
+        category: HomeCategory
+    ): LiveSubCategory {
+        if (category != HomeCategory.LIVE) return currentState.liveSubCategory
+        val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
+        return if (isLoggedIn) currentState.liveSubCategory else LiveSubCategory.POPULAR
+    }
+
+    private fun syncCurrentCategory(category: HomeCategory) {
         val currentState = _uiState.value
         if (currentState.currentCategory == category) return
-        
+
         //  [修复] 标记正在切换分类，避免入场动画产生收缩效果
         com.android.purebilibili.core.util.CardPositionManager.isSwitchingCategory = true
-        
-        viewModelScope.launch {
-            //  [修复] 如果切换到直播分类，未登录用户默认显示热门
-            val liveSubCategory = if (category == HomeCategory.LIVE) {
-                val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
-                if (isLoggedIn) currentState.liveSubCategory else LiveSubCategory.POPULAR
-            } else {
-                currentState.liveSubCategory
+
+        _uiState.value = currentState.copy(
+            currentCategory = category,
+            liveSubCategory = resolveSelectedLiveSubCategory(
+                currentState = currentState,
+                category = category
+            ),
+            displayedTabIndex = currentState.displayedTabIndex
+        )
+    }
+
+    fun rememberInteractedCategory(category: HomeCategory) {
+        syncCurrentCategory(category)
+    }
+
+    //  [新增] 切换分类
+    fun switchCategory(category: HomeCategory) {
+        if (_uiState.value.currentCategory == category) return
+
+        syncCurrentCategory(category)
+
+        //  [修复] 恢复“追番”分类的数据拉取逻辑，确保滑动到这些页面时有内容显示
+        /* 之前禁用了此处拉取，导致滑动展示空白页。现在移除提前返回。 */
+
+        val targetCategoryState = _uiState.value.categoryStates[category] ?: CategoryContent()
+        val needFetch = targetCategoryState.videos.isEmpty() &&
+            targetCategoryState.liveRooms.isEmpty() &&
+            !targetCategoryState.isLoading &&
+            targetCategoryState.error == null
+
+        // 如果目标分类没有数据，则加载
+        if (needFetch) {
+            viewModelScope.launch {
+                fetchData(category = category, isLoadMore = false)
             }
-            
-            _uiState.value = currentState.copy(
-                currentCategory = category,
-                liveSubCategory = liveSubCategory,
-                displayedTabIndex = currentState.displayedTabIndex
-            )
-
-            //  [修复] 恢复“追番”分类的数据拉取逻辑，确保滑动到这些页面时有内容显示
-            /* 之前禁用了此处拉取，导致滑动展示空白页。现在移除提前返回。 */
-
-            val targetCategoryState = _uiState.value.categoryStates[category] ?: CategoryContent()
-            val needFetch = targetCategoryState.videos.isEmpty() && 
-                           targetCategoryState.liveRooms.isEmpty() && 
-                           !targetCategoryState.isLoading && 
-                           targetCategoryState.error == null
-
-            // 如果目标分类没有数据，则加载
-            if (needFetch) {
-                 fetchData(isLoadMore = false)
-            } else if (category == HomeCategory.RECOMMEND) {
+        } else if (category == HomeCategory.RECOMMEND) {
+            viewModelScope.launch {
                 val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
                 if (shouldAutoRebuildTodayWatchPlan(
                         currentCategory = category,
@@ -572,8 +589,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     //  [新增] 完成消散动画（从列表移除并记录到已过滤集合）
     //  [新增] 完成消散动画（从列表移除并记录到已过滤集合）
-    fun completeVideoDissolve(bvid: String) {
-        val currentCategory = _uiState.value.currentCategory
+    fun completeVideoDissolve(
+        bvid: String,
+        category: HomeCategory = _uiState.value.currentCategory
+    ) {
+        val currentCategory = category
         
         // Update global dissolving list
         val newDissolving = _uiState.value.dissolvingVideos - bvid
@@ -755,11 +775,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refresh() {
+    fun refresh(category: HomeCategory = _uiState.value.currentCategory) {
         if (_isRefreshing.value) return
+        syncCurrentCategory(category)
         viewModelScope.launch {
             _isRefreshing.value = true
-            val refreshingCategory = _uiState.value.currentCategory
+            val refreshingCategory = category
             _undoSnapshot = buildHomeRefreshUndoSnapshot(
                 refreshingCategory = refreshingCategory,
                 recommendCategoryState = _uiState.value.categoryStates[HomeCategory.RECOMMEND],
@@ -770,7 +791,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 (_uiState.value.categoryStates[HomeCategory.RECOMMEND]?.videos
                     ?: _uiState.value.videos).firstOrNull()?.bvid?.takeIf { it.isNotBlank() }
             } else null
-            val newItemsCount = fetchData(isLoadMore = false, isManualRefresh = true)
+            val newItemsCount = fetchData(
+                category = refreshingCategory,
+                isLoadMore = false,
+                isManualRefresh = true
+            )
             
             //  数据加载完成后再更新 refreshKey，避免闪烁
             //  刷新成功后显示趣味提示
@@ -866,25 +891,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         undoDismissJob = null
     }
 
-    fun loadMore() {
-        val currentCategory = _uiState.value.currentCategory
-        val categoryState = _uiState.value.categoryStates[currentCategory] ?: return
+    fun loadMore(category: HomeCategory = _uiState.value.currentCategory) {
+        val categoryState = _uiState.value.categoryStates[category] ?: return
         
         if (categoryState.isLoading || _isRefreshing.value || !categoryState.hasMore) return
-        if (currentCategory == HomeCategory.POPULAR &&
+        if (category == HomeCategory.POPULAR &&
             !supportsPopularLoadMore(_uiState.value.popularSubCategory)
         ) {
             return
         }
         
         //  修复：如果是直播分类且没有更多数据，不再加载
-        if (currentCategory == HomeCategory.LIVE && !hasMoreLiveData) {
+        if (category == HomeCategory.LIVE && !hasMoreLiveData) {
             com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 No more live data, skipping loadMore")
             return
         }
-        
+
+        syncCurrentCategory(category)
         viewModelScope.launch {
-            fetchData(isLoadMore = true)
+            fetchData(category = category, isLoadMore = true)
         }
     }
 
@@ -895,8 +920,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun fetchData(isLoadMore: Boolean, isManualRefresh: Boolean = false): Int? {
-        val currentCategory = _uiState.value.currentCategory
+    private suspend fun fetchData(
+        category: HomeCategory = _uiState.value.currentCategory,
+        isLoadMore: Boolean,
+        isManualRefresh: Boolean = false
+    ): Int? {
+        val currentCategory = category
         var refreshNewItemsCount: Int? = null
         
         // 更新当前分类为加载状态
@@ -1111,8 +1140,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     ): List<VideoItem> {
         return when {
             isLoadMore -> appendDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
-            incrementalTimelineRefreshEnabled -> prependDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
-            else -> incomingRawVideos
+            else -> prependDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
         }
     }
 
@@ -1144,13 +1172,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!shouldReload) return
 
         followFeedFocusRefreshJob?.cancel()
-        rawFollowFeedVideos = emptyList()
-        hasResolvedFollowFeedOnce = false
-        com.android.purebilibili.data.repository.DynamicRepository.resetPagination(
-            com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+        followFeedShuffleSeed = System.currentTimeMillis()
+        val visibleVideos = applyHomeVideoFilters(
+            category = HomeCategory.FOLLOW,
+            videos = rawFollowFeedVideos
         )
         updateFollowFeedCategoryState(
-            videos = emptyList(),
+            videos = visibleVideos.ifEmpty { followState.videos },
             isLoading = true,
             error = null,
             hasMore = true
@@ -1161,12 +1189,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun fetchFollowFeedSinglePass(isLoadMore: Boolean) {
+        if (!isLoadMore) {
+            followFeedShuffleSeed = System.currentTimeMillis()
+        }
         val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
             refresh = !isLoadMore,
             scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
         )
-
-        if (isLoadMore) delay(100)
 
         val items = result.getOrElse { error ->
             handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
@@ -1214,6 +1243,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (!isLoadMore) {
+            followFeedShuffleSeed = System.currentTimeMillis()
             refreshUserInfoInBackground()
             com.android.purebilibili.data.repository.DynamicRepository.resetPagination(
                 com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
@@ -1225,11 +1255,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val baselineRawVideos = when {
-            isLoadMore -> rawFollowFeedVideos
-            incrementalTimelineRefreshEnabled -> rawFollowFeedVideos
-            else -> emptyList()
-        }
+        val baselineRawVideos = rawFollowFeedVideos
         val baselineVisibleCount = applyHomeVideoFilters(
             category = HomeCategory.FOLLOW,
             videos = baselineRawVideos
@@ -1249,7 +1275,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
                 return
             }
-            val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
+            val rawVideos = randomizeHomeFollowIncomingVideos(
+                videos = mapFollowDynamicItemsToHomeVideos(items),
+                seed = followFeedShuffleSeed + continuationFetches + 1L
+            )
             val previousRoundRawVideos = roundRawVideos
             val mergedRoundRawVideos = accumulateHomeFollowRoundRawVideos(
                 existingRoundRawVideos = previousRoundRawVideos,
@@ -1261,7 +1290,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 baselineRawVideos = baselineRawVideos,
                 roundRawVideos = roundRawVideos,
                 isLoadMore = isLoadMore,
-                incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
                 keySelector = ::videoItemKey
             )
 
