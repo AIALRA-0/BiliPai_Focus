@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.4</sub>
+  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.5</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.4-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.5-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.4.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.5.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.4.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.5.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.4-focus.4` |
+| Focus 版本 | `7.1.4-focus.5` |
 | 上游基线 | `7.1.4` |
-| 发布标签 | `v7.1.4-focus.4` |
-| Release Notes | [docs/releases/focus-7.1.4-focus.4.md](docs/releases/focus-7.1.4-focus.4.md) |
-| 主要收口 | FOLLOW 手动刷新彻底改成“回弹结束后再换列表”，首屏与重算都严格只展示 `16` 条，并新增首页关注 5 档排序模式 |
-| 对外 APK | `BliPai-Focus-release-7.1.4-focus.4.apk` |
+| 发布标签 | `v7.1.4-focus.5` |
+| Release Notes | [docs/releases/focus-7.1.4-focus.5.md](docs/releases/focus-7.1.4-focus.5.md) |
+| 主要收口 | FOLLOW 刷新语义进一步区分：`随机排序` 继续换序，`UP聚类/时间排序` 刷新时只纳入新内容并保持确定性排序 |
+| 对外 APK | `BliPai-Focus-release-7.1.4-focus.5.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.4-focus.4.md` | Focus `v7.1.4-focus.4` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.4-focus.4-en.md` | Focus `v7.1.4-focus.4` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.5.md` | Focus `v7.1.4-focus.5` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.5-en.md` | Focus `v7.1.4-focus.5` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
@@ -718,11 +718,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.1.4 / v7.1.4-focus.4 · 2026-03-24)
+### 最近更新 (v7.1.4 / v7.1.4-focus.5 · 2026-03-24)
 
-- 🔄 **FOLLOW 刷新不再提前顶列表**：手动下拉刷新时，新列表会等到回弹和内容位移完全归零后才一次性切入。
-- 📦 **首屏严格只展示一批 `16` 条**：首次进入、重算和重新打开 FOLLOW，都不会再把几十条一次性摊到首页。
-- 🧭 **新增首页关注排序模式**：现在可以在关注分组设置里选择 `随机排序`、`UP聚类倒序`、`UP聚类正序`、`时间倒序` 或 `时间正序`。
+- 🎯 **随机与确定性排序彻底分流**：`随机排序` 刷新时继续换 seed 和重排；`UP聚类/时间排序` 刷新时只纳入新内容，不再额外打乱。
+- 🧭 **非随机模式刷新更可预期**：`UP聚类倒序/正序` 与 `时间倒序/正序` 现在都会严格按各自规则重新计算结果。
+- ✅ **对应策略测试已补齐**：防止后续回退成“所有排序模式刷新都像随机排序一样换序”。
 
 ### 历史版本
 

@@ -156,6 +156,63 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
+    fun `creator cluster refresh should stay deterministic instead of front-loading prioritized videos`() {
+        val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-old-1", ownerMid = 11L, pubdate = 100L)
+        val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-old-2", ownerMid = 11L, pubdate = 95L)
+        val newerOtherCreator = video(
+            id = 3,
+            bvid = "BV3",
+            dynamicId = "dyn-old-3",
+            ownerMid = 22L,
+            pubdate = 140L
+        )
+        val newlyFetchedOlderCreatorVideo = video(
+            id = 4,
+            bvid = "BV4",
+            dynamicId = "dyn-new-1",
+            ownerMid = 33L,
+            pubdate = 90L
+        )
+
+        val clustered = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = listOf(oldA, oldB, newerOtherCreator, newlyFetchedOlderCreatorVideo),
+            isLoadMore = false,
+            seed = 99L,
+            reshuffleOnRefresh = true,
+            prioritizedVideoKeys = setOf(resolveHomeFollowVideoKey(newlyFetchedOlderCreatorVideo)),
+            sortMode = FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC
+        )
+
+        assertEquals(
+            listOf("dyn-old-3", "dyn-old-1", "dyn-old-2", "dyn-new-1"),
+            clustered.map { it.dynamicId }
+        )
+    }
+
+    @Test
+    fun `publish time refresh should stay deterministic instead of front-loading prioritized videos`() {
+        val oldestNew = video(id = 1, bvid = "BV1", dynamicId = "dyn-new-1", ownerMid = 11L, pubdate = 90L)
+        val newestOld = video(id = 2, bvid = "BV2", dynamicId = "dyn-old-1", ownerMid = 22L, pubdate = 150L)
+        val middleOld = video(id = 3, bvid = "BV3", dynamicId = "dyn-old-2", ownerMid = 33L, pubdate = 120L)
+
+        val sorted = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = listOf(oldestNew, newestOld, middleOld),
+            isLoadMore = false,
+            seed = 77L,
+            reshuffleOnRefresh = true,
+            prioritizedVideoKeys = setOf(resolveHomeFollowVideoKey(oldestNew)),
+            sortMode = FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC
+        )
+
+        assertEquals(
+            listOf("dyn-old-1", "dyn-old-2", "dyn-new-1"),
+            sorted.map { it.dynamicId }
+        )
+    }
+
+    @Test
     fun `creator cluster descending keeps latest active creator first and groups videos by up`() {
         val source = listOf(
             video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),

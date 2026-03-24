@@ -153,49 +153,18 @@ private fun orderHomeFollowVisibleVideos(
             }
         }
         FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC -> {
-            prioritizeAndSortHomeFollowVideos(
-                videos = videos,
-                prioritizedVideoKeys = prioritizedVideoKeys,
-                sortBlock = ::clusterHomeFollowVideosByCreatorDescending
-            )
+            clusterHomeFollowVideosByCreatorDescending(videos)
         }
         FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_ASC -> {
-            prioritizeAndSortHomeFollowVideos(
-                videos = videos,
-                prioritizedVideoKeys = prioritizedVideoKeys,
-                sortBlock = ::clusterHomeFollowVideosByCreatorAscending
-            )
+            clusterHomeFollowVideosByCreatorAscending(videos)
         }
         FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC -> {
-            prioritizeAndSortHomeFollowVideos(
-                videos = videos,
-                prioritizedVideoKeys = prioritizedVideoKeys,
-                sortBlock = ::sortHomeFollowVideosByPublishTimeDescending
-            )
+            sortHomeFollowVideosByPublishTimeDescending(videos)
         }
         FocusFollowHomeFeedSortMode.PUBLISH_TIME_ASC -> {
-            prioritizeAndSortHomeFollowVideos(
-                videos = videos,
-                prioritizedVideoKeys = prioritizedVideoKeys,
-                sortBlock = ::sortHomeFollowVideosByPublishTimeAscending
-            )
+            sortHomeFollowVideosByPublishTimeAscending(videos)
         }
     }
-}
-
-private fun prioritizeAndSortHomeFollowVideos(
-    videos: List<VideoItem>,
-    prioritizedVideoKeys: Set<String>,
-    sortBlock: (List<VideoItem>) -> List<VideoItem>
-): List<VideoItem> {
-    if (prioritizedVideoKeys.isEmpty()) return sortBlock(videos)
-    val prioritizedVideos = videos.filter { video ->
-        resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
-    }
-    val historicalVideos = videos.filterNot { video ->
-        resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
-    }
-    return sortBlock(prioritizedVideos) + sortBlock(historicalVideos)
 }
 
 private fun clusterHomeFollowVideosByCreatorDescending(videos: List<VideoItem>): List<VideoItem> {
