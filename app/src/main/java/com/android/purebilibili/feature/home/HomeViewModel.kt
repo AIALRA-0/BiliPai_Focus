@@ -922,8 +922,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadMore(category: HomeCategory = _uiState.value.currentCategory) {
         val categoryState = _uiState.value.categoryStates[category] ?: return
-        
-        if (categoryState.isLoading || _isRefreshing.value || !categoryState.hasMore) return
+
+        val followHasMore = if (category == HomeCategory.FOLLOW) {
+            canLoadMoreFollowFeed()
+        } else {
+            categoryState.hasMore
+        }
+        if (categoryState.isLoading || _isRefreshing.value || !followHasMore) return
         if (category == HomeCategory.POPULAR &&
             !supportsPopularLoadMore(_uiState.value.popularSubCategory)
         ) {
@@ -1213,6 +1218,53 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun resolveHomeFollowSourceHasMore(): Boolean {
+        return followFeedSourceHasMore || hasMoreHomeFollowUsers(homeFollowFastCursor)
+    }
+
+    private fun canLoadMoreFollowFeed(): Boolean {
+        return canRevealMorePresentedHomeFollowVideos(
+            presentedVisibleCount = presentedFollowFeedVisibleVideos.size,
+            displayedVisibleCount = followFeedDisplayedVisibleCount
+        ) || resolveHomeFollowSourceHasMore()
+    }
+
+    private fun resolveHomeFollowRefreshVisiblePool(
+        fallbackVisibleVideos: List<VideoItem> = emptyList()
+    ): List<VideoItem> {
+        return when {
+            presentedFollowFeedVisibleVideos.isNotEmpty() -> presentedFollowFeedVisibleVideos
+            rawFollowFeedVideos.isNotEmpty() -> applyHomeFollowVisibleVideoFilter(rawFollowFeedVideos)
+            fallbackVisibleVideos.isNotEmpty() -> applyHomeFollowVisibleVideoFilter(fallbackVisibleVideos)
+            else -> emptyList()
+        }
+    }
+
+    private fun prepareHomeFollowRefreshPresentation(
+        fallbackVisibleVideos: List<VideoItem> = emptyList()
+    ) {
+        val refreshVisiblePool = resolveHomeFollowRefreshVisiblePool(
+            fallbackVisibleVideos = fallbackVisibleVideos
+        )
+        if (refreshVisiblePool.isEmpty()) return
+
+        presentedFollowFeedVisibleVideos = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = refreshVisiblePool,
+            isLoadMore = false,
+            seed = followFeedShuffleSeed,
+            reshuffleOnRefresh = focusFollowGroupFilteringEnabled
+        )
+        followFeedDisplayedVisibleCount = resolveHomeFollowDisplayCount(
+            currentDisplayCount = 0,
+            isLoadMore = false
+        ).coerceAtMost(presentedFollowFeedVisibleVideos.size)
+        publishPresentedHomeFollowVideos(
+            isLoading = true,
+            error = null
+        )
+    }
+
     private fun publishPresentedHomeFollowVideos(
         isLoading: Boolean,
         error: String?
@@ -1228,7 +1280,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             hasMore = resolveHomeFollowPresentationHasMore(
                 presentedVisibleCount = presentedFollowFeedVisibleVideos.size,
                 displayedVisibleCount = displayedVideos.size,
-                sourceHasMore = followFeedSourceHasMore
+                sourceHasMore = resolveHomeFollowSourceHasMore()
             )
         )
     }
@@ -1285,11 +1337,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             visibleVideoFilter = ::applyHomeFollowVisibleVideoFilter
         )
         while (shouldContinueHomeFollowFetchAfterFocusFilter(
-                baselineVisibleCount = session.baselineVisibleCount,
                 visibleIncrement = latestWave.visibleIncrement,
                 hasMore = latestWave.hasMoreUsers,
                 continuationFetches = latestWave.session.cursor.waveCount,
-                isLoadMore = session.isLoadMore
+                isLoadMore = session.isLoadMore,
+                requiredVisibleIncrement = session.requiredVisibleIncrement
             )
         ) {
             latestWave = homeFollowFastFeedCoordinator.fetchWave(
@@ -1337,18 +1389,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         cancelFollowFeedBackgroundHydration()
         homeFollowFastCursor = null
         followFeedShuffleSeed = System.currentTimeMillis()
-        val visibleVideos = resolveDisplayedHomeFollowVisibleVideos(
-            presentedVisibleVideos = applyHomeVideoFilters(
-                category = HomeCategory.FOLLOW,
-                videos = presentedFollowFeedVisibleVideos
+        val refreshPreviewVideos = resolveDisplayedHomeFollowVisibleVideos(
+            presentedVisibleVideos = presentHomeFollowVisibleVideos(
+                existingPresentedVisibleVideos = emptyList(),
+                incomingVisibleVideos = resolveHomeFollowRefreshVisiblePool(
+                    fallbackVisibleVideos = followState.videos
+                ),
+                isLoadMore = false,
+                seed = followFeedShuffleSeed,
+                reshuffleOnRefresh = focusFollowGroupFilteringEnabled
             ),
-            displayCount = followFeedDisplayedVisibleCount
+            displayCount = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
         )
         updateFollowFeedCategoryState(
-            videos = visibleVideos.ifEmpty { followState.videos },
+            videos = refreshPreviewVideos,
             isLoading = true,
             error = null,
-            hasMore = true
+            hasMore = resolveHomeFollowPresentationHasMore(
+                presentedVisibleCount = resolveHomeFollowRefreshVisiblePool(
+                    fallbackVisibleVideos = followState.videos
+                ).size,
+                displayedVisibleCount = refreshPreviewVideos.size,
+                sourceHasMore = true
+            )
         )
         followFeedFocusRefreshJob = viewModelScope.launch {
             fetchFollowFeed(isLoadMore = false)
@@ -1408,12 +1471,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         cancelFollowFeedBackgroundHydration()
         val baselineRawVideos = rawFollowFeedVideos
         val baselineVisibleCount = applyHomeFollowVisibleVideoFilter(baselineRawVideos).size
+        val requiredVisibleIncrement = resolveHomeFollowRequiredVisibleIncrement(
+            isLoadMore = isLoadMore,
+            cachedVisibleCount = if (isLoadMore) {
+                0
+            } else {
+                resolveHomeFollowRefreshVisiblePool().size
+            }
+        )
         val session = homeFollowFastFeedCoordinator.startSession(
             existingRawVideos = baselineRawVideos,
             existingVisibleCount = baselineVisibleCount,
             visibleUserMids = visibleUserMids,
             isLoadMore = isLoadMore,
             previousCursor = homeFollowFastCursor,
+            requiredVisibleIncrement = requiredVisibleIncrement,
             seed = followFeedShuffleSeed
         )
         val finalWave = fetchHomeFollowFastUntilDisplayTarget(session)
@@ -1446,6 +1518,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!isLoadMore) {
             followFeedShuffleSeed = System.currentTimeMillis()
             refreshUserInfoInBackground()
+            prepareHomeFollowRefreshPresentation()
         }
 
         if (!focusFollowGroupFilteringEnabled) {

@@ -14,21 +14,41 @@ class HomeFollowFocusPolicyTest {
     fun `follow completion keeps fetching until at least sixteen visible items are added`() {
         assertTrue(
             shouldContinueHomeFollowFetchAfterFocusFilter(
-                baselineVisibleCount = 12,
                 visibleIncrement = 15,
                 hasMore = true,
                 continuationFetches = 2,
-                isLoadMore = true
+                isLoadMore = true,
+                requiredVisibleIncrement = 16
             )
         )
 
         assertFalse(
             shouldContinueHomeFollowFetchAfterFocusFilter(
-                baselineVisibleCount = 12,
                 visibleIncrement = 16,
                 hasMore = true,
                 continuationFetches = 2,
-                isLoadMore = true
+                isLoadMore = true,
+                requiredVisibleIncrement = 16
+            )
+        )
+    }
+
+    @Test
+    fun `refresh completion should stop once cached pool already satisfies first sixteen cards`() {
+        assertEquals(
+            0,
+            resolveHomeFollowRequiredVisibleIncrement(
+                isLoadMore = false,
+                cachedVisibleCount = 24
+            )
+        )
+        assertFalse(
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                visibleIncrement = 0,
+                hasMore = true,
+                continuationFetches = 1,
+                isLoadMore = false,
+                requiredVisibleIncrement = 0
             )
         )
     }

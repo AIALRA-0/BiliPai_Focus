@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class HomeFollowFastFeedCoordinatorTest {
 
     @Test
-    fun `first wave reaches eight visible videos within one second across common follow counts`() = runTest {
+    fun `first wave reaches the first sixteen visible videos within one second across common follow counts`() = runTest {
         listOf(10, 100, 200, 300).forEach { followCount ->
             val dataSource = FakeHomeFollowFeedDataSource(
                 defaultDelayMs = 500L,
@@ -49,8 +49,16 @@ class HomeFollowFastFeedCoordinatorTest {
                 elapsedMs <= 1_000L,
                 "followCount=$followCount should deliver the first wave within 1000ms, actual=$elapsedMs"
             )
-            assertEquals(8, wave.visibleVideos.size, "followCount=$followCount should expose 8 visible videos in the first wave")
-            assertEquals(8, dataSource.requestHistory.size, "followCount=$followCount should only request the first 8 users in the first wave")
+            assertEquals(
+                minOf(16, followCount),
+                wave.visibleVideos.size,
+                "followCount=$followCount should expose the first visible batch in the first wave"
+            )
+            assertEquals(
+                minOf(16, followCount),
+                dataSource.requestHistory.size,
+                "followCount=$followCount should only request one first-batch wave"
+            )
         }
     }
 

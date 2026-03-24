@@ -69,12 +69,11 @@ internal fun resolveVisibleHomeFollowUserMids(
 }
 
 internal fun shouldContinueHomeFollowFetchAfterFocusFilter(
-    baselineVisibleCount: Int,
     visibleIncrement: Int,
     hasMore: Boolean,
     continuationFetches: Int,
     isLoadMore: Boolean,
-    minimumVisibleIncrement: Int = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
+    requiredVisibleIncrement: Int = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
 ): Boolean {
     if (!hasMore) return false
     val maxContinuationFetches = if (isLoadMore) {
@@ -83,8 +82,23 @@ internal fun shouldContinueHomeFollowFetchAfterFocusFilter(
         HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT
     }
     if (continuationFetches >= maxContinuationFetches) return false
-    if (visibleIncrement >= minimumVisibleIncrement.coerceAtLeast(1)) return false
+    val normalizedRequiredVisibleIncrement = requiredVisibleIncrement.coerceAtLeast(0)
+    if (normalizedRequiredVisibleIncrement == 0) return false
+    if (visibleIncrement >= normalizedRequiredVisibleIncrement) return false
     return true
+}
+
+internal fun resolveHomeFollowRequiredVisibleIncrement(
+    isLoadMore: Boolean,
+    cachedVisibleCount: Int,
+    batchSize: Int = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
+): Int {
+    val normalizedBatchSize = batchSize.coerceAtLeast(1)
+    return if (isLoadMore) {
+        normalizedBatchSize
+    } else {
+        (normalizedBatchSize - cachedVisibleCount.coerceAtLeast(0)).coerceAtLeast(0)
+    }
 }
 
 internal fun presentHomeFollowVisibleVideos(
@@ -141,6 +155,16 @@ internal fun canRevealMorePresentedHomeFollowVideos(
     displayedVisibleCount: Int
 ): Boolean {
     return presentedVisibleCount > displayedVisibleCount
+}
+
+internal fun hasMoreHomeFollowUsers(
+    cursor: HomeFollowFastCursor?
+): Boolean {
+    if (cursor == null) return false
+    return cursor.visibleUserMidsInOrder.any { hostMid ->
+        val state = cursor.userStates[hostMid] ?: HomeFollowUserCursor()
+        !state.initialized || state.hasMore
+    }
 }
 
 internal fun accumulateHomeFollowRoundRawVideos(

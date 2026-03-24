@@ -7,7 +7,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
-private const val HOME_FOLLOW_FAST_MAX_CONCURRENT_USERS = 8
+private const val HOME_FOLLOW_FAST_MAX_CONCURRENT_USERS = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
 
 internal data class HomeFollowUserFeedPage(
     val videos: List<VideoItem> = emptyList(),
@@ -40,6 +40,7 @@ internal data class HomeFollowFastSession(
     val baselineRawVideos: List<VideoItem>,
     val roundRawVideos: List<VideoItem>,
     val baselineVisibleCount: Int,
+    val requiredVisibleIncrement: Int,
     val isLoadMore: Boolean,
     val cursor: HomeFollowFastCursor
 )
@@ -113,6 +114,7 @@ internal class HomeFollowFastFeedCoordinator(
         visibleUserMids: Collection<Long>,
         isLoadMore: Boolean,
         previousCursor: HomeFollowFastCursor? = null,
+        requiredVisibleIncrement: Int = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE,
         seed: Long = nowMs()
     ): HomeFollowFastSession {
         val normalizedVisibleUserMids = visibleUserMids
@@ -135,6 +137,7 @@ internal class HomeFollowFastFeedCoordinator(
             baselineRawVideos = existingRawVideos,
             roundRawVideos = emptyList(),
             baselineVisibleCount = existingVisibleCount,
+            requiredVisibleIncrement = requiredVisibleIncrement.coerceAtLeast(0),
             isLoadMore = isLoadMore,
             cursor = cursor
         )
