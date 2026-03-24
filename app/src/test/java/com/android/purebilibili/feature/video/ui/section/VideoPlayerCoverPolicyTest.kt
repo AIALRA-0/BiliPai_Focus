@@ -104,6 +104,28 @@ class VideoPlayerCoverPolicyTest {
     }
 
     @Test
+    fun `manual start cover should fill player viewport instead of shared 16 by 9 card`() {
+        assertTrue(
+            shouldFillPlayerViewportForManualStartCover(
+                shouldKeepCoverForManualStart = true,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+        assertFalse(
+            shouldFillPlayerViewportForManualStartCover(
+                shouldKeepCoverForManualStart = false,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+        assertFalse(
+            shouldFillPlayerViewportForManualStartCover(
+                shouldKeepCoverForManualStart = true,
+                forceCoverDuringReturnAnimation = true
+            )
+        )
+    }
+
+    @Test
     fun `manual start play button should use pili plus style layout`() {
         val spec = resolveManualStartPlayButtonLayoutSpec()
 

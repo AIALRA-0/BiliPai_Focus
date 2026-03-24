@@ -45,6 +45,13 @@ internal data class HomeRefreshUndoSnapshot(
     val hasMore: Boolean
 )
 
+private data class PendingFollowRefreshPresentation(
+    val presentedVisibleVideos: List<VideoItem>,
+    val displayedVisibleCount: Int,
+    val sourceHasMore: Boolean,
+    val error: String?
+)
+
 internal fun buildHomeRefreshUndoSnapshot(
     refreshingCategory: HomeCategory,
     recommendCategoryState: CategoryContent?,
@@ -157,6 +164,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var followFeedBackgroundHydrationJob: Job? = null
     private var followFeedShuffleSeed: Long = System.currentTimeMillis()
     private var followPresentationTopResetCounter: Long = 0L
+    private var pendingFollowRefreshPresentation: PendingFollowRefreshPresentation? = null
     private val homeFollowFastFeedCoordinator = HomeFollowFastFeedCoordinator(
         dataSource = NetworkHomeFollowFeedDataSource()
     )
@@ -863,6 +871,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 cancelUndoDismiss()
             }
             _isRefreshing.value = false
+            commitPendingFollowRefreshPresentationIfNeeded(refreshingCategory)
         }
     }
 
@@ -974,7 +983,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         
         //  关注动态分类单独处理 (TODO: Adapt fetchFollowFeed to use categoryStates)
         if (currentCategory == HomeCategory.FOLLOW) {
-            fetchFollowFeed(isLoadMore)
+            fetchFollowFeed(
+                isLoadMore = isLoadMore,
+                isManualRefresh = isManualRefresh
+            )
             return refreshNewItemsCount
         }
         
@@ -1174,16 +1186,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = current.copy(followAutoLoadMoreEnabled = enabled)
     }
 
+    private fun setFollowLoadMoreArmed(armed: Boolean) {
+        val current = _uiState.value
+        if (current.followLoadMoreArmed == armed) return
+        _uiState.value = current.copy(followLoadMoreArmed = armed)
+    }
+
     private fun beginFollowPresentationRefreshWindow() {
+        pendingFollowRefreshPresentation = null
         setFollowAutoLoadMoreEnabled(false)
     }
 
     private fun scheduleFollowPresentationTopReset() {
+        pendingFollowRefreshPresentation = null
         followPresentationTopResetCounter += 1L
         val current = _uiState.value
         _uiState.value = current.copy(
             followPresentationTopResetKey = followPresentationTopResetCounter,
-            followAutoLoadMoreEnabled = false
+            followAutoLoadMoreEnabled = false,
+            followLoadMoreArmed = false
         )
     }
 
@@ -1196,6 +1217,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             followPresentationTopResetHandledKey = key,
             followAutoLoadMoreEnabled = true
         )
+    }
+
+    fun markFollowLoadMoreGestureObserved() {
+        if (_uiState.value.currentCategory != HomeCategory.FOLLOW) return
+        setFollowLoadMoreArmed(true)
     }
 
     private fun mergeFollowFeedRawVideos(
@@ -1214,6 +1240,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         error: Throwable
     ) {
         cancelFollowFeedBackgroundHydration()
+        pendingFollowRefreshPresentation = null
         if (!isLoadMore) {
             setFollowAutoLoadMoreEnabled(true)
         }
@@ -1299,6 +1326,64 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun buildPendingFollowRefreshPresentation(
+        visibleVideos: List<VideoItem>,
+        isLoadMore: Boolean,
+        sourceHasMore: Boolean,
+        error: String?,
+        reshuffleOnRefresh: Boolean,
+        prioritizedVideoKeys: Set<String> = emptySet()
+    ): PendingFollowRefreshPresentation {
+        val nextPresentedVisibleVideos = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = presentedFollowFeedVisibleVideos,
+            incomingVisibleVideos = visibleVideos,
+            isLoadMore = isLoadMore,
+            seed = followFeedShuffleSeed,
+            reshuffleOnRefresh = reshuffleOnRefresh,
+            prioritizedVideoKeys = prioritizedVideoKeys
+        )
+        val nextDisplayedVisibleCount = resolveHomeFollowDisplayCount(
+            currentDisplayCount = if (isLoadMore) followFeedDisplayedVisibleCount else 0,
+            isLoadMore = isLoadMore
+        ).coerceAtMost(nextPresentedVisibleVideos.size)
+
+        return PendingFollowRefreshPresentation(
+            presentedVisibleVideos = nextPresentedVisibleVideos,
+            displayedVisibleCount = nextDisplayedVisibleCount,
+            sourceHasMore = sourceHasMore,
+            error = error
+        )
+    }
+
+    private fun applyPendingFollowRefreshPresentation(
+        presentation: PendingFollowRefreshPresentation,
+        scheduleTopReset: Boolean
+    ) {
+        pendingFollowRefreshPresentation = null
+        presentedFollowFeedVisibleVideos = presentation.presentedVisibleVideos
+        followFeedDisplayedVisibleCount = presentation.displayedVisibleCount
+        followFeedSourceHasMore = presentation.sourceHasMore
+        publishPresentedHomeFollowVideos(
+            isLoading = false,
+            error = presentation.error
+        )
+        if (scheduleTopReset) {
+            scheduleFollowPresentationTopReset()
+        }
+    }
+
+    private fun commitPendingFollowRefreshPresentationIfNeeded(category: HomeCategory) {
+        if (category != HomeCategory.FOLLOW) {
+            pendingFollowRefreshPresentation = null
+            return
+        }
+        val presentation = pendingFollowRefreshPresentation ?: return
+        applyPendingFollowRefreshPresentation(
+            presentation = presentation,
+            scheduleTopReset = true
+        )
+    }
+
     private fun publishPresentedHomeFollowVideos(
         isLoading: Boolean,
         error: String?
@@ -1324,27 +1409,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         isLoadMore: Boolean,
         sourceHasMore: Boolean,
         error: String?,
-        reshuffleOnRefresh: Boolean
+        reshuffleOnRefresh: Boolean,
+        prioritizedVideoKeys: Set<String> = emptySet(),
+        deferPublicationUntilRefreshCompletes: Boolean = false
     ) {
-        presentedFollowFeedVisibleVideos = presentHomeFollowVisibleVideos(
-            existingPresentedVisibleVideos = presentedFollowFeedVisibleVideos,
-            incomingVisibleVideos = visibleVideos,
+        val presentation = buildPendingFollowRefreshPresentation(
+            visibleVideos = visibleVideos,
             isLoadMore = isLoadMore,
-            seed = followFeedShuffleSeed,
-            reshuffleOnRefresh = reshuffleOnRefresh
+            sourceHasMore = sourceHasMore,
+            error = error,
+            reshuffleOnRefresh = reshuffleOnRefresh,
+            prioritizedVideoKeys = prioritizedVideoKeys
         )
-        followFeedDisplayedVisibleCount = resolveHomeFollowDisplayCount(
-            currentDisplayCount = if (isLoadMore) followFeedDisplayedVisibleCount else 0,
-            isLoadMore = isLoadMore
-        ).coerceAtMost(presentedFollowFeedVisibleVideos.size)
-        followFeedSourceHasMore = sourceHasMore
-        publishPresentedHomeFollowVideos(
-            isLoading = false,
-            error = error
-        )
-        if (!isLoadMore) {
-            scheduleFollowPresentationTopReset()
+        if (!isLoadMore && deferPublicationUntilRefreshCompletes) {
+            pendingFollowRefreshPresentation = presentation
+            return
         }
+        applyPendingFollowRefreshPresentation(
+            presentation = presentation,
+            scheduleTopReset = !isLoadMore
+        )
     }
 
     private fun revealMorePresentedHomeFollowVideosIfAvailable(): Boolean {
@@ -1391,10 +1475,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun applyHomeFollowFastWave(
         wave: HomeFollowFastWave,
-        isLoadMore: Boolean
+        isLoadMore: Boolean,
+        deferPublicationUntilRefreshCompletes: Boolean
     ) {
         rawFollowFeedVideos = wave.presentedRawVideos
         hasResolvedFollowFeedOnce = true
+        val prioritizedVideoKeys = if (isLoadMore) {
+            emptySet()
+        } else {
+            applyHomeFollowVisibleVideoFilter(wave.session.roundRawVideos)
+                .map(::resolveHomeFollowVideoKey)
+                .toSet()
+        }
         updatePresentedHomeFollowVideos(
             visibleVideos = wave.visibleVideos,
             isLoadMore = isLoadMore,
@@ -1407,7 +1499,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 null
             },
-            reshuffleOnRefresh = true
+            reshuffleOnRefresh = true,
+            prioritizedVideoKeys = prioritizedVideoKeys,
+            deferPublicationUntilRefreshCompletes = deferPublicationUntilRefreshCompletes
         )
     }
 
@@ -1455,7 +1549,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun fetchFollowFeedSinglePass(isLoadMore: Boolean) {
+    private suspend fun fetchFollowFeedSinglePass(
+        isLoadMore: Boolean,
+        deferPublicationUntilRefreshCompletes: Boolean = false
+    ) {
         if (isLoadMore && revealMorePresentedHomeFollowVideosIfAvailable()) {
             return
         }
@@ -1494,13 +1591,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 null
             },
-            reshuffleOnRefresh = focusFollowGroupFilteringEnabled
+            reshuffleOnRefresh = focusFollowGroupFilteringEnabled,
+            prioritizedVideoKeys = if (isLoadMore) {
+                emptySet()
+            } else {
+                applyHomeFollowVisibleVideoFilter(rawVideos)
+                    .map(::resolveHomeFollowVideoKey)
+                    .toSet()
+            },
+            deferPublicationUntilRefreshCompletes = deferPublicationUntilRefreshCompletes
         )
     }
 
     private suspend fun fetchFollowFeedFast(
         isLoadMore: Boolean,
-        visibleUserMids: List<Long>
+        visibleUserMids: List<Long>,
+        deferPublicationUntilRefreshCompletes: Boolean
     ) {
         if (isLoadMore && revealMorePresentedHomeFollowVideosIfAvailable()) {
             return
@@ -1529,12 +1635,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         homeFollowFastCursor = finalWave.session.cursor
         applyHomeFollowFastWave(
             wave = finalWave,
-            isLoadMore = isLoadMore
+            isLoadMore = isLoadMore,
+            deferPublicationUntilRefreshCompletes = deferPublicationUntilRefreshCompletes
         )
         cancelFollowFeedBackgroundHydration()
     }
 
-    private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
+    private suspend fun fetchFollowFeed(
+        isLoadMore: Boolean,
+        isManualRefresh: Boolean = false
+    ) {
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
             cancelFollowFeedBackgroundHydration()
             homeFollowFastCursor = null
@@ -1543,6 +1653,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             followFeedDisplayedVisibleCount = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
             followFeedSourceHasMore = false
             hasResolvedFollowFeedOnce = false
+            pendingFollowRefreshPresentation = null
             if (!isLoadMore) {
                 setFollowAutoLoadMoreEnabled(true)
             }
@@ -1559,11 +1670,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             beginFollowPresentationRefreshWindow()
             followFeedShuffleSeed = System.currentTimeMillis()
             refreshUserInfoInBackground()
-            prepareHomeFollowRefreshPresentation()
+            if (!isManualRefresh) {
+                prepareHomeFollowRefreshPresentation()
+            }
         }
 
         if (!focusFollowGroupFilteringEnabled) {
-            fetchFollowFeedSinglePass(isLoadMore = isLoadMore)
+            fetchFollowFeedSinglePass(
+                isLoadMore = isLoadMore,
+                deferPublicationUntilRefreshCompletes = !isLoadMore && isManualRefresh
+            )
             return
         }
 
@@ -1571,7 +1687,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (visibleUserMids.isNotEmpty()) {
             fetchFollowFeedFast(
                 isLoadMore = isLoadMore,
-                visibleUserMids = visibleUserMids
+                visibleUserMids = visibleUserMids,
+                deferPublicationUntilRefreshCompletes = !isLoadMore && isManualRefresh
             )
             return
         }
@@ -1579,26 +1696,41 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.followingMids.isNotEmpty()) {
             cancelFollowFeedBackgroundHydration()
             homeFollowFastCursor = null
-            presentedFollowFeedVisibleVideos = emptyList()
-            followFeedDisplayedVisibleCount = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
-            followFeedSourceHasMore = false
             hasResolvedFollowFeedOnce = true
-            updateFollowFeedCategoryState(
-                videos = emptyList(),
-                isLoading = false,
-                error = resolveHomeFollowEmptyMessage(
-                    visibleVideoCount = 0,
-                    hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
-                ),
-                hasMore = false
+            val emptyMessage = resolveHomeFollowEmptyMessage(
+                visibleVideoCount = 0,
+                hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
             )
+            if (isManualRefresh && !isLoadMore) {
+                pendingFollowRefreshPresentation = PendingFollowRefreshPresentation(
+                    presentedVisibleVideos = emptyList(),
+                    displayedVisibleCount = 0,
+                    sourceHasMore = false,
+                    error = emptyMessage
+                )
+            } else {
+                presentedFollowFeedVisibleVideos = emptyList()
+                followFeedDisplayedVisibleCount = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
+                followFeedSourceHasMore = false
+                updateFollowFeedCategoryState(
+                    videos = emptyList(),
+                    isLoading = false,
+                    error = emptyMessage,
+                    hasMore = false
+                )
+            }
             if (!isLoadMore) {
-                scheduleFollowPresentationTopReset()
+                if (!isManualRefresh) {
+                    scheduleFollowPresentationTopReset()
+                }
             }
             return
         }
 
-        fetchFollowFeedSinglePass(isLoadMore = isLoadMore)
+        fetchFollowFeedSinglePass(
+            isLoadMore = isLoadMore,
+            deferPublicationUntilRefreshCompletes = !isLoadMore && isManualRefresh
+        )
     }
     
     //  🔴 [改进] 获取直播间列表（同时获取关注和热门）

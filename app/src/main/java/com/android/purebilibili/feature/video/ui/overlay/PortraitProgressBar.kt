@@ -33,6 +33,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.FormatUtils
+import kotlin.math.abs
+
+private const val PORTRAIT_PROGRESS_SETTLED_TOLERANCE = 0.01f
+
+internal fun shouldHoldPortraitSettledProgress(
+    progress: Float,
+    pendingSettledProgress: Float?,
+    tolerance: Float = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
+): Boolean {
+    val settledProgress = pendingSettledProgress ?: return false
+    return abs(progress - settledProgress) > tolerance
+}
+
+internal fun resolvePortraitProgressDisplayProgress(
+    progress: Float,
+    dragProgress: Float,
+    isDragging: Boolean,
+    pendingSettledProgress: Float?
+): Float {
+    return when {
+        isDragging -> dragProgress
+        shouldHoldPortraitSettledProgress(progress, pendingSettledProgress) -> pendingSettledProgress ?: progress
+        else -> progress
+    }.coerceIn(0f, 1f)
+}
 
 /**
  * 竖屏模式下的底部容器 (含进度条)
@@ -95,9 +120,20 @@ fun ThinWigglyProgressBar(
 ) {
     var isDragging by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableFloatStateOf(0f) }
+    var pendingSettledProgress by remember { mutableStateOf<Float?>(null) }
     
-    // 显示的进度：如果正在拖拽，显示拖拽值，否则显示真实进度
-    val displayProgress = if (isDragging) dragProgress else progress
+    LaunchedEffect(progress, pendingSettledProgress, isDragging) {
+        if (!isDragging && !shouldHoldPortraitSettledProgress(progress, pendingSettledProgress)) {
+            pendingSettledProgress = null
+        }
+    }
+
+    val displayProgress = resolvePortraitProgressDisplayProgress(
+        progress = progress,
+        dragProgress = dragProgress,
+        isDragging = isDragging,
+        pendingSettledProgress = pendingSettledProgress
+    )
     
     // 动画状态
     val barHeight by animateDpAsState(
@@ -122,15 +158,19 @@ fun ThinWigglyProgressBar(
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
                         isDragging = true
+                        pendingSettledProgress = null
                         onSeekStart()
                         val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
                         dragProgress = newProgress
                     },
                     onDragEnd = {
+                        val committedProgress = dragProgress
+                        pendingSettledProgress = committedProgress
+                        onSeek(committedProgress)
                         isDragging = false
-                        onSeek(dragProgress)
                     },
                     onDragCancel = {
+                        pendingSettledProgress = null
                         isDragging = false
                     },
                     onHorizontalDrag = { change, dragAmount ->
@@ -145,14 +185,17 @@ fun ThinWigglyProgressBar(
                 detectTapGestures(
                     onPress = { offset ->
                         isDragging = true // 按下变成拖拽态
+                        pendingSettledProgress = null
                         onSeekStart()
                         val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
                         dragProgress = newProgress
                         try {
                             tryAwaitRelease()
                         } finally {
+                            val committedProgress = dragProgress
+                            pendingSettledProgress = committedProgress
+                            onSeek(committedProgress)
                             isDragging = false
-                            onSeek(dragProgress)
                         }
                     }
                 ) 

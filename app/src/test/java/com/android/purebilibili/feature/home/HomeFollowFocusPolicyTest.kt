@@ -130,6 +130,31 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
+    fun `refresh presentation should keep newly fetched videos ahead of cached videos`() {
+        val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-old-1", ownerMid = 11L)
+        val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-old-2", ownerMid = 22L)
+        val newA = video(id = 3, bvid = "BV3", dynamicId = "dyn-new-1", ownerMid = 33L)
+        val newB = video(id = 4, bvid = "BV4", dynamicId = "dyn-new-2", ownerMid = 44L)
+
+        val refreshed = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = listOf(oldA, oldB, newA, newB),
+            isLoadMore = false,
+            seed = 5L,
+            reshuffleOnRefresh = true,
+            prioritizedVideoKeys = setOf(
+                resolveHomeFollowVideoKey(newA),
+                resolveHomeFollowVideoKey(newB)
+            )
+        )
+
+        assertEquals(
+            setOf("dyn-new-1", "dyn-new-2"),
+            refreshed.take(2).map { it.dynamicId }.toSet()
+        )
+    }
+
+    @Test
     fun `load more presentation should keep existing order and append only new entries`() {
         val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-1")
         val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-2")

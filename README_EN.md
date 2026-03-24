@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-24 · Upstream base v7.1.3 · Current Focus release v7.1.3-focus.1</sub>
+  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.1</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.3--focus.1-fb7299?style=flat-square" alt="Focus Version">
-  <img src="https://img.shields.io/badge/Upstream-7.1.3-00a1d6?style=flat-square" alt="Upstream Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -24,7 +24,8 @@
 </p>
 
 <p align="center">
-  <a href="https://t.me/BiliPai"><img src="https://img.shields.io/badge/Telegram-Join-2CA5E0?style=flat-square&logo=telegram" alt="Telegram"></a>
+  <a href="https://t.me/BiliPaii"><img src="https://img.shields.io/badge/Telegram-Group-2CA5E0?style=flat-square&logo=telegram" alt="Telegram Group"></a>
+  <a href="https://t.me/BiliPai"><img src="https://img.shields.io/badge/Telegram-Channel-2CA5E0?style=flat-square&logo=telegram" alt="Telegram Channel"></a>
   <a href="https://x.com/YangY_0x00"><img src="https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x" alt="X"></a>
 </p>
 
@@ -32,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.3-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -49,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.3-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.3-focus.1` |
-| Upstream base | `7.1.3` |
-| Release tag | `v7.1.3-focus.1` |
-| Release notes | [docs/releases/focus-7.1.3-focus.1-en.md](docs/releases/focus-7.1.3-focus.1-en.md) |
-| Main refinements | Synced upstream `7.1.3`; Home Follow now stays on a strict `16`-card first window for initial load and refresh, resets to top after refresh completion, and keeps auto load-more locked until that reset has been handled |
-| Public APK | `BliPai-Focus-release-7.1.3-focus.1.apk` |
+| Focus version | `7.1.4-focus.1` |
+| Upstream base | `7.1.4` |
+| Release tag | `v7.1.4-focus.1` |
+| Release notes | [docs/releases/focus-7.1.4-focus.1-en.md](docs/releases/focus-7.1.4-focus.1-en.md) |
+| Main refinements | Synced upstream `7.1.4`; manual Home Follow refresh now keeps the old list visible until refresh completes, freshly updated items are prioritized ahead of older cached content, and both the first screen and every later reveal stay capped to `16` cards |
+| Public APK | `BliPai-Focus-release-7.1.4-focus.1.apk` |
 
 ### Default customizations
 
@@ -151,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.3-focus.1.md` | Chinese release notes for `v7.1.3-focus.1` |
-| Added | `docs/releases/focus-7.1.3-focus.1-en.md` | English release notes for `v7.1.3-focus.1` |
+| Added | `docs/releases/focus-7.1.4-focus.1.md` | Chinese release notes for `v7.1.4-focus.1` |
+| Added | `docs/releases/focus-7.1.4-focus.1-en.md` | English release notes for `v7.1.4-focus.1` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -202,7 +203,7 @@ This list only covers the main Focus-maintained entry points; use the repository
 | **Picture-in-Picture** | Floating window playback for multitasking |
 | **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, playlists, and a sleep timer |
 | **In-app Update** | 🆕 Check updates, download APK in-app, and hand off to the system installer |
-| **Background Play** | Continue listening when screen is off or in background, with more reliable prev/next controls from notifications and system media controls |
+| **Background Play** | Continue listening when screen is off or in background, with dedicated background-play and audio-focus toggles plus more reliable prev/next controls from notifications and system media controls |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
@@ -523,6 +524,8 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ## 🗺️ Roadmap
 
+> [!TIP]
+> Roadmap last refreshed on 2026-03-24 (v7.1.4). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 ### ✅ Completed
 
 - [x] Home Waterfall Feed
@@ -560,12 +563,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.1.0 · 2026-03-22)
+### Latest (v7.1.4 / v7.1.4-focus.1 · 2026-03-24)
 
-- 🎞️ **Upstream bangumi overlay actions are synced**: the bangumi player now matches upstream `v7.1.0` for share, interaction, and control-overlay behavior.
-- 🧭 **Focus naming is now unified**: settings entry points, settings search, README copy, and the standalone changelog no longer mix the old `AIALRA` label.
-- 🧱 **Windows verification is less fragile**: `ci_verify_windows.ps1` now auto-detects `Java 21` and the Android SDK before invoking Gradle.
-- 📘 **Focus changes now use versioned changelog sections**: `FOCUS_CHANGLOG.md` follows the same release-style structure as the upstream `CHANGELOG.md`.
+- ▶️ **Upstream portrait video fixes are synced**: Focus now includes upstream `v7.1.4` fixes for portrait cover ratio handoff, manual-start overlay behavior, and portrait seek/progress stability.
+- 🔄 **Home Follow refresh timing is now cleaner**: manual pull-to-refresh keeps the current cards visible during the refresh state, then swaps in the new order only after refresh completes.
+- 🆕 **Freshly updated follow content is prioritized**: newly fetched videos are now biased toward the front of the refreshed list, while still keeping the cross-creator interleaving and reshuffle behavior.
+- 📦 **Follow paging stays on strict 16-card windows**: the first screen and each later reveal stay capped to `16` cards, and additional batches only arm after real downward scroll interaction has been observed.
 
 ---
 

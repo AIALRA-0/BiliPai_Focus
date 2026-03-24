@@ -172,6 +172,8 @@ data class HomeUiState(
     val followPresentationTopResetHandledKey: Long = 0L,
     //  [Focus] FOLLOW 是否允许自动触发下一批 loadMore
     val followAutoLoadMoreEnabled: Boolean = true,
+    //  [Focus] FOLLOW 是否已经观察到本轮展示后的用户下滚交互
+    val followLoadMoreArmed: Boolean = false,
     //  [新增] 推荐流旧内容锚点（刷新前首条视频 bvid）
     val recommendOldContentAnchorBvid: String? = null,
     //  [新增] 推荐流中“旧内容起始”索引（用于插入分割线）

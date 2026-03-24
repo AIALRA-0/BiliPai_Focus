@@ -55,9 +55,12 @@ internal fun shouldLoadMoreHomeCategoryContent(
     isLoading: Boolean,
     hasMore: Boolean,
     autoLoadMoreEnabled: Boolean = true,
-    preloadThreshold: Int = 4
+    preloadThreshold: Int = 4,
+    requireUserScrollObservation: Boolean = false,
+    userScrollObserved: Boolean = true
 ): Boolean {
     if (!autoLoadMoreEnabled) return false
+    if (requireUserScrollObservation && !userScrollObserved) return false
     if (contentItemCount <= 0) return false
     if (isLoading || !hasMore) return false
     if (totalItems <= 0) return false
@@ -90,6 +93,8 @@ internal fun HomeCategoryPageContent(
     compactStatsOnCover: Boolean = true,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    followLoadMoreArmed: Boolean = true,
+    onFollowScrollInteraction: () -> Unit = {},
     oldContentAnchorBvid: String? = null,
     oldContentStartIndex: Int? = null,
     todayWatchEnabled: Boolean = false,
@@ -139,7 +144,9 @@ internal fun HomeCategoryPageContent(
                 },
                 isLoading = categoryState.isLoading,
                 hasMore = categoryState.hasMore,
-                autoLoadMoreEnabled = autoLoadMoreEnabled
+                autoLoadMoreEnabled = autoLoadMoreEnabled,
+                requireUserScrollObservation = category == HomeCategory.FOLLOW,
+                userScrollObserved = followLoadMoreArmed
             )
         }
     }
@@ -152,6 +159,17 @@ internal fun HomeCategoryPageContent(
         categoryState.hasMore
     ) {
         if (shouldLoadMore) onLoadMore()
+    }
+
+    if (category == HomeCategory.FOLLOW) {
+        LaunchedEffect(gridState, onFollowScrollInteraction) {
+            snapshotFlow { gridState.isScrollInProgress }
+                .collect { isScrolling ->
+                    if (isScrolling) {
+                        onFollowScrollInteraction()
+                    }
+                }
+        }
     }
 
     LazyVerticalGrid(

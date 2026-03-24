@@ -1,5 +1,30 @@
 # Focus Changelog
 
+## v7.1.4 Focus / focus.1 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.4` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.4-focus.1`。
+- 为保证已发布 `v7.1.3-focus.1 / 145` 用户可直接升级，`versionCode` 继续递增到 `146`。
+- `focus.1` 本轮同时完成上游 `7.1.4` 同步，以及首页“关注”手动刷新时序、新内容优先级和分页触发门闩的收口。
+
+### 上游 `7.1.4` 同步
+- 合并上游 `v7.1.4` 的竖屏视频封面比例、封面到首帧过渡，以及竖屏进度拖动回弹修复。
+- Focus 版继续保留独立包名、与官方版共存安装、Focus-only 应用内更新通道，以及首次使用声明里的 Focus GitHub / Telegram 双入口。
+- 更新检查仍只接受 Focus 仓库发布的正式 `release` APK，不接收官方版的更新推送。
+
+### 首页“关注”刷新时序
+- 手动下拉刷新时，首页“关注”会继续保留当前已显示列表并进入刷新态；新排序结果会等刷新完成后再一次性切入，不再边下拉边换列表。
+- 过滤后的 FOLLOW 在刷新完成后仍会统一回到顶部，并在回顶处理完成前继续锁住自动补批，避免刷新后立刻偷拉下一组。
+
+### 新内容优先与分页稳定性
+- 刷新时新抓到的关注视频现在会优先排在旧内容前面，同时仍保持跨 UP 交错随机，尽量让刚更新内容先被看到。
+- FOLLOW 的首屏和后续分页继续严格按 `16` 条一组展示；只有观察到真实下滚交互后，才允许触发下一批，避免首屏在大屏设备上自动灌出几十条。
+- 底部触发下一批的条件改成“已解锁自动补批 + 已观察到用户下滚 + 当前确实到达尾部”，减少间歇性到底不继续刷新的情况。
+
+### 验证
+- 已通过 `:app:compileDebugKotlin`。
+- 已通过 `HomeFollowFocusPolicyTest`、`HomeFollowFastFeedCoordinatorTest`、`HomeCategoryPagePolicyTest`、`HomePullRefreshUiPolicyTest`、`HomeTopCategoryPolicyTest`、`PortraitProgressBarPolicyTest`、`PortraitSeekUiSyncPolicyTest`、`PortraitVideoPagerPolicyTest` 与 `VideoPlayerCoverPolicyTest`。
+
 ## v7.1.3 Focus / focus.1 (2026-03-24)
 
 ### 版本信息

@@ -1258,6 +1258,9 @@ fun HomeScreen(
                                  val onPopularSubCategoryChange = remember(viewModel) {
                                      { subCategory: PopularSubCategory -> viewModel.switchPopularSubCategory(subCategory) }
                                  }
+                                 val onFollowScrollInteraction = remember(viewModel) {
+                                     { viewModel.markFollowLoadMoreGestureObserved() }
+                                 }
 
                                  HomeCategoryPageContent(
                                      category = category,
@@ -1287,6 +1290,8 @@ fun HomeScreen(
                                      compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      showCoverGlassBadges = homeSettings.showHomeCoverGlassBadges,
                                      showInfoGlassBadges = homeSettings.showHomeInfoGlassBadges,
+                                     followLoadMoreArmed = category != HomeCategory.FOLLOW || state.followLoadMoreArmed,
+                                     onFollowScrollInteraction = onFollowScrollInteraction,
                                      oldContentAnchorBvid = if (shouldShowRecommendOldContentDivider(
                                              currentCategory = category,
                                              refreshNewItemsKey = state.refreshNewItemsKey,

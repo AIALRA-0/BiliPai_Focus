@@ -117,6 +117,30 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun runtimeAspectRatio_keepsKnownPortraitAspectWhenPlayerReportsRotatedLandscapeSize() {
+        assertEquals(
+            9f / 16f,
+            resolvePortraitRuntimeVideoAspectRatio(
+                knownVideoAspectRatio = 9f / 16f,
+                playerVideoWidth = 1920,
+                playerVideoHeight = 1080
+            )
+        )
+    }
+
+    @Test
+    fun runtimeAspectRatio_usesPlayerAspectWhenOrientationMatchesKnownVideo() {
+        assertEquals(
+            720f / 1280f,
+            resolvePortraitRuntimeVideoAspectRatio(
+                knownVideoAspectRatio = 9f / 16f,
+                playerVideoWidth = 720,
+                playerVideoHeight = 1280
+            )
+        )
+    }
+
+    @Test
     fun sharedPlayerEntry_reusesExistingFrameWhenSharedPlayerAlreadyHasVideoSize() {
         assertEquals(
             0,

@@ -106,12 +106,14 @@ internal fun presentHomeFollowVisibleVideos(
     incomingVisibleVideos: List<VideoItem>,
     isLoadMore: Boolean,
     seed: Long,
-    reshuffleOnRefresh: Boolean
+    reshuffleOnRefresh: Boolean,
+    prioritizedVideoKeys: Set<String> = emptySet()
 ): List<VideoItem> {
     return when {
         !isLoadMore && reshuffleOnRefresh -> randomizeHomeFollowIncomingVideos(
             videos = incomingVisibleVideos,
-            seed = seed
+            seed = seed,
+            prioritizedVideoKeys = prioritizedVideoKeys
         )
         !isLoadMore -> incomingVisibleVideos
         else -> appendDistinctByKey(
@@ -189,16 +191,51 @@ internal fun resolveHomeFollowPresentedRawVideos(
 
 internal fun randomizeHomeFollowIncomingVideos(
     videos: List<VideoItem>,
+    seed: Long,
+    prioritizedVideoKeys: Set<String> = emptySet()
+): List<VideoItem> {
+    if (videos.size <= 1) return videos
+
+    if (prioritizedVideoKeys.isNotEmpty()) {
+        val prioritizedVideos = videos.filter { video ->
+            resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+        }
+        val historicalVideos = videos.filterNot { video ->
+            resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+        }
+        return interleaveHomeFollowVideosByCreator(
+            videos = prioritizedVideos,
+            seed = seed
+        ) + interleaveHomeFollowVideosByCreator(
+            videos = historicalVideos,
+            seed = seed xor HOME_FOLLOW_RANDOM_MIX2
+        )
+    }
+
+    return interleaveHomeFollowVideosByCreator(
+        videos = videos,
+        seed = seed
+    )
+}
+
+private fun interleaveHomeFollowVideosByCreator(
+    videos: List<VideoItem>,
     seed: Long
 ): List<VideoItem> {
     if (videos.size <= 1) return videos
     val creators = videos
         .groupBy { it.owner.mid }
-        .mapValues { (_, creatorVideos) -> ArrayDeque(creatorVideos) }
+        .mapValues { (creatorMid, creatorVideos) ->
+            ArrayDeque(
+                creatorVideos.sortedWith(
+                    compareByDescending<VideoItem> { it.pubdate }
+                        .thenBy { resolveHomeFollowRandomOrderValue(it, seed xor creatorMid) }
+                )
+            )
+        }
     val creatorOrder = creators.keys.sortedBy { creatorMid ->
         resolveHomeFollowCreatorRandomOrderValue(creatorMid = creatorMid, seed = seed)
     }
-
     return buildList(videos.size) {
         while (true) {
             var appendedInRound = false

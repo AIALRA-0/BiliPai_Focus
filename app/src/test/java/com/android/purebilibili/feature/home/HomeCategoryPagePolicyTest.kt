@@ -45,4 +45,31 @@ class HomeCategoryPagePolicyTest {
             )
         )
     }
+
+    @Test
+    fun shouldLoadMoreHomeCategoryContent_blocksFollowAutoPagingUntilUserHasScrolled() {
+        assertFalse(
+            shouldLoadMoreHomeCategoryContent(
+                totalItems = 16,
+                lastVisibleItemIndex = 15,
+                contentItemCount = 16,
+                isLoading = false,
+                hasMore = true,
+                requireUserScrollObservation = true,
+                userScrollObserved = false
+            )
+        )
+
+        assertTrue(
+            shouldLoadMoreHomeCategoryContent(
+                totalItems = 16,
+                lastVisibleItemIndex = 15,
+                contentItemCount = 16,
+                isLoading = false,
+                hasMore = true,
+                requireUserScrollObservation = true,
+                userScrollObserved = true
+            )
+        )
+    }
 }
