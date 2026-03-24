@@ -11,11 +11,11 @@ import kotlin.test.assertTrue
 class HomeFollowFocusPolicyTest {
 
     @Test
-    fun `follow completion keeps fetching until at least eight visible items are added`() {
+    fun `follow completion keeps fetching until at least sixteen visible items are added`() {
         assertTrue(
             shouldContinueHomeFollowFetchAfterFocusFilter(
                 baselineVisibleCount = 12,
-                visibleIncrement = 7,
+                visibleIncrement = 15,
                 hasMore = true,
                 continuationFetches = 2,
                 isLoadMore = true
@@ -25,7 +25,7 @@ class HomeFollowFocusPolicyTest {
         assertFalse(
             shouldContinueHomeFollowFetchAfterFocusFilter(
                 baselineVisibleCount = 12,
-                visibleIncrement = 8,
+                visibleIncrement = 16,
                 hasMore = true,
                 continuationFetches = 2,
                 isLoadMore = true
@@ -83,6 +83,95 @@ class HomeFollowFocusPolicyTest {
         val randomized = randomizeHomeFollowIncomingVideos(source, seed = 7L)
 
         assertEquals(3, randomized.take(3).map { it.owner.mid }.distinct().size)
+    }
+
+    @Test
+    fun `refresh presentation should reshuffle the full visible follow list`() {
+        val source = listOf(
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 33L)
+        )
+
+        val refreshed = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = listOf(video(id = 99, bvid = "BV99", dynamicId = "dyn-99")),
+            incomingVisibleVideos = source,
+            isLoadMore = false,
+            seed = 7L,
+            reshuffleOnRefresh = true
+        )
+
+        assertEquals(
+            randomizeHomeFollowIncomingVideos(source, seed = 7L).map { it.dynamicId },
+            refreshed.map { it.dynamicId }
+        )
+        assertNotEquals(source.map { it.dynamicId }, refreshed.map { it.dynamicId })
+    }
+
+    @Test
+    fun `load more presentation should keep existing order and append only new entries`() {
+        val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-1")
+        val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-2")
+        val newA = video(id = 3, bvid = "BV3", dynamicId = "dyn-3")
+        val newB = video(id = 4, bvid = "BV4", dynamicId = "dyn-4")
+
+        val presented = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = listOf(oldB, oldA),
+            incomingVisibleVideos = listOf(oldA, oldB, newA, newB),
+            isLoadMore = true,
+            seed = 99L,
+            reshuffleOnRefresh = true
+        )
+
+        assertEquals(
+            listOf(oldB, oldA, newA, newB).map { it.dynamicId },
+            presented.map { it.dynamicId }
+        )
+    }
+
+    @Test
+    fun `follow display window should reveal sixteen items per page`() {
+        val allVideos = (1L..40L).map { index ->
+            video(
+                id = index,
+                bvid = "BV$index",
+                dynamicId = "dyn-$index"
+            )
+        }
+
+        val refreshDisplayCount = resolveHomeFollowDisplayCount(
+            currentDisplayCount = 48,
+            isLoadMore = false
+        )
+        val firstPage = resolveDisplayedHomeFollowVisibleVideos(
+            presentedVisibleVideos = allVideos,
+            displayCount = refreshDisplayCount
+        )
+        val secondPageCount = resolveHomeFollowDisplayCount(
+            currentDisplayCount = firstPage.size,
+            isLoadMore = true
+        )
+        val secondPage = resolveDisplayedHomeFollowVisibleVideos(
+            presentedVisibleVideos = allVideos,
+            displayCount = secondPageCount
+        )
+
+        assertEquals(16, firstPage.size)
+        assertEquals(32, secondPage.size)
+        assertTrue(
+            canRevealMorePresentedHomeFollowVideos(
+                presentedVisibleCount = allVideos.size,
+                displayedVisibleCount = firstPage.size
+            )
+        )
+        assertTrue(
+            resolveHomeFollowPresentationHasMore(
+                presentedVisibleCount = allVideos.size,
+                displayedVisibleCount = secondPage.size,
+                sourceHasMore = false
+            )
+        )
     }
 
     private fun video(

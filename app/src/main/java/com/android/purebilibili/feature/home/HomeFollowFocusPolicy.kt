@@ -7,7 +7,7 @@ import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.VideoItem
 import java.util.ArrayDeque
 
-internal const val HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE = 8
+internal const val HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE = 16
 private const val HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT = 12
 private const val HOME_FOLLOW_LOAD_MORE_COMPLETION_FETCH_LIMIT = 32
 private const val HOME_FOLLOW_EMPTY_MESSAGE = "没有可用关注对象"
@@ -85,6 +85,62 @@ internal fun shouldContinueHomeFollowFetchAfterFocusFilter(
     if (continuationFetches >= maxContinuationFetches) return false
     if (visibleIncrement >= minimumVisibleIncrement.coerceAtLeast(1)) return false
     return true
+}
+
+internal fun presentHomeFollowVisibleVideos(
+    existingPresentedVisibleVideos: List<VideoItem>,
+    incomingVisibleVideos: List<VideoItem>,
+    isLoadMore: Boolean,
+    seed: Long,
+    reshuffleOnRefresh: Boolean
+): List<VideoItem> {
+    return when {
+        !isLoadMore && reshuffleOnRefresh -> randomizeHomeFollowIncomingVideos(
+            videos = incomingVisibleVideos,
+            seed = seed
+        )
+        !isLoadMore -> incomingVisibleVideos
+        else -> appendDistinctByKey(
+            existingPresentedVisibleVideos,
+            incomingVisibleVideos,
+            ::resolveHomeFollowVideoKey
+        )
+    }
+}
+
+internal fun resolveHomeFollowDisplayCount(
+    currentDisplayCount: Int,
+    isLoadMore: Boolean,
+    batchSize: Int = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
+): Int {
+    val normalizedBatchSize = batchSize.coerceAtLeast(1)
+    return if (isLoadMore) {
+        currentDisplayCount.coerceAtLeast(0) + normalizedBatchSize
+    } else {
+        normalizedBatchSize
+    }
+}
+
+internal fun resolveDisplayedHomeFollowVisibleVideos(
+    presentedVisibleVideos: List<VideoItem>,
+    displayCount: Int
+): List<VideoItem> {
+    return presentedVisibleVideos.take(displayCount.coerceAtLeast(0))
+}
+
+internal fun resolveHomeFollowPresentationHasMore(
+    presentedVisibleCount: Int,
+    displayedVisibleCount: Int,
+    sourceHasMore: Boolean
+): Boolean {
+    return sourceHasMore || presentedVisibleCount > displayedVisibleCount
+}
+
+internal fun canRevealMorePresentedHomeFollowVideos(
+    presentedVisibleCount: Int,
+    displayedVisibleCount: Int
+): Boolean {
+    return presentedVisibleCount > displayedVisibleCount
 }
 
 internal fun accumulateHomeFollowRoundRawVideos(
