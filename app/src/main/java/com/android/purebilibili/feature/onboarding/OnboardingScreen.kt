@@ -34,7 +34,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import com.android.purebilibili.feature.settings.FOCUS_GITHUB_URL
-import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_URL
+import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_GROUP_URL
 
 @Composable
 fun OnboardingScreen(
@@ -456,7 +456,7 @@ fun GetStartedPage(onFinish: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
-                onClick = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) },
+                onClick = { uriHandler.openUri(OFFICIAL_TELEGRAM_GROUP_URL) },
                 shape = RoundedCornerShape(999.dp)
             ) {
                 Text("Telegram 群")

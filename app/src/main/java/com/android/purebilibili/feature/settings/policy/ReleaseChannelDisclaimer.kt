@@ -11,7 +11,8 @@ import androidx.compose.ui.unit.dp
 
 const val OFFICIAL_GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
 const val FOCUS_GITHUB_URL = "https://github.com/AIALRA-0/BiliPai_Focus"
-const val OFFICIAL_TELEGRAM_URL = "https://t.me/BiliPai"
+const val OFFICIAL_TELEGRAM_GROUP_URL = "https://t.me/BiliPaii"
+const val OFFICIAL_TELEGRAM_CHANNEL_URL = "https://t.me/BiliPai"
 const val RELEASE_DISCLAIMER_ACK_KEY = "release_disclaimer_ack_v1"
 
 @Composable
@@ -19,7 +20,8 @@ fun ReleaseChannelDisclaimerDialog(
     onDismiss: () -> Unit,
     onOpenGithub: () -> Unit,
     onOpenFocusGithub: () -> Unit,
-    onOpenTelegram: () -> Unit,
+    onOpenTelegramGroup: () -> Unit,
+    onOpenTelegramChannel: () -> Unit,
     title: String = "免责声明"
 ) {
     AlertDialog(
@@ -33,7 +35,7 @@ fun ReleaseChannelDisclaimerDialog(
         text = {
             Text(
                 text = "本应用仅用于学习与交流\n\n" +
-                    "官方原版发布渠道：GitHub 与 Telegram\n" +
+                    "官方原版发布渠道：GitHub、Telegram 交流群与 Telegram 频道\n" +
                     "Focus 定制版发布渠道：Focus GitHub\n" +
                     "Focus 版本只会跟随 Focus 分支检查与接收更新，不会接收官方原版更新推送\n" +
                     "除上述渠道外，不存在任何其他发布途径\n\n" +
@@ -52,7 +54,8 @@ fun ReleaseChannelDisclaimerDialog(
             ) {
                 TextButton(onClick = onOpenGithub) { Text("官方 GitHub") }
                 TextButton(onClick = onOpenFocusGithub) { Text("Focus GitHub") }
-                TextButton(onClick = onOpenTelegram) { Text("Telegram") }
+                TextButton(onClick = onOpenTelegramGroup) { Text("Telegram 交流群") }
+                TextButton(onClick = onOpenTelegramChannel) { Text("Telegram 频道") }
             }
         }
     )

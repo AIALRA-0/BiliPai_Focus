@@ -213,5 +213,44 @@ class HomeTopCategoryPolicyTest {
         assertEquals(R.string.home_category_live, resolveHomeCategoryLabelRes(HomeCategory.LIVE))
         assertEquals(R.string.home_category_game, resolveHomeCategoryLabelRes(HomeCategory.GAME))
     }
+
+    @Test
+    fun `unhydrated focus settings should preserve base top categories`() {
+        val baseCategories = listOf(
+            HomeCategory.FOLLOW,
+            HomeCategory.POPULAR,
+            HomeCategory.LIVE
+        )
+
+        assertEquals(
+            baseCategories,
+            resolveHydratedHomeTopCategories(
+                categories = baseCategories,
+                focusSettings = null
+            )
+        )
+    }
+
+    @Test
+    fun `current category should not fallback before focus settings hydrate`() {
+        assertFalse(
+            shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
+                currentCategory = HomeCategory.POPULAR,
+                topCategories = listOf(HomeCategory.FOLLOW, HomeCategory.LIVE),
+                focusSettingsHydrated = false
+            )
+        )
+    }
+
+    @Test
+    fun `current category should fallback after focus settings hydrate when hidden`() {
+        assertTrue(
+            shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
+                currentCategory = HomeCategory.POPULAR,
+                topCategories = listOf(HomeCategory.FOLLOW, HomeCategory.LIVE),
+                focusSettingsHydrated = true
+            )
+        )
+    }
 }
 

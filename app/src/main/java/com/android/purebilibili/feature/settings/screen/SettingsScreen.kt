@@ -201,7 +201,8 @@ fun SettingsScreen(
     }
     
     val onExportLogsAction: () -> Unit = { LogCollector.exportAndShare(context) }
-    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
+    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_CHANNEL_URL) }
+    val onTelegramGroupClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_GROUP_URL) }
     val onTwitterClick: () -> Unit = { uriHandler.openUri("https://x.com/YangY_0x00") }
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
     val onFocusGithubClick: () -> Unit = { uriHandler.openUri(FOCUS_GITHUB_URL) }
@@ -387,7 +388,8 @@ fun SettingsScreen(
             onDismiss = { showReleaseDisclaimerDialog = false },
             onOpenGithub = onGithubClick,
             onOpenFocusGithub = onFocusGithubClick,
-            onOpenTelegram = onTelegramClick
+            onOpenTelegramGroup = onTelegramGroupClick,
+            onOpenTelegramChannel = onTelegramClick
         )
     }
 

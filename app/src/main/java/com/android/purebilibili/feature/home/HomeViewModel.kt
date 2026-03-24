@@ -21,6 +21,10 @@ import com.android.purebilibili.feature.plugin.EyeProtectionPlugin
 import com.android.purebilibili.feature.plugin.TodayWatchPlugin
 import com.android.purebilibili.feature.plugin.TodayWatchPluginConfig
 import com.android.purebilibili.feature.plugin.TodayWatchPluginMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -147,7 +151,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var rawFollowFeedVideos: List<VideoItem> = emptyList()
     private var hasResolvedFollowFeedOnce: Boolean = false
     private var followFeedFocusRefreshJob: Job? = null
+    private var followFeedBackgroundHydrationJob: Job? = null
     private var followFeedShuffleSeed: Long = System.currentTimeMillis()
+    private val homeFollowFastFeedCoordinator = HomeFollowFastFeedCoordinator(
+        dataSource = NetworkHomeFollowFeedDataSource()
+    )
+    private var homeFollowFastCursor: HomeFollowFastCursor? = null
     private var historySampleCache: List<VideoItem> = emptyList()
     private var historySampleLoadedAtMs: Long = 0L
     private val todayConsumedBvids = mutableSetOf<String>()
@@ -1013,9 +1022,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 var addedCount = 0
                 updateCategoryState(currentCategory) { oldState ->
                     val mergedVideos = when {
-                        isLoadMore -> appendDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey)
+                        isLoadMore -> appendDistinctByKey(oldState.videos, incomingVideos, ::resolveHomeFollowVideoKey)
                         useIncrementalRecommendRefresh -> {
-                            val merged = prependDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey)
+                            val merged = prependDistinctByKey(oldState.videos, incomingVideos, ::resolveHomeFollowVideoKey)
                             addedCount = (merged.size - oldState.videos.size).coerceAtLeast(0)
                             merged
                         }
@@ -1139,8 +1148,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         isLoadMore: Boolean
     ): List<VideoItem> {
         return when {
-            isLoadMore -> appendDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
-            else -> prependDistinctByKey(existingRawVideos, incomingRawVideos, ::videoItemKey)
+            isLoadMore -> appendDistinctByKey(existingRawVideos, incomingRawVideos, ::resolveHomeFollowVideoKey)
+            else -> prependDistinctByKey(existingRawVideos, incomingRawVideos, ::resolveHomeFollowVideoKey)
         }
     }
 
@@ -1148,6 +1157,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         isLoadMore: Boolean,
         error: Throwable
     ) {
+        cancelFollowFeedBackgroundHydration()
         updateCategoryState(HomeCategory.FOLLOW) { oldState ->
             oldState.copy(
                 isLoading = false,
@@ -1158,6 +1168,51 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             )
         }
+    }
+
+    private fun cancelFollowFeedBackgroundHydration() {
+        followFeedBackgroundHydrationJob?.cancel()
+        followFeedBackgroundHydrationJob = null
+    }
+
+    private fun resolveFastHomeFollowVisibleUserMids(): List<Long> {
+        return resolveVisibleHomeFollowUserMids(
+            followingMids = _uiState.value.followingMids,
+            blockedMids = blockedMids,
+            config = focusFollowGroupConfig,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
+    }
+
+    private fun applyHomeFollowVisibleVideoFilter(
+        videos: List<VideoItem>
+    ): List<VideoItem> {
+        return applyHomeVideoFilters(
+            category = HomeCategory.FOLLOW,
+            videos = videos
+        )
+    }
+
+    private fun applyHomeFollowFastWave(
+        wave: HomeFollowFastWave,
+        isLoadMore: Boolean,
+        keepLoading: Boolean
+    ) {
+        rawFollowFeedVideos = wave.presentedRawVideos
+        hasResolvedFollowFeedOnce = true
+        updateFollowFeedCategoryState(
+            videos = wave.visibleVideos,
+            isLoading = keepLoading,
+            error = if (!isLoadMore && wave.visibleVideos.isEmpty()) {
+                wave.firstErrorMessage ?: resolveHomeFollowEmptyMessage(
+                    visibleVideoCount = wave.visibleVideos.size,
+                    hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
+                )
+            } else {
+                null
+            },
+            hasMore = wave.hasMoreUsers
+        )
     }
 
     private fun requestFollowFeedRefreshAfterFocusConfigChange() {
@@ -1172,6 +1227,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!shouldReload) return
 
         followFeedFocusRefreshJob?.cancel()
+        cancelFollowFeedBackgroundHydration()
+        homeFollowFastCursor = null
         followFeedShuffleSeed = System.currentTimeMillis()
         val visibleVideos = applyHomeVideoFilters(
             category = HomeCategory.FOLLOW,
@@ -1189,6 +1246,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun fetchFollowFeedSinglePass(isLoadMore: Boolean) {
+        cancelFollowFeedBackgroundHydration()
+        homeFollowFastCursor = null
         if (!isLoadMore) {
             followFeedShuffleSeed = System.currentTimeMillis()
         }
@@ -1201,7 +1260,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
             return
         }
-        val rawVideos = mapFollowDynamicItemsToHomeVideos(items)
+        val rawVideos = mapHomeFollowDynamicItemsToVideoItems(items)
         val mergedRawVideos = mergeFollowFeedRawVideos(
             existingRawVideos = rawFollowFeedVideos,
             incomingRawVideos = rawVideos,
@@ -1209,10 +1268,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
         rawFollowFeedVideos = mergedRawVideos
         hasResolvedFollowFeedOnce = true
-        val visibleVideos = applyHomeVideoFilters(
-            category = HomeCategory.FOLLOW,
-            videos = mergedRawVideos
-        )
+        val visibleVideos = applyHomeFollowVisibleVideoFilter(mergedRawVideos)
 
         updateFollowFeedCategoryState(
             videos = visibleVideos,
@@ -1229,8 +1285,78 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private suspend fun fetchFollowFeedFast(
+        isLoadMore: Boolean,
+        visibleUserMids: List<Long>
+    ) {
+        cancelFollowFeedBackgroundHydration()
+        val baselineRawVideos = rawFollowFeedVideos
+        val baselineVisibleCount = applyHomeFollowVisibleVideoFilter(baselineRawVideos).size
+        val session = homeFollowFastFeedCoordinator.startSession(
+            existingRawVideos = baselineRawVideos,
+            existingVisibleCount = baselineVisibleCount,
+            visibleUserMids = visibleUserMids,
+            isLoadMore = isLoadMore,
+            previousCursor = homeFollowFastCursor,
+            seed = followFeedShuffleSeed
+        )
+        val firstWave = homeFollowFastFeedCoordinator.fetchWave(
+            session = session,
+            visibleVideoFilter = ::applyHomeFollowVisibleVideoFilter
+        )
+        homeFollowFastCursor = firstWave.session.cursor
+        val shouldContinueInBackground =
+            firstWave.hasMoreUsers &&
+                firstWave.visibleIncrement < HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
+        applyHomeFollowFastWave(
+            wave = firstWave,
+            isLoadMore = isLoadMore,
+            keepLoading = shouldContinueInBackground
+        )
+
+        if (shouldContinueInBackground) {
+            cancelFollowFeedBackgroundHydration()
+            followFeedBackgroundHydrationJob = viewModelScope.launch {
+                continueHomeFollowBackgroundHydration(
+                    initialSession = firstWave.session,
+                    isLoadMore = isLoadMore
+                )
+            }
+        } else {
+            cancelFollowFeedBackgroundHydration()
+        }
+    }
+
+    private suspend fun continueHomeFollowBackgroundHydration(
+        initialSession: HomeFollowFastSession,
+        isLoadMore: Boolean
+    ) {
+        var session = initialSession
+        while (true) {
+            val wave = homeFollowFastFeedCoordinator.fetchWave(
+                session = session,
+                visibleVideoFilter = ::applyHomeFollowVisibleVideoFilter
+            )
+            homeFollowFastCursor = wave.session.cursor
+            val shouldContinue =
+                wave.hasMoreUsers && wave.visibleIncrement < HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
+            applyHomeFollowFastWave(
+                wave = wave,
+                isLoadMore = isLoadMore,
+                keepLoading = shouldContinue
+            )
+            if (!shouldContinue) {
+                followFeedBackgroundHydrationJob = null
+                return
+            }
+            session = wave.session
+        }
+    }
+
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
         if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
+            cancelFollowFeedBackgroundHydration()
+            homeFollowFastCursor = null
             rawFollowFeedVideos = emptyList()
             hasResolvedFollowFeedOnce = false
             updateFollowFeedCategoryState(
@@ -1245,9 +1371,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!isLoadMore) {
             followFeedShuffleSeed = System.currentTimeMillis()
             refreshUserInfoInBackground()
-            com.android.purebilibili.data.repository.DynamicRepository.resetPagination(
-                com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
-            )
         }
 
         if (!focusFollowGroupFilteringEnabled) {
@@ -1255,148 +1378,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val baselineRawVideos = rawFollowFeedVideos
-        val baselineVisibleCount = applyHomeVideoFilters(
-            category = HomeCategory.FOLLOW,
-            videos = baselineRawVideos
-        ).size
-        var roundRawVideos = emptyList<VideoItem>()
-        var continuationFetches = 0
-        var refreshRequest = !isLoadMore
-
-        while (true) {
-            val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
-                refresh = refreshRequest,
-                scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
-            )
-            refreshRequest = false
-
-            val items = result.getOrElse { error ->
-                handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
-                return
-            }
-            val rawVideos = randomizeHomeFollowIncomingVideos(
-                videos = mapFollowDynamicItemsToHomeVideos(items),
-                seed = followFeedShuffleSeed + continuationFetches + 1L
-            )
-            val previousRoundRawVideos = roundRawVideos
-            val mergedRoundRawVideos = accumulateHomeFollowRoundRawVideos(
-                existingRoundRawVideos = previousRoundRawVideos,
-                incomingRawVideos = rawVideos,
-                keySelector = ::videoItemKey
-            )
-            roundRawVideos = mergedRoundRawVideos
-            val presentedRawVideos = resolveHomeFollowPresentedRawVideos(
-                baselineRawVideos = baselineRawVideos,
-                roundRawVideos = roundRawVideos,
+        val visibleUserMids = resolveFastHomeFollowVisibleUserMids()
+        if (visibleUserMids.isNotEmpty()) {
+            fetchFollowFeedFast(
                 isLoadMore = isLoadMore,
-                keySelector = ::videoItemKey
+                visibleUserMids = visibleUserMids
             )
-
-            val visibleVideos = applyHomeVideoFilters(
-                category = HomeCategory.FOLLOW,
-                videos = presentedRawVideos
-            )
-            val visibleIncrement = resolveHomeFollowVisibleIncrement(
-                baselineVisibleCount = baselineVisibleCount,
-                currentVisibleCount = visibleVideos.size
-            )
-            continuationFetches += 1
-            val hasMore = homeFollowHasMoreData()
-
-            if (!shouldContinueHomeFollowFetchAfterFocusFilter(
-                    baselineVisibleCount = baselineVisibleCount,
-                    visibleIncrement = visibleIncrement,
-                    hasMore = hasMore,
-                    continuationFetches = continuationFetches,
-                    isLoadMore = isLoadMore
-                )
-            ) {
-                rawFollowFeedVideos = presentedRawVideos
-                hasResolvedFollowFeedOnce = true
-                updateFollowFeedCategoryState(
-                    videos = visibleVideos,
-                    isLoading = false,
-                    error = if (!isLoadMore) {
-                        resolveHomeFollowEmptyMessage(
-                            visibleVideoCount = visibleVideos.size,
-                            hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
-                        )
-                    } else {
-                        null
-                    },
-                    hasMore = hasMore
-                )
-                return
-            }
+            return
         }
-    }
 
-    private fun mapFollowDynamicItemsToHomeVideos(
-        items: List<com.android.purebilibili.data.model.response.DynamicItem>
-    ): List<com.android.purebilibili.data.model.response.VideoItem> {
-        return items.mapNotNull { item ->
-            val archive = item.modules.module_dynamic?.major?.archive ?: return@mapNotNull null
-            if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
-                return@mapNotNull null
-            }
-
-            val resolvedAid = resolveDynamicArchiveAid(
-                archiveAid = archive.aid,
-                fallbackId = 0L
-            )
-            com.android.purebilibili.data.model.response.VideoItem(
-                id = resolvedAid,
-                bvid = archive.bvid,
-                dynamicId = item.id_str.trim(),
-                aid = resolvedAid,
-                title = archive.title,
-                pic = archive.cover,
-                duration = parseDurationText(archive.duration_text),
-                owner = com.android.purebilibili.data.model.response.Owner(
-                    mid = item.modules.module_author?.mid ?: 0,
-                    name = item.modules.module_author?.name ?: "",
-                    face = item.modules.module_author?.face ?: ""
+        if (_uiState.value.followingMids.isNotEmpty()) {
+            cancelFollowFeedBackgroundHydration()
+            homeFollowFastCursor = null
+            hasResolvedFollowFeedOnce = true
+            updateFollowFeedCategoryState(
+                videos = applyHomeFollowVisibleVideoFilter(rawFollowFeedVideos),
+                isLoading = false,
+                error = resolveHomeFollowEmptyMessage(
+                    visibleVideoCount = 0,
+                    hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
                 ),
-                stat = com.android.purebilibili.data.model.response.Stat(
-                    view = parseStatText(archive.stat.play),
-                    danmaku = parseStatText(archive.stat.danmaku)
-                )
+                hasMore = false
             )
+            return
         }
-    }
 
-    private fun videoItemKey(item: com.android.purebilibili.data.model.response.VideoItem): String {
-        if (item.dynamicId.isNotBlank()) return "dyn:${item.dynamicId}"
-        if (item.bvid.isNotBlank()) return "bvid:${item.bvid}"
-        if (item.aid > 0) return "aid:${item.aid}"
-        if (item.id > 0) return "id:${item.id}"
-        return "${item.owner.mid}:${item.title}:${item.pubdate}"
-    }
-    
-    //  解析时长文本 "10:24" -> 624 秒
-    private fun parseDurationText(text: String): Int {
-        val parts = text.split(":")
-        return try {
-            when (parts.size) {
-                2 -> parts[0].toInt() * 60 + parts[1].toInt()
-                3 -> parts[0].toInt() * 3600 + parts[1].toInt() * 60 + parts[2].toInt()
-                else -> 0
-            }
-        } catch (e: Exception) { 0 }
-    }
-    
-    //  解析统计文本 "123.4万" -> 1234000
-    private fun parseStatText(text: String): Int {
-        return try {
-            if (text.contains("万")) {
-                (text.replace("万", "").toFloat() * 10000).toInt()
-            } else if (text.contains("亿")) {
-                (text.replace("亿", "").toFloat() * 100000000).toInt()
-            } else {
-                text.toIntOrNull() ?: 0
-            }
-        } catch (e: Exception) { 0 }
+        fetchFollowFeedSinglePass(isLoadMore = isLoadMore)
     }
     
     //  🔴 [改进] 获取直播间列表（同时获取关注和热门）
@@ -1547,39 +1554,63 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val mids = cachedMids.mapNotNull { it.toLongOrNull() }.toSet()
                 _uiState.value = _uiState.value.copy(followingMids = mids)
                 com.android.purebilibili.core.util.Logger.d("HomeVM", " Loaded ${mids.size} following mids from cache")
+                requestFollowFeedRefreshAfterFocusConfigChange()
                 return
             }
         }
         
         //  动态获取所有关注列表（无上限）
         try {
+            val pageSize = 50
             val allMids = mutableSetOf<Long>()
-            
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                var page = 1
-                while (true) {  //  无限循环，直到获取完所有关注
-                    try {
-                        val result = com.android.purebilibili.core.network.NetworkModule.api.getFollowings(mid, page, 50)
-                        if (result.code == 0 && result.data != null) {
-                            val list = result.data.list ?: break
-                            if (list.isEmpty()) break
-                            
-                            list.forEach { user -> allMids.add(user.mid) }
-                            
-                            // 如果这一页不满50，说明已经获取完所有关注
-                            if (list.size < 50) {
-                                com.android.purebilibili.core.util.Logger.d("HomeVM", " Reached end at page $page, total: ${allMids.size}")
-                                break
-                            }
-                            page++
-                        } else {
-                            break
+            val firstPageResult = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                com.android.purebilibili.core.network.NetworkModule.api.getFollowings(
+                    vmid = mid,
+                    pn = 1,
+                    ps = pageSize
+                )
+            }
+            val firstPageData = firstPageResult.data
+                ?.takeIf { firstPageResult.code == 0 }
+                ?: return
+            firstPageData.list.orEmpty().forEach { user -> allMids += user.mid }
+
+            val totalFollowings = firstPageData.total.coerceAtLeast(allMids.size)
+            val totalPages = ((totalFollowings + pageSize - 1) / pageSize).coerceAtLeast(1)
+            if (totalPages > 1) {
+                (2..totalPages)
+                    .toList()
+                    .chunked(8)
+                    .forEach { pageChunk ->
+                        val chunkResults = coroutineScope {
+                            pageChunk.map { page ->
+                                async(Dispatchers.IO) {
+                                    page to runCatching {
+                                        com.android.purebilibili.core.network.NetworkModule.api.getFollowings(
+                                            vmid = mid,
+                                            pn = page,
+                                            ps = pageSize
+                                        )
+                                    }
+                                }
+                            }.awaitAll()
                         }
-                    } catch (e: Exception) {
-                        com.android.purebilibili.core.util.Logger.e("HomeVM", " Error at page $page", e)
-                        break
+                        chunkResults
+                            .sortedBy { (page, _) -> page }
+                            .forEach { (page, result) ->
+                                result.onSuccess { response ->
+                                    response.data?.list.orEmpty().forEach { user ->
+                                        allMids += user.mid
+                                    }
+                                }.onFailure { error ->
+                                    com.android.purebilibili.core.util.Logger.e(
+                                        "HomeVM",
+                                        " Error at page $page",
+                                        error
+                                    )
+                                }
+                            }
                     }
-                }
             }
             
             //  保存到本地缓存
@@ -1590,6 +1621,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             
             _uiState.value = _uiState.value.copy(followingMids = allMids.toSet())
             com.android.purebilibili.core.util.Logger.d("HomeVM", " Total following mids fetched and cached: ${allMids.size}")
+            requestFollowFeedRefreshAfterFocusConfigChange()
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("HomeVM", " Error fetching following list", e)
         }

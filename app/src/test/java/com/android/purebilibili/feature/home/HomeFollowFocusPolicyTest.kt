@@ -56,10 +56,10 @@ class HomeFollowFocusPolicyTest {
     @Test
     fun `follow incoming randomization should be deterministic per seed and vary across seeds`() {
         val source = listOf(
-            video(id = 1, bvid = "BV1", dynamicId = "dyn-1"),
-            video(id = 2, bvid = "BV2", dynamicId = "dyn-2"),
-            video(id = 3, bvid = "BV3", dynamicId = "dyn-3"),
-            video(id = 4, bvid = "BV4", dynamicId = "dyn-4")
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 101L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 202L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 303L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 404L)
         )
 
         val seedAOrder = randomizeHomeFollowIncomingVideos(source, seed = 11L).map { it.dynamicId }
@@ -70,10 +70,26 @@ class HomeFollowFocusPolicyTest {
         assertNotEquals(seedAOrder, seedBOrder)
     }
 
+    @Test
+    fun `follow incoming randomization should interleave creators before repeating same up`() {
+        val source = listOf(
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L),
+            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L)
+        )
+
+        val randomized = randomizeHomeFollowIncomingVideos(source, seed = 7L)
+
+        assertEquals(3, randomized.take(3).map { it.owner.mid }.distinct().size)
+    }
+
     private fun video(
         id: Long,
         bvid: String,
-        dynamicId: String
+        dynamicId: String,
+        ownerMid: Long = id
     ): VideoItem {
         return VideoItem(
             id = id,
@@ -81,7 +97,7 @@ class HomeFollowFocusPolicyTest {
             bvid = bvid,
             dynamicId = dynamicId,
             title = "video-$id",
-            owner = Owner(mid = id, name = "up-$id")
+            owner = Owner(mid = ownerMid, name = "up-$ownerMid")
         )
     }
 }

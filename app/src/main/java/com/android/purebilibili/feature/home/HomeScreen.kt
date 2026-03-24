@@ -226,18 +226,20 @@ fun HomeScreen(
             visibleIds = defaultTopTabIds.toSet()
         )
     )
-    val focusSettings by SettingsManager.getFocusSettings(context).collectAsState(
-        initial = FocusSettings()
+    val focusSettingsState by SettingsManager.getFocusSettings(context).collectAsState(
+        initial = null as FocusSettings?
     )
+    val focusSettingsHydrated = focusSettingsState != null
+    val focusSettings = focusSettingsState ?: FocusSettings()
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 iOSHomeHeader
-    val topCategories = remember(topTabSettings, focusSettings) {
-        applyFocusHomeTopCategories(
+    val topCategories = remember(topTabSettings, focusSettingsState) {
+        resolveHydratedHomeTopCategories(
             categories = resolveHomeTopCategories(
                 customOrderIds = topTabSettings.orderIds,
                 visibleIds = topTabSettings.visibleIds
             ),
-            settings = focusSettings
+            focusSettings = focusSettingsState
         )
     }
     val localizedTopCategoryLabels = topCategories.map { category ->
@@ -287,13 +289,18 @@ fun HomeScreen(
     }
 
     // [P2] 当前分类被隐藏时，自动落到首个可见分类
-    LaunchedEffect(topCategories) {
+    LaunchedEffect(topCategories, focusSettingsHydrated, state.currentCategory) {
         if (!hasVisibleTopCategories) {
             hasSyncedPagerWithState = false
             return@LaunchedEffect
         }
         val firstVisible = topCategories.firstOrNull() ?: return@LaunchedEffect
-        if (state.currentCategory !in topCategories) {
+        if (shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
+                currentCategory = state.currentCategory,
+                topCategories = topCategories,
+                focusSettingsHydrated = focusSettingsHydrated
+            )
+        ) {
             viewModel.updateDisplayedTabIndex(0)
             viewModel.switchCategory(firstVisible)
         }

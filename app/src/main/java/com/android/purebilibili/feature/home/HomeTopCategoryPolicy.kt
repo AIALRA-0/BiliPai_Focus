@@ -95,6 +95,28 @@ fun applyFocusHomeTopCategories(
     return listOf(HomeCategory.RECOMMEND)
 }
 
+fun resolveHydratedHomeTopCategories(
+    categories: List<HomeCategory>,
+    focusSettings: FocusSettings?
+): List<HomeCategory> {
+    return focusSettings?.let { resolvedSettings ->
+        applyFocusHomeTopCategories(
+            categories = categories,
+            settings = resolvedSettings
+        )
+    } ?: categories
+}
+
+internal fun shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
+    currentCategory: HomeCategory,
+    topCategories: List<HomeCategory>,
+    focusSettingsHydrated: Boolean
+): Boolean {
+    if (!focusSettingsHydrated) return false
+    if (topCategories.isEmpty()) return false
+    return currentCategory !in topCategories
+}
+
 fun resolveHomeTopTabIndex(
     category: HomeCategory,
     topCategories: List<HomeCategory> = resolveHomeTopCategories()
