@@ -45,6 +45,7 @@ import com.android.purebilibili.feature.list.CommonListScreen
 import com.android.purebilibili.feature.list.HistoryViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
 import com.android.purebilibili.feature.list.resolveHistoryPlaybackCid
+import com.android.purebilibili.feature.list.resolveHistoryResumePositionMs
 import com.android.purebilibili.feature.video.screen.VideoDetailScreen
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
@@ -99,16 +100,17 @@ import java.nio.charset.StandardCharsets
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
-    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}"
+    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&resumePositionMs={resumePositionMs}"
 
     internal fun resolveVideoRoutePath(
         bvid: String,
         cid: Long,
         encodedCover: String,
         startAudio: Boolean,
-        autoPortrait: Boolean
+        autoPortrait: Boolean,
+        resumePositionMs: Long = 0L
     ): String {
-        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait"
+        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}"
     }
 
     // 构建 helper
@@ -117,7 +119,8 @@ object VideoRoute {
         cid: Long,
         coverUrl: String,
         startAudio: Boolean = false,
-        autoPortrait: Boolean = false
+        autoPortrait: Boolean = false,
+        resumePositionMs: Long = 0L
     ): String {
         val encodedCover = Uri.encode(coverUrl)
         return resolveVideoRoutePath(
@@ -125,7 +128,8 @@ object VideoRoute {
             cid = cid,
             encodedCover = encodedCover,
             startAudio = startAudio,
-            autoPortrait = autoPortrait
+            autoPortrait = autoPortrait,
+            resumePositionMs = resumePositionMs
         )
     }
 }
@@ -137,7 +141,8 @@ internal fun resolveStandardVideoRoute(
     cid: Long,
     coverUrl: String,
     startAudio: Boolean = false,
-    autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation()
+    autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
+    resumePositionMs: Long = 0L
 ): String {
     val encodedCover = URLEncoder.encode(coverUrl, StandardCharsets.UTF_8.toString())
     return VideoRoute.resolveVideoRoutePath(
@@ -145,7 +150,8 @@ internal fun resolveStandardVideoRoute(
         cid = cid,
         encodedCover = encodedCover,
         startAudio = startAudio,
-        autoPortrait = autoPortrait
+        autoPortrait = autoPortrait,
+        resumePositionMs = resumePositionMs
     )
 }
 
@@ -219,7 +225,8 @@ fun AppNavigation(
         cid: Long = 0L,
         coverUrl: String = "",
         startAudio: Boolean = false,
-        autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation()
+        autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
+        resumePositionMs: Long = 0L
     ) {
         navigateToVideoRoute(
             resolveStandardVideoRoute(
@@ -227,7 +234,8 @@ fun AppNavigation(
                 cid = cid,
                 coverUrl = coverUrl,
                 startAudio = startAudio,
-                autoPortrait = autoPortrait
+                autoPortrait = autoPortrait,
+                resumePositionMs = resumePositionMs
             )
         )
     }
@@ -624,7 +632,8 @@ fun AppNavigation(
                 navArgument("cover") { type = NavType.StringType; defaultValue = "" },
                 navArgument("startAudio") { type = NavType.BoolType; defaultValue = false },
                 navArgument("autoPortrait") { type = NavType.BoolType; defaultValue = false },
-                navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false }
+                navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false },
+                navArgument("resumePositionMs") { type = NavType.LongType; defaultValue = 0L }
             ),
             //  进入动画：当卡片过渡开启时用淡入（配合共享元素），关闭时用滑入
             //  进入动画：基于位置的扩散展开 (Scale + Fade)
@@ -809,6 +818,7 @@ fun AppNavigation(
             val startAudio = backStackEntry.arguments?.getBoolean("startAudio") ?: false
             val autoPortraitFromRoute = backStackEntry.arguments?.getBoolean("autoPortrait") ?: false
             val startFullscreen = backStackEntry.arguments?.getBoolean("fullscreen") ?: false
+            val resumePositionMsFromRoute = backStackEntry.arguments?.getLong("resumePositionMs") ?: 0L
             
             //  使用顶层定义的 cardTransitionEnabled（已在 line 68 定义）
 
@@ -879,6 +889,7 @@ fun AppNavigation(
                     startInFullscreen = startFullscreen,  //  传递全屏参数
                     startAudioFromRoute = startAudio,
                     autoEnterPortraitFromRoute = autoPortraitFromRoute,
+                    resumePositionMsFromRoute = resumePositionMsFromRoute,
                     transitionEnabled = shouldUseClassicBackRouteMotion(backRouteMotionMode),  // 预测返回优先稳定路由动画
                     predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
                     transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
@@ -1037,6 +1048,7 @@ fun AppNavigation(
                             clickedCid = cid,
                             historyItem = historyItem
                         )
+                        val resumePositionMs = resolveHistoryResumePositionMs(historyItem)
                         when (historyItem?.business) {
                             com.android.purebilibili.data.model.response.HistoryBusiness.PGC -> {
                                 // 番剧: 导航到番剧播放页
@@ -1048,7 +1060,12 @@ fun AppNavigation(
                                     navController.navigate(ScreenRoutes.BangumiDetail.createRoute(historyItem.seasonId, historyItem.epid))
                                 } else {
                                     // 异常情况，尝试普通视频方式
-                                    navigateToVideo(lookupKey, resolvedCid, cover)
+                                    navigateToVideo(
+                                        lookupKey,
+                                        resolvedCid,
+                                        cover,
+                                        resumePositionMs = resumePositionMs
+                                    )
                                 }
                             }
                             com.android.purebilibili.data.model.response.HistoryBusiness.LIVE -> {
@@ -1060,12 +1077,22 @@ fun AppNavigation(
                                         historyItem.videoItem.owner.name
                                     ))
                                 } else {
-                                    navigateToVideo(lookupKey, resolvedCid, cover)
+                                    navigateToVideo(
+                                        lookupKey,
+                                        resolvedCid,
+                                        cover,
+                                        resumePositionMs = resumePositionMs
+                                    )
                                 }
                             }
                             else -> {
                                 // 普通视频 (archive) 或未知类型
-                                navigateToVideo(lookupKey, resolvedCid, cover)
+                                navigateToVideo(
+                                    lookupKey,
+                                    resolvedCid,
+                                    cover,
+                                    resumePositionMs = resumePositionMs
+                                )
                             }
                         }
                     }

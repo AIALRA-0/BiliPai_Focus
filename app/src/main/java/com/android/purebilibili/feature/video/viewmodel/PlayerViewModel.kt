@@ -218,6 +218,15 @@ internal fun shouldApplyVideoLoadResult(
     return activeRequestToken == resultRequestToken && expectedBvid == currentBvid
 }
 
+internal fun resolveRequestedStartPositionMs(
+    cachedPositionMs: Long,
+    fallbackResumePositionMs: Long
+): Long {
+    val safeCachedPositionMs = cachedPositionMs.coerceAtLeast(0L)
+    if (safeCachedPositionMs > 0L) return safeCachedPositionMs
+    return fallbackResumePositionMs.coerceAtLeast(0L)
+}
+
 internal fun shouldApplyPlayerInfoResult(
     activeRequestToken: Long,
     resultRequestToken: Long,
@@ -1673,7 +1682,8 @@ class PlayerViewModel : ViewModel() {
         ignoreSavedProgress: Boolean = false,
         audioLang: String? = null,
         videoCodecOverride: String? = null,
-        cid: Long = 0L
+        cid: Long = 0L,
+        fallbackResumePositionMs: Long = 0L
     ) {
         if (bvid.isBlank()) return
         val playbackRequest = PlaybackRequest.create(
@@ -1782,8 +1792,12 @@ class PlayerViewModel : ViewModel() {
             "SUB_DBG loadVideo request resolved progressCid=$progressCid for request=${playbackRequest.bvid}/${playbackRequest.cid}"
         )
         val cachedPosition = playbackUseCase.getCachedPosition(playbackRequest.bvid, progressCid)
+        val requestedStartPositionMs = resolveRequestedStartPositionMs(
+            cachedPositionMs = cachedPosition,
+            fallbackResumePositionMs = fallbackResumePositionMs
+        )
         clearInteractiveChoiceRuntime()
-        lastCreatorSignalPositionSec = cachedPosition / 1000L
+        lastCreatorSignalPositionSec = requestedStartPositionMs / 1000L
         val loadRequestContext = playbackSessionStore.beginLoadRequest(playbackRequest)
         val requestToken = loadRequestContext.requestToken
         playerInfoJob?.cancel()
@@ -1901,7 +1915,10 @@ class PlayerViewModel : ViewModel() {
                         // 🛠️ [修复] 检查是否已播放结束 (余量 < 5秒)
                         // 若上次已看完，则从头开始播放，避免立即触发 STATE_ENDED 导致循环跳转
                         val videoDuration = result.duration
-                        var startPos = loadResult.cachedPositionMs
+                        var startPos = resolveRequestedStartPositionMs(
+                            cachedPositionMs = loadResult.cachedPositionMs,
+                            fallbackResumePositionMs = fallbackResumePositionMs
+                        )
                         if (videoDuration > 0 && startPos >= videoDuration - 5000) {
                              Logger.d("PlayerVM", "🛡️ Previous position at end ($startPos / $videoDuration), restarting from 0")
                              startPos = 0

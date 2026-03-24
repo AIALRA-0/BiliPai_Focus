@@ -28,6 +28,22 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
+    fun scrollingResults_keepsHazeEnabled() {
+        val budget = resolveSearchMotionBudget(
+            hasQuery = true,
+            isSearching = false,
+            isScrolling = true
+        )
+
+        assertEquals(SearchMotionBudget.REDUCED, budget)
+        assertTrue(
+            shouldEnableSearchHazeSource(
+                isSearching = false
+            )
+        )
+    }
+
+    @Test
     fun idleSearchState_keepsFullBudgetAndHaze() {
         val budget = resolveSearchMotionBudget(
             hasQuery = false,
@@ -36,7 +52,19 @@ class SearchMotionBudgetPolicyTest {
         )
 
         assertEquals(SearchMotionBudget.FULL, budget)
-        assertTrue(shouldEnableSearchHazeSource(budget))
-        assertFalse(shouldEnableSearchHazeSource(SearchMotionBudget.REDUCED))
+        assertTrue(
+            shouldEnableSearchHazeSource(
+                isSearching = false
+            )
+        )
+    }
+
+    @Test
+    fun activeSearchRequest_disablesHazeSource() {
+        assertFalse(
+            shouldEnableSearchHazeSource(
+                isSearching = true
+            )
+        )
     }
 }

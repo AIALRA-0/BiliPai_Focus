@@ -1,5 +1,43 @@
 # Focus Changelog
 
+## v7.1.2 Focus (2026-03-23)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.2` 维护 Focus 发布线，当前推荐对外版本为 `7.1.2-focus.1`。
+- 为保证已发布 `v7.1.1-focus.3 / 137` 用户可直接升级，`versionCode` 继续递增到 `138`。
+- 本次为“同步上游 `7.1.2` + 首页 8 项 title 全开关 + 无 title 空态页”的稳定性发布。
+
+### 上游同步
+- 合并上游 `v7.1.2` 的播放回归修复、设置页本地化继续收口、楼中楼回复预览交互回归测试，以及搜索 / 历史 / 导航相关策略补强。
+- `SettingsScreenPolicy`、视频详情页与播放器相关实现已经跟进到上游 `7.1.2` 基线。
+- 本轮 `MainActivity`、`AppNavigation`、`SearchScreen`、`HistoryPlaybackPolicy` 和多组配套测试都已同步上游变更。
+
+### 首页 title 全开关
+- Focus 首页 title 开关现已覆盖 `推荐 / 关注 / 热门 / 直播 / 追番 / 游戏 / 知识 / 科技` 共 8 项。
+- 新增 `showHomeFollowTab / showHomeAnimeTab / showHomeKnowledgeTab / showHomeTechTab` 持久化设置，并已接入 Focus 设置页。
+- 首页顶部最终显示顺序仍先遵循 `HomeTopTabSettings` 的顺序与显隐，再叠加 Focus 的 8 项过滤层，不额外破坏原有顶部标签管理逻辑。
+- 默认值继续保持 Focus 的克制入口策略：`推荐 / 热门 / 直播 / 游戏` 默认隐藏；`关注 / 追番 / 知识 / 科技` 默认显示。
+
+### 无 title 空态页
+- 首页顶部分类全部关闭时，不再强制回退到 `关注`。
+- 当前会保留首页壳层和基础 chrome，但不再创建 pager，也不自动跳回任一分类。
+- 首页主体会显示空态提示，并提供直接进入 `设置 -> 常规 -> Focus` 的入口，便于重新开启任一首页栏目。
+
+### 行为与性能审计
+- 这次 release 不继续顺带优化其余分叉行为，但已确认并列出当前仍与官方存在差异、且可能带来卡顿或刷新异常的点。
+- 首页“关注”刷新目前仍不是官方完全同构：在官方 `HOME_FOLLOW` 单通道之上，还叠了一层 Focus 过滤后的补抓逻辑。
+- Focus 分组配置或关注过滤总开关变化时，首页“关注”仍会出现“旧结果重投影 + 真刷新”双重工作。
+- 动态页关注列表预热策略目前比上游更激进：启动即拉取并把默认同步预算扩到最多 `1000` 位。
+- 首页顶部栏的居中、viewport padding、clip 和分区按钮显隐定制，已经明显偏离上游默认几何。
+- 关注分组功能会放大动态页的重建频率，当前仍偏向整段重算，而不是更细的增量更新。
+
+### 构建与发布
+- Focus 版本号提升到 `v7.1.2-focus.1`，APK 命名切换为 `BliPai-Focus-*-7.1.2-focus.1*.apk`。
+- README / README_EN / CHANGELOG / Focus Changelog / Release Notes 已同步切到 `7.1.2-focus.1` 发布线。
+
+### 维护记录
+- `2026-03-23T20:47:53.9062712-04:00` 清理未提交的首页关注缓冲池实验代码后，合并上游 `v7.1.2`，补齐 Focus 首页 8 项 title 全开关与无 title 空态页，并完成 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug`、`:app:assembleRelease` 验证，准备发布 `v7.1.2-focus.1 / 138`。
+
 ## v7.1.1 Focus (2026-03-23)
 
 ### 版本信息

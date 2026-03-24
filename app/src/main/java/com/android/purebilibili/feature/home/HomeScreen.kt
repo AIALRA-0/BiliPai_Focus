@@ -243,13 +243,16 @@ fun HomeScreen(
     val localizedTopCategoryLabels = topCategories.map { category ->
         stringResource(resolveHomeCategoryLabelRes(category))
     }
+    val hasVisibleTopCategories = topCategories.isNotEmpty()
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) {
+        topCategories.size.coerceAtLeast(1)
+    }
     var hasSyncedPagerWithState by remember(topCategories) { mutableStateOf(false) }
     var programmaticPageSwitchInProgress by remember { mutableStateOf(false) }
     TrackJankStateFlag(
         stateName = "home:pager_swipe",
-        isActive = pagerState.isScrollInProgress
+        isActive = hasVisibleTopCategories && pagerState.isScrollInProgress
     )
     TrackJankStateValue(
         stateName = "home:current_category",
@@ -258,6 +261,7 @@ fun HomeScreen(
 
     // [修复] 仅在完成首次“状态->Pager”对齐后，才允许“Pager->状态”反向同步，避免返回首页时误跳分类。
     LaunchedEffect(pagerState, topCategories, hasSyncedPagerWithState, state.currentCategory) {
+        if (!hasVisibleTopCategories) return@LaunchedEffect
         if (!hasSyncedPagerWithState) return@LaunchedEffect
         snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
             .distinctUntilChanged()
@@ -284,6 +288,10 @@ fun HomeScreen(
 
     // [P2] 当前分类被隐藏时，自动落到首个可见分类
     LaunchedEffect(topCategories) {
+        if (!hasVisibleTopCategories) {
+            hasSyncedPagerWithState = false
+            return@LaunchedEffect
+        }
         val firstVisible = topCategories.firstOrNull() ?: return@LaunchedEffect
         if (state.currentCategory !in topCategories) {
             viewModel.updateDisplayedTabIndex(0)
@@ -293,7 +301,7 @@ fun HomeScreen(
 
     // [CrashFix] 顶栏配置变化导致页数收缩时，先钳制 pager 当前页，避免越界
     LaunchedEffect(topCategories.size) {
-        if (topCategories.isEmpty()) return@LaunchedEffect
+        if (!hasVisibleTopCategories) return@LaunchedEffect
         val lastIndex = topCategories.lastIndex
         if (pagerState.currentPage > lastIndex) {
             pagerState.scrollToPage(lastIndex)
@@ -302,6 +310,10 @@ fun HomeScreen(
 
     // [修复] 状态变化时驱动 Pager：首次使用无动画对齐，后续用动画跟随
     LaunchedEffect(state.currentCategory, topCategories) {
+        if (!hasVisibleTopCategories) {
+            hasSyncedPagerWithState = false
+            return@LaunchedEffect
+        }
         val targetPage = topCategories.indexOf(state.currentCategory)
         if (targetPage < 0) return@LaunchedEffect
         if (shouldUseInitialHomePagerSnap(
@@ -855,7 +867,7 @@ fun HomeScreen(
     
     // [P2] 优先按当前可见顶栏计算索引，避免自定义排序后高亮错位
     val currentCategoryIndex = topCategories.indexOf(state.currentCategory)
-    val displayedTabIndex = if (currentCategoryIndex >= 0) {
+    val displayedTabIndex = if (hasVisibleTopCategories && currentCategoryIndex >= 0) {
         currentCategoryIndex
     } else {
         state.displayedTabIndex.coerceIn(0, (topCategories.size - 1).coerceAtLeast(0))
@@ -899,7 +911,8 @@ fun HomeScreen(
     // Pixels
     val searchCollapseDistancePx = with(density) { searchCollapseDistanceDp.toPx() }
 
-    LaunchedEffect(pagerState, topCategories, searchCollapseDistancePx) {
+    LaunchedEffect(pagerState, topCategories, searchCollapseDistancePx, hasVisibleTopCategories) {
+        if (!hasVisibleTopCategories) return@LaunchedEffect
         snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { (page, scrolling) ->
@@ -1056,13 +1069,20 @@ fun HomeScreen(
                             // 首页使用 Pager + Lazy 子层，source 挂在外层容器更稳定。
                             .hazeSource(state = hazeState)
                     ) {
-                    // [Fix] Re-enabled default overscroll for better feedback
-                        HorizontalPager(
-                            state = pagerState,
-                            beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
-                            modifier = Modifier.fillMaxSize(),
-                            key = { index -> resolveHomeTopCategoryKey(topCategories, index) }
-                        ) { page ->
+                        if (!hasVisibleTopCategories) {
+                            HomeNoTitleEmptyState(
+                                modifier = Modifier.fillMaxSize(),
+                                topPadding = listTopPadding,
+                                onSettingsClick = onSettingsClick
+                            )
+                        } else {
+                        // [Fix] Re-enabled default overscroll for better feedback
+                            HorizontalPager(
+                                state = pagerState,
+                                beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
+                                modifier = Modifier.fillMaxSize(),
+                                key = { index -> resolveHomeTopCategoryKey(topCategories, index) }
+                            ) { page ->
                         val category = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@HorizontalPager
                         val categoryState = state.categoryStates[category] ?: com.android.purebilibili.feature.home.CategoryContent()
                         
@@ -1260,6 +1280,7 @@ fun HomeScreen(
                              } // Close Box wrapper
                         }
                 } // Close HorizontalPager lambda
+                        }
             } // Close Box wrapper
         } // Close Scaffold lambda
         
@@ -1340,7 +1361,7 @@ fun HomeScreen(
             },
             onPartitionClick = onPartitionClick,
             onLiveClick = onLiveListClick,  // [修复] 直播分区点击导航到独立页面
-            showPartitionButton = focusSettings.showHomePartitionButton,
+            showPartitionButton = hasVisibleTopCategories && focusSettings.showHomePartitionButton,
             // isScrollingUp = isHeaderVisible, // [Removed] logic moved to offset
             hazeState = if (topChromeMaterialMode != com.android.purebilibili.feature.home.components.TopTabMaterialMode.PLAIN) {
                 hazeState
@@ -1358,7 +1379,7 @@ fun HomeScreen(
             pagerState = pagerState,
             backdrop = homeBackdrop,
             homeSettings = effectiveHomeSettings,
-            topTabsVisible = resolveHomeTopTabsVisible(
+            topTabsVisible = hasVisibleTopCategories && resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = delayTopTabsUntilCardSettled,
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
                 isReturningFromDetail = CardPositionManager.isReturningFromDetail
@@ -1748,10 +1769,10 @@ fun HomeScreen(
 
     //  [修复] 如果当前在直播分类（非关注空列表情况），返回时切换到推荐
     val isLiveCategoryNotHome = state.currentCategory == HomeCategory.LIVE && !isEmptyLiveFollowed
-    val liveCategoryBackTarget = remember(topCategories) {
-        topCategories.firstOrNull { it != HomeCategory.LIVE } ?: topCategories.firstOrNull() ?: HomeCategory.FOLLOW
+    val liveCategoryBackTarget = remember(topCategories, state.currentCategory) {
+        topCategories.firstOrNull { it != HomeCategory.LIVE } ?: topCategories.firstOrNull() ?: state.currentCategory
     }
-    androidx.activity.compose.BackHandler(enabled = isLiveCategoryNotHome) {
+    androidx.activity.compose.BackHandler(enabled = hasVisibleTopCategories && isLiveCategoryNotHome) {
         viewModel.switchCategory(liveCategoryBackTarget)
     }
     

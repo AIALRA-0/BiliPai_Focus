@@ -1,13 +1,18 @@
 package com.Android.purebilibili.feature.video.ui.components
 
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -84,6 +89,92 @@ class SubReplyDetailUiRegressionTest {
         }
     }
 
+    @Test
+    fun clickingSubReplyPreview_opensRootReplyDetail() {
+        var openedReplyId: Long? = null
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyItemView(
+                    item = buildReplyWithPreview(),
+                    emoteMap = emptyMap(),
+                    onClick = {},
+                    onSubClick = { openedReplyId = it.rpid },
+                    onAvatarClick = {}
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301")
+            .performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals(100L, openedReplyId)
+        }
+    }
+
+    @Test
+    fun clickingViewAllRepliesEntry_opensRootReplyDetail() {
+        var openedReplyId: Long? = null
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                ReplyItemView(
+                    item = buildReplyWithPreview(),
+                    emoteMap = emptyMap(),
+                    onClick = {},
+                    onSubClick = { openedReplyId = it.rpid },
+                    onAvatarClick = {}
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("${COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX}100")
+            .assertIsDisplayed()
+            .performClick()
+
+        composeTestRule.runOnIdle {
+            assertEquals(100L, openedReplyId)
+        }
+    }
+
+    @Test
+    fun longPressingSubReplyPreview_copiesPreviewText() {
+        lateinit var clipboardManager: ClipboardManager
+        lateinit var appContext: android.content.Context
+
+        composeTestRule.setContent {
+            val context = LocalContext.current
+            appContext = context
+            clipboardManager = context.getSystemService(ClipboardManager::class.java)
+            MaterialTheme {
+                ReplyItemView(
+                    item = buildReplyWithPreview(),
+                    emoteMap = emptyMap(),
+                    onClick = {},
+                    onSubClick = {},
+                    onAvatarClick = {}
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("${COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX}301")
+            .performTouchInput {
+                longClick(center)
+            }
+
+        composeTestRule.runOnIdle {
+            val clip = clipboardManager.primaryClip
+            val firstItem = clip?.takeIf { it.description.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) }
+                ?.getItemAt(0)
+                ?.coerceToText(appContext)
+                ?.toString()
+            assertEquals("preview child reply", firstItem)
+        }
+    }
     private fun buildSubReplyState(): SubReplyUiState {
         return SubReplyUiState(
             visible = true,

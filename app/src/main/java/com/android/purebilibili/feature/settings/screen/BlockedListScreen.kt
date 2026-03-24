@@ -41,7 +41,7 @@ fun BlockedListScreen(
                 title = { Text("黑名单管理", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "Back")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

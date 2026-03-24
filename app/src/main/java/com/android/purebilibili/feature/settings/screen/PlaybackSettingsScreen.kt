@@ -452,9 +452,9 @@ fun PlaybackSettingsContent(
                             title = "听视频离开时自动进入画中画",
                             subtitle = if (audioModeAutoPipToggleEnabled) {
                                 if (audioModeAutoPipEnabled) {
-                                    "已开启：按 Home 或离开手势时会自动进入系统画中画"
+                                    "已开启：回到桌面或使用离开手势时会自动进入系统画中画"
                                 } else {
-                                    "关闭后仅保留听视频页内的显式 PiP 按钮"
+                                    "关闭后仅保留听视频页内的画中画按钮"
                                 }
                             } else {
                                 "仅系统画中画模式下生效"
@@ -554,7 +554,7 @@ fun PlaybackSettingsContent(
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChartBar,
                             title = "详细统计信息",
-                            subtitle = "显示 Codec、码率等 Geek 信息",
+                            subtitle = "显示编解码、码率等极客信息",
                             checked = isStatsEnabled,
                             onCheckedChange = {
                                 isStatsEnabled = it
@@ -889,18 +889,18 @@ fun PlaybackSettingsContent(
                             }
                             Text(
                                 text = if (fullscreenSwipeSeekEnabled) {
-                                    "左右滑动时每档跳转秒数：当前 ${fullscreenSwipeSeekSeconds}s"
+                                    "左右滑动时每档跳转秒数：当前 ${fullscreenSwipeSeekSeconds} 秒"
                                 } else {
-                                    "已关闭固定步长（当前设定 ${fullscreenSwipeSeekSeconds}s，重新开启后生效）"
+                                    "已关闭固定步长（当前设定 ${fullscreenSwipeSeekSeconds} 秒，重新开启后生效）"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             val seekStepOptions = listOf(
-                                PlaybackSegmentOption(10, "10s"),
-                                PlaybackSegmentOption(15, "15s"),
-                                PlaybackSegmentOption(20, "20s"),
-                                PlaybackSegmentOption(30, "30s")
+                                PlaybackSegmentOption(10, "10秒"),
+                                PlaybackSegmentOption(15, "15秒"),
+                                PlaybackSegmentOption(20, "20秒"),
+                                PlaybackSegmentOption(30, "30秒")
                             )
                             IOSSlidingSegmentedControl(
                                 options = seekStepOptions,
@@ -1205,7 +1205,7 @@ fun PlaybackSettingsContent(
                             icon = CupertinoIcons.Default.ChartBar,
                             title = "B站定向流量支持",
                             subtitle = if (directedTrafficEnabled) {
-                                "移动数据下优先使用 App 播放链路（实验性）"
+                                "移动数据下优先使用应用内播放链路（实验性）"
                             } else {
                                 "若套餐含 B 站定向流量，建议开启"
                             },
@@ -1227,7 +1227,7 @@ fun PlaybackSettingsContent(
                             subtitle = if (autoHighestQualityEnabled) {
                                 "已开启，始终请求账号与设备可用的最高画质"
                             } else {
-                                "全局开关，开启后覆盖下方 WiFi 和流量默认画质"
+                                "全局开关，开启后覆盖下方无线网络和流量默认画质"
                             },
                             checked = autoHighestQualityEnabled,
                             onCheckedChange = {
@@ -1242,13 +1242,13 @@ fun PlaybackSettingsContent(
                         IOSDivider()
 
                         IOSSlidingSegmentedSetting(
-                            title = "WiFi 默认画质：${getQualityLabel(wifiQuality)}",
+                            title = "无线网络默认画质：${getQualityLabel(wifiQuality)}",
                             subtitle = if (autoHighestQualityEnabled) {
-                                "已被自动最高画质覆盖，当前仅保留你的 WiFi 偏好"
+                                "已被自动最高画质覆盖，当前仅保留你的无线网络偏好"
                             } else {
                                 resolveDefaultQualitySubtitle(
                                     rawQuality = wifiQuality,
-                                    fallbackSubtitle = "仅 WiFi 环境生效",
+                                    fallbackSubtitle = "仅无线网络环境生效",
                                     isLoggedIn = isLoggedIn,
                                     isVip = isVip
                                 )
@@ -1279,7 +1279,7 @@ fun PlaybackSettingsContent(
                         val effectiveQualityLabel = getQualityLabel(effectiveQuality)
                         
                         IOSSlidingSegmentedSetting(
-                            title = "流量 默认画质：${getQualityLabel(mobileQuality)}",
+                            title = "流量默认画质：${getQualityLabel(mobileQuality)}",
                             subtitle = when {
                                 autoHighestQualityEnabled ->
                                     "已被自动最高画质覆盖，当前仅保留你的流量偏好"

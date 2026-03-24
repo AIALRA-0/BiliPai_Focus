@@ -143,6 +143,12 @@ private const val HI_RES_AUDIO_QUALITY_ID = 30251
 private const val HI_RES_LONG_PRESS_SPEED_LIMIT = 1.5f
 private const val LONG_PRESS_SPEED_LOCK_THRESHOLD_DP = 72
 
+internal data class LongPressSpeedStartDecision(
+    val originalPlaybackParameters: PlaybackParameters,
+    val targetPlaybackParameters: PlaybackParameters,
+    val clearExistingLock: Boolean
+)
+
 internal fun resolveEffectiveLongPressSpeed(
     requestedSpeed: Float,
     currentAudioQuality: Int,
@@ -166,6 +172,27 @@ internal fun resolveLongPressPlaybackParameters(
             currentAudioQuality = currentAudioQuality
         ),
         1.0f
+    )
+}
+
+internal fun resolveLongPressSpeedStartDecision(
+    currentPlaybackParameters: PlaybackParameters,
+    previousOriginalPlaybackParameters: PlaybackParameters,
+    longPressSpeedLocked: Boolean,
+    requestedSpeed: Float,
+    currentAudioQuality: Int
+): LongPressSpeedStartDecision {
+    return LongPressSpeedStartDecision(
+        originalPlaybackParameters = if (longPressSpeedLocked) {
+            previousOriginalPlaybackParameters
+        } else {
+            currentPlaybackParameters
+        },
+        targetPlaybackParameters = resolveLongPressPlaybackParameters(
+            requestedSpeed = requestedSpeed,
+            currentAudioQuality = currentAudioQuality
+        ),
+        clearExistingLock = longPressSpeedLocked
     )
 }
 
@@ -899,7 +926,7 @@ fun VideoPlayerSection(
     }
     val hiResCompatHintShownPersisted = playerInteractionSettings.hiResLongPressCompatHintShown
     var isLongPressing by remember { mutableStateOf(false) }
-    var originalPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
+    var originalPlaybackParameters by remember(bvid) { mutableStateOf(PlaybackParameters.DEFAULT) }
     var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
     var longPressSpeedFeedbackVisible by remember { mutableStateOf(false) }
     var longPressSpeedLocked by remember(bvid) { mutableStateOf(false) }
@@ -1585,13 +1612,19 @@ fun VideoPlayerSection(
                         }
                         //  长按开始：保存原速度并应用长按倍速
                         val player = playerState.player
-                        originalPlaybackParameters = player.playbackParameters
-                        val longPressPlaybackParameters = resolveLongPressPlaybackParameters(
+                        val startDecision = resolveLongPressSpeedStartDecision(
+                            currentPlaybackParameters = player.playbackParameters,
+                            previousOriginalPlaybackParameters = originalPlaybackParameters,
+                            longPressSpeedLocked = longPressSpeedLocked,
                             requestedSpeed = longPressSpeed,
                             currentAudioQuality = currentAudioQuality
                         )
-                        effectiveLongPressSpeed = longPressPlaybackParameters.speed
-                        player.playbackParameters = longPressPlaybackParameters
+                        originalPlaybackParameters = startDecision.originalPlaybackParameters
+                        if (startDecision.clearExistingLock) {
+                            longPressSpeedLocked = false
+                        }
+                        effectiveLongPressSpeed = startDecision.targetPlaybackParameters.speed
+                        player.playbackParameters = startDecision.targetPlaybackParameters
                         if (
                             shouldShowHiResLongPressCompatHint(
                                 requestedSpeed = longPressSpeed,

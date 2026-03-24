@@ -303,7 +303,9 @@ fun SearchScreen(
             )
         }
     }
-    val searchHazeEnabled = shouldEnableSearchHazeSource(searchMotionBudget)
+    val searchHazeEnabled = shouldEnableSearchHazeSource(
+        isSearching = state.isSearching
+    )
     val effectiveCardTransitionEnabled =
         cardTransitionEnabled && searchMotionBudget == SearchMotionBudget.FULL
     val showHotSectionHeader by remember(state.hotList, hotSearchEnabled) {
@@ -965,7 +967,12 @@ fun SearchScreen(
                     .align(Alignment.TopCenter)
                     .then(
                         if (searchHazeEnabled) {
-                            Modifier.unifiedBlur(hazeState = hazeState)
+                            Modifier.unifiedBlur(
+                                hazeState = hazeState,
+                                surfaceType = com.android.purebilibili.core.ui.blur.BlurSurfaceType.HEADER,
+                                isScrolling = isSearchResultsScrolling,
+                                forceLowBudget = searchMotionBudget == SearchMotionBudget.REDUCED
+                            )
                         } else {
                             Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
                         }

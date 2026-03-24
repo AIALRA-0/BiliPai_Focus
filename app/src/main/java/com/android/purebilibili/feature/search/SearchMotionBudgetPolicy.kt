@@ -18,5 +18,5 @@ internal fun resolveSearchMotionBudget(
 }
 
 internal fun shouldEnableSearchHazeSource(
-    budget: SearchMotionBudget
-): Boolean = budget == SearchMotionBudget.FULL
+    isSearching: Boolean
+): Boolean = !isSearching

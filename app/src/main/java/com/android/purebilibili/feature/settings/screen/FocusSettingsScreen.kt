@@ -105,6 +105,16 @@ fun FocusSettingsScreen(
                     IOSDivider(startIndent = 66.dp)
                     IOSSwitchItem(
                         icon = Icons.Outlined.Home,
+                        title = "显示关注",
+                        subtitle = "控制首页顶部关注标签显隐",
+                        checked = settings.showHomeFollowTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeFollowTabVisible(context, enabled) }
+                        }
+                    )
+                    IOSDivider(startIndent = 66.dp)
+                    IOSSwitchItem(
+                        icon = Icons.Outlined.Home,
                         title = "显示热门",
                         subtitle = "控制首页顶部热门标签显隐",
                         checked = settings.showHomePopularTab,
@@ -125,11 +135,41 @@ fun FocusSettingsScreen(
                     IOSDivider(startIndent = 66.dp)
                     IOSSwitchItem(
                         icon = Icons.Outlined.Home,
+                        title = "显示追番",
+                        subtitle = "控制首页顶部追番标签显隐",
+                        checked = settings.showHomeAnimeTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeAnimeTabVisible(context, enabled) }
+                        }
+                    )
+                    IOSDivider(startIndent = 66.dp)
+                    IOSSwitchItem(
+                        icon = Icons.Outlined.Home,
                         title = "显示游戏",
                         subtitle = "控制首页顶部游戏标签显隐",
                         checked = settings.showHomeGameTab,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setFocusHomeGameTabVisible(context, enabled) }
+                        }
+                    )
+                    IOSDivider(startIndent = 66.dp)
+                    IOSSwitchItem(
+                        icon = Icons.Outlined.Home,
+                        title = "显示知识",
+                        subtitle = "控制首页顶部知识标签显隐",
+                        checked = settings.showHomeKnowledgeTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeKnowledgeTabVisible(context, enabled) }
+                        }
+                    )
+                    IOSDivider(startIndent = 66.dp)
+                    IOSSwitchItem(
+                        icon = Icons.Outlined.Home,
+                        title = "显示科技",
+                        subtitle = "控制首页顶部科技标签显隐",
+                        checked = settings.showHomeTechTab,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setFocusHomeTechTabVisible(context, enabled) }
                         }
                     )
                     IOSDivider(startIndent = 66.dp)

@@ -6,6 +6,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -53,6 +54,7 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlace
 import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.common.copyOnLongPress
+import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import androidx.compose.foundation.text.selection.SelectionContainer
 import java.text.SimpleDateFormat
 import java.util.*
@@ -67,6 +69,8 @@ internal val COMMENT_INLINE_BVID_PATTERN =
     Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
 internal const val COLLAPSED_SUB_REPLY_PREVIEW_LIMIT = 3
 const val COMMENT_PICTURE_TAG_PREFIX = "comment_picture_"
+const val COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX = "comment_sub_reply_preview_"
+const val COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX = "comment_view_all_replies_"
 
 private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
 
@@ -539,6 +543,7 @@ fun ReplyItemView(
     val showInlineSubReplyToggle = remember(item.replies) {
         shouldShowInlineSubReplyToggle(item.replies.orEmpty().size)
     }
+    val copyToClipboard = rememberClipboardCopyHandler()
 
     Column(
         modifier = Modifier
@@ -790,7 +795,16 @@ fun ReplyItemView(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onSubClick(item) }
+                                    .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
+                                    .combinedClickable(
+                                        onClick = { onSubClick(item) },
+                                        onLongClick = {
+                                            copyToClipboard(
+                                                subReply.content.message,
+                                                "回复内容"
+                                            )
+                                        }
+                                    )
                             ) {
                                 ReplyMessageText(
                                     text = subReply.content.message,

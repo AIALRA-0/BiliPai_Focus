@@ -437,6 +437,7 @@ fun VideoDetailScreen(
     startInFullscreen: Boolean = false,
     startAudioFromRoute: Boolean = false,
     autoEnterPortraitFromRoute: Boolean = false,
+    resumePositionMsFromRoute: Long = 0L,
     transitionEnabled: Boolean = false,
     predictiveBackAnimationEnabled: Boolean = true,
     transitionEnterDurationMillis: Int = 320,
@@ -1118,6 +1119,7 @@ fun VideoDetailScreen(
         viewModel = viewModel,
         bvid = currentBvid,
         cid = cid,
+        fallbackResumePositionMs = resumePositionMsFromRoute,
         startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
     )
     val isVideoPlaying by produceState(

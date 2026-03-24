@@ -94,34 +94,50 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `focus filters configured home tabs and keeps follow by default`() {
+    fun `focus filters configured home tabs and keeps follow anime knowledge tech by default`() {
         val categories = applyFocusHomeTopCategories(
             categories = listOf(
                 HomeCategory.RECOMMEND,
                 HomeCategory.FOLLOW,
                 HomeCategory.POPULAR,
                 HomeCategory.LIVE,
+                HomeCategory.ANIME,
                 HomeCategory.GAME
+            ) + listOf(
+                HomeCategory.KNOWLEDGE,
+                HomeCategory.TECH
             ),
             settings = FocusSettings()
         )
 
-        assertEquals(listOf(HomeCategory.FOLLOW), categories)
+        assertEquals(
+            listOf(
+                HomeCategory.FOLLOW,
+                HomeCategory.ANIME,
+                HomeCategory.KNOWLEDGE,
+                HomeCategory.TECH
+            ),
+            categories
+        )
     }
 
     @Test
-    fun `focus fallback keeps home non empty when everything else is hidden`() {
+    fun `focus can return empty when every title is hidden`() {
         val categories = applyFocusHomeTopCategories(
-            categories = listOf(HomeCategory.RECOMMEND, HomeCategory.POPULAR, HomeCategory.LIVE, HomeCategory.GAME),
-            settings = FocusSettings(),
-            fallbackCategory = HomeCategory.FOLLOW
+            categories = HomeCategory.entries.toList(),
+            settings = FocusSettings(
+                showHomeFollowTab = false,
+                showHomeAnimeTab = false,
+                showHomeKnowledgeTab = false,
+                showHomeTechTab = false
+            )
         )
 
-        assertEquals(listOf(HomeCategory.FOLLOW), categories)
+        assertTrue(categories.isEmpty())
     }
 
     @Test
-    fun `focus can selectively restore recommend and popular`() {
+    fun `focus can selectively restore recommend popular and follow`() {
         val categories = applyFocusHomeTopCategories(
             categories = listOf(
                 HomeCategory.RECOMMEND,
@@ -131,6 +147,7 @@ class HomeTopCategoryPolicyTest {
             ),
             settings = FocusSettings(
                 showHomeRecommendTab = true,
+                showHomeFollowTab = true,
                 showHomePopularTab = true
             )
         )
@@ -140,6 +157,42 @@ class HomeTopCategoryPolicyTest {
                 HomeCategory.RECOMMEND,
                 HomeCategory.FOLLOW,
                 HomeCategory.POPULAR
+            ),
+            categories
+        )
+    }
+
+    @Test
+    fun `focus applies all eight title visibility switches`() {
+        val categories = applyFocusHomeTopCategories(
+            categories = listOf(
+                HomeCategory.RECOMMEND,
+                HomeCategory.FOLLOW,
+                HomeCategory.POPULAR,
+                HomeCategory.LIVE,
+                HomeCategory.ANIME,
+                HomeCategory.GAME,
+                HomeCategory.KNOWLEDGE,
+                HomeCategory.TECH
+            ),
+            settings = FocusSettings(
+                showHomeRecommendTab = true,
+                showHomeFollowTab = false,
+                showHomePopularTab = true,
+                showHomeLiveTab = false,
+                showHomeAnimeTab = true,
+                showHomeGameTab = false,
+                showHomeKnowledgeTab = true,
+                showHomeTechTab = false
+            )
+        )
+
+        assertEquals(
+            listOf(
+                HomeCategory.RECOMMEND,
+                HomeCategory.POPULAR,
+                HomeCategory.ANIME,
+                HomeCategory.KNOWLEDGE
             ),
             categories
         )

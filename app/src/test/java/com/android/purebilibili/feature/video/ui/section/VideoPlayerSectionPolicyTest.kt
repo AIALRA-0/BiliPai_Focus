@@ -254,6 +254,36 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun longPressStart_capturesCurrentPlaybackParameters_whenNoLockIsActive() {
+        val decision = resolveLongPressSpeedStartDecision(
+            currentPlaybackParameters = PlaybackParameters(1.25f, 1.0f),
+            previousOriginalPlaybackParameters = PlaybackParameters.DEFAULT,
+            longPressSpeedLocked = false,
+            requestedSpeed = 2.0f,
+            currentAudioQuality = 30280
+        )
+
+        assertEquals(PlaybackParameters(1.25f, 1.0f), decision.originalPlaybackParameters)
+        assertEquals(PlaybackParameters(2.0f, 1.0f), decision.targetPlaybackParameters)
+        assertFalse(decision.clearExistingLock)
+    }
+
+    @Test
+    fun longPressStart_preservesPreLockOriginalPlaybackParameters_whenLockAlreadyActive() {
+        val decision = resolveLongPressSpeedStartDecision(
+            currentPlaybackParameters = PlaybackParameters(2.0f, 1.0f),
+            previousOriginalPlaybackParameters = PlaybackParameters(1.0f, 1.0f),
+            longPressSpeedLocked = true,
+            requestedSpeed = 2.0f,
+            currentAudioQuality = 30280
+        )
+
+        assertEquals(PlaybackParameters(1.0f, 1.0f), decision.originalPlaybackParameters)
+        assertEquals(PlaybackParameters(2.0f, 1.0f), decision.targetPlaybackParameters)
+        assertTrue(decision.clearExistingLock)
+    }
+
+    @Test
     fun hiResLongPressCompatHint_showsOnlyWhenClampHappensFirstTime() {
         assertTrue(
             shouldShowHiResLongPressCompatHint(

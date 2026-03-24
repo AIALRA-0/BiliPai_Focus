@@ -445,6 +445,7 @@ fun rememberVideoPlayerState(
     viewModel: PlayerViewModel,
     bvid: String,
     cid: Long = 0L,
+    fallbackResumePositionMs: Long = 0L,
     startPaused: Boolean = false
 ): VideoPlayerState {
 
@@ -845,7 +846,7 @@ fun rememberVideoPlayerState(
 
     //  [重构] 合并为单个 LaunchedEffect 确保执行顺序
     // 必须先 attachPlayer，再 loadVideo，否则 ViewModel 中的 exoPlayer 引用无效
-    LaunchedEffect(player, bvid, cid, reuseFromMiniPlayerAtEntry) {
+    LaunchedEffect(player, bvid, cid, reuseFromMiniPlayerAtEntry, fallbackResumePositionMs) {
         // 1️⃣ 首先绑定 player
         viewModel.attachPlayer(player)
         Logger.d(
@@ -883,7 +884,11 @@ fun rememberVideoPlayerState(
         // 3️⃣ 如果没有恢复成功，则调用 loadVideo
         if (!restored) {
             com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "SUB_DBG call loadVideo: request=$bvid/$cid")
-            viewModel.loadVideo(bvid, cid = cid)
+            viewModel.loadVideo(
+                bvid = bvid,
+                cid = cid,
+                fallbackResumePositionMs = fallbackResumePositionMs
+            )
         }
     }
 

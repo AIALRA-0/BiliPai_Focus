@@ -41,6 +41,34 @@ class HistoryPlaybackPolicyTest {
     }
 
     @Test
+    fun `resolveHistoryResumePosition converts positive server progress to milliseconds`() {
+        val historyItem = HistoryItem(
+            videoItem = VideoItem(bvid = "BV1"),
+            business = HistoryBusiness.ARCHIVE,
+            progress = 123
+        )
+
+        val resolved = resolveHistoryResumePositionMs(historyItem)
+
+        assertEquals(123_000L, resolved)
+    }
+
+    @Test
+    fun `resolveHistoryResumePosition ignores missing or non-positive progress`() {
+        assertEquals(0L, resolveHistoryResumePositionMs(null))
+        assertEquals(
+            0L,
+            resolveHistoryResumePositionMs(
+                HistoryItem(
+                    videoItem = VideoItem(bvid = "BV1"),
+                    business = HistoryBusiness.ARCHIVE,
+                    progress = 0
+                )
+            )
+        )
+    }
+
+    @Test
     fun `resolveHistoryDisplayProgress prefers furthest valid progress when both are available`() {
         val resolved = resolveHistoryDisplayProgress(
             serverProgressSec = 120,

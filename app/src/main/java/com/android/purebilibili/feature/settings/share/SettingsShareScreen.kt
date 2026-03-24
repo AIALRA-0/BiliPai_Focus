@@ -172,7 +172,7 @@ fun SettingsShareScreen(
                     IOSClickableItem(
                         icon = Icons.Filled.Download,
                         title = "导出到文件",
-                        subtitle = "生成可分享的 JSON 设置文件",
+                        subtitle = "生成可分享的设置文件（JSON）",
                         onClick = {
                             exportLauncher.launch(
                                 buildSettingsShareFileName(
@@ -207,9 +207,9 @@ fun SettingsShareScreen(
                 IOSGroup {
                     IOSClickableItem(
                         icon = Icons.Filled.Info,
-                        title = "JSON 设置包",
+                        title = "设置包（JSON）",
                         subtitle = "支持用户查看，也支持应用内一键导入",
-                        value = "Schema v$SETTINGS_SHARE_SCHEMA_VERSION",
+                        value = "格式版本 v$SETTINGS_SHARE_SCHEMA_VERSION",
                         onClick = null,
                         iconTint = iOSOrange,
                         showChevron = false
@@ -302,7 +302,7 @@ private fun buildImportPreviewSummary(session: SettingsShareImportSession): Stri
         .ifBlank { "无可导入分类" }
     val skippedCount = session.preview.skippedKeys.size
     val skippedSummary = if (skippedCount > 0) {
-        "将跳过 $skippedCount 项本机或未知配置"
+        "将跳过 $skippedCount 项本机专属或未知配置"
     } else {
         "没有需要跳过的项目"
     }

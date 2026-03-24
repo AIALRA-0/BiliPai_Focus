@@ -10,6 +10,14 @@ internal fun resolveHistoryPlaybackCid(
     return if (historyCid > 0L) historyCid else clickedCid.coerceAtLeast(0L)
 }
 
+internal fun resolveHistoryResumePositionMs(historyItem: HistoryItem?): Long {
+    val progressSec = historyItem?.progress ?: 0
+    return progressSec
+        .takeIf { it > 0 }
+        ?.times(1000L)
+        ?: 0L
+}
+
 internal fun resolveHistoryDisplayProgress(
     serverProgressSec: Int,
     durationSec: Int,

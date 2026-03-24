@@ -277,9 +277,13 @@ data class HomeTopTabSettings(
 
 data class FocusSettings(
     val showHomeRecommendTab: Boolean = false,
+    val showHomeFollowTab: Boolean = true,
     val showHomePopularTab: Boolean = false,
     val showHomeLiveTab: Boolean = false,
+    val showHomeAnimeTab: Boolean = true,
     val showHomeGameTab: Boolean = false,
+    val showHomeKnowledgeTab: Boolean = true,
+    val showHomeTechTab: Boolean = true,
     val showHomePartitionButton: Boolean = false,
     val enableFollowGroupFiltering: Boolean = true,
     val showVideoRelatedVideosSection: Boolean = false,
@@ -472,12 +476,20 @@ object SettingsManager {
     private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
     private val KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE =
         booleanPreferencesKey("focus_home_recommend_tab_visible")
+    private val KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_follow_tab_visible")
     private val KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE =
         booleanPreferencesKey("focus_home_popular_tab_visible")
     private val KEY_FOCUS_HOME_LIVE_TAB_VISIBLE =
         booleanPreferencesKey("focus_home_live_tab_visible")
+    private val KEY_FOCUS_HOME_ANIME_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_anime_tab_visible")
     private val KEY_FOCUS_HOME_GAME_TAB_VISIBLE =
         booleanPreferencesKey("focus_home_game_tab_visible")
+    private val KEY_FOCUS_HOME_KNOWLEDGE_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_knowledge_tab_visible")
+    private val KEY_FOCUS_HOME_TECH_TAB_VISIBLE =
+        booleanPreferencesKey("focus_home_tech_tab_visible")
     private val KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE =
         booleanPreferencesKey("focus_home_partition_button_visible")
     private val KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED =
@@ -645,9 +657,13 @@ object SettingsManager {
     internal fun mapFocusSettingsFromPreferences(preferences: Preferences): FocusSettings {
         return FocusSettings(
             showHomeRecommendTab = preferences[KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE] ?: false,
+            showHomeFollowTab = preferences[KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE] ?: true,
             showHomePopularTab = preferences[KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE] ?: false,
             showHomeLiveTab = preferences[KEY_FOCUS_HOME_LIVE_TAB_VISIBLE] ?: false,
+            showHomeAnimeTab = preferences[KEY_FOCUS_HOME_ANIME_TAB_VISIBLE] ?: true,
             showHomeGameTab = preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] ?: false,
+            showHomeKnowledgeTab = preferences[KEY_FOCUS_HOME_KNOWLEDGE_TAB_VISIBLE] ?: true,
+            showHomeTechTab = preferences[KEY_FOCUS_HOME_TECH_TAB_VISIBLE] ?: true,
             showHomePartitionButton = preferences[KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE] ?: false,
             enableFollowGroupFiltering = preferences[KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED] ?: true,
             showVideoRelatedVideosSection = preferences[KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE] ?: false,
@@ -1473,6 +1489,15 @@ object SettingsManager {
         }
     }
 
+    fun getFocusHomeFollowTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE] ?: true }
+
+    suspend fun setFocusHomeFollowTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE] = value
+        }
+    }
+
     fun getFocusHomePopularTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE] ?: false }
 
@@ -1491,12 +1516,39 @@ object SettingsManager {
         }
     }
 
+    fun getFocusHomeAnimeTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_ANIME_TAB_VISIBLE] ?: true }
+
+    suspend fun setFocusHomeAnimeTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_ANIME_TAB_VISIBLE] = value
+        }
+    }
+
     fun getFocusHomeGameTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] ?: false }
 
     suspend fun setFocusHomeGameTabVisible(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_FOCUS_HOME_GAME_TAB_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHomeKnowledgeTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_KNOWLEDGE_TAB_VISIBLE] ?: true }
+
+    suspend fun setFocusHomeKnowledgeTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_KNOWLEDGE_TAB_VISIBLE] = value
+        }
+    }
+
+    fun getFocusHomeTechTabVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FOCUS_HOME_TECH_TAB_VISIBLE] ?: true }
+
+    suspend fun setFocusHomeTechTabVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_HOME_TECH_TAB_VISIBLE] = value
         }
     }
 
@@ -3234,9 +3286,13 @@ object SettingsManager {
             StringShareablePreferenceDefinition(KEY_TOP_TAB_ORDER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_RECOMMEND_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_FOLLOW_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_POPULAR_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_LIVE_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_ANIME_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_GAME_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_KNOWLEDGE_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_TECH_TAB_VISIBLE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HOME_PARTITION_BUTTON_VISIBLE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE, SettingsShareSection.NAVIGATION),

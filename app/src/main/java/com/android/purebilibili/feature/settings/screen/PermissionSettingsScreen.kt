@@ -179,13 +179,13 @@ fun PermissionSettingsContent(
             ),
             //  DLNA 投屏所需权限
             PermissionInfo(
-                name = "设备发现 (DLNA)",
+                name = "设备发现（DLNA）",
                 permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     Manifest.permission.NEARBY_WIFI_DEVICES
                 } else {
                     Manifest.permission.ACCESS_FINE_LOCATION
                 },
-                description = "用于扫描和连接附近的投屏设备 (DLNA)",
+                description = "用于扫描和连接附近的投屏设备（DLNA）",
                 icon = CupertinoIcons.Default.Tv,
                 iconTint = iOSBlue,
                 isNormal = false,

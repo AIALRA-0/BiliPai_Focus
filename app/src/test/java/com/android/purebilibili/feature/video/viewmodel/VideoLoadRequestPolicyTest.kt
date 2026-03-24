@@ -45,6 +45,39 @@ class VideoLoadRequestPolicyTest {
     }
 
     @Test
+    fun `requested start position prefers local cache before route resume fallback`() {
+        assertEquals(
+            36_000L,
+            resolveRequestedStartPositionMs(
+                cachedPositionMs = 36_000L,
+                fallbackResumePositionMs = 12_000L
+            )
+        )
+    }
+
+    @Test
+    fun `requested start position falls back to route resume when local cache missing`() {
+        assertEquals(
+            12_000L,
+            resolveRequestedStartPositionMs(
+                cachedPositionMs = 0L,
+                fallbackResumePositionMs = 12_000L
+            )
+        )
+    }
+
+    @Test
+    fun `requested start position clamps invalid inputs to zero`() {
+        assertEquals(
+            0L,
+            resolveRequestedStartPositionMs(
+                cachedPositionMs = -1L,
+                fallbackResumePositionMs = -20L
+            )
+        )
+    }
+
+    @Test
     fun `player info result requires token and exact video context`() {
         assertTrue(
             shouldApplyPlayerInfoResult(

@@ -182,7 +182,8 @@ internal fun resolveMainActivityVideoRoute(
         cid = cid,
         encodedCover = "",
         startAudio = false,
-        autoPortrait = true
+        autoPortrait = true,
+        resumePositionMs = 0L
     )
 }
 

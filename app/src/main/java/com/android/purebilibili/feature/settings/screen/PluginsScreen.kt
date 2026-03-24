@@ -145,11 +145,11 @@ fun PluginsContent(
 
     fun validateImportUrlOrError(raw: String): String? {
         val normalized = raw.trim()
-        if (normalized.isBlank()) return "请输入 URL"
+        if (normalized.isBlank()) return "请输入链接地址"
         val uri = Uri.parse(normalized)
         val scheme = uri.scheme?.lowercase()
         if (scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
-            return "请输入有效的 http/https 链接"
+            return "请输入有效的 http/https 地址"
         }
         return null
     }
@@ -303,7 +303,7 @@ fun PluginsContent(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "通过 URL 安装 JSON 规则插件",
+                                text = "通过链接安装 JSON 规则插件",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -444,8 +444,8 @@ fun PluginsContent(
                             importUrl = it
                             importError = null
                         },
-                        label = { Text("插件 URL") },
-                        placeholder = { Text("https://example.com/plugin") },
+                        label = { Text("插件链接") },
+                        placeholder = { Text("例如：https://example.com/plugin.json") },
                         singleLine = true,
                         isError = importError != null,
                         supportingText = importError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
@@ -717,7 +717,7 @@ private fun PluginItem(
                 //  显示作者
                 if (plugin.author != "Unknown") {
                     Text(
-                        text = "by ${plugin.author}",
+                        text = "作者：${plugin.author}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
@@ -863,7 +863,7 @@ private fun JsonPluginItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "by ${plugin.author}",
+                        text = "作者：${plugin.author}",
                         style = MaterialTheme.typography.labelSmall,
                         color = iOSPurple
                     )
@@ -1115,7 +1115,7 @@ private fun TestResultDialog(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "时长: ${formatDuration(video.duration)}",
+                                        text = "时长：${formatDuration(video.duration)}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1124,7 +1124,7 @@ private fun TestResultDialog(
                         }
                         if (filteredVideos.size > 3) {
                             Text(
-                                text = "... 还有 ${filteredVideos.size - 3} 个视频",
+                                text = "……还有 ${filteredVideos.size - 3} 个视频",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp)

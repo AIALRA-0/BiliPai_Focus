@@ -3,10 +3,26 @@
 > [!NOTE]
 > 当前仓库继续保留上游 `BiliPai` 的版本记录；Focus 定制版单独维护发布线。
 > 
-> - 最新 Focus 发布：`v7.1.1-focus.3`
+> - 最新 Focus 发布：`v7.1.2-focus.1`
 > - Focus 变更日志：[FOCUS_CHANGLOG.md](FOCUS_CHANGLOG.md)
-> - Focus Release Notes：[docs/releases/focus-7.1.1-focus.3.md](docs/releases/focus-7.1.1-focus.3.md)
+> - Focus Release Notes：[docs/releases/focus-7.1.2-focus.1.md](docs/releases/focus-7.1.2-focus.1.md)
 > - 下方正文仍对应上游官方版本演进
+
+## v7.1.2 (2026-03-23)
+
+### 版本信息
+- 版本号从 `7.1.1` 升级到 `7.1.2`，`versionCode` 升级到 `125`。
+- 本次为“播放回归修复 + 设置页本地化继续收口”的维护更新。
+
+### 播放、导航与交互回归
+- 视频详情、播放器状态与播放请求链路继续修复，减少部分场景下的播放回归与异常落点。
+- `MainActivity`、`AppNavigation`、首页到视频页的导航策略继续收口，视频路由判断和回退行为更稳定。
+- 楼中楼回复预览补齐点击展开与长按复制回归测试，相关交互链路保持可验证。
+
+### 设置页与本地化
+- 设置首页新增 `SettingsScreenPolicy`，继续统一设置页结构与入口映射规则。
+- 外观、动画、权限、插件、播放、拉黑列表和设置分享等页面继续补齐本地化与标题文案。
+- 搜索、历史与设置相关策略测试同步增强，以覆盖本轮本地化和交互修复。
 
 ## v7.1.1 (2026-03-23)
 

@@ -115,9 +115,9 @@ fun AnimationSettingsContent(
     )
     val motionTierLabel = remember(effectiveMotionTier) {
         when (effectiveMotionTier) {
-            MotionTier.Reduced -> "Reduced（低动效）"
-            MotionTier.Normal -> "Normal（标准）"
-            MotionTier.Enhanced -> "Enhanced（增强）"
+            MotionTier.Reduced -> "低动效"
+            MotionTier.Normal -> "标准"
+            MotionTier.Enhanced -> "增强"
         }
     }
     val motionTierHint = remember(effectiveMotionTier) {

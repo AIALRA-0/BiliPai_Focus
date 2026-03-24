@@ -367,7 +367,7 @@ fun AppearanceSettingsContent(
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                              IOSSwitchItem(
                                 icon = CupertinoIcons.Default.PaintbrushPointed,
-                                title = "Material You",
+                                title = "动态取色（Material You）",
                                 subtitle = "跟随系统壁纸变换应用主题色",
                                 checked = state.dynamicColor,
                                 onCheckedChange = { viewModel.toggleDynamicColor(it) },

@@ -23,10 +23,10 @@ internal fun resolveDarkThemeStyleSegmentOptions(
 }
 
 internal fun resolveAppLanguageSegmentOptions(
-    followSystemLabel: String = "Follow System",
+    followSystemLabel: String = "跟随系统",
     simplifiedChineseLabel: String = "简体中文",
     traditionalChineseLabel: String = "繁體中文",
-    englishLabel: String = "English"
+    englishLabel: String = "英语"
 ): List<PlaybackSegmentOption<AppLanguage>> {
     return listOf(
         PlaybackSegmentOption(AppLanguage.FOLLOW_SYSTEM, followSystemLabel),
