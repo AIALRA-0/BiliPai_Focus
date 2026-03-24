@@ -70,6 +70,7 @@ import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 // 🌈 Material Icons Extended - 亮度图标
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -507,9 +508,55 @@ internal fun shouldForceCoverDuringReturnAnimation(
 
 internal fun shouldShowCoverImage(
     isFirstFrameRendered: Boolean,
-    forceCoverDuringReturnAnimation: Boolean
+    forceCoverDuringReturnAnimation: Boolean,
+    shouldKeepCoverForManualStart: Boolean
 ): Boolean {
-    return forceCoverDuringReturnAnimation || !isFirstFrameRendered
+    return forceCoverDuringReturnAnimation || shouldKeepCoverForManualStart || !isFirstFrameRendered
+}
+
+internal fun shouldKeepCoverForManualStart(
+    playWhenReady: Boolean,
+    currentPositionMs: Long
+): Boolean {
+    return !playWhenReady && currentPositionMs <= 0L
+}
+
+internal fun shouldShowManualStartPlayButton(
+    shouldKeepCoverForManualStart: Boolean
+): Boolean {
+    return shouldKeepCoverForManualStart
+}
+
+internal fun shouldEnableManualStartCoverOverlay(
+    shouldKeepCoverForManualStart: Boolean
+): Boolean {
+    return shouldKeepCoverForManualStart
+}
+
+internal enum class ManualStartPlayButtonAnchor {
+    Center,
+    CenterEnd,
+    BottomEnd
+}
+
+internal data class ManualStartPlayButtonLayoutSpec(
+    val anchor: ManualStartPlayButtonAnchor,
+    val endPaddingDp: Int,
+    val iconWidthDp: Int,
+    val iconHeightDp: Int,
+    val showCoverScrim: Boolean,
+    val showTopDecorations: Boolean
+)
+
+internal fun resolveManualStartPlayButtonLayoutSpec(): ManualStartPlayButtonLayoutSpec {
+    return ManualStartPlayButtonLayoutSpec(
+        anchor = ManualStartPlayButtonAnchor.BottomEnd,
+        endPaddingDp = 24,
+        iconWidthDp = 72,
+        iconHeightDp = 60,
+        showCoverScrim = false,
+        showTopDecorations = false
+    )
 }
 
 internal fun shouldDisableCoverFadeAnimation(
@@ -544,21 +591,36 @@ internal fun shouldHidePlayerSurfaceDuringForcedReturn(
 }
 
 internal fun shouldKeepInlinePlayerContentOnReset(
-    isPortraitFullscreen: Boolean
+    isPortraitFullscreen: Boolean,
+    forceCoverDuringReturnAnimation: Boolean
 ): Boolean {
-    return !isPortraitFullscreen
+    return !isPortraitFullscreen && !forceCoverDuringReturnAnimation
 }
 
 internal fun shouldShowInlinePlayerView(
-    isPortraitFullscreen: Boolean
+    isPortraitFullscreen: Boolean,
+    forceCoverDuringReturnAnimation: Boolean
 ): Boolean {
-    return !isPortraitFullscreen
+    return !isPortraitFullscreen && !forceCoverDuringReturnAnimation
 }
 
 internal fun shouldEnableCoverImageCrossfade(
     forceCoverDuringReturnAnimation: Boolean
 ): Boolean {
     return !forceCoverDuringReturnAnimation
+}
+
+internal fun resolvePreferredVideoCoverUrl(
+    entryCoverUrl: String,
+    detailCoverUrl: String
+): String {
+    val normalizedEntryCoverUrl = entryCoverUrl.trim()
+    if (normalizedEntryCoverUrl.isNotEmpty()) return normalizedEntryCoverUrl
+
+    val normalizedDetailCoverUrl = detailCoverUrl.trim()
+    if (normalizedDetailCoverUrl.isNotEmpty()) return normalizedDetailCoverUrl
+
+    return ""
 }
 
 internal fun shouldEnableForcedReturnCoverSharedBounds(
@@ -622,9 +684,12 @@ internal fun shouldRebindPlayerSurfaceOnForeground(
 internal fun shouldBindInlinePlayerViewToPlayer(
     isPortraitFullscreen: Boolean,
     hostLifecycleStarted: Boolean,
-    isInPipMode: Boolean
+    isInPipMode: Boolean,
+    forceCoverDuringReturnAnimation: Boolean
 ): Boolean {
-    return !isPortraitFullscreen && (hostLifecycleStarted || isInPipMode)
+    return !isPortraitFullscreen &&
+        !forceCoverDuringReturnAnimation &&
+        (hostLifecycleStarted || isInPipMode)
 }
 
 internal fun shouldLoadDanmakuForForegroundHost(
@@ -1056,15 +1121,20 @@ fun VideoPlayerSection(
     var orientationHintText by remember { mutableStateOf(resolveOrientationSwitchHintText(isFullscreen)) }
     var hasObservedOrientationChange by remember { mutableStateOf(false) }
     val gestureMotionSpec = remember { resolveVideoGestureMotionSpec() }
+    val forceCoverDuringReturnAnimation = shouldForceCoverDuringReturnAnimation(
+        forceCoverOnly = forceCoverOnly
+    )
     val shouldBindInlinePlayerView = remember(
         isPortraitFullscreen,
         hostLifecycleStarted,
-        isInPipMode
+        isInPipMode,
+        forceCoverDuringReturnAnimation
     ) {
         shouldBindInlinePlayerViewToPlayer(
             isPortraitFullscreen = isPortraitFullscreen,
             hostLifecycleStarted = hostLifecycleStarted,
-            isInPipMode = isInPipMode
+            isInPipMode = isInPipMode,
+            forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
         )
     }
 
@@ -1130,9 +1200,6 @@ fun VideoPlayerSection(
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager()
     val overlayDrawerHazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
-    val forceCoverDuringReturnAnimation = shouldForceCoverDuringReturnAnimation(
-        forceCoverOnly = forceCoverOnly
-    )
 
     var rootModifier = Modifier
         .fillMaxSize()
@@ -1365,10 +1432,9 @@ fun VideoPlayerSection(
                                         targetPositionMs = seekTargetTime
                                     )
                                 ) {
-                                    playerState.player.seekTo(seekTargetTime)
+                                    seekPlayerFromUserAction(playerState.player, seekTargetTime)
                                     danmakuManager.seekTo(seekTargetTime)
                                 }
-                                playPlayerFromUserAction(playerState.player)
                             } else if (gestureMode == VideoGestureMode.SwipeToFullscreen) {
                                 //  阈值判定：上滑超过一定距离触发全屏
                                 val swipeThreshold = 50.dp.toPx()
@@ -2071,7 +2137,8 @@ fun VideoPlayerSection(
                         if (!shouldBindInlinePlayerViewToPlayer(
                                 isPortraitFullscreen = isPortraitFullscreen,
                                 hostLifecycleStarted = true,
-                                isInPipMode = isInPipMode
+                                isInPipMode = isInPipMode,
+                                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
                             )
                         ) {
                             return@LifecycleEventObserver
@@ -2141,7 +2208,8 @@ fun VideoPlayerSection(
                             player = if (shouldBindInlinePlayerView) playerState.player else null
                             setKeepContentOnPlayerReset(
                                 shouldKeepInlinePlayerContentOnReset(
-                                    isPortraitFullscreen = isPortraitFullscreen
+                                    isPortraitFullscreen = isPortraitFullscreen,
+                                    forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
                                 )
                             )
                             setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -2149,7 +2217,11 @@ fun VideoPlayerSection(
                             useController = false
                             keepScreenOn = true
                             resizeMode = viewportAspectRatio.playerResizeMode
-                            visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
+                            visibility = if (shouldShowInlinePlayerView(
+                                    isPortraitFullscreen = isPortraitFullscreen,
+                                    forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+                                )
+                            ) {
                                 View.VISIBLE
                             } else {
                                 View.INVISIBLE
@@ -2161,11 +2233,16 @@ fun VideoPlayerSection(
                         playerView.player = if (shouldBindInlinePlayerView) playerState.player else null
                         playerView.setKeepContentOnPlayerReset(
                             shouldKeepInlinePlayerContentOnReset(
-                                isPortraitFullscreen = isPortraitFullscreen
+                                isPortraitFullscreen = isPortraitFullscreen,
+                                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
                             )
                         )
                         playerView.resizeMode = viewportAspectRatio.playerResizeMode
-                        playerView.visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
+                        playerView.visibility = if (shouldShowInlinePlayerView(
+                                isPortraitFullscreen = isPortraitFullscreen,
+                                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+                            )
+                        ) {
                             View.VISIBLE
                         } else {
                             View.INVISIBLE
@@ -2237,8 +2314,12 @@ fun VideoPlayerSection(
     }
     
     // 4. 封面图 (Cover Image) - 始终在第一帧渲染前显示
-    // 优先使用 PlayerUiState.Success 中的高清封面 (pic)，否则使用传入的 coverUrl
-    var rawCoverUrl = if (uiState is PlayerUiState.Success) uiState.info.pic else coverUrl
+    // 统一优先使用入口卡片封面，保证从各类列表进入详情时封面与入口一致。
+    val detailCoverUrl = (uiState as? PlayerUiState.Success)?.info?.pic.orEmpty()
+    val rawCoverUrl = resolvePreferredVideoCoverUrl(
+        entryCoverUrl = coverUrl,
+        detailCoverUrl = detailCoverUrl
+    )
     
     // [Fix] 使用 FormatUtils 统一处理 URL (支持无协议头 URL)
     val currentCoverUrl = FormatUtils.fixImageUrl(rawCoverUrl)
@@ -2267,10 +2348,24 @@ fun VideoPlayerSection(
             delay(120L)
         }
     }
+    val keepCoverForManualStart = shouldKeepCoverForManualStart(
+        playWhenReady = playerState.player.playWhenReady,
+        currentPositionMs = playerState.player.currentPosition
+    )
     val showCover = shouldShowCoverImage(
         isFirstFrameRendered = isFirstFrameRendered,
-        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
+        shouldKeepCoverForManualStart = keepCoverForManualStart
     )
+    val showManualStartPlayButton = shouldShowManualStartPlayButton(
+        shouldKeepCoverForManualStart = keepCoverForManualStart
+    )
+    val enableManualStartCoverOverlay = shouldEnableManualStartCoverOverlay(
+        shouldKeepCoverForManualStart = keepCoverForManualStart
+    )
+    val manualStartPlayButtonLayoutSpec = remember {
+        resolveManualStartPlayButtonLayoutSpec()
+    }
 
     LaunchedEffect(
         showControls,
@@ -2346,6 +2441,9 @@ fun VideoPlayerSection(
                     .aspectRatio(VIDEO_SHARED_COVER_ASPECT_RATIO)
                     .clip(coverCardShape)
                     .background(Color.Black)
+                    .clickable(enabled = enableManualStartCoverOverlay) {
+                        playPlayerFromUserAction(playerState.player)
+                    }
             ) {
                 AsyncImage(
                     model = coil.request.ImageRequest.Builder(LocalContext.current)
@@ -2364,6 +2462,77 @@ fun VideoPlayerSection(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+
+                if (showManualStartPlayButton) {
+                    if (manualStartPlayButtonLayoutSpec.showCoverScrim) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Color.Black.copy(alpha = 0.18f))
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(
+                                when (manualStartPlayButtonLayoutSpec.anchor) {
+                                    ManualStartPlayButtonAnchor.Center -> Alignment.Center
+                                    ManualStartPlayButtonAnchor.CenterEnd -> Alignment.CenterEnd
+                                    ManualStartPlayButtonAnchor.BottomEnd -> Alignment.BottomEnd
+                                }
+                            )
+                            .padding(
+                                end = manualStartPlayButtonLayoutSpec.endPaddingDp.dp,
+                                bottom = if (manualStartPlayButtonLayoutSpec.anchor == ManualStartPlayButtonAnchor.BottomEnd) {
+                                    24.dp
+                                } else {
+                                    0.dp
+                                }
+                            )
+                            .size(
+                                width = manualStartPlayButtonLayoutSpec.iconWidthDp.dp,
+                                height = manualStartPlayButtonLayoutSpec.iconHeightDp.dp
+                            )
+                            .clickable {
+                                playPlayerFromUserAction(playerState.player)
+                            },
+                    ) {
+                        if (manualStartPlayButtonLayoutSpec.showTopDecorations) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .offset(x = (-11).dp, y = 4.dp)
+                                    .size(width = 12.dp, height = 6.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(Color.White.copy(alpha = 0.96f))
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .offset(x = 11.dp, y = 4.dp)
+                                    .size(width = 12.dp, height = 6.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(Color.White.copy(alpha = 0.96f))
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .align(if (manualStartPlayButtonLayoutSpec.showTopDecorations) Alignment.BottomCenter else Alignment.Center)
+                                .size(width = 58.dp, height = 46.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = 0.96f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = "Play video",
+                                tint = Color(0xFF4D5160),
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .offset(x = 2.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

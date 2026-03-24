@@ -54,8 +54,10 @@ internal fun shouldLoadMoreHomeCategoryContent(
     contentItemCount: Int,
     isLoading: Boolean,
     hasMore: Boolean,
+    autoLoadMoreEnabled: Boolean = true,
     preloadThreshold: Int = 4
 ): Boolean {
+    if (!autoLoadMoreEnabled) return false
     if (contentItemCount <= 0) return false
     if (isLoading || !hasMore) return false
     if (totalItems <= 0) return false
@@ -79,6 +81,7 @@ internal fun HomeCategoryPageContent(
     onDissolveComplete: (String) -> Unit,
     longPressCallback: (VideoItem) -> Unit, // [Feature] Long Press
     displayMode: Int,
+    autoLoadMoreEnabled: Boolean = true,
     cardAnimationEnabled: Boolean,
     cardMotionTier: MotionTier = MotionTier.Normal,
     cardTransitionEnabled: Boolean,
@@ -135,7 +138,8 @@ internal fun HomeCategoryPageContent(
                     categoryState.videos.size
                 },
                 isLoading = categoryState.isLoading,
-                hasMore = categoryState.hasMore
+                hasMore = categoryState.hasMore,
+                autoLoadMoreEnabled = autoLoadMoreEnabled
             )
         }
     }

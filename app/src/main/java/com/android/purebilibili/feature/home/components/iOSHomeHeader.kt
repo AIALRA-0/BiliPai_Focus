@@ -183,7 +183,7 @@ internal data class HomeHeaderScrollLayout(
 )
 
 internal fun resolveHomeTopSearchRevealDeadZone(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
+    return if (uiPreset == UiPreset.MD3) 0.dp else 8.dp
 }
 
 internal fun resolveHomeTopVisibleSearchHeightPx(
@@ -200,13 +200,38 @@ internal fun resolveHomeTopVisibleSearchHeightPx(
     return (normalizedFraction * fullSearchHeightPx).coerceIn(0f, fullSearchHeightPx)
 }
 
+internal fun usesImmediateHomeTopSearchReveal(
+    revealDeadZonePx: Float
+): Boolean = revealDeadZonePx <= 0.01f
+
+internal fun resolveHomeTopSearchContentRevealFraction(
+    searchRevealFraction: Float,
+    usesImmediateReveal: Boolean
+): Float {
+    val clampedFraction = searchRevealFraction.coerceIn(0f, 1f)
+    if (!usesImmediateReveal) return clampedFraction
+    return (clampedFraction * (0.72f + 0.28f * clampedFraction)).coerceIn(0f, 1f)
+}
+
+internal fun resolveHomeTopSearchContentTranslationYPx(
+    searchRevealFraction: Float,
+    searchBarHeightPx: Float,
+    usesImmediateReveal: Boolean
+): Float {
+    if (!usesImmediateReveal || searchBarHeightPx <= 0f) return 0f
+    val clampedFraction = searchRevealFraction.coerceIn(0f, 1f)
+    val maxShiftPx = minOf(searchBarHeightPx * 0.18f, 10f)
+    return -maxShiftPx * (1f - clampedFraction)
+}
+
 internal fun resolveHomeHeaderScrollLayout(
     headerOffsetPx: Float,
     searchBarHeightPx: Float,
     searchCollapseDistancePx: Float,
     tabRowHeightPx: Float,
     isHeaderCollapseEnabled: Boolean,
-    searchRevealDeadZonePx: Float = 0f
+    searchRevealDeadZonePx: Float = 0f,
+    usesImmediateSearchReveal: Boolean = false
 ): HomeHeaderScrollLayout {
     if (!isHeaderCollapseEnabled) {
         return HomeHeaderScrollLayout(
@@ -223,11 +248,15 @@ internal fun resolveHomeHeaderScrollLayout(
         fullSearchHeightPx = searchBarHeightPx,
         revealDeadZonePx = searchRevealDeadZonePx
     )
-    val searchAlpha = if (searchBarHeightPx > 0f) {
+    val rawSearchRevealFraction = if (searchBarHeightPx > 0f) {
         (currentSearchHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
     } else {
         0f
     }
+    val searchAlpha = resolveHomeTopSearchContentRevealFraction(
+        searchRevealFraction = rawSearchRevealFraction,
+        usesImmediateReveal = usesImmediateSearchReveal
+    )
     return HomeHeaderScrollLayout(
         searchBarHeightPx = currentSearchHeightPx,
         searchAlpha = searchAlpha,
@@ -1050,7 +1079,8 @@ fun iOSHomeHeader(
             searchCollapseDistancePx = searchCollapseDistancePx,
             tabRowHeightPx = tabRowHeightPx,
             isHeaderCollapseEnabled = isHeaderCollapseEnabled,
-            searchRevealDeadZonePx = searchRevealDeadZonePx
+            searchRevealDeadZonePx = searchRevealDeadZonePx,
+            usesImmediateSearchReveal = usesImmediateHomeTopSearchReveal(searchRevealDeadZonePx)
         )
     }
     val currentSearchHeight = with(density) { scrollLayout.searchBarHeightPx.toDp() }
@@ -1061,6 +1091,26 @@ fun iOSHomeHeader(
         (scrollLayout.searchBarHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
     } else {
         0f
+    }
+    val usesImmediateSearchReveal = remember(searchRevealDeadZonePx) {
+        usesImmediateHomeTopSearchReveal(searchRevealDeadZonePx)
+    }
+    val searchContentRevealFraction = remember(searchRevealFraction, usesImmediateSearchReveal) {
+        resolveHomeTopSearchContentRevealFraction(
+            searchRevealFraction = searchRevealFraction,
+            usesImmediateReveal = usesImmediateSearchReveal
+        )
+    }
+    val searchContentTranslationYPx = remember(
+        searchRevealFraction,
+        searchBarHeightPx,
+        usesImmediateSearchReveal
+    ) {
+        resolveHomeTopSearchContentTranslationYPx(
+            searchRevealFraction = searchRevealFraction,
+            searchBarHeightPx = searchBarHeightPx,
+            usesImmediateReveal = usesImmediateSearchReveal
+        )
     }
     val integratedCollapsedTopBar = shouldUseIntegratedCollapsedHomeTopBar(
         searchRevealFraction = searchRevealFraction,
@@ -1081,8 +1131,8 @@ fun iOSHomeHeader(
         collapsedIntoStatusBar = integratedCollapsedTopBar
     )
     val searchToTabsSpacing = resolveHomeTopSearchToTabsSpacing(uiPreset)
-    val currentSearchToTabsSpacing = searchToTabsSpacing * searchRevealFraction
-    val currentUnifiedDividerBottomSpacing = 4.dp * searchRevealFraction
+    val currentSearchToTabsSpacing = searchToTabsSpacing * searchContentRevealFraction
+    val currentUnifiedDividerBottomSpacing = 4.dp * searchContentRevealFraction
 
     val tabHorizontalPadding by animateDpAsState(
         targetValue = resolveHomeTopTabHorizontalPadding(isTabFloating = isTabFloating, uiPreset = uiPreset),
@@ -1261,7 +1311,10 @@ fun iOSHomeHeader(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(currentSearchHeight)
-                            .graphicsLayer { alpha = searchAlpha }
+                            .graphicsLayer {
+                                alpha = searchAlpha
+                                translationY = searchContentTranslationYPx
+                            }
                             .clip(androidx.compose.ui.graphics.RectangleShape)
                     ) {
                         Row(

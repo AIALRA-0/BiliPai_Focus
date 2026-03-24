@@ -132,6 +132,10 @@ fun PlaybackSettingsContent(
         )
     val stopPlaybackOnExit by com.android.purebilibili.core.store.SettingsManager
         .getStopPlaybackOnExit(context).collectAsState(initial = false)
+    val backgroundPlaybackEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getBackgroundPlaybackEnabled(context).collectAsState(initial = true)
+    val audioFocusEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getAudioFocusEnabled(context).collectAsState(initial = true)
     val audioModeAutoPipEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAudioModeAutoPipEnabled(context).collectAsState(initial = false)
     val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
@@ -338,9 +342,12 @@ fun PlaybackSettingsContent(
                     val pipNoDanmakuEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getPipNoDanmakuEnabled(context)
                         .collectAsState(initial = false)
-                    val audioModeAutoPipToggleEnabled = remember(miniPlayerMode) {
+                    val modeControlsEnabled = remember(stopPlaybackOnExit, backgroundPlaybackEnabled) {
+                        !stopPlaybackOnExit && backgroundPlaybackEnabled
+                    }
+                    val audioModeAutoPipToggleEnabled = remember(miniPlayerMode, backgroundPlaybackEnabled) {
                         com.android.purebilibili.core.store.SettingsManager
-                            .shouldEnableAudioModeAutoPipToggle(miniPlayerMode)
+                            .shouldEnableAudioModeAutoPipToggle(miniPlayerMode) && backgroundPlaybackEnabled
                     }
                     val miniPlayerOptions = listOf(
                         PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF, "默认"),
@@ -363,16 +370,54 @@ fun PlaybackSettingsContent(
                             iconTint = iOSOrange
                         )
                         IOSDivider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Play,
+                            title = "后台播放",
+                            subtitle = if (backgroundPlaybackEnabled) {
+                                "已开启：离开应用或锁屏时仍可继续播放"
+                            } else {
+                                "关闭后离开应用或锁屏时停止播放"
+                            },
+                            checked = backgroundPlaybackEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setBackgroundPlaybackEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSGreen
+                        )
+                        IOSDivider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.SpeakerWave2,
+                            title = "占用音频焦点",
+                            subtitle = if (audioFocusEnabled) {
+                                "已开启：会优先接管系统媒体音频焦点"
+                            } else {
+                                "关闭后可以与其它 APP 同时播放"
+                            },
+                            checked = audioFocusEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setAudioFocusEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
+                        )
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
-                            title = "后台播放模式：${if (stopPlaybackOnExit) "已覆盖" else miniPlayerMode.label}",
+                            title = "后台播放模式：${if (modeControlsEnabled) miniPlayerMode.label else "已覆盖"}",
                             subtitle = if (stopPlaybackOnExit) {
                                 "已由“离开播放页后停止”覆盖，后台模式暂不生效"
+                            } else if (!backgroundPlaybackEnabled) {
+                                "已关闭“后台播放”，后台模式暂不生效"
                             } else {
                                 miniPlayerMode.description
                             },
                             options = miniPlayerOptions,
                             selectedValue = miniPlayerMode,
-                            enabled = !stopPlaybackOnExit,
+                            enabled = modeControlsEnabled,
                             onSelectionChange = { mode ->
                                 scope.launch {
                                     com.android.purebilibili.core.store.SettingsManager
@@ -387,7 +432,7 @@ fun PlaybackSettingsContent(
                         )
                         
                         //  权限提示（仅当选择系统PiP且无权限时显示）
-                        if (!stopPlaybackOnExit &&
+                        if (modeControlsEnabled &&
                             miniPlayerMode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
                             && !checkPipPermission()) {
                             IOSDivider()
@@ -429,14 +474,17 @@ fun PlaybackSettingsContent(
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.TextBubble,
                             title = "画中画不加载弹幕",
-                            subtitle = if (miniPlayerMode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP) {
+                            subtitle = if (!backgroundPlaybackEnabled) {
+                                "开启后台播放后，系统画中画相关设置才会生效"
+                            } else if (miniPlayerMode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP) {
                                 if (pipNoDanmakuEnabled) "已开启：系统画中画中不显示弹幕" else "关闭后：系统画中画中也会显示弹幕"
                             } else {
                                 "仅系统画中画模式下生效"
                             },
                             checked = pipNoDanmakuEnabled,
                             onCheckedChange = {
-                                if (miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP) {
+                                if (!backgroundPlaybackEnabled ||
+                                    miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP) {
                                     return@IOSSwitchItem
                                 }
                                 scope.launch {

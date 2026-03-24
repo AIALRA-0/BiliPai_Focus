@@ -69,8 +69,10 @@ import com.android.purebilibili.core.ui.rememberAppDynamicIcon
 import com.android.purebilibili.core.ui.rememberAppHomeIcon
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppPlayIcon
+import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
+import com.android.purebilibili.core.ui.components.IOSSearchBar
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -104,6 +106,14 @@ fun SpaceScreen(
     var showBlockConfirmDialog by remember { mutableStateOf(false) }
     var showTopPhotoPreview by remember(mid) { mutableStateOf(false) }
     var showRepostDialog by remember { mutableStateOf<String?>(null) }
+    val currentSearchScope = (uiState as? SpaceUiState.Success)?.let { state ->
+        resolveSpaceSearchScope(
+            selectedMainTab = state.tabShellState.selectedTab,
+            selectedSubTab = state.selectedSubTab
+        )
+    } ?: SpaceSearchScope.NONE
+    val isSearchSupported = currentSearchScope != SpaceSearchScope.NONE
+    val isSearchMode = (uiState as? SpaceUiState.Success)?.isSearchMode == true
     val screenTitle = stringResource(R.string.space_title)
     val backLabel = stringResource(R.string.common_back)
     val moreLabel = stringResource(R.string.common_more)
@@ -145,6 +155,18 @@ fun SpaceScreen(
                     ),
                     scrollBehavior = scrollBehavior,
                     actions = {
+                        if (isSearchSupported) {
+                            IconButton(onClick = { viewModel.setSearchMode(!isSearchMode) }) {
+                                Icon(
+                                    imageVector = if (isSearchMode) {
+                                        CupertinoIcons.Default.Xmark
+                                    } else {
+                                        rememberAppSearchIcon()
+                                    },
+                                    contentDescription = if (isSearchMode) "关闭搜索" else "搜索"
+                                )
+                            }
+                        }
                         IconButton(onClick = { showBlockMenu = true }) {
                             Icon(rememberAppMoreIcon(), contentDescription = moreLabel)
                         }
@@ -207,8 +229,24 @@ fun SpaceScreen(
                 }
                 
                 is SpaceUiState.Success -> {
-                    val sharedDynamicItems = remember(state.dynamics) {
-                        resolveSpaceDynamicCardItems(state.dynamics)
+                    val filteredDynamics = remember(
+                        state.dynamics,
+                        state.searchQuery,
+                        state.tabShellState.selectedTab,
+                        state.selectedSubTab
+                    ) {
+                        val scope = resolveSpaceSearchScope(
+                            selectedMainTab = state.tabShellState.selectedTab,
+                            selectedSubTab = state.selectedSubTab
+                        )
+                        if (scope == SpaceSearchScope.DYNAMIC) {
+                            filterSpaceDynamicItemsByQuery(state.dynamics, state.searchQuery)
+                        } else {
+                            state.dynamics
+                        }
+                    }
+                    val sharedDynamicItems = remember(filteredDynamics) {
+                        resolveSpaceDynamicCardItems(filteredDynamics)
                     }
                     SpaceContent(
                         state = state,
@@ -224,6 +262,8 @@ fun SpaceScreen(
                         onLoadDynamic = { viewModel.loadSpaceDynamic(refresh = true) },
                         onLoadMoreDynamic = { viewModel.loadSpaceDynamic(refresh = false) },
                         onSubTabSelected = { viewModel.selectSubTab(it) },
+                        onSearchModeChange = { viewModel.setSearchMode(it) },
+                        onSearchQueryChange = { viewModel.updateSearchQuery(it) },
                         onViewAllClick = onViewAllClick,
                         // [Blur] Pass content padding to handle list top spacing
                         contentPadding = padding,
@@ -419,6 +459,8 @@ private fun SpaceContent(
     onLoadDynamic: () -> Unit,  //  加载动态数据
     onLoadMoreDynamic: () -> Unit,  //  加载更多动态
     onSubTabSelected: (SpaceSubTab) -> Unit,  // Uploads Sub-tab selection
+    onSearchModeChange: (Boolean) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
 
     onViewAllClick: (String, Long, Long, String) -> Unit,
     contentPadding: PaddingValues, // [Blur] Receive padding from Scaffold
@@ -466,6 +508,15 @@ private fun SpaceContent(
 
         onPlayAllAudioClick?.invoke(startBvid) ?: onVideoClick(startBvid)
     }
+    val searchScope = remember(state.tabShellState.selectedTab, state.selectedSubTab) {
+        resolveSpaceSearchScope(
+            selectedMainTab = state.tabShellState.selectedTab,
+            selectedSubTab = state.selectedSubTab
+        )
+    }
+    val normalizedSearchQuery = remember(state.searchQuery) { state.searchQuery.trim() }
+    val isDynamicSearching = searchScope == SpaceSearchScope.DYNAMIC && normalizedSearchQuery.isNotEmpty()
+    val isVideoSearching = searchScope == SpaceSearchScope.VIDEO && normalizedSearchQuery.isNotEmpty()
     val listState = rememberLazyGridState()
     
     //  自动加载更多：当滚动接近底部时触发
@@ -551,6 +602,16 @@ private fun SpaceContent(
 
                 when (state.selectedSubTab) {
                     SpaceSubTab.VIDEO -> {
+                        if (state.isSearchMode && searchScope == SpaceSearchScope.VIDEO) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                IOSSearchBar(
+                                    query = state.searchQuery,
+                                    onQueryChange = onSearchQueryChange,
+                                    placeholder = resolveSpaceSearchPlaceholder(searchScope),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
                         // 播放全部 + 排序按钮行 - 官方风格
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Row(
@@ -619,6 +680,22 @@ private fun SpaceContent(
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
+                            }
+                        }
+
+                        if (state.videos.isEmpty() && !state.isLoadingMore) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isVideoSearching) "未找到相关视频" else "暂无视频",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
                             }
                         }
 
@@ -898,6 +975,16 @@ private fun SpaceContent(
             }
             
             1 -> {  //  动态 Tab
+                if (state.isSearchMode && searchScope == SpaceSearchScope.DYNAMIC) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        IOSSearchBar(
+                            query = state.searchQuery,
+                            onQueryChange = onSearchQueryChange,
+                            placeholder = resolveSpaceSearchPlaceholder(searchScope),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                }
                 val dynamicPresentationState = resolveSpaceDynamicPresentationState(
                     itemCount = state.dynamics.size,
                     isLoading = state.isLoadingDynamics,
@@ -906,7 +993,21 @@ private fun SpaceContent(
                 )
 
                 // 动态列表
-                if (dynamicPresentationState == SpaceDynamicPresentationState.EMPTY) {
+                if (isDynamicSearching && state.dynamics.isNotEmpty() && spaceDynamicItems.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "未找到相关动态",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                } else if (dynamicPresentationState == SpaceDynamicPresentationState.EMPTY) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             modifier = Modifier
@@ -950,7 +1051,7 @@ private fun SpaceContent(
                             )
                             
                             // 触发加载更多
-                            if (index == spaceDynamicItems.size - 3 && state.hasMoreDynamics && !state.isLoadingDynamics) {
+                            if (!isDynamicSearching && index == spaceDynamicItems.size - 3 && state.hasMoreDynamics && !state.isLoadingDynamics) {
                                 LaunchedEffect(index) { onLoadMoreDynamic() }
                             }
                         }

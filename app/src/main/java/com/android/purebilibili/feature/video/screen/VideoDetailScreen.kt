@@ -426,6 +426,12 @@ internal fun shouldSyncMainPlayerToInternalBvid(
     return resolvedLoadedCid != targetCid
 }
 
+internal fun resolveAutoPlayOverrideForInternalBvidSync(
+    forceAutoPlay: Boolean
+): Boolean? {
+    return if (forceAutoPlay) true else null
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -1520,7 +1526,7 @@ fun VideoDetailScreen(
         viewModel.loadVideo(
             bvid = currentBvid,
             cid = currentBvidCid.takeIf { it > 0L } ?: 0L,
-            autoPlay = true
+            autoPlay = resolveAutoPlayOverrideForInternalBvidSync(forceAutoPlay = false)
         )
     }
 

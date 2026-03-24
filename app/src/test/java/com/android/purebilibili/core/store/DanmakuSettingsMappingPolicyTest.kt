@@ -82,6 +82,17 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
+    fun persistedFontScale_supportsThirtyPercentMinimum() {
+        val prefs = mutablePreferencesOf(
+            floatPreferencesKey("danmaku_font_scale") to 0.2f
+        )
+
+        val result = mapDanmakuSettingsFromPreferences(prefs)
+
+        assertEquals(0.3f, result.fontScale)
+    }
+
+    @Test
     fun persistedDisplayArea_isNormalizedBackToDiscreteOption() {
         val prefs = mutablePreferencesOf(
             floatPreferencesKey("danmaku_area") to 0.33f

@@ -20,3 +20,10 @@ internal fun resolveSearchMotionBudget(
 internal fun shouldEnableSearchHazeSource(
     isSearching: Boolean
 ): Boolean = !isSearching
+
+internal fun shouldForceLowBudgetSearchHeaderBlur(
+    isSearching: Boolean,
+    isScrollingResults: Boolean
+): Boolean {
+    return isSearching && !isScrollingResults
+}

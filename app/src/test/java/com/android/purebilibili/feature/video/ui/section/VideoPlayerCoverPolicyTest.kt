@@ -8,6 +8,39 @@ import kotlin.test.assertTrue
 class VideoPlayerCoverPolicyTest {
 
     @Test
+    fun `entry cover should win when both entry and detail covers exist`() {
+        assertEquals(
+            "https://img.test/entry.jpg",
+            resolvePreferredVideoCoverUrl(
+                entryCoverUrl = "https://img.test/entry.jpg",
+                detailCoverUrl = "https://img.test/detail.jpg"
+            )
+        )
+    }
+
+    @Test
+    fun `detail cover should be used when entry cover is blank`() {
+        assertEquals(
+            "https://img.test/detail.jpg",
+            resolvePreferredVideoCoverUrl(
+                entryCoverUrl = "   ",
+                detailCoverUrl = "https://img.test/detail.jpg"
+            )
+        )
+    }
+
+    @Test
+    fun `preferred cover should stay blank when both sources are blank`() {
+        assertEquals(
+            "",
+            resolvePreferredVideoCoverUrl(
+                entryCoverUrl = "",
+                detailCoverUrl = "   "
+            )
+        )
+    }
+
+    @Test
     fun `without explicit force cover should not be forced`() {
         assertFalse(
             shouldForceCoverDuringReturnAnimation(
@@ -30,7 +63,8 @@ class VideoPlayerCoverPolicyTest {
         assertFalse(
             shouldShowCoverImage(
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                shouldKeepCoverForManualStart = false
             )
         )
     }
@@ -40,7 +74,65 @@ class VideoPlayerCoverPolicyTest {
         assertTrue(
             shouldShowCoverImage(
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = true
+                forceCoverDuringReturnAnimation = true,
+                shouldKeepCoverForManualStart = false
+            )
+        )
+    }
+
+    @Test
+    fun `manual start entry should keep cover after first frame while paused at start`() {
+        assertTrue(
+            shouldShowCoverImage(
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false,
+                shouldKeepCoverForManualStart = true
+            )
+        )
+    }
+
+    @Test
+    fun `manual start pending should show dedicated play button`() {
+        assertTrue(shouldShowManualStartPlayButton(shouldKeepCoverForManualStart = true))
+        assertFalse(shouldShowManualStartPlayButton(shouldKeepCoverForManualStart = false))
+    }
+
+    @Test
+    fun `manual start overlay should be clickable only for manual start state`() {
+        assertTrue(shouldEnableManualStartCoverOverlay(shouldKeepCoverForManualStart = true))
+        assertFalse(shouldEnableManualStartCoverOverlay(shouldKeepCoverForManualStart = false))
+    }
+
+    @Test
+    fun `manual start play button should use pili plus style layout`() {
+        val spec = resolveManualStartPlayButtonLayoutSpec()
+
+        assertEquals(ManualStartPlayButtonAnchor.BottomEnd, spec.anchor)
+        assertEquals(24, spec.endPaddingDp)
+        assertEquals(72, spec.iconWidthDp)
+        assertEquals(60, spec.iconHeightDp)
+        assertFalse(spec.showCoverScrim)
+        assertFalse(spec.showTopDecorations)
+    }
+
+    @Test
+    fun `paused at start should count as manual start cover hold only before playback intent`() {
+        assertTrue(
+            shouldKeepCoverForManualStart(
+                playWhenReady = false,
+                currentPositionMs = 0L
+            )
+        )
+        assertFalse(
+            shouldKeepCoverForManualStart(
+                playWhenReady = true,
+                currentPositionMs = 0L
+            )
+        )
+        assertFalse(
+            shouldKeepCoverForManualStart(
+                playWhenReady = false,
+                currentPositionMs = 1_000L
             )
         )
     }

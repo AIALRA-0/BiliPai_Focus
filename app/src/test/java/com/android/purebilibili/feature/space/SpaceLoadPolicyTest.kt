@@ -17,6 +17,38 @@ import kotlin.test.assertTrue
 class SpaceLoadPolicyTest {
 
     @Test
+    fun resolveSpaceSearchScope_supportsDynamicAndVideoContributionOnly() {
+        assertEquals(
+            SpaceSearchScope.DYNAMIC,
+            resolveSpaceSearchScope(
+                selectedMainTab = SpaceMainTab.DYNAMIC,
+                selectedSubTab = SpaceSubTab.VIDEO
+            )
+        )
+        assertEquals(
+            SpaceSearchScope.VIDEO,
+            resolveSpaceSearchScope(
+                selectedMainTab = SpaceMainTab.CONTRIBUTION,
+                selectedSubTab = SpaceSubTab.VIDEO
+            )
+        )
+        assertEquals(
+            SpaceSearchScope.NONE,
+            resolveSpaceSearchScope(
+                selectedMainTab = SpaceMainTab.CONTRIBUTION,
+                selectedSubTab = SpaceSubTab.AUDIO
+            )
+        )
+    }
+
+    @Test
+    fun resolveSpaceSearchPlaceholder_matchesSearchScope() {
+        assertEquals("搜索 TA 的动态", resolveSpaceSearchPlaceholder(SpaceSearchScope.DYNAMIC))
+        assertEquals("搜索 TA 的视频", resolveSpaceSearchPlaceholder(SpaceSearchScope.VIDEO))
+        assertEquals("", resolveSpaceSearchPlaceholder(SpaceSearchScope.NONE))
+    }
+
+    @Test
     fun shouldApplySpaceLoadResult_requires_matching_generation_and_mid() {
         assertTrue(
             shouldApplySpaceLoadResult(

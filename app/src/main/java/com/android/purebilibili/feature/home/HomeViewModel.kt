@@ -156,6 +156,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var followFeedFocusRefreshJob: Job? = null
     private var followFeedBackgroundHydrationJob: Job? = null
     private var followFeedShuffleSeed: Long = System.currentTimeMillis()
+    private var followPresentationTopResetCounter: Long = 0L
     private val homeFollowFastFeedCoordinator = HomeFollowFastFeedCoordinator(
         dataSource = NetworkHomeFollowFeedDataSource()
     )
@@ -1167,6 +1168,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun setFollowAutoLoadMoreEnabled(enabled: Boolean) {
+        val current = _uiState.value
+        if (current.followAutoLoadMoreEnabled == enabled) return
+        _uiState.value = current.copy(followAutoLoadMoreEnabled = enabled)
+    }
+
+    private fun beginFollowPresentationRefreshWindow() {
+        setFollowAutoLoadMoreEnabled(false)
+    }
+
+    private fun scheduleFollowPresentationTopReset() {
+        followPresentationTopResetCounter += 1L
+        val current = _uiState.value
+        _uiState.value = current.copy(
+            followPresentationTopResetKey = followPresentationTopResetCounter,
+            followAutoLoadMoreEnabled = false
+        )
+    }
+
+    fun markFollowPresentationTopResetHandled(key: Long) {
+        val current = _uiState.value
+        if (key <= 0L) return
+        if (key != current.followPresentationTopResetKey) return
+        if (key <= current.followPresentationTopResetHandledKey) return
+        _uiState.value = current.copy(
+            followPresentationTopResetHandledKey = key,
+            followAutoLoadMoreEnabled = true
+        )
+    }
+
     private fun mergeFollowFeedRawVideos(
         existingRawVideos: List<VideoItem>,
         incomingRawVideos: List<VideoItem>,
@@ -1183,6 +1214,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         error: Throwable
     ) {
         cancelFollowFeedBackgroundHydration()
+        if (!isLoadMore) {
+            setFollowAutoLoadMoreEnabled(true)
+        }
         updateCategoryState(HomeCategory.FOLLOW) { oldState ->
             oldState.copy(
                 isLoading = false,
@@ -1308,6 +1342,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoading = false,
             error = error
         )
+        if (!isLoadMore) {
+            scheduleFollowPresentationTopReset()
+        }
     }
 
     private fun revealMorePresentedHomeFollowVideosIfAvailable(): Boolean {
@@ -1506,6 +1543,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             followFeedDisplayedVisibleCount = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE
             followFeedSourceHasMore = false
             hasResolvedFollowFeedOnce = false
+            if (!isLoadMore) {
+                setFollowAutoLoadMoreEnabled(true)
+            }
             updateFollowFeedCategoryState(
                 videos = emptyList(),
                 isLoading = false,
@@ -1516,6 +1556,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (!isLoadMore) {
+            beginFollowPresentationRefreshWindow()
             followFeedShuffleSeed = System.currentTimeMillis()
             refreshUserInfoInBackground()
             prepareHomeFollowRefreshPresentation()
@@ -1551,6 +1592,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 ),
                 hasMore = false
             )
+            if (!isLoadMore) {
+                scheduleFollowPresentationTopReset()
+            }
             return
         }
 

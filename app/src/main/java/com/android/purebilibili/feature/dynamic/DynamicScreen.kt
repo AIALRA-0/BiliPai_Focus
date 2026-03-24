@@ -109,13 +109,13 @@ fun DynamicScreen(
     val isSidebarExpanded by viewModel.isSidebarExpanded.collectAsState()
     val showHiddenUsers by viewModel.showHiddenUsers.collectAsState()
     val hiddenUserIds by viewModel.hiddenUserIds.collectAsState()
+    val selectedTab by viewModel.selectedTab.collectAsState()
     
     //  [新增] 点赞/转发状态
     val likedDynamics by viewModel.likedDynamics.collectAsState()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }  // 存储要转发的动态ID
     
     // Tab 选择
-    var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("全部", "视频")
     
     //  布局模式状态（侧边栏/横向）
@@ -461,7 +461,7 @@ fun DynamicScreen(
                                 DynamicTopBarWithTabs(
                                     selectedTab = selectedTab,
                                     tabs = tabs,
-                                    onTabSelected = { selectedTab = it },
+                                    onTabSelected = viewModel::setSelectedTab,
                                     displayMode = displayMode,
                                     onSettingsClick = {
                                         showFocusFollowGroupSheet = true
@@ -554,7 +554,7 @@ fun DynamicScreen(
                                      DynamicTopBarWithTabs(
                                          selectedTab = selectedTab,
                                          tabs = tabs,
-                                         onTabSelected = { selectedTab = it },
+                                         onTabSelected = viewModel::setSelectedTab,
                                          displayMode = displayMode,
                                          onSettingsClick = {
                                              showFocusFollowGroupSheet = true

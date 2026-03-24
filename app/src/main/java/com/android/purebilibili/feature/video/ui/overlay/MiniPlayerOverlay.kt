@@ -41,6 +41,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.ui.PlayerView
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 //  已改用 MaterialTheme.colorScheme.primary
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -383,7 +384,7 @@ fun MiniPlayerOverlay(
                                                 if (abs(dragProgressDelta) > 10f) {
                                                     val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
                                                     val newPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
-                                                    player?.seekTo(newPosition)
+                                                    player?.let { seekPlayerFromUserAction(it, newPosition) }
                                                 }
                                                 isDraggingProgress = false
                                                 dragProgressDelta = 0f

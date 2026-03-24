@@ -87,17 +87,23 @@ internal fun shouldEnterPipByPolicy(
 }
 
 internal fun shouldContinueBackgroundAudioByPolicy(
+    backgroundPlaybackEnabled: Boolean,
     mode: SettingsManager.MiniPlayerMode,
     isActive: Boolean,
     isLeavingByNavigation: Boolean,
     stopPlaybackOnExit: Boolean
 ): Boolean {
+    if (!backgroundPlaybackEnabled) return false
     if (stopPlaybackOnExit) return false
     return when (mode) {
         SettingsManager.MiniPlayerMode.OFF -> isActive && !isLeavingByNavigation
         SettingsManager.MiniPlayerMode.IN_APP_ONLY -> false
         SettingsManager.MiniPlayerMode.SYSTEM_PIP -> false
     }
+}
+
+internal fun resolveHandleAudioFocusByPolicy(audioFocusEnabled: Boolean): Boolean {
+    return audioFocusEnabled
 }
 
 internal fun shouldClearPlaybackNotificationOnNavigationExit(
@@ -966,8 +972,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun shouldContinueBackgroundAudio(): Boolean {
         val mode = getCurrentMode()
+        val backgroundPlaybackEnabled = SettingsManager.getBackgroundPlaybackEnabledSync(context)
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
         return shouldContinueBackgroundAudioByPolicy(
+            backgroundPlaybackEnabled = backgroundPlaybackEnabled,
             mode = mode,
             isActive = isActive,
             isLeavingByNavigation = isLeavingByNavigation,
@@ -1099,10 +1107,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 .build()
             val miniPlayerMode = SettingsManager.getMiniPlayerModeSync(context)
             val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
+            val audioFocusEnabled = SettingsManager.getAudioFocusEnabledSync(context)
 
             _player = ExoPlayer.Builder(context)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-                .setAudioAttributes(audioAttributes, true)
+                .setAudioAttributes(
+                    audioAttributes,
+                    resolveHandleAudioFocusByPolicy(audioFocusEnabled = audioFocusEnabled)
+                )
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(
                     resolvePlaybackWakeMode(

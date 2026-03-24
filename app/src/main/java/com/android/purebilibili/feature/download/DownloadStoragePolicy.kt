@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.download
 
+import java.io.File
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 private val INVALID_FILE_NAME_CHARS = Regex("[\\\\/:*?\"<>|\\n\\r\\t]")
 private val MULTI_UNDERSCORE = Regex("_+")
 private val MULTI_SPACE = Regex("\\s+")
@@ -31,6 +34,43 @@ fun buildSafeExportDisplayName(
     return "$baseName.$safeExt"
 }
 
+fun resolveManagedDownloadDirectory(
+    filesDir: File,
+    externalFilesRoot: File?,
+    customPath: String?
+): File {
+    val defaultDir = (externalFilesRoot?.resolve("downloads") ?: File(filesDir, "downloads")).apply {
+        mkdirs()
+    }
+
+    if (customPath.isNullOrBlank()) return defaultDir
+
+    val sanitizedPath = sanitizeLegacyCustomPath(
+        customPath = customPath,
+        appScopedRoot = externalFilesRoot?.absolutePath.orEmpty()
+    ) ?: return defaultDir
+
+    val customDir = File(sanitizedPath)
+    return if ((customDir.exists() || customDir.mkdirs()) && customDir.canWrite()) {
+        customDir
+    } else {
+        defaultDir
+    }
+}
+
+fun resolveDisplayedDownloadLocation(
+    defaultManagedPath: String,
+    customManagedPath: String?,
+    exportTreeUri: String?
+): String {
+    val exportDisplayPath = exportTreeUri
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::resolveExportTreeDisplayPath)
+
+    return exportDisplayPath
+        ?: customManagedPath?.takeIf { it.isNotBlank() }
+        ?: defaultManagedPath
+}
 private fun sanitizeFileNamePart(value: String): String {
     return value
         .replace(INVALID_FILE_NAME_CHARS, "_")
@@ -44,4 +84,30 @@ private fun normalizePath(path: String): String {
         .replace('\\', '/')
         .replace(Regex("/+"), "/")
         .trimEnd('/')
+}
+
+private fun resolveExportTreeDisplayPath(treeUri: String): String? {
+    val encodedTreeId = treeUri.substringAfter("/tree/", missingDelimiterValue = "")
+        .substringBefore('?')
+        .takeIf { it.isNotBlank() }
+        ?: return null
+
+    val documentId = URLDecoder.decode(encodedTreeId, StandardCharsets.UTF_8)
+    val volumeId = documentId.substringBefore(':', missingDelimiterValue = "")
+    val relativePath = documentId.substringAfter(':', missingDelimiterValue = "")
+        .trim('/')
+
+    return when {
+        volumeId.equals("primary", ignoreCase = true) -> buildString {
+            append("/storage/emulated/0")
+            if (relativePath.isNotBlank()) {
+                append('/')
+                append(relativePath)
+            }
+        }
+
+        volumeId.isBlank() -> null
+        relativePath.isBlank() -> "$volumeId:"
+        else -> "$volumeId:/$relativePath"
+    }
 }

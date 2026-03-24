@@ -17,11 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.store.SettingsManager
 
 /**
  *  离线缓存列表页面
@@ -33,8 +35,16 @@ fun DownloadListScreen(
     onVideoClick: (String) -> Unit,  // bvid - 在线播放
     onOfflineVideoClick: (String) -> Unit = {}  // 🔧 [新增] taskId - 离线播放
 ) {
+    val context = LocalContext.current
     val tasks by DownloadManager.tasks.collectAsState()
+    val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsState(initial = null)
+    val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsState(initial = null)
     val taskList = tasks.values.toList().sortedByDescending { it.createdAt }
+    val currentDir = resolveDisplayedDownloadLocation(
+        defaultManagedPath = remember(context) { SettingsManager.getDefaultDownloadPath(context) },
+        customManagedPath = customDownloadPath,
+        exportTreeUri = downloadExportTreeUri
+    )
     
     Scaffold(
         topBar = {
@@ -109,7 +119,6 @@ fun DownloadListScreen(
                 
                 // [新增] 显示当前存储路径
                 item {
-                    val currentDir = remember { DownloadManager.getDownloadDir().absolutePath }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()

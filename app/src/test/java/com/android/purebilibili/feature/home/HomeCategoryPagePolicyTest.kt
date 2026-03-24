@@ -31,4 +31,18 @@ class HomeCategoryPagePolicyTest {
             )
         )
     }
+
+    @Test
+    fun shouldLoadMoreHomeCategoryContent_blocksAutoPagingWhenAutoLoadMoreIsSuppressed() {
+        assertFalse(
+            shouldLoadMoreHomeCategoryContent(
+                totalItems = 8,
+                lastVisibleItemIndex = 7,
+                contentItemCount = 4,
+                isLoading = false,
+                hasMore = true,
+                autoLoadMoreEnabled = false
+            )
+        )
+    }
 }

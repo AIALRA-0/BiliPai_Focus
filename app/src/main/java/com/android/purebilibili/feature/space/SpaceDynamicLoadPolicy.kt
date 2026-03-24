@@ -45,6 +45,32 @@ fun resolveSpaceDynamicPresentationState(
     return SpaceDynamicPresentationState.EMPTY
 }
 
+internal fun filterSpaceDynamicItemsByQuery(
+    items: List<SpaceDynamicItem>,
+    query: String
+): List<SpaceDynamicItem> {
+    val normalizedQuery = query.trim()
+    if (normalizedQuery.isEmpty()) return items
+
+    return items.filter { item ->
+        resolveSpaceDynamicSearchText(item).contains(normalizedQuery, ignoreCase = true)
+    }
+}
+
+private fun resolveSpaceDynamicSearchText(item: SpaceDynamicItem): String {
+    val content = item.modules.module_dynamic
+    val major = content?.major
+    return listOfNotNull(
+        content?.desc?.text,
+        major?.archive?.title,
+        major?.archive?.desc,
+        major?.opus?.title,
+        major?.opus?.summary?.text
+    )
+        .filter { it.isNotBlank() }
+        .joinToString(separator = "\n")
+}
+
 internal fun resolveSpaceDynamicCardItems(items: List<SpaceDynamicItem>): List<DynamicItem> {
     return items.map(::resolveSpaceDynamicCardItem)
 }

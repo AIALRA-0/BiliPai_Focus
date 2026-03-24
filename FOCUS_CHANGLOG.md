@@ -1,5 +1,31 @@
 # Focus Changelog
 
+## v7.1.3 Focus / focus.1 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.3` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.3-focus.1`。
+- 为保证已发布 `v7.1.2-focus.7 / 144` 用户可直接升级，`versionCode` 继续递增到 `145`。
+- `focus.1` 本轮同时完成上游 `7.1.3` 同步，以及首页“关注”首批展示/刷新回顶/自动补批门闩的收口。
+
+### 上游 `7.1.3` 同步
+- 合并上游 `v7.1.3` 的空间页搜索、动态页顶部 Tab 持久化、播放器封面/手动起播、后台播放音频焦点，以及首页头像分流等更新。
+- Focus 版继续保留独立包名、与官方版共存安装、Focus-only 应用内更新通道，以及首次使用声明里的 Focus GitHub / Telegram 入口。
+- 更新检查仍只接受 Focus 仓库发布的正式 `release` APK，不接收官方版的更新推送。
+
+### 首页“关注”首批与刷新行为
+- 首页“关注”现在以“展示窗口”为唯一真相：首次进入和下拉刷新完成后，都只向 UI 发布首批 `16` 条可见视频，不再因为缓存池或旧锚点把几十条一次性摊到首屏。
+- 下拉刷新完成后，过滤后的 FOLLOW 会先提交新的首批 `16` 条，再统一滚动到顶部，不再停留在旧锚点位置造成 UI 抽搐。
+- 每次刷新都会基于新的随机种子对当前候选池整体重排，然后再截取前 `16` 条；继续下滑时则沿用本轮顺序，避免中途跳序。
+
+### 分页门闩与稳定性
+- FOLLOW 的自动 `loadMore` 现在会在“刷新完成但顶部复位尚未处理”期间被临时锁住，避免刷新后一落到底就立刻偷拉下一批。
+- 只有首批 `16` 条完成展示并处理完回顶事件后，才重新允许底部自动补批；后续仍保持每次追加 `16` 条。
+- 本轮继续保留 Focus 并发抓取主路径，不回退到旧的长串行补抓模式。
+
+### 验证
+- 已通过 `:app:compileDebugKotlin`。
+- 已通过 `HomeFollowFocusPolicyTest`、`HomeFollowFastFeedCoordinatorTest`、`HomeCategoryPagePolicyTest`、`HomePullRefreshUiPolicyTest`、`HomeTopCategoryPolicyTest`、`DynamicScreenStatePolicyTest`、`DownloadStoragePolicyTest`、`AppUpdateAssetSelectionPolicyTest`、`AppUpdateCheckerTest` 与 `HomeAvatarActionPolicyTest`。
+
 ## v7.1.2 Focus / focus.7 (2026-03-24)
 
 ### 版本信息

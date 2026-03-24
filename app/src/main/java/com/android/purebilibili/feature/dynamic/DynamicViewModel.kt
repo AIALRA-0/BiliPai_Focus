@@ -143,6 +143,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _isFocusFollowGroupFilteringEnabled = MutableStateFlow(true)
     val isFocusFollowGroupFilteringEnabled: StateFlow<Boolean> =
         _isFocusFollowGroupFilteringEnabled.asStateFlow()
+    private val _selectedTab = MutableStateFlow(0)
+    val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
     init {
         val startupPlan = resolveDynamicStartupLoadPlan()
@@ -191,6 +193,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         } catch (e: Exception) {
             DynamicDisplayMode.SIDEBAR
         }
+        val savedSelectedTab = if (userPrefs.contains(KEY_SELECTED_TAB)) {
+            userPrefs.getInt(KEY_SELECTED_TAB, 0)
+        } else {
+            null
+        }
+        _selectedTab.value = resolveDynamicSelectedTab(
+            savedTab = savedSelectedTab,
+            tabCount = DYNAMIC_TOP_TAB_COUNT
+        )
     }
 
     private fun saveUserPreferences(pinned: Set<Long>, hidden: Set<Long>) {
@@ -744,6 +755,18 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             FocusFollowGroupStore.assignUserToGroup(appContext, mid, groupId)
         }
     }
+
+    fun setSelectedTab(tab: Int) {
+        val resolvedTab = resolveDynamicSelectedTab(
+            savedTab = tab,
+            tabCount = DYNAMIC_TOP_TAB_COUNT
+        )
+        if (_selectedTab.value == resolvedTab) return
+        _selectedTab.value = resolvedTab
+        userPrefs.edit()
+            .putInt(KEY_SELECTED_TAB, resolvedTab)
+            .apply()
+    }
     
     /**
      * 加载动态列表
@@ -1253,6 +1276,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_PINNED_USERS = "dynamic_pinned_users"
         private const val KEY_HIDDEN_USERS = "dynamic_hidden_users"
         private const val KEY_DISPLAY_MODE = "dynamic_display_mode"
+        private const val KEY_SELECTED_TAB = "dynamic_selected_tab"
+        private const val DYNAMIC_TOP_TAB_COUNT = 2
         private const val MAX_CACHE_ITEMS = 100
         private const val FULL_FOLLOWINGS_PAGE_LIMIT = Int.MAX_VALUE
     }

@@ -308,6 +308,12 @@ fun SearchScreen(
     )
     val effectiveCardTransitionEnabled =
         cardTransitionEnabled && searchMotionBudget == SearchMotionBudget.FULL
+    val forceLowBudgetSearchHeaderBlur = remember(state.isSearching, isSearchResultsScrolling) {
+        shouldForceLowBudgetSearchHeaderBlur(
+            isSearching = state.isSearching,
+            isScrollingResults = isSearchResultsScrolling
+        )
+    }
     val showHotSectionHeader by remember(state.hotList, hotSearchEnabled) {
         derivedStateOf {
             shouldShowSearchHotHeader(
@@ -971,7 +977,7 @@ fun SearchScreen(
                                 hazeState = hazeState,
                                 surfaceType = com.android.purebilibili.core.ui.blur.BlurSurfaceType.HEADER,
                                 isScrolling = isSearchResultsScrolling,
-                                forceLowBudget = searchMotionBudget == SearchMotionBudget.REDUCED
+                                forceLowBudget = forceLowBudgetSearchHeaderBlur
                             )
                         } else {
                             Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))

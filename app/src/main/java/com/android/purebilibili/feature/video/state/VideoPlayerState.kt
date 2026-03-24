@@ -41,6 +41,7 @@ import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
+import com.android.purebilibili.feature.video.player.resolveHandleAudioFocusByPolicy
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -504,6 +505,7 @@ fun rememberVideoPlayerState(
             val seekFastEnabled = com.android.purebilibili.core.store.PlayerSettingsCache.isSeekFastEnabled(context)
             val miniPlayerMode = SettingsManager.getMiniPlayerModeSync(context)
             val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
+            val audioFocusEnabled = SettingsManager.getAudioFocusEnabledSync(context)
             val bufferPolicy = resolvePlayerBufferPolicy(
                 isOnWifi = NetworkUtils.isWifi(context)
             )
@@ -548,7 +550,10 @@ fun rememberVideoPlayerState(
                         androidx.media3.exoplayer.SeekParameters.DEFAULT
                     }
                 )
-                .setAudioAttributes(audioAttributes, true)
+                .setAudioAttributes(
+                    audioAttributes,
+                    resolveHandleAudioFocusByPolicy(audioFocusEnabled = audioFocusEnabled)
+                )
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(
                     resolvePlaybackWakeMode(

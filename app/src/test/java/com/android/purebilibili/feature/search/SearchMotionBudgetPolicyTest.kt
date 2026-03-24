@@ -67,4 +67,24 @@ class SearchMotionBudgetPolicyTest {
             )
         )
     }
+
+    @Test
+    fun scrollingResults_shouldNotForceLowHeaderBlurBudget() {
+        assertFalse(
+            shouldForceLowBudgetSearchHeaderBlur(
+                isSearching = false,
+                isScrollingResults = true
+            )
+        )
+    }
+
+    @Test
+    fun activeSearchRequest_shouldForceLowHeaderBlurBudget() {
+        assertTrue(
+            shouldForceLowBudgetSearchHeaderBlur(
+                isSearching = true,
+                isScrollingResults = false
+            )
+        )
+    }
 }

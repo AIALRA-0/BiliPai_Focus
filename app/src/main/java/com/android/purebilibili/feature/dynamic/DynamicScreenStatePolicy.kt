@@ -16,6 +16,14 @@ internal fun resolveDynamicSelectedUserIdAfterClick(
     return if (selectedUserId == clickedUserId) null else clickedUserId
 }
 
+internal fun resolveDynamicSelectedTab(
+    savedTab: Int?,
+    tabCount: Int
+): Int {
+    if (tabCount <= 0) return 0
+    return savedTab?.takeIf { it in 0 until tabCount } ?: 0
+}
+
 internal fun resolveHorizontalUserListVerticalPaddingDp(): Int {
     return 4
 }

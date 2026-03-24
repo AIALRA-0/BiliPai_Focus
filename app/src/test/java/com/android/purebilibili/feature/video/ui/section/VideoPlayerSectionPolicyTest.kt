@@ -12,12 +12,14 @@ class VideoPlayerSectionPolicyTest {
     fun inlinePlayerTakeover_disablesKeepingLastFrame_whenPortraitFullscreenOwnsPlayback() {
         assertFalse(
             shouldKeepInlinePlayerContentOnReset(
-                isPortraitFullscreen = true
+                isPortraitFullscreen = true,
+                forceCoverDuringReturnAnimation = false
             )
         )
         assertTrue(
             shouldKeepInlinePlayerContentOnReset(
-                isPortraitFullscreen = false
+                isPortraitFullscreen = false,
+                forceCoverDuringReturnAnimation = false
             )
         )
     }
@@ -26,12 +28,38 @@ class VideoPlayerSectionPolicyTest {
     fun inlinePlayerTakeover_hidesInlinePlayerView_whenPortraitFullscreenOwnsPlayback() {
         assertFalse(
             shouldShowInlinePlayerView(
-                isPortraitFullscreen = true
+                isPortraitFullscreen = true,
+                forceCoverDuringReturnAnimation = false
             )
         )
         assertTrue(
             shouldShowInlinePlayerView(
-                isPortraitFullscreen = false
+                isPortraitFullscreen = false,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+    }
+
+    @Test
+    fun forcedReturnTakeover_disablesInlinePlayerRetentionBindingAndVisibility() {
+        assertFalse(
+            shouldKeepInlinePlayerContentOnReset(
+                isPortraitFullscreen = false,
+                forceCoverDuringReturnAnimation = true
+            )
+        )
+        assertFalse(
+            shouldShowInlinePlayerView(
+                isPortraitFullscreen = false,
+                forceCoverDuringReturnAnimation = true
+            )
+        )
+        assertFalse(
+            shouldBindInlinePlayerViewToPlayer(
+                isPortraitFullscreen = false,
+                hostLifecycleStarted = true,
+                isInPipMode = false,
+                forceCoverDuringReturnAnimation = true
             )
         )
     }
@@ -140,14 +168,16 @@ class VideoPlayerSectionPolicyTest {
             shouldBindInlinePlayerViewToPlayer(
                 isPortraitFullscreen = false,
                 hostLifecycleStarted = true,
-                isInPipMode = false
+                isInPipMode = false,
+                forceCoverDuringReturnAnimation = false
             )
         )
         assertTrue(
             shouldBindInlinePlayerViewToPlayer(
                 isPortraitFullscreen = false,
                 hostLifecycleStarted = false,
-                isInPipMode = true
+                isInPipMode = true,
+                forceCoverDuringReturnAnimation = false
             )
         )
     }
@@ -158,14 +188,16 @@ class VideoPlayerSectionPolicyTest {
             shouldBindInlinePlayerViewToPlayer(
                 isPortraitFullscreen = false,
                 hostLifecycleStarted = false,
-                isInPipMode = false
+                isInPipMode = false,
+                forceCoverDuringReturnAnimation = false
             )
         )
         assertFalse(
             shouldBindInlinePlayerViewToPlayer(
                 isPortraitFullscreen = true,
                 hostLifecycleStarted = true,
-                isInPipMode = false
+                isInPipMode = false,
+                forceCoverDuringReturnAnimation = false
             )
         )
     }

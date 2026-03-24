@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.gradle-user/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -85,5 +86,7 @@ docs/plans/
 !CHANGELOG.md
 !docs/
 docs/*
+!docs/releases/
+!docs/releases/*.md
 !docs/wiki/
 !docs/wiki/*.md

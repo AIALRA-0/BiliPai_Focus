@@ -13,6 +13,7 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
 import android.app.Activity
@@ -889,7 +890,7 @@ fun FullscreenPlayerOverlay(
                                     isDragging = false
                                     val newPosition = (dragProgress * duration).toLong()
                                     player?.let {
-                                        it.seekTo(newPosition)
+                                        seekPlayerFromUserAction(it, newPosition)
                                         danmakuManager.seekTo(newPosition)
                                     }
                                     currentProgress = dragProgress

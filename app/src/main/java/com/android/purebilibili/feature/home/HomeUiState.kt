@@ -166,6 +166,12 @@ data class HomeUiState(
     val refreshNewItemsKey: Long = 0L,
     //  [新增] 新增条数提示已消费键（防止离开页面后重复弹出）
     val refreshNewItemsHandledKey: Long = 0L,
+    //  [Focus] FOLLOW 刷新完成后的回顶事件键
+    val followPresentationTopResetKey: Long = 0L,
+    //  [Focus] FOLLOW 回顶事件已处理键
+    val followPresentationTopResetHandledKey: Long = 0L,
+    //  [Focus] FOLLOW 是否允许自动触发下一批 loadMore
+    val followAutoLoadMoreEnabled: Boolean = true,
     //  [新增] 推荐流旧内容锚点（刷新前首条视频 bvid）
     val recommendOldContentAnchorBvid: String? = null,
     //  [新增] 推荐流中“旧内容起始”索引（用于插入分割线）

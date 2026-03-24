@@ -242,31 +242,41 @@ internal fun shouldShowTopTabText(mode: Int): Boolean {
 internal fun resolveMd3TopTabLabelMode(requestedLabelMode: Int): Int =
     normalizeTopTabLabelMode(requestedLabelMode)
 
+private fun resolveTopTabCategoryForIcon(categoryKey: String): HomeCategory? {
+    val normalizedKey = categoryKey.trim()
+    if (normalizedKey.isEmpty()) return null
+
+    return HomeCategory.entries.firstOrNull { category ->
+        category.name.equals(normalizedKey, ignoreCase = true) || category.label == normalizedKey
+    }
+}
+
 internal fun resolveTopTabCategoryIcon(
     categoryKey: String,
     uiPreset: UiPreset = UiPreset.IOS
 ): ImageVector {
+    val category = resolveTopTabCategoryForIcon(categoryKey)
     return when (uiPreset) {
-        UiPreset.MD3 -> when (categoryKey.uppercase()) {
-            HomeCategory.RECOMMEND.name -> Icons.Outlined.Home
-            HomeCategory.FOLLOW.name -> Icons.Outlined.Person
-            HomeCategory.POPULAR.name -> Icons.AutoMirrored.Outlined.TrendingUp
-            HomeCategory.LIVE.name -> Icons.Outlined.LiveTv
-            HomeCategory.ANIME.name -> Icons.Outlined.Tv
-            HomeCategory.GAME.name -> Icons.Outlined.SportsEsports
-            HomeCategory.KNOWLEDGE.name -> Icons.Outlined.Lightbulb
-            HomeCategory.TECH.name -> Icons.Outlined.SmartToy
+        UiPreset.MD3 -> when (category) {
+            HomeCategory.RECOMMEND -> Icons.Outlined.Home
+            HomeCategory.FOLLOW -> Icons.Outlined.Person
+            HomeCategory.POPULAR -> Icons.AutoMirrored.Outlined.TrendingUp
+            HomeCategory.LIVE -> Icons.Outlined.LiveTv
+            HomeCategory.ANIME -> Icons.Outlined.Tv
+            HomeCategory.GAME -> Icons.Outlined.SportsEsports
+            HomeCategory.KNOWLEDGE -> Icons.Outlined.Lightbulb
+            HomeCategory.TECH -> Icons.Outlined.SmartToy
             else -> Icons.AutoMirrored.Outlined.MenuOpen
         }
-        UiPreset.IOS -> when (categoryKey.uppercase()) {
-            HomeCategory.RECOMMEND.name -> CupertinoIcons.Default.House
-            HomeCategory.FOLLOW.name -> CupertinoIcons.Default.PersonCropCircleBadgePlus
-            HomeCategory.POPULAR.name -> CupertinoIcons.Default.ChartBar
-            HomeCategory.LIVE.name -> CupertinoIcons.Default.Video
-            HomeCategory.ANIME.name -> CupertinoIcons.Default.Tv
-            HomeCategory.GAME.name -> CupertinoIcons.Default.PlayCircle
-            HomeCategory.KNOWLEDGE.name -> CupertinoIcons.Default.Lightbulb
-            HomeCategory.TECH.name -> CupertinoIcons.Default.Cpu
+        UiPreset.IOS -> when (category) {
+            HomeCategory.RECOMMEND -> CupertinoIcons.Default.House
+            HomeCategory.FOLLOW -> CupertinoIcons.Default.PersonCropCircleBadgePlus
+            HomeCategory.POPULAR -> CupertinoIcons.Default.ChartBar
+            HomeCategory.LIVE -> CupertinoIcons.Default.Video
+            HomeCategory.ANIME -> CupertinoIcons.Default.Tv
+            HomeCategory.GAME -> CupertinoIcons.Default.PlayCircle
+            HomeCategory.KNOWLEDGE -> CupertinoIcons.Default.Lightbulb
+            HomeCategory.TECH -> CupertinoIcons.Default.Cpu
             else -> CupertinoIcons.Default.ListBullet
         }
     }

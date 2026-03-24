@@ -6,6 +6,33 @@ import com.android.purebilibili.data.model.response.SeasonItem
 import com.android.purebilibili.data.model.response.SeriesArchiveItem
 import com.android.purebilibili.data.model.response.SeriesItem
 
+enum class SpaceSearchScope {
+    NONE,
+    DYNAMIC,
+    VIDEO
+}
+
+internal fun resolveSpaceSearchScope(
+    selectedMainTab: SpaceMainTab,
+    selectedSubTab: SpaceSubTab
+): SpaceSearchScope {
+    return when {
+        selectedMainTab == SpaceMainTab.DYNAMIC -> SpaceSearchScope.DYNAMIC
+        selectedMainTab == SpaceMainTab.CONTRIBUTION && selectedSubTab == SpaceSubTab.VIDEO -> {
+            SpaceSearchScope.VIDEO
+        }
+        else -> SpaceSearchScope.NONE
+    }
+}
+
+internal fun resolveSpaceSearchPlaceholder(scope: SpaceSearchScope): String {
+    return when (scope) {
+        SpaceSearchScope.DYNAMIC -> "搜索 TA 的动态"
+        SpaceSearchScope.VIDEO -> "搜索 TA 的视频"
+        SpaceSearchScope.NONE -> ""
+    }
+}
+
 internal fun shouldApplySpaceLoadResult(
     requestMid: Long,
     activeMid: Long,

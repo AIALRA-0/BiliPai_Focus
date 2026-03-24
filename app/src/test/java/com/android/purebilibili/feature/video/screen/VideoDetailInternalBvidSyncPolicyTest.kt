@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -101,6 +102,22 @@ class VideoDetailInternalBvidSyncPolicyTest {
                 loadedBvid = "BV_NEXT",
                 loadedCid = 202L
             )
+        )
+    }
+
+    @Test
+    fun normalInternalSync_shouldRespectUserSettingByNotForcingAutoplay() {
+        assertEquals(
+            null,
+            resolveAutoPlayOverrideForInternalBvidSync(forceAutoPlay = false)
+        )
+    }
+
+    @Test
+    fun explicitInternalSyncAutoplay_shouldStillForcePlayback() {
+        assertEquals(
+            true,
+            resolveAutoPlayOverrideForInternalBvidSync(forceAutoPlay = true)
         )
     }
 }

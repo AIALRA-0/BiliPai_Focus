@@ -347,6 +347,7 @@ fun HomeScreen(
     // [修复] 刷新时仅在列表不在顶部时回顶，避免与下拉手势状态冲突导致“卡一下”
     LaunchedEffect(isRefreshing, state.currentCategory) {
         if (!isRefreshing) return@LaunchedEffect
+        if (state.currentCategory == HomeCategory.FOLLOW) return@LaunchedEffect
         val gridState = gridStates[state.currentCategory] ?: return@LaunchedEffect
         if (!shouldResetToTopOnRefreshStart(
                 firstVisibleItemIndex = gridState.firstVisibleItemIndex,
@@ -356,6 +357,22 @@ fun HomeScreen(
             return@LaunchedEffect
         }
         gridState.animateScrollToItem(0)
+    }
+
+    LaunchedEffect(state.followPresentationTopResetKey, state.followPresentationTopResetHandledKey, state.currentCategory) {
+        val resetKey = state.followPresentationTopResetKey
+        if (!shouldResetFollowToTopAfterRefreshCompletion(
+                currentCategory = state.currentCategory,
+                resetKey = resetKey,
+                handledKey = state.followPresentationTopResetHandledKey
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        val followGridState = gridStates[HomeCategory.FOLLOW] ?: return@LaunchedEffect
+        yield()
+        followGridState.scrollToItem(0)
+        viewModel.markFollowPresentationTopResetHandled(resetKey)
     }
 
     //  [新增] JSON 插件过滤提示
@@ -1261,6 +1278,7 @@ fun HomeScreen(
                                      onDissolveComplete = onDissolveCompleteCallback,
                                      longPressCallback = onLongPressCallback, // [Feature] Pass callback
                                      displayMode = displayMode,
+                                     autoLoadMoreEnabled = category != HomeCategory.FOLLOW || state.followAutoLoadMoreEnabled,
                                      cardAnimationEnabled = cardAnimationEnabled,
                                      cardMotionTier = cardMotionTier,
                                      cardTransitionEnabled = cardTransitionEnabled,
@@ -1366,11 +1384,16 @@ fun HomeScreen(
             headerOffsetProvider = { headerOffsetHeightPx }, // [Optimization] Pass lambda to defer state read
             isHeaderCollapseEnabled = isHeaderCollapseEnabled,
             user = state.user,
-            onAvatarClick = { 
-                if (state.user.isLogin && isHomeDrawerEnabled) {
-                    coroutineScope.launch { drawerState.open() }
-                } else {
-                    onAvatarClick() 
+            onAvatarClick = {
+                when (
+                    resolveHomeAvatarAction(
+                        isLoggedIn = state.user.isLogin,
+                        isHomeDrawerEnabled = isHomeDrawerEnabled
+                    )
+                ) {
+                    HomeAvatarAction.OPEN_DRAWER -> coroutineScope.launch { drawerState.open() }
+                    HomeAvatarAction.OPEN_PROFILE -> onProfileClick()
+                    HomeAvatarAction.OPEN_LOGIN -> onAvatarClick()
                 }
             },
             onSettingsClick = onSettingsClick,

@@ -4,8 +4,12 @@ import com.android.purebilibili.data.model.response.SpaceDynamicContent
 import com.android.purebilibili.data.model.response.SpaceDynamicDraw
 import com.android.purebilibili.data.model.response.SpaceDynamicDrawItem
 import com.android.purebilibili.data.model.response.SpaceDynamicItem
+import com.android.purebilibili.data.model.response.SpaceDynamicDesc
 import com.android.purebilibili.data.model.response.SpaceDynamicMajor
 import com.android.purebilibili.data.model.response.SpaceDynamicModules
+import com.android.purebilibili.data.model.response.SpaceDynamicArchive
+import com.android.purebilibili.data.model.response.SpaceDynamicOpus
+import com.android.purebilibili.data.model.response.SpaceDynamicOpusSummary
 import com.android.purebilibili.feature.dynamic.components.DynamicCardMediaAction
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicCardMediaAction
 import kotlin.test.Test
@@ -13,6 +17,59 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class SpaceDynamicLoadPolicyTest {
+
+    @Test
+    fun filterSpaceDynamicItemsByQuery_matchesDynamicTextAndArchiveTitle() {
+        val items = listOf(
+            SpaceDynamicItem(
+                id_str = "1",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        desc = SpaceDynamicDesc(text = "今天打游戏")
+                    )
+                )
+            ),
+            SpaceDynamicItem(
+                id_str = "2",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        major = SpaceDynamicMajor(
+                            archive = SpaceDynamicArchive(
+                                bvid = "BV1",
+                                title = "火影周年庆攻略",
+                                desc = "视频简介"
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("1"), filterSpaceDynamicItemsByQuery(items, "游戏").map { it.id_str })
+        assertEquals(listOf("2"), filterSpaceDynamicItemsByQuery(items, "火影").map { it.id_str })
+    }
+
+    @Test
+    fun filterSpaceDynamicItemsByQuery_matchesOpusTitleAndSummary() {
+        val items = listOf(
+            SpaceDynamicItem(
+                id_str = "3",
+                modules = SpaceDynamicModules(
+                    module_dynamic = SpaceDynamicContent(
+                        major = SpaceDynamicMajor(
+                            opus = SpaceDynamicOpus(
+                                title = "旅行相册",
+                                summary = SpaceDynamicOpusSummary(text = "记录春天的海边")
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("3"), filterSpaceDynamicItemsByQuery(items, "旅行").map { it.id_str })
+        assertEquals(listOf("3"), filterSpaceDynamicItemsByQuery(items, "海边").map { it.id_str })
+    }
 
     @Test
     fun shouldRequestInitialSpaceDynamicLoad_onlyTriggersBeforeFirstCompletedLoad() {

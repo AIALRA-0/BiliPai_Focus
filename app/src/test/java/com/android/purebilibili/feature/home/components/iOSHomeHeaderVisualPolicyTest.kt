@@ -174,6 +174,51 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `md3 search row starts revealing with small reverse scroll`() {
+        assertEquals(0.dp, resolveHomeTopSearchRevealDeadZone(UiPreset.MD3))
+
+        val layout = resolveHomeHeaderScrollLayout(
+            headerOffsetPx = -44f,
+            searchBarHeightPx = 52f,
+            searchCollapseDistancePx = 63f,
+            tabRowHeightPx = 48f,
+            isHeaderCollapseEnabled = true,
+            searchRevealDeadZonePx = resolveHomeTopSearchRevealDeadZone(UiPreset.MD3).value,
+            usesImmediateSearchReveal = true
+        )
+
+        assertEquals(8f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(
+            resolveHomeTopSearchContentRevealFraction(
+                searchRevealFraction = 8f / 52f,
+                usesImmediateReveal = true
+            ),
+            layout.searchAlpha,
+            0.0001f
+        )
+        assertEquals(48f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `md3 partial collapse softens search content alpha instead of using linear fade`() {
+        val layout = resolveHomeHeaderScrollLayout(
+            headerOffsetPx = -26f,
+            searchBarHeightPx = 52f,
+            searchCollapseDistancePx = 63f,
+            tabRowHeightPx = 48f,
+            isHeaderCollapseEnabled = true,
+            searchRevealDeadZonePx = 0f,
+            usesImmediateSearchReveal = true
+        )
+
+        assertEquals(26f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(0.43f, layout.searchAlpha, 0.0001f)
+        assertEquals(48f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
     fun `home header collapse distance includes search spacing before pinned tabs`() {
         assertEquals(
             54.dp,

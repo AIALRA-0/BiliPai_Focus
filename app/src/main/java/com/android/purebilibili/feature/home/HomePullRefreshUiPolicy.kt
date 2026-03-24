@@ -50,6 +50,16 @@ internal fun shouldResetToTopAfterIncrementalRefresh(
     )
 }
 
+internal fun shouldResetFollowToTopAfterRefreshCompletion(
+    currentCategory: HomeCategory,
+    resetKey: Long,
+    handledKey: Long
+): Boolean {
+    if (currentCategory != HomeCategory.FOLLOW) return false
+    if (resetKey <= 0L) return false
+    return resetKey > handledKey
+}
+
 internal fun shouldShowReleaseToRefreshHint(
     progress: Float,
     isRefreshing: Boolean,

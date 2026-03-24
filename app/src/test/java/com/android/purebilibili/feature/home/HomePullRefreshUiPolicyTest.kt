@@ -113,6 +113,31 @@ class HomePullRefreshUiPolicyTest {
     }
 
     @Test
+    fun `shouldResetFollowToTopAfterRefreshCompletion only triggers for unhandled follow event`() {
+        assertTrue(
+            shouldResetFollowToTopAfterRefreshCompletion(
+                currentCategory = HomeCategory.FOLLOW,
+                resetKey = 2L,
+                handledKey = 1L
+            )
+        )
+        assertFalse(
+            shouldResetFollowToTopAfterRefreshCompletion(
+                currentCategory = HomeCategory.FOLLOW,
+                resetKey = 2L,
+                handledKey = 2L
+            )
+        )
+        assertFalse(
+            shouldResetFollowToTopAfterRefreshCompletion(
+                currentCategory = HomeCategory.POPULAR,
+                resetKey = 2L,
+                handledKey = 1L
+            )
+        )
+    }
+
+    @Test
     fun `resolvePullRefreshHintText shows pull text while indicator animates back`() {
         assertEquals(
             "下拉刷新...",

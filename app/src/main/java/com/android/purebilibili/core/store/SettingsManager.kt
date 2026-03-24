@@ -190,6 +190,8 @@ internal fun normalizeDanmakuDisplayArea(value: Float): Float {
     return supportedOptions.minByOrNull { abs(it - normalized) } ?: 0.5f
 }
 
+internal fun normalizeDanmakuFontScale(value: Float): Float = value.coerceIn(0.3f, 2.0f)
+
 internal const val DEFAULT_HOME_REFRESH_COUNT = 20
 internal const val MIN_HOME_REFRESH_COUNT = 10
 internal const val MAX_HOME_REFRESH_COUNT = 30
@@ -583,6 +585,8 @@ object SettingsManager {
     private val KEY_COMMENT_DEFAULT_SORT_MODE = intPreferencesKey("comment_default_sort_mode")
     //  [新增] 离开播放页后停止播放（优先于小窗/画中画模式）
     private val KEY_STOP_PLAYBACK_ON_EXIT = booleanPreferencesKey("stop_playback_on_exit")
+    private val KEY_BACKGROUND_PLAYBACK_ENABLED = booleanPreferencesKey("background_playback_enabled")
+    private val KEY_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("audio_focus_enabled")
     private val KEY_AUDIO_MODE_AUTO_PIP_ENABLED = booleanPreferencesKey("audio_mode_auto_pip_enabled")
     private val KEY_VIDEO_AI_SUMMARY_ENTRY_ENABLED = booleanPreferencesKey("video_ai_summary_entry_enabled")
     private const val PLAYBACK_SPEED_CACHE_PREFS = "playback_speed_cache"
@@ -1829,7 +1833,9 @@ object SettingsManager {
             opacity = normalizeDanmakuOpacity(
                 preferences[KEY_DANMAKU_OPACITY] ?: DEFAULT_DANMAKU_OPACITY
             ),
-            fontScale = preferences[KEY_DANMAKU_FONT_SCALE] ?: DEFAULT_DANMAKU_FONT_SCALE,
+            fontScale = normalizeDanmakuFontScale(
+                preferences[KEY_DANMAKU_FONT_SCALE] ?: DEFAULT_DANMAKU_FONT_SCALE
+            ),
             speed = preferences[KEY_DANMAKU_SPEED] ?: DEFAULT_DANMAKU_SPEED,
             displayArea = normalizeDanmakuDisplayArea(
                 preferences[KEY_DANMAKU_AREA] ?: DEFAULT_DANMAKU_AREA
@@ -1878,13 +1884,17 @@ object SettingsManager {
         }
     }
     
-    // --- 弹幕字体大小 (0.5 ~ 2.0, 默认 1.0) ---
+    // --- 弹幕字体大小 (0.3 ~ 2.0, 默认 1.0) ---
     fun getDanmakuFontScale(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_DANMAKU_FONT_SCALE] ?: DEFAULT_DANMAKU_FONT_SCALE }
+        .map { preferences ->
+            normalizeDanmakuFontScale(
+                preferences[KEY_DANMAKU_FONT_SCALE] ?: DEFAULT_DANMAKU_FONT_SCALE
+            )
+        }
 
     suspend fun setDanmakuFontScale(context: Context, value: Float) {
-        context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_DANMAKU_FONT_SCALE] = value.coerceIn(0.5f, 2.0f)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_FONT_SCALE] = normalizeDanmakuFontScale(value)
         }
     }
     
@@ -2555,6 +2565,38 @@ object SettingsManager {
     fun getStopPlaybackOnExitSync(context: Context): Boolean {
         return context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
             .getBoolean("stop_playback_on_exit", false)
+    }
+
+    fun getBackgroundPlaybackEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_BACKGROUND_PLAYBACK_ENABLED] ?: true }
+
+    suspend fun setBackgroundPlaybackEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_BACKGROUND_PLAYBACK_ENABLED] = value
+        }
+        context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .edit().putBoolean("background_playback_enabled", value).apply()
+    }
+
+    fun getBackgroundPlaybackEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .getBoolean("background_playback_enabled", true)
+    }
+
+    fun getAudioFocusEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_AUDIO_FOCUS_ENABLED] ?: true }
+
+    suspend fun setAudioFocusEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_AUDIO_FOCUS_ENABLED] = value
+        }
+        context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .edit().putBoolean("audio_focus_enabled", value).apply()
+    }
+
+    fun getAudioFocusEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .getBoolean("audio_focus_enabled", true)
     }
 
     fun getAudioModeAutoPipEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -3323,6 +3365,8 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_REMEMBER_LAST_PLAYBACK_SPEED, SettingsShareSection.PLAYBACK),
             IntShareablePreferenceDefinition(KEY_COMMENT_DEFAULT_SORT_MODE, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_STOP_PLAYBACK_ON_EXIT, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_BACKGROUND_PLAYBACK_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_AUDIO_FOCUS_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_AI_SUMMARY_ENTRY_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_CLICK_TO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESUME_PLAYBACK_PROMPT_ENABLED, SettingsShareSection.PLAYBACK),

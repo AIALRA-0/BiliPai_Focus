@@ -12,6 +12,7 @@ import com.android.purebilibili.data.repository.shouldContinueDynamicFetchAfterF
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -64,6 +65,8 @@ sealed class SpaceUiState {
         val hasMoreAudios: Boolean = true,
         val hasMoreArticles: Boolean = true
         ,
+        val isSearchMode: Boolean = false,
+        val searchQuery: String = "",
         val headerState: SpaceHeaderState = SpaceHeaderState(null, null, null, null, "", emptyList(), emptyList()),
         val tabShellState: SpaceTabShellState = buildInitialTabShellState()
     ) : SpaceUiState()
@@ -111,7 +114,9 @@ class SpaceViewModel(
     private var activeSpaceLoadGeneration: Long = 0
     private var activeSpaceLoadJob: Job? = null
     private var activeSpaceSupplementalJob: Job? = null
+    private var activeSpaceSearchJob: Job? = null
     private val collectionPreviewLimit = 3
+    private var currentKeyword: String = ""
     
     fun loadSpaceInfo(mid: Long) {
         if (mid <= 0) return
@@ -123,6 +128,8 @@ class SpaceViewModel(
 
         currentMid = mid
         currentPage = 1
+        currentKeyword = ""
+        activeSpaceSearchJob?.cancel()
         activeSpaceLoadGeneration += 1
         val requestGeneration = activeSpaceLoadGeneration
         activeSpaceLoadJob?.cancel()
@@ -275,9 +282,22 @@ class SpaceViewModel(
         _selectedMainTab.value = tab
         savedStateHandle[KEY_SELECTED_MAIN_TAB] = tab
         val current = _uiState.value as? SpaceUiState.Success ?: return
+        val previousScope = resolveSpaceSearchScope(
+            selectedMainTab = current.tabShellState.selectedTab,
+            selectedSubTab = current.selectedSubTab
+        )
+        val nextScope = resolveSpaceSearchScope(
+            selectedMainTab = newTab,
+            selectedSubTab = current.selectedSubTab
+        )
         _uiState.value = current.copy(
+            isSearchMode = if (previousScope == nextScope) current.isSearchMode else false,
+            searchQuery = if (previousScope == nextScope) current.searchQuery else "",
             tabShellState = current.tabShellState.withSelectedTab(newTab)
         )
+        if (previousScope == SpaceSearchScope.VIDEO && previousScope != nextScope && currentKeyword.isNotBlank()) {
+            clearVideoSearchResults()
+        }
     }
     
     fun loadMoreVideos() {
@@ -292,7 +312,15 @@ class SpaceViewModel(
             try {
                 val nextPage = currentPage + 1
                 //  修复: 使用当前的 tid 和 order
-                val result = fetchSpaceVideos(currentMid, nextPage, cachedImgKey, cachedSubKey, currentTid, currentOrder)
+                val result = fetchSpaceVideos(
+                    currentMid,
+                    nextPage,
+                    cachedImgKey,
+                    cachedSubKey,
+                    currentTid,
+                    currentOrder,
+                    currentKeyword
+                )
                 
                 if (result != null) {
                     currentPage = nextPage
@@ -385,7 +413,8 @@ class SpaceViewModel(
         imgKey: String, 
         subKey: String, 
         tid: Int = 0,
-        order: VideoSortOrder = VideoSortOrder.PUBDATE
+        order: VideoSortOrder = VideoSortOrder.PUBDATE,
+        keyword: String = ""
     ): SpaceVideoData? {
         return try {
             val params = WbiUtils.sign(mutableMapOf(
@@ -395,6 +424,7 @@ class SpaceViewModel(
                 "order" to order.apiValue  //  使用传入的排序方式
             ).apply {
                 if (tid > 0) put("tid", tid.toString())  //  添加分类筛选
+                if (keyword.isNotBlank()) put("keyword", keyword)
             }.toMap(), imgKey, subKey)
             val response = spaceApi.getSpaceVideos(params)
             if (response.code == 0) response.data else null
@@ -426,7 +456,15 @@ class SpaceViewModel(
             )
             
             try {
-                val result = fetchSpaceVideos(currentMid, 1, cachedImgKey, cachedSubKey, currentTid, order)
+                val result = fetchSpaceVideos(
+                    currentMid,
+                    1,
+                    cachedImgKey,
+                    cachedSubKey,
+                    currentTid,
+                    order,
+                    currentKeyword
+                )
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 
                 if (result != null) {
@@ -464,7 +502,15 @@ class SpaceViewModel(
             
             try {
                 //  修复: 使用当前排序方式
-                val result = fetchSpaceVideos(currentMid, 1, cachedImgKey, cachedSubKey, tid, currentOrder)
+                val result = fetchSpaceVideos(
+                    currentMid,
+                    1,
+                    cachedImgKey,
+                    cachedSubKey,
+                    tid,
+                    currentOrder,
+                    currentKeyword
+                )
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 
                 if (result != null) {
@@ -740,8 +786,23 @@ class SpaceViewModel(
     fun selectSubTab(tab: SpaceSubTab) {
         val current = _uiState.value as? SpaceUiState.Success ?: return
         if (current.selectedSubTab == tab) return
-        
-        _uiState.value = current.copy(selectedSubTab = tab)
+        val previousScope = resolveSpaceSearchScope(
+            selectedMainTab = current.tabShellState.selectedTab,
+            selectedSubTab = current.selectedSubTab
+        )
+        val nextScope = resolveSpaceSearchScope(
+            selectedMainTab = current.tabShellState.selectedTab,
+            selectedSubTab = tab
+        )
+
+        _uiState.value = current.copy(
+            selectedSubTab = tab,
+            isSearchMode = if (previousScope == nextScope) current.isSearchMode else false,
+            searchQuery = if (previousScope == nextScope) current.searchQuery else ""
+        )
+        if (previousScope == SpaceSearchScope.VIDEO && previousScope != nextScope && currentKeyword.isNotBlank()) {
+            clearVideoSearchResults()
+        }
         
         // Check if data needs loading
         when (tab) {
@@ -756,6 +817,54 @@ class SpaceViewModel(
                 }
             }
             else -> {}
+        }
+    }
+
+    fun setSearchMode(enabled: Boolean) {
+        val current = _uiState.value as? SpaceUiState.Success ?: return
+        val scope = resolveSpaceSearchScope(
+            selectedMainTab = current.tabShellState.selectedTab,
+            selectedSubTab = current.selectedSubTab
+        )
+        if (scope == SpaceSearchScope.NONE) return
+
+        if (enabled) {
+            _uiState.value = current.copy(isSearchMode = true)
+            return
+        }
+
+        activeSpaceSearchJob?.cancel()
+        _uiState.value = current.copy(
+            isSearchMode = false,
+            searchQuery = ""
+        )
+        if (scope == SpaceSearchScope.VIDEO && currentKeyword.isNotBlank()) {
+            clearVideoSearchResults()
+        } else {
+            currentKeyword = ""
+        }
+    }
+
+    fun updateSearchQuery(query: String) {
+        val current = _uiState.value as? SpaceUiState.Success ?: return
+        val scope = resolveSpaceSearchScope(
+            selectedMainTab = current.tabShellState.selectedTab,
+            selectedSubTab = current.selectedSubTab
+        )
+        if (scope == SpaceSearchScope.NONE) return
+
+        _uiState.value = current.copy(
+            isSearchMode = true,
+            searchQuery = query
+        )
+
+        if (scope != SpaceSearchScope.VIDEO) return
+
+        activeSpaceSearchJob?.cancel()
+        activeSpaceSearchJob = viewModelScope.launch {
+            delay(300L)
+            currentKeyword = query.trim()
+            refreshVideoSearchResults()
         }
     }
     
@@ -1018,6 +1127,55 @@ class SpaceViewModel(
                 it.copy(isLoading = false, error = error, hasLoaded = hasLoaded)
             }
         )
+    }
+
+    private fun clearVideoSearchResults() {
+        currentKeyword = ""
+        refreshVideoSearchResults()
+    }
+
+    private fun refreshVideoSearchResults() {
+        val current = _uiState.value as? SpaceUiState.Success ?: return
+        if (cachedImgKey.isBlank() || cachedSubKey.isBlank()) return
+
+        viewModelScope.launch {
+            val loadingState = (_uiState.value as? SpaceUiState.Success ?: current).copy(
+                videos = emptyList(),
+                isLoadingMore = true,
+                hasMoreVideos = true
+            )
+            _uiState.value = loadingState
+
+            try {
+                val result = fetchSpaceVideos(
+                    mid = currentMid,
+                    page = 1,
+                    imgKey = cachedImgKey,
+                    subKey = cachedSubKey,
+                    tid = currentTid,
+                    order = currentOrder,
+                    keyword = currentKeyword
+                )
+                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
+                if (result != null) {
+                    currentPage = 1
+                    _uiState.value = currentState.copy(
+                        videos = result.list.vlist,
+                        totalVideos = result.page.count,
+                        hasMoreVideos = result.list.vlist.size >= pageSize,
+                        isLoadingMore = false
+                    )
+                } else {
+                    _uiState.value = currentState.copy(
+                        isLoadingMore = false,
+                        hasMoreVideos = false
+                    )
+                }
+            } catch (e: Exception) {
+                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
+                _uiState.value = currentState.copy(isLoadingMore = false)
+            }
+        }
     }
 
 

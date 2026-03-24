@@ -78,6 +78,7 @@ class BackgroundPlaybackPolicyTest {
     fun stopOnExitDisablesBackgroundAudioEvenInDefaultMode() {
         assertFalse(
             shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.OFF,
                 isActive = true,
                 isLeavingByNavigation = false,
@@ -90,6 +91,7 @@ class BackgroundPlaybackPolicyTest {
     fun defaultModeStillSupportsBackgroundAudioWhenOptionOff() {
         assertTrue(
             shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.OFF,
                 isActive = true,
                 isLeavingByNavigation = false,
@@ -102,6 +104,7 @@ class BackgroundPlaybackPolicyTest {
     fun defaultModeStopsBackgroundAudioWhenLeavingByNavigation() {
         assertFalse(
             shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.OFF,
                 isActive = true,
                 isLeavingByNavigation = true,
@@ -114,6 +117,7 @@ class BackgroundPlaybackPolicyTest {
     fun nonDefaultModesDoNotContinueBackgroundAudio() {
         assertFalse(
             shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.IN_APP_ONLY,
                 isActive = true,
                 isLeavingByNavigation = false,
@@ -122,12 +126,32 @@ class BackgroundPlaybackPolicyTest {
         )
         assertFalse(
             shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.SYSTEM_PIP,
                 isActive = true,
                 isLeavingByNavigation = false,
                 stopPlaybackOnExit = false
             )
         )
+    }
+
+    @Test
+    fun backgroundPlaybackToggleDisablesBackgroundAudioEvenInDefaultMode() {
+        assertFalse(
+            shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = false,
+                mode = SettingsManager.MiniPlayerMode.OFF,
+                isActive = true,
+                isLeavingByNavigation = false,
+                stopPlaybackOnExit = false
+            )
+        )
+    }
+
+    @Test
+    fun audioFocusPolicyOnlyHandlesFocusWhenEnabled() {
+        assertTrue(resolveHandleAudioFocusByPolicy(audioFocusEnabled = true))
+        assertFalse(resolveHandleAudioFocusByPolicy(audioFocusEnabled = false))
     }
 
     @Test
