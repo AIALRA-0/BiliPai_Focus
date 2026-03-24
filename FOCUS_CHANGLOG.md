@@ -1,5 +1,20 @@
 # Focus Changelog
 
+## v7.1.4 Focus / focus.3 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.4` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.4-focus.3`。
+- 为保证已发布 `v7.1.4-focus.2 / 147` 用户可直接升级，`versionCode` 继续递增到 `148`。
+- `focus.3` 是一个紧急修复版，专门处理 release 包里“点击任意视频直接闪退”的严重问题。
+
+### 视频点击闪退根因与修复
+- 设备 adb 崩溃栈确认，`focus.2` 在进入 `VideoDetailScreen` 时触发了 release 专属 `VerifyError`，根因是 R8 对大型 Compose 视频详情页做字节码优化后生成了不可校验的 dex。
+- 本次保留 release 的代码裁剪与混淆，但关闭 R8 字节码优化，避免视频详情页和同类大型 Compose 页面继续被错误优化成运行时不可验证的类。
+
+### 设备验证
+- 已通过 `:app:assembleRelease`。
+- 已在连接的真机上通过 adb 安装修复后的 release 包，并用 `ACTION_VIEW` 直达 B 站视频链接，确认应用不再因进入 `VideoDetailScreen` 闪退。
+
 ## v7.1.4 Focus / focus.2 (2026-03-24)
 
 ### 版本信息

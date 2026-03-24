@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.2</sub>
+  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.3</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.2-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.3-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.2.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.3.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.2.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.3.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.4-focus.2` |
+| Focus 版本 | `7.1.4-focus.3` |
 | 上游基线 | `7.1.4` |
-| 发布标签 | `v7.1.4-focus.2` |
-| Release Notes | [docs/releases/focus-7.1.4-focus.2.md](docs/releases/focus-7.1.4-focus.2.md) |
-| 主要收口 | 彻底延后 FOLLOW 手动下拉刷新的列表提交时机，避免刷新动画未结束就提前换新列表；修复刷新完成后底部分页门闩不同步、必须切标签才能继续加载的问题 |
-| 对外 APK | `BliPai-Focus-release-7.1.4-focus.2.apk` |
+| 发布标签 | `v7.1.4-focus.3` |
+| Release Notes | [docs/releases/focus-7.1.4-focus.3.md](docs/releases/focus-7.1.4-focus.3.md) |
+| 主要收口 | 修复 release 包点击任意视频直接闪退的问题；根因是 `VideoDetailScreen` 在 R8 优化后触发 `VerifyError`，本次保留混淆与裁剪，但关闭字节码优化以确保视频详情页稳定进入 |
+| 对外 APK | `BliPai-Focus-release-7.1.4-focus.3.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.4-focus.2.md` | Focus `v7.1.4-focus.2` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.4-focus.2-en.md` | Focus `v7.1.4-focus.2` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.3.md` | Focus `v7.1.4-focus.3` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.3-en.md` | Focus `v7.1.4-focus.3` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
@@ -718,11 +718,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.1.4 / v7.1.4-focus.2 · 2026-03-24)
+### 最近更新 (v7.1.4 / v7.1.4-focus.3 · 2026-03-24)
 
-- 🔒 **FOLLOW 新列表提交时机继续后移**：手动下拉刷新时，新的关注视频列表会一直等到刷新指示器完全收回后才一次性替换，修掉了间歇性“刷新还没结束内容就先顶上来”的问题。
-- ♻️ **刷新后底部分页恢复稳定**：FOLLOW 在刷新并回顶完成后，不再卡死在无法继续触发底部加载的状态，也不需要切去别的标签再回来才能恢复。
-- 🧪 **相关 home 回归已补测**：这次额外覆盖了 FOLLOW 刷新提交时机、分页门闩和下滚触发条件相关的策略测试，并重新通过编译与 release 出包验证。
+- 🚨 **修复点击视频即闪退**：`focus.2` 的 release 包在进入 `VideoDetailScreen` 时会触发 `VerifyError`，现在已经修掉。
+- 🛠️ **保留混淆与裁剪，关闭字节码优化**：这次保留 release APK 的正常发布形态，但关闭了 R8 对大型 Compose 视频页的字节码优化，避免再次生成不可校验的 dex。
+- 📱 **已用 adb 真机验证**：修复后已在连接设备上安装 release 包，并通过 adb 直达 B 站视频链接，确认进入视频详情页不再崩溃。
 
 ### 历史版本
 

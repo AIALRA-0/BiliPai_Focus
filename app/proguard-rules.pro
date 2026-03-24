@@ -10,8 +10,10 @@
 -dontwarn org.jetbrains.annotations.**
 
 # === 优化选项 ===
--optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
--optimizationpasses 5
+# Release 7.1.4-focus.2 on device hit a VerifyError while entering VideoDetailScreen.
+# Keep shrinking/obfuscation, but disable bytecode optimization to avoid Compose/R8
+# generating unverifiable dex for large video screen composables.
+-dontoptimize
 -allowaccessmodification
 -dontpreverify
 
