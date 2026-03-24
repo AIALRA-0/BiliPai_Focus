@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-23 · Upstream base v7.1.2 · Current Focus release v7.1.2-focus.1</sub>
+  <sub>Last updated: 2026-03-23 · Upstream base v7.1.2 · Current Focus release v7.1.2-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.2--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.2--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.2-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -32,7 +32,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.2-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.2-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -49,26 +49,27 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.2-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.2-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.2-focus.1` |
+| Focus version | `7.1.2-focus.2` |
 | Upstream base | `7.1.2` |
-| Release tag | `v7.1.2-focus.1` |
-| Release notes | [docs/releases/focus-7.1.2-focus.1-en.md](docs/releases/focus-7.1.2-focus.1-en.md) |
-| Main refinements | Syncs upstream `v7.1.2` playback and settings-localization fixes, expands Focus home title switches to all eight top tabs, and replaces the old forced fallback with a proper empty state when every home title is hidden |
-| APK names | `BliPai-Focus-debug-7.1.2-focus.1-debug.apk` · `BliPai-Focus-release-7.1.2-focus.1.apk` |
+| Release tag | `v7.1.2-focus.2` |
+| Release notes | [docs/releases/focus-7.1.2-focus.2-en.md](docs/releases/focus-7.1.2-focus.2-en.md) |
+| Main refinements | Keeps upstream `v7.1.2` as the base, removes the extra Focus switches for Anime / Knowledge / Tech, speeds up filtered Home Follow refresh, and safely falls back to a single Recommend tab when every Focus-controlled home title is hidden |
+| APK names | `BliPai-Focus-debug-7.1.2-focus.2-debug.apk` · `BliPai-Focus-release-7.1.2-focus.2.apk` |
 
 ### Default customizations
 
 | Item | Default |
 | --- | --- |
-| Home title switches | Cover `Recommend / Follow / Popular / Live / Anime / Game / Knowledge / Tech` |
+| Home title switches | Cover `Recommend / Follow / Popular / Live / Game` |
 | Home Recommend / Popular / Live / Game tabs | Hidden |
-| Home Follow / Anime / Knowledge / Tech tabs | Visible by default, but all can be disabled in Focus |
+| Home Follow tab | Visible by default and can be disabled in Focus |
+| Home Anime / Knowledge / Tech tabs | Follow the original top-tab management and are no longer exposed as separate Focus switches |
 | Home Partition button | Hidden |
 | Related videos below video detail | Hidden |
 | Search hot list | Disabled, while keeping suggestions, discovery, results, and search history |
@@ -86,9 +87,9 @@ From the perspective of attention psychology and behavioral design, recommendati
 - Follow-group management now includes a search field for creator name or UID, making large follow lists easier to manage.
 - The new-group field, creator-search field, add button, and refresh button now share a taller tap target and the same rounded style, making the control area feel more consistent.
 - Dynamic follow users now restore from local cache first and hydrate in parallel during startup, instead of waiting for the primary feed to finish first.
-- Home Follow now keeps the official `HOME_FOLLOW` pagination semantics and only continues when the Focus-filtered visible delta still falls short of the current official chunk, instead of surfacing false empty states or unstable `1-2` item outputs.
+- Home Follow still uses the official `HOME_FOLLOW` pagination as its base, but filtered refresh now stops as soon as the first visible cards appear, while bottom-end loading keeps going until new visible cards arrive or the filtered sources are truly exhausted.
 - Dynamic follow-user sync now targets up to `1000` creators by default; if you follow fewer than `1000`, it syncs the actual count instead of stopping at the first `50`.
-- If every home title is hidden, Home now shows a dedicated empty state with a shortcut back to `Settings -> General -> Focus`, instead of forcing `Follow` back into view.
+- If every Focus-controlled home title is hidden, Home now safely falls back to a single `Recommend` tab instead of crashing or becoming unrecoverable.
 
 ### Maintenance cadence and test scope
 
@@ -150,19 +151,19 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.2-focus.1.md` | Chinese release notes for `v7.1.2-focus.1` |
-| Added | `docs/releases/focus-7.1.2-focus.1-en.md` | English release notes for `v7.1.2-focus.1` |
+| Added | `docs/releases/focus-7.1.2-focus.2.md` | Chinese release notes for `v7.1.2-focus.2` |
+| Added | `docs/releases/focus-7.1.2-focus.2-en.md` | English release notes for `v7.1.2-focus.2` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus settings entry and Quiet Mode switches |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Settings search indexing and Focus entry copy |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeTopCategoryPolicy.kt` | Eight-tab home visibility filtering and empty-list support |
-| Added | `app/src/main/java/com/android/purebilibili/feature/home/HomeNoTitleEmptyState.kt` | Dedicated empty state when every home title is disabled |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt` | Safe pager and header handling for the no-title case |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeTopCategoryPolicy.kt` | Five-switch Focus home filtering with a safe single-Recommend fallback |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt` | Safe pager and header handling around the fallback path |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | Home top-tab filtering, centered layout, and viewport spacing |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | Indicator offset and centered compensation |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | Home Follow projection and local cache filtering |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | Faster filtered Home Follow refresh and tail-fetch completion |
+| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeFollowFocusPolicy.kt` | Filtered Home Follow continuation thresholds and stopping rules |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | Dynamic follow hydration, grouping, and visibility policy |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | Follow-group management, expansion flow, and single-group assignment |
 | Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | Dynamic group entry and interaction handoff |

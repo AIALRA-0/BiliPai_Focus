@@ -122,9 +122,15 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `focus can return empty when every title is hidden`() {
+    fun `focus falls back to recommend when every controlled title is hidden`() {
         val categories = applyFocusHomeTopCategories(
-            categories = HomeCategory.entries.toList(),
+            categories = listOf(
+                HomeCategory.RECOMMEND,
+                HomeCategory.FOLLOW,
+                HomeCategory.POPULAR,
+                HomeCategory.LIVE,
+                HomeCategory.GAME
+            ),
             settings = FocusSettings(
                 showHomeFollowTab = false,
                 showHomeAnimeTab = false,
@@ -133,7 +139,7 @@ class HomeTopCategoryPolicyTest {
             )
         )
 
-        assertTrue(categories.isEmpty())
+        assertEquals(listOf(HomeCategory.RECOMMEND), categories)
     }
 
     @Test
@@ -163,7 +169,7 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `focus applies all eight title visibility switches`() {
+    fun `focus applies recommend follow popular live and game switches while leaving official extra tabs visible`() {
         val categories = applyFocusHomeTopCategories(
             categories = listOf(
                 HomeCategory.RECOMMEND,
@@ -192,7 +198,8 @@ class HomeTopCategoryPolicyTest {
                 HomeCategory.RECOMMEND,
                 HomeCategory.POPULAR,
                 HomeCategory.ANIME,
-                HomeCategory.KNOWLEDGE
+                HomeCategory.KNOWLEDGE,
+                HomeCategory.TECH
             ),
             categories
         )

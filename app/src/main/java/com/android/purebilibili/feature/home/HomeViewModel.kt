@@ -1214,7 +1214,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (!isLoadMore) {
-            fetchUserInfo()
+            refreshUserInfoInBackground()
             com.android.purebilibili.data.repository.DynamicRepository.resetPagination(
                 com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
             )
@@ -1235,7 +1235,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             videos = baselineRawVideos
         ).size
         var roundRawVideos = emptyList<VideoItem>()
-        var targetRawIncrement: Int? = null
         var continuationFetches = 0
         var refreshRequest = !isLoadMore
 
@@ -1245,8 +1244,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
             )
             refreshRequest = false
-
-            if (isLoadMore) delay(100)
 
             val items = result.getOrElse { error ->
                 handleFollowFeedFetchFailure(isLoadMore = isLoadMore, error = error)
@@ -1259,10 +1256,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 incomingRawVideos = rawVideos,
                 keySelector = ::videoItemKey
             )
-            val rawIncrement = (mergedRoundRawVideos.size - previousRoundRawVideos.size).coerceAtLeast(0)
-            if (targetRawIncrement == null && rawIncrement > 0) {
-                targetRawIncrement = rawIncrement
-            }
             roundRawVideos = mergedRoundRawVideos
             val presentedRawVideos = resolveHomeFollowPresentedRawVideos(
                 baselineRawVideos = baselineRawVideos,
@@ -1284,10 +1277,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val hasMore = homeFollowHasMoreData()
 
             if (!shouldContinueHomeFollowFetchAfterFocusFilter(
-                    targetRawIncrement = targetRawIncrement,
+                    baselineVisibleCount = baselineVisibleCount,
                     visibleIncrement = visibleIncrement,
                     hasMore = hasMore,
-                    continuationFetches = continuationFetches
+                    continuationFetches = continuationFetches,
+                    isLoadMore = isLoadMore
                 )
             ) {
                 rawFollowFeedVideos = presentedRawVideos

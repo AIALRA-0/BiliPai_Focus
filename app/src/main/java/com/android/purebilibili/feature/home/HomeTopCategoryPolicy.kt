@@ -78,19 +78,21 @@ private fun isFocusHomeCategoryVisible(
     HomeCategory.FOLLOW -> settings.showHomeFollowTab
     HomeCategory.POPULAR -> settings.showHomePopularTab
     HomeCategory.LIVE -> settings.showHomeLiveTab
-    HomeCategory.ANIME -> settings.showHomeAnimeTab
+    HomeCategory.ANIME -> true
     HomeCategory.GAME -> settings.showHomeGameTab
-    HomeCategory.KNOWLEDGE -> settings.showHomeKnowledgeTab
-    HomeCategory.TECH -> settings.showHomeTechTab
+    HomeCategory.KNOWLEDGE -> true
+    HomeCategory.TECH -> true
 }
 
 fun applyFocusHomeTopCategories(
     categories: List<HomeCategory>,
     settings: FocusSettings
 ): List<HomeCategory> {
-    return categories.filter { category ->
+    val filtered = categories.filter { category ->
         isFocusHomeCategoryVisible(category, settings)
     }
+    if (filtered.isNotEmpty()) return filtered
+    return listOf(HomeCategory.RECOMMEND)
 }
 
 fun resolveHomeTopTabIndex(

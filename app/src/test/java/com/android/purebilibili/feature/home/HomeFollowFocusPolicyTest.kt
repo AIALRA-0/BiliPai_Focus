@@ -67,32 +67,55 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
-    fun shouldContinueHomeFollowFetchAfterFocusFilter_waitsUntilFilteredDeltaMatchesOfficialChunkDelta() {
+    fun shouldContinueHomeFollowFetchAfterFocusFilter_stopsAsSoonAsVisibleResultsAppear() {
         assertEquals(
             true,
             shouldContinueHomeFollowFetchAfterFocusFilter(
-                targetRawIncrement = 4,
+                baselineVisibleCount = 0,
+                visibleIncrement = 0,
+                hasMore = true,
+                continuationFetches = 1,
+                isLoadMore = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                baselineVisibleCount = 0,
                 visibleIncrement = 1,
                 hasMore = true,
-                continuationFetches = 1
+                continuationFetches = 2,
+                isLoadMore = false
             )
         )
         assertEquals(
             false,
             shouldContinueHomeFollowFetchAfterFocusFilter(
-                targetRawIncrement = 4,
-                visibleIncrement = 4,
-                hasMore = true,
-                continuationFetches = 2
-            )
-        )
-        assertEquals(
-            false,
-            shouldContinueHomeFollowFetchAfterFocusFilter(
-                targetRawIncrement = null,
+                baselineVisibleCount = 0,
                 visibleIncrement = 0,
                 hasMore = false,
-                continuationFetches = 1
+                continuationFetches = 1,
+                isLoadMore = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                baselineVisibleCount = 12,
+                visibleIncrement = 0,
+                hasMore = true,
+                continuationFetches = 1,
+                isLoadMore = false
+            )
+        )
+        assertEquals(
+            true,
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                baselineVisibleCount = 12,
+                visibleIncrement = 0,
+                hasMore = true,
+                continuationFetches = 1,
+                isLoadMore = true
             )
         )
     }

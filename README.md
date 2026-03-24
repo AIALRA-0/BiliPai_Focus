@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-23 · 上游基线 v7.1.2 · 当前 Focus 发布 v7.1.2-focus.1</sub>
+  <sub>最后更新：2026-03-23 · 上游基线 v7.1.2 · 当前 Focus 发布 v7.1.2-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.2--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.2--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.2-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.2-focus.1.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.2-focus.2.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,26 +61,27 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.2-focus.1.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.2-focus.2.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.2-focus.1` |
+| Focus 版本 | `7.1.2-focus.2` |
 | 上游基线 | `7.1.2` |
-| 发布标签 | `v7.1.2-focus.1` |
-| Release Notes | [docs/releases/focus-7.1.2-focus.1.md](docs/releases/focus-7.1.2-focus.1.md) |
-| 主要收口 | 同步上游 `v7.1.2` 的播放回归与设置本地化修复，并把 Focus 首页 title 开关扩展到 `推荐 / 关注 / 热门 / 直播 / 追番 / 游戏 / 知识 / 科技` 共 8 项；当首页 title 全部关闭时，当前会进入空态页而不再强制回退到 `关注` |
-| APK 命名 | `BliPai-Focus-debug-7.1.2-focus.1-debug.apk` · `BliPai-Focus-release-7.1.2-focus.1.apk` |
+| 发布标签 | `v7.1.2-focus.2` |
+| Release Notes | [docs/releases/focus-7.1.2-focus.2.md](docs/releases/focus-7.1.2-focus.2.md) |
+| 主要收口 | 在上游 `v7.1.2` 基线上继续收口 Focus 首页开关：移除 `追番 / 知识 / 科技` 的 Focus 独立开关，首页 `关注` 过滤刷新提速，并在所有 Focus 首页入口都关闭时安全回退到单 `推荐`，避免崩溃 |
+| APK 命名 | `BliPai-Focus-debug-7.1.2-focus.2-debug.apk` · `BliPai-Focus-release-7.1.2-focus.2.apk` |
 
 ### 默认定制项
 
 | 项目 | 默认行为 |
 | --- | --- |
-| 首页 title 开关 | 覆盖 `推荐 / 关注 / 热门 / 直播 / 追番 / 游戏 / 知识 / 科技` |
+| 首页 title 开关 | 覆盖 `推荐 / 关注 / 热门 / 直播 / 游戏` |
 | 首页推荐 / 热门 / 直播 / 游戏 | 默认隐藏 |
-| 首页关注 / 追番 / 知识 / 科技 | 默认显示，但均可在 Focus 中关闭 |
+| 首页关注 | 默认显示，可在 Focus 中关闭 |
+| 首页追番 / 知识 / 科技 | 跟随原有顶部标签管理，不再提供 Focus 单独开关 |
 | 首页分区按钮 | 默认隐藏 |
 | 搜索热搜 | 默认关闭，但保留搜索建议、搜索发现、搜索结果与搜索历史链路 |
 | 观看历史 | 新增“一键清空全部历史记录”，默认开启入口 |
@@ -98,10 +99,10 @@
 - 分组管理新增搜索框，可按 UP 名称或 UID 快速定位目标对象，适合大关注列表使用。
 - 分组管理中的新分组输入框、关注对象搜索框、添加按钮和刷新按钮现在统一成更高的点击热区和同一套圆角样式，交互区更整齐。
 - 动态页关注列表会优先使用本地缓存回填，并在页面启动时并行预热，不再必须等主动态先加载完才补全关注对象。
-- 首页“关注”现在以官方 `HOME_FOLLOW` 动态分页为基线，只在结果层按 Focus 分组过滤后补足当前轮次的可见视频，不再频繁误报“没有可用关注对象”或只剩 `1-2` 条可见结果。
+- 首页“关注”现在仍以官方 `HOME_FOLLOW` 动态分页为基线，但过滤后只要首批可见视频已经出现，就会尽快结束前台补抓；而到底加载时则会继续向后追到出现新的可见视频或真正耗尽为止。
 - 动态页关注对象默认会优先同步到最多 `1000` 位；如果实际关注数不足 `1000`，就直接同步实际数量，不再默认只停在 `50` 位。
 - Focus 开关优先于首页顶部标签最终展示结果，但不会破坏原有顶栏管理/底栏管理页。
-- 当首页顶部 `title` 被全部隐藏时，首页会进入空态页，并直接提示前往 `设置 -> 常规 -> Focus` 重新开启任一栏目。
+- 当 Focus 可控制的首页 `title` 全部被关闭时，当前会安全回退到单 `推荐`，避免出现首页崩溃或空白不可恢复状态。
 
 ### 维护节奏与测试范围
 
@@ -163,19 +164,19 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.2-focus.1.md` | Focus `v7.1.2-focus.1` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.2-focus.1-en.md` | Focus `v7.1.2-focus.1` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.2-focus.2.md` | Focus `v7.1.2-focus.2` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.2-focus.2-en.md` | Focus `v7.1.2-focus.2` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus 设置页入口与专注模式开关 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Focus 设置搜索索引与设置入口文案 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeTopCategoryPolicy.kt` | 首页 8 项 title 过滤与无兜底空列表支持 |
-| 新增 | `app/src/main/java/com/android/purebilibili/feature/home/HomeNoTitleEmptyState.kt` | 首页无 title 时的空态页与设置跳转入口 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt` | 首页 pager/头部在空 title 场景下的安全收口 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeTopCategoryPolicy.kt` | 首页 5 项 Focus title 过滤与全关闭时回退到单推荐 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt` | 首页 pager/头部在单推荐回退场景下的安全收口 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | 首页顶部分类过滤、居中对称布局与边界留白 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | 顶部分类指示器偏移与居中补偿 |
-| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | 首页“关注”数据过滤与本地缓存投影 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | 首页“关注”过滤后的刷新提速与尾部补抓收口 |
+| 修改 | `app/src/main/java/com/android/purebilibili/feature/home/HomeFollowFocusPolicy.kt` | 首页“关注”过滤后的继续补抓阈值与停止条件 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | 动态页关注对象预热、分组过滤与显示策略 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | 关注分组管理、分组展开与单归属迁移 |
 | 修改 | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | 动态页分组入口与交互承接 |

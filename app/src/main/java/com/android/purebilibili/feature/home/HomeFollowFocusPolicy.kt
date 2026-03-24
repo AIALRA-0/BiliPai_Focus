@@ -6,7 +6,8 @@ import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.VideoItem
 
-private const val HOME_FOLLOW_FILTER_COMPLETION_FETCH_LIMIT = 8
+private const val HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT = 4
+private const val HOME_FOLLOW_LOAD_MORE_COMPLETION_FETCH_LIMIT = 32
 private const val HOME_FOLLOW_EMPTY_MESSAGE = "没有可用关注对象"
 
 internal fun filterHomeFollowVideosByFocusFollowGroups(
@@ -50,17 +51,21 @@ internal fun resolveHomeFollowVisibleIncrement(
 }
 
 internal fun shouldContinueHomeFollowFetchAfterFocusFilter(
-    targetRawIncrement: Int?,
+    baselineVisibleCount: Int,
     visibleIncrement: Int,
     hasMore: Boolean,
     continuationFetches: Int,
-    maxContinuationFetches: Int = HOME_FOLLOW_FILTER_COMPLETION_FETCH_LIMIT
+    isLoadMore: Boolean
 ): Boolean {
     if (!hasMore) return false
+    val maxContinuationFetches = if (isLoadMore) {
+        HOME_FOLLOW_LOAD_MORE_COMPLETION_FETCH_LIMIT
+    } else {
+        HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT
+    }
     if (continuationFetches >= maxContinuationFetches) return false
-
-    val requiredVisibleIncrement = targetRawIncrement ?: 1
-    return visibleIncrement < requiredVisibleIncrement
+    if (visibleIncrement > 0) return false
+    return isLoadMore || baselineVisibleCount == 0
 }
 
 internal fun accumulateHomeFollowRoundRawVideos(
