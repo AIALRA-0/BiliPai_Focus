@@ -29,6 +29,28 @@ class AppUpdateAssetSelectionPolicyTest {
     }
 
     @Test
+    fun selectPreferredAppUpdateAsset_prefers_release_apk_over_debug_apk() {
+        val selected = selectPreferredAppUpdateAsset(
+            listOf(
+                AppUpdateAsset(
+                    name = "BliPai-Focus-debug-7.1.2-focus.3-debug.apk",
+                    downloadUrl = "https://example.com/debug.apk",
+                    sizeBytes = 45034213L,
+                    contentType = "application/vnd.android.package-archive"
+                ),
+                AppUpdateAsset(
+                    name = "BliPai-Focus-release-7.1.2-focus.3.apk",
+                    downloadUrl = "https://example.com/release.apk",
+                    sizeBytes = 20756490L,
+                    contentType = "application/vnd.android.package-archive"
+                )
+            )
+        )
+
+        assertEquals("BliPai-Focus-release-7.1.2-focus.3.apk", selected?.name)
+    }
+
+    @Test
     fun selectPreferredAppUpdateAsset_returns_null_when_no_apk_assets_exist() {
         val selected = selectPreferredAppUpdateAsset(
             listOf(

@@ -1,5 +1,18 @@
 # Focus Changelog
 
+## v7.1.2 Focus / focus.4 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.2` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.2-focus.4`。
+- 为保证已发布 `v7.1.2-focus.3 / 140` 用户可直接升级，`versionCode` 继续递增到 `141`。
+- `focus.4` 为应用内更新通道热修复版本，只处理 GitHub Release 资产选择错误。
+
+### 应用内更新修复
+- 应用内自动更新在同时检测到 `debug` 与 `release` APK 资产时，当前会明确优先选择 `release` 包，不再误下 `debug` 包。
+- `debug / dev` 资产会被自动降权，仅在没有正常 `release` APK 时才作为兜底候选。
+- GitHub Release 对外发布资产只保留 `release` APK，不再附带 `debug` APK。
+- 补充对应单测，避免后续发布再次因为资产大小或命名顺序变化而回退到 `debug`。
+
 ## v7.1.2 Focus / focus.3 (2026-03-24)
 
 ### 版本信息
