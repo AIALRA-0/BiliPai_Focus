@@ -72,4 +72,26 @@ class HomeCategoryPagePolicyTest {
             )
         )
     }
+
+    @Test
+    fun hasObservedFollowLoadMoreScroll_requiresContentToMoveAwayFromTop() {
+        assertFalse(
+            hasObservedFollowLoadMoreScroll(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
+        assertTrue(
+            hasObservedFollowLoadMoreScroll(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 8
+            )
+        )
+        assertTrue(
+            hasObservedFollowLoadMoreScroll(
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
+    }
 }

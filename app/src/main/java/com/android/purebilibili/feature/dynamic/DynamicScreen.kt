@@ -645,6 +645,9 @@ fun DynamicScreen(
             onSetGroupVisible = { groupId, visible ->
                 viewModel.setFocusFollowGroupVisible(groupId, visible)
             },
+            onSetHomeFeedSortMode = { sortMode ->
+                viewModel.setFocusHomeFeedSortMode(sortMode)
+            },
             onAssignUserToGroup = { mid, groupId ->
                 viewModel.assignFocusFollowingUserToGroup(mid, groupId)
             }

@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.home
 import com.android.purebilibili.core.theme.UiPreset
 import kotlin.math.min
 import kotlin.math.max
+import kotlin.math.abs
 
 internal fun resolvePullRefreshThresholdDp(): Float = 56f
 
@@ -66,12 +67,15 @@ internal fun shouldCommitFollowRefreshPresentationAfterPullSettles(
     isRefreshing: Boolean,
     isStateAnimating: Boolean,
     distanceFraction: Float,
+    contentOffsetFraction: Float = 0f,
     settledDistanceTolerance: Float = 0.01f
 ): Boolean {
     if (currentCategory != HomeCategory.FOLLOW) return false
     if (!hasPendingPresentation) return false
     if (isRefreshing || isStateAnimating) return false
-    return distanceFraction <= settledDistanceTolerance.coerceAtLeast(0f)
+    val tolerance = settledDistanceTolerance.coerceAtLeast(0f)
+    if (distanceFraction > tolerance) return false
+    return abs(contentOffsetFraction) <= tolerance
 }
 
 internal fun shouldDeferFollowRefreshPreviewWhilePullRefreshing(

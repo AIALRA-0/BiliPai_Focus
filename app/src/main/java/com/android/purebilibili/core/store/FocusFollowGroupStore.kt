@@ -23,9 +23,19 @@ data class FocusFollowGroup(
 )
 
 @Serializable
+enum class FocusFollowHomeFeedSortMode {
+    RANDOM,
+    CREATOR_CLUSTER_DESC,
+    CREATOR_CLUSTER_ASC,
+    PUBLISH_TIME_DESC,
+    PUBLISH_TIME_ASC
+}
+
+@Serializable
 data class FocusFollowGroupConfig(
     val groups: List<FocusFollowGroup> = listOf(defaultFocusFollowGroup()),
-    val assignments: Map<String, String> = emptyMap()
+    val assignments: Map<String, String> = emptyMap(),
+    val homeFeedSortMode: FocusFollowHomeFeedSortMode = FocusFollowHomeFeedSortMode.RANDOM
 )
 
 private val KEY_FOCUS_FOLLOW_GROUP_CONFIG =
@@ -84,7 +94,8 @@ fun normalizeFocusFollowGroupConfig(
 
     return FocusFollowGroupConfig(
         groups = groups,
-        assignments = assignments
+        assignments = assignments,
+        homeFeedSortMode = config.homeFeedSortMode
     )
 }
 
@@ -209,6 +220,13 @@ fun withFocusFollowGroupVisibility(
     return normalizeFocusFollowGroupConfig(config.copy(groups = updatedGroups))
 }
 
+fun withFocusFollowHomeFeedSortMode(
+    config: FocusFollowGroupConfig,
+    sortMode: FocusFollowHomeFeedSortMode
+): FocusFollowGroupConfig {
+    return normalizeFocusFollowGroupConfig(config.copy(homeFeedSortMode = sortMode))
+}
+
 private fun generateFocusFollowGroupId(): String {
     val entropy = Random.nextInt(1000, 9999)
     return "group_${System.currentTimeMillis()}_$entropy"
@@ -265,6 +283,15 @@ object FocusFollowGroupStore {
     suspend fun assignUserToGroup(context: Context, mid: Long, groupId: String) {
         updateConfig(context) { current ->
             withUserAssignedToFocusFollowGroup(current, mid, groupId)
+        }
+    }
+
+    suspend fun setHomeFeedSortMode(
+        context: Context,
+        sortMode: FocusFollowHomeFeedSortMode
+    ) {
+        updateConfig(context) { current ->
+            withFocusFollowHomeFeedSortMode(current, sortMode)
         }
     }
 

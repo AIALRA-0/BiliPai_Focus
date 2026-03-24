@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
 import com.android.purebilibili.core.store.FocusFollowGroupStore
 import com.android.purebilibili.core.store.FollowingCacheStore
 import com.android.purebilibili.core.store.SettingsManager
@@ -753,6 +754,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     fun assignFocusFollowingUserToGroup(mid: Long, groupId: String) {
         viewModelScope.launch {
             FocusFollowGroupStore.assignUserToGroup(appContext, mid, groupId)
+        }
+    }
+
+    fun setFocusHomeFeedSortMode(sortMode: FocusFollowHomeFeedSortMode) {
+        viewModelScope.launch {
+            FocusFollowGroupStore.setHomeFeedSortMode(appContext, sortMode)
         }
     }
 

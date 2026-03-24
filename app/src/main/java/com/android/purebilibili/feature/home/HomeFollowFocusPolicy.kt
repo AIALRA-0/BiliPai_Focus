@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
@@ -107,21 +108,138 @@ internal fun presentHomeFollowVisibleVideos(
     isLoadMore: Boolean,
     seed: Long,
     reshuffleOnRefresh: Boolean,
-    prioritizedVideoKeys: Set<String> = emptySet()
+    prioritizedVideoKeys: Set<String> = emptySet(),
+    sortMode: FocusFollowHomeFeedSortMode = FocusFollowHomeFeedSortMode.RANDOM
 ): List<VideoItem> {
+    val orderedVisibleVideos = orderHomeFollowVisibleVideos(
+        videos = incomingVisibleVideos,
+        sortMode = sortMode,
+        seed = seed,
+        prioritizedVideoKeys = if (isLoadMore) emptySet() else prioritizedVideoKeys,
+        reshuffleOnRefresh = reshuffleOnRefresh
+    )
     return when {
-        !isLoadMore && reshuffleOnRefresh -> randomizeHomeFollowIncomingVideos(
-            videos = incomingVisibleVideos,
-            seed = seed,
-            prioritizedVideoKeys = prioritizedVideoKeys
-        )
-        !isLoadMore -> incomingVisibleVideos
+        !isLoadMore -> orderedVisibleVideos
         else -> appendDistinctByKey(
             existingPresentedVisibleVideos,
-            incomingVisibleVideos,
+            if (sortMode == FocusFollowHomeFeedSortMode.RANDOM) {
+                incomingVisibleVideos
+            } else {
+                orderedVisibleVideos
+            },
             ::resolveHomeFollowVideoKey
         )
     }
+}
+
+private fun orderHomeFollowVisibleVideos(
+    videos: List<VideoItem>,
+    sortMode: FocusFollowHomeFeedSortMode,
+    seed: Long,
+    prioritizedVideoKeys: Set<String>,
+    reshuffleOnRefresh: Boolean
+): List<VideoItem> {
+    if (videos.size <= 1) return videos
+    return when (sortMode) {
+        FocusFollowHomeFeedSortMode.RANDOM -> {
+            if (!reshuffleOnRefresh && prioritizedVideoKeys.isEmpty()) {
+                videos
+            } else {
+                randomizeHomeFollowIncomingVideos(
+                    videos = videos,
+                    seed = seed,
+                    prioritizedVideoKeys = prioritizedVideoKeys
+                )
+            }
+        }
+        FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC -> {
+            prioritizeAndSortHomeFollowVideos(
+                videos = videos,
+                prioritizedVideoKeys = prioritizedVideoKeys,
+                sortBlock = ::clusterHomeFollowVideosByCreatorDescending
+            )
+        }
+        FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_ASC -> {
+            prioritizeAndSortHomeFollowVideos(
+                videos = videos,
+                prioritizedVideoKeys = prioritizedVideoKeys,
+                sortBlock = ::clusterHomeFollowVideosByCreatorAscending
+            )
+        }
+        FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC -> {
+            prioritizeAndSortHomeFollowVideos(
+                videos = videos,
+                prioritizedVideoKeys = prioritizedVideoKeys,
+                sortBlock = ::sortHomeFollowVideosByPublishTimeDescending
+            )
+        }
+        FocusFollowHomeFeedSortMode.PUBLISH_TIME_ASC -> {
+            prioritizeAndSortHomeFollowVideos(
+                videos = videos,
+                prioritizedVideoKeys = prioritizedVideoKeys,
+                sortBlock = ::sortHomeFollowVideosByPublishTimeAscending
+            )
+        }
+    }
+}
+
+private fun prioritizeAndSortHomeFollowVideos(
+    videos: List<VideoItem>,
+    prioritizedVideoKeys: Set<String>,
+    sortBlock: (List<VideoItem>) -> List<VideoItem>
+): List<VideoItem> {
+    if (prioritizedVideoKeys.isEmpty()) return sortBlock(videos)
+    val prioritizedVideos = videos.filter { video ->
+        resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+    }
+    val historicalVideos = videos.filterNot { video ->
+        resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+    }
+    return sortBlock(prioritizedVideos) + sortBlock(historicalVideos)
+}
+
+private fun clusterHomeFollowVideosByCreatorDescending(videos: List<VideoItem>): List<VideoItem> {
+    if (videos.size <= 1) return videos
+    val creatorGroups = videos.groupBy { it.owner.mid }
+    return creatorGroups
+        .entries
+        .sortedWith(
+            compareByDescending<Map.Entry<Long, List<VideoItem>>> { (_, creatorVideos) ->
+                creatorVideos.maxOfOrNull { video -> video.pubdate } ?: 0
+            }.thenBy { entry -> entry.key }
+        )
+        .flatMap { (_, creatorVideos) ->
+            sortHomeFollowVideosByPublishTimeDescending(creatorVideos)
+        }
+}
+
+private fun clusterHomeFollowVideosByCreatorAscending(videos: List<VideoItem>): List<VideoItem> {
+    if (videos.size <= 1) return videos
+    val creatorGroups = videos.groupBy { it.owner.mid }
+    return creatorGroups
+        .entries
+        .sortedWith(
+            compareBy<Map.Entry<Long, List<VideoItem>>> { (_, creatorVideos) ->
+                creatorVideos.maxOfOrNull { video -> video.pubdate } ?: 0
+            }.thenBy { entry -> entry.key }
+        )
+        .flatMap { (_, creatorVideos) ->
+            sortHomeFollowVideosByPublishTimeAscending(creatorVideos)
+        }
+}
+
+private fun sortHomeFollowVideosByPublishTimeDescending(videos: List<VideoItem>): List<VideoItem> {
+    return videos.sortedWith(
+        compareByDescending<VideoItem> { it.pubdate }
+            .thenBy { resolveHomeFollowVideoKey(it) }
+    )
+}
+
+private fun sortHomeFollowVideosByPublishTimeAscending(videos: List<VideoItem>): List<VideoItem> {
+    return videos.sortedWith(
+        compareBy<VideoItem> { it.pubdate }
+            .thenBy { resolveHomeFollowVideoKey(it) }
+    )
 }
 
 internal fun resolveHomeFollowDisplayCount(

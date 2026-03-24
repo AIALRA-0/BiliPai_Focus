@@ -145,7 +145,8 @@ class HomePullRefreshUiPolicyTest {
                 hasPendingPresentation = true,
                 isRefreshing = true,
                 isStateAnimating = true,
-                distanceFraction = 0.8f
+                distanceFraction = 0.8f,
+                contentOffsetFraction = 0.8f
             )
         )
         assertFalse(
@@ -154,7 +155,8 @@ class HomePullRefreshUiPolicyTest {
                 hasPendingPresentation = true,
                 isRefreshing = false,
                 isStateAnimating = true,
-                distanceFraction = 0.2f
+                distanceFraction = 0.2f,
+                contentOffsetFraction = 0.2f
             )
         )
         assertFalse(
@@ -163,7 +165,8 @@ class HomePullRefreshUiPolicyTest {
                 hasPendingPresentation = true,
                 isRefreshing = false,
                 isStateAnimating = false,
-                distanceFraction = 0.2f
+                distanceFraction = 0.2f,
+                contentOffsetFraction = 0.2f
             )
         )
         assertTrue(
@@ -172,7 +175,32 @@ class HomePullRefreshUiPolicyTest {
                 hasPendingPresentation = true,
                 isRefreshing = false,
                 isStateAnimating = false,
-                distanceFraction = 0f
+                distanceFraction = 0f,
+                contentOffsetFraction = 0f
+            )
+        )
+    }
+
+    @Test
+    fun `follow refresh presentation should wait for animated content bounce to finish`() {
+        assertFalse(
+            shouldCommitFollowRefreshPresentationAfterPullSettles(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true,
+                isRefreshing = false,
+                isStateAnimating = false,
+                distanceFraction = 0f,
+                contentOffsetFraction = 0.08f
+            )
+        )
+        assertTrue(
+            shouldCommitFollowRefreshPresentationAfterPullSettles(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true,
+                isRefreshing = false,
+                isStateAnimating = false,
+                distanceFraction = 0f,
+                contentOffsetFraction = 0f
             )
         )
     }

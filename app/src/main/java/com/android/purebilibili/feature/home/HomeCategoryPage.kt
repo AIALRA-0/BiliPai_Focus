@@ -67,6 +67,13 @@ internal fun shouldLoadMoreHomeCategoryContent(
     return lastVisibleItemIndex >= totalItems - preloadThreshold.coerceAtLeast(1)
 }
 
+internal fun hasObservedFollowLoadMoreScroll(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int
+): Boolean {
+    return firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > 0
+}
+
 @Composable
 internal fun HomeCategoryPageContent(
     category: HomeCategory,
@@ -173,9 +180,18 @@ internal fun HomeCategoryPageContent(
 
     if (category == HomeCategory.FOLLOW) {
         LaunchedEffect(gridState, onFollowScrollInteraction) {
-            snapshotFlow { gridState.isScrollInProgress }
-                .collect { isScrolling ->
-                    if (isScrolling) {
+            snapshotFlow {
+                Triple(
+                    gridState.isScrollInProgress,
+                    gridState.firstVisibleItemIndex,
+                    gridState.firstVisibleItemScrollOffset
+                )
+            }.collect { (isScrolling, firstVisibleItemIndex, firstVisibleItemScrollOffset) ->
+                    if (isScrolling && hasObservedFollowLoadMoreScroll(
+                            firstVisibleItemIndex = firstVisibleItemIndex,
+                            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset
+                        )
+                    ) {
                         onFollowScrollInteraction()
                     }
                 }

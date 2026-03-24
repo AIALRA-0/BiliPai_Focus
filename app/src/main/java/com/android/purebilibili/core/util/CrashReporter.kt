@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.lifecycle.BackgroundManager
+import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.ktx.crashlytics
 import com.google.firebase.ktx.Firebase
 import java.util.Locale
@@ -51,7 +52,10 @@ object CrashReporter {
     private const val CUSTOM_KEY_CACHE_MAX_KEYS = 256
 
     @Volatile
-    private var isEnabled: Boolean = true
+    private var isEnabled: Boolean = false
+
+    @Volatile
+    private var isRuntimeAvailable: Boolean = false
 
     @Volatile
     private var globalHandlerInstalled = false
@@ -75,10 +79,22 @@ object CrashReporter {
     @Volatile
     private var liveLastStage: String = ""
 
+    private fun resolveFirebaseRuntimeAvailable(context: Context): Boolean {
+        return runCatching {
+            FirebaseApp.getApps(context).isNotEmpty() || FirebaseApp.initializeApp(context) != null
+        }.getOrDefault(false)
+    }
+
     /**
      * 基础初始化：写入稳定环境信息
      */
     fun init(context: Context) {
+        isRuntimeAvailable = resolveFirebaseRuntimeAvailable(context)
+        if (!isRuntimeAvailable) {
+            isEnabled = false
+            Logger.w(TAG, "Firebase Crashlytics unavailable for package ${context.packageName}, crash telemetry disabled")
+            return
+        }
         try {
             setCustomKey("app_version", BuildConfig.VERSION_NAME)
             setCustomKey("version_code", BuildConfig.VERSION_CODE)
@@ -105,10 +121,13 @@ object CrashReporter {
      * 启用/禁用 Crashlytics 收集
      */
     fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled
+        isEnabled = enabled && isRuntimeAvailable
+        if (!isRuntimeAvailable) {
+            return
+        }
         try {
-            Firebase.crashlytics.setCrashlyticsCollectionEnabled(enabled)
-            Logger.d(TAG, " Crashlytics collection ${if (enabled) "enabled" else "disabled"}")
+            Firebase.crashlytics.setCrashlyticsCollectionEnabled(isEnabled)
+            Logger.d(TAG, " Crashlytics collection ${if (isEnabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Crashlytics enabled state", e)
         }

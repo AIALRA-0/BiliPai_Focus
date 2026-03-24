@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
@@ -59,6 +60,7 @@ import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.DEFAULT_FOCUS_FOLLOW_GROUP_ID
 import com.android.purebilibili.core.store.FocusFollowGroup
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
 import com.android.purebilibili.core.store.canCreateFocusFollowGroup
 import com.android.purebilibili.core.store.normalizeFocusFollowGroupName
 import com.android.purebilibili.core.store.resolveFocusFollowGroupForUser
@@ -80,6 +82,7 @@ fun FocusFollowGroupSheet(
     onRenameGroup: (String, String) -> Unit,
     onDeleteGroup: (String) -> Unit,
     onSetGroupVisible: (String, Boolean) -> Unit,
+    onSetHomeFeedSortMode: (FocusFollowHomeFeedSortMode) -> Unit,
     onAssignUserToGroup: (Long, String) -> Unit
 ) {
     val inputHeight = 60.dp
@@ -91,6 +94,7 @@ fun FocusFollowGroupSheet(
     var renameTargetGroup by remember { mutableStateOf<FocusFollowGroup?>(null) }
     var renameDraft by rememberSaveable { mutableStateOf("") }
     var deleteTargetGroupId by remember { mutableStateOf<String?>(null) }
+    var sortModeMenuExpanded by remember { mutableStateOf(false) }
     val groupStateKey = remember(config.groups) {
         config.groups.joinToString(separator = "|") { group -> group.id }
     }
@@ -183,6 +187,73 @@ fun FocusFollowGroupSheet(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("刷新")
+                            }
+                        }
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(inputShape)
+                                    .clickable { sortModeMenuExpanded = true },
+                                shape = inputShape,
+                                tonalElevation = 0.dp,
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(inputHeight)
+                                        .padding(horizontal = 18.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Sort,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "首页关注排序",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = resolveFocusFollowHomeFeedSortModeLabel(config.homeFeedSortMode),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Outlined.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = sortModeMenuExpanded,
+                                onDismissRequest = { sortModeMenuExpanded = false }
+                            ) {
+                                FocusFollowHomeFeedSortMode.entries.forEach { sortMode ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text(resolveFocusFollowHomeFeedSortModeLabel(sortMode))
+                                                Text(
+                                                    text = resolveFocusFollowHomeFeedSortModeDescription(sortMode),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            sortModeMenuExpanded = false
+                                            onSetHomeFeedSortMode(sortMode)
+                                        }
+                                    )
+                                }
                             }
                         }
 
@@ -377,6 +448,26 @@ fun FocusFollowGroupSheet(
                 }
             )
         }
+    }
+}
+
+private fun resolveFocusFollowHomeFeedSortModeLabel(sortMode: FocusFollowHomeFeedSortMode): String {
+    return when (sortMode) {
+        FocusFollowHomeFeedSortMode.RANDOM -> "随机排序"
+        FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC -> "UP聚类倒序"
+        FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_ASC -> "UP聚类正序"
+        FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC -> "时间倒序"
+        FocusFollowHomeFeedSortMode.PUBLISH_TIME_ASC -> "时间正序"
+    }
+}
+
+private fun resolveFocusFollowHomeFeedSortModeDescription(sortMode: FocusFollowHomeFeedSortMode): String {
+    return when (sortMode) {
+        FocusFollowHomeFeedSortMode.RANDOM -> "跨 UP 交错打乱，每次刷新都会换一种顺序"
+        FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC -> "按最近活跃 UP 分组展示，组内视频按时间倒序"
+        FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_ASC -> "按较早活跃 UP 分组展示，组内视频按时间正序"
+        FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC -> "所有可见视频按发布时间全局倒序"
+        FocusFollowHomeFeedSortMode.PUBLISH_TIME_ASC -> "所有可见视频按发布时间全局正序"
     }
 }
 

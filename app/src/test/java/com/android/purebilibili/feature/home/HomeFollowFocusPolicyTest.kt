@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
@@ -155,6 +156,102 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
+    fun `creator cluster descending keeps latest active creator first and groups videos by up`() {
+        val source = listOf(
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L, pubdate = 95L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L, pubdate = 130L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L, pubdate = 120L),
+            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L, pubdate = 90L)
+        )
+
+        val clustered = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = source,
+            isLoadMore = false,
+            seed = 1L,
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC
+        )
+
+        assertEquals(
+            listOf("dyn-3", "dyn-4", "dyn-1", "dyn-2", "dyn-5"),
+            clustered.map { it.dynamicId }
+        )
+    }
+
+    @Test
+    fun `creator cluster ascending keeps earliest active creator first and groups videos by up`() {
+        val source = listOf(
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L, pubdate = 95L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L, pubdate = 130L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L, pubdate = 120L),
+            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L, pubdate = 90L)
+        )
+
+        val clustered = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = source,
+            isLoadMore = false,
+            seed = 1L,
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_ASC
+        )
+
+        assertEquals(
+            listOf("dyn-5", "dyn-2", "dyn-1", "dyn-4", "dyn-3"),
+            clustered.map { it.dynamicId }
+        )
+    }
+
+    @Test
+    fun `publish time descending keeps newest visible videos first`() {
+        val source = listOf(
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 22L, pubdate = 140L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 33L, pubdate = 120L)
+        )
+
+        val sorted = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = source,
+            isLoadMore = false,
+            seed = 1L,
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC
+        )
+
+        assertEquals(
+            listOf("dyn-2", "dyn-3", "dyn-1"),
+            sorted.map { it.dynamicId }
+        )
+    }
+
+    @Test
+    fun `publish time ascending keeps oldest visible videos first`() {
+        val source = listOf(
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 22L, pubdate = 140L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 33L, pubdate = 120L)
+        )
+
+        val sorted = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = source,
+            isLoadMore = false,
+            seed = 1L,
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.PUBLISH_TIME_ASC
+        )
+
+        assertEquals(
+            listOf("dyn-1", "dyn-3", "dyn-2"),
+            sorted.map { it.dynamicId }
+        )
+    }
+
+    @Test
     fun `load more presentation should keep existing order and append only new entries`() {
         val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-1")
         val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-2")
@@ -223,7 +320,8 @@ class HomeFollowFocusPolicyTest {
         id: Long,
         bvid: String,
         dynamicId: String,
-        ownerMid: Long = id
+        ownerMid: Long = id,
+        pubdate: Long = id
     ): VideoItem {
         return VideoItem(
             id = id,
@@ -231,6 +329,7 @@ class HomeFollowFocusPolicyTest {
             bvid = bvid,
             dynamicId = dynamicId,
             title = "video-$id",
+            pubdate = pubdate,
             owner = Owner(mid = ownerMid, name = "up-$ownerMid")
         )
     }

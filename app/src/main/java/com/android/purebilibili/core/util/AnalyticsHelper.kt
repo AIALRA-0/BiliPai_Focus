@@ -7,6 +7,7 @@ import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
+import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.analytics.ktx.logEvent
@@ -47,7 +48,8 @@ object AnalyticsHelper {
     private const val TAG = "AnalyticsHelper"
     
     private var analytics: FirebaseAnalytics? = null
-    private var isEnabled: Boolean = true
+    private var isEnabled: Boolean = false
+    private var isRuntimeAvailable: Boolean = false
     private var isInForeground: Boolean = false
     private var sessionStartMs: Long = 0L
     private val eventRateLimiter = ConcurrentHashMap<String, Long>()
@@ -63,6 +65,12 @@ object AnalyticsHelper {
             durationMs < 600L -> "420_600ms"
             else -> "over_600ms"
         }
+    }
+
+    private fun resolveFirebaseRuntimeAvailable(context: Context): Boolean {
+        return runCatching {
+            FirebaseApp.getApps(context).isNotEmpty() || FirebaseApp.initializeApp(context) != null
+        }.getOrDefault(false)
     }
 
     private fun resolvePluginPressureLevel(totalPluginCount: Int): String {
@@ -103,16 +111,18 @@ object AnalyticsHelper {
      * 初始化 Analytics (在 Application 中调用)
      */
     fun init(context: Context) {
+        isRuntimeAvailable = resolveFirebaseRuntimeAvailable(context)
+        if (!isRuntimeAvailable) {
+            analytics = null
+            isEnabled = false
+            Logger.w(TAG, "Firebase Analytics unavailable for package ${context.packageName}, analytics disabled")
+            return
+        }
         try {
             analytics = Firebase.analytics
             analytics?.setUserProperty("app_version", BuildConfig.VERSION_NAME)
             analytics?.setUserProperty("build_type", BuildConfig.BUILD_TYPE)
             analytics?.setUserProperty("locale", Locale.getDefault().toLanguageTag())
-            syncUserContext(
-                mid = TokenManager.midCache,
-                isVip = TokenManager.isVipCache,
-                privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(context)
-            )
             Logger.d(TAG, " Firebase Analytics initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to init Firebase Analytics", e)
@@ -123,11 +133,14 @@ object AnalyticsHelper {
      * 启用/禁用 Analytics 收集
      */
     fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled
+        isEnabled = enabled && isRuntimeAvailable
+        if (!isRuntimeAvailable) {
+            return
+        }
         try {
-            analytics?.setAnalyticsCollectionEnabled(enabled)
-            CrashReporter.setLastEvent("analytics_collection_${if (enabled) "enabled" else "disabled"}")
-            Logger.d(TAG, " Analytics collection ${if (enabled) "enabled" else "disabled"}")
+            analytics?.setAnalyticsCollectionEnabled(isEnabled)
+            CrashReporter.setLastEvent("analytics_collection_${if (isEnabled) "enabled" else "disabled"}")
+            Logger.d(TAG, " Analytics collection ${if (isEnabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Analytics enabled state", e)
         }

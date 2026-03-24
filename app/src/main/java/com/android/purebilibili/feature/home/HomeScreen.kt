@@ -1151,14 +1151,16 @@ fun HomeScreen(
                             state.followRefreshPresentationPending,
                             isPageRefreshing,
                             isPullRefreshStateAnimating,
-                            pullDistanceFraction
+                            pullDistanceFraction,
+                            animatedDragOffsetFraction
                         ) {
                             if (!shouldCommitFollowRefreshPresentationAfterPullSettles(
                                     currentCategory = category,
                                     hasPendingPresentation = state.followRefreshPresentationPending,
                                     isRefreshing = isPageRefreshing,
                                     isStateAnimating = isPullRefreshStateAnimating,
-                                    distanceFraction = pullDistanceFraction
+                                    distanceFraction = pullDistanceFraction,
+                                    contentOffsetFraction = animatedDragOffsetFraction
                                 )
                             ) {
                                 return@LaunchedEffect

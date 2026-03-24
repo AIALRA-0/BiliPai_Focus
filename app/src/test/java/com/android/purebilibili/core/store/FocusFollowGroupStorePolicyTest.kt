@@ -8,6 +8,13 @@ import kotlin.test.assertTrue
 class FocusFollowGroupStorePolicyTest {
 
     @Test
+    fun normalizeConfig_keepsRandomHomeFeedSortModeByDefault() {
+        val result = normalizeFocusFollowGroupConfig(FocusFollowGroupConfig())
+
+        assertEquals(FocusFollowHomeFeedSortMode.RANDOM, result.homeFeedSortMode)
+    }
+
+    @Test
     fun normalizeConfig_keepsDefaultGroupAndDropsInvalidAssignments() {
         val result = normalizeFocusFollowGroupConfig(
             FocusFollowGroupConfig(
@@ -97,5 +104,28 @@ class FocusFollowGroupStorePolicyTest {
 
         assertFalse(isFocusFollowUserVisible(hidden, 5566L))
         assertTrue(isFocusFollowUserVisible(hidden, 8899L))
+    }
+
+    @Test
+    fun homeFeedSortMode_updatesWithoutLosingGroupsOrAssignments() {
+        val created = withFocusFollowGroupCreated(
+            config = FocusFollowGroupConfig(),
+            name = "朋友",
+            idProvider = { "friends" }
+        )
+        val assigned = withUserAssignedToFocusFollowGroup(
+            config = created,
+            mid = 7788L,
+            groupId = "friends"
+        )
+
+        val updated = withFocusFollowHomeFeedSortMode(
+            config = assigned,
+            sortMode = FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC
+        )
+
+        assertEquals(FocusFollowHomeFeedSortMode.CREATOR_CLUSTER_DESC, updated.homeFeedSortMode)
+        assertEquals("friends", resolveFocusFollowGroupIdForUser(updated, 7788L))
+        assertTrue(updated.groups.any { it.id == "friends" })
     }
 }
