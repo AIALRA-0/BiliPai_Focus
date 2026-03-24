@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.1</sub>
+  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.4-focus.1` |
+| Focus version | `7.1.4-focus.2` |
 | Upstream base | `7.1.4` |
-| Release tag | `v7.1.4-focus.1` |
-| Release notes | [docs/releases/focus-7.1.4-focus.1-en.md](docs/releases/focus-7.1.4-focus.1-en.md) |
-| Main refinements | Synced upstream `7.1.4`; manual Home Follow refresh now keeps the old list visible until refresh completes, freshly updated items are prioritized ahead of older cached content, and both the first screen and every later reveal stay capped to `16` cards |
-| Public APK | `BliPai-Focus-release-7.1.4-focus.1.apk` |
+| Release tag | `v7.1.4-focus.2` |
+| Release notes | [docs/releases/focus-7.1.4-focus.2-en.md](docs/releases/focus-7.1.4-focus.2-en.md) |
+| Main refinements | FOLLOW manual refresh now keeps the refreshed list deferred until the pull indicator has fully settled, and load-more works again immediately after refresh completion without requiring a tab switch |
+| Public APK | `BliPai-Focus-release-7.1.4-focus.2.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.4-focus.1.md` | Chinese release notes for `v7.1.4-focus.1` |
-| Added | `docs/releases/focus-7.1.4-focus.1-en.md` | English release notes for `v7.1.4-focus.1` |
+| Added | `docs/releases/focus-7.1.4-focus.2.md` | Chinese release notes for `v7.1.4-focus.2` |
+| Added | `docs/releases/focus-7.1.4-focus.2-en.md` | English release notes for `v7.1.4-focus.2` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -563,12 +563,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.1.4 / v7.1.4-focus.1 · 2026-03-24)
+### Latest (v7.1.4 / v7.1.4-focus.2 · 2026-03-24)
 
-- ▶️ **Upstream portrait video fixes are synced**: Focus now includes upstream `v7.1.4` fixes for portrait cover ratio handoff, manual-start overlay behavior, and portrait seek/progress stability.
-- 🔄 **Home Follow refresh timing is now cleaner**: manual pull-to-refresh keeps the current cards visible during the refresh state, then swaps in the new order only after refresh completes.
-- 🆕 **Freshly updated follow content is prioritized**: newly fetched videos are now biased toward the front of the refreshed list, while still keeping the cross-creator interleaving and reshuffle behavior.
-- 📦 **Follow paging stays on strict 16-card windows**: the first screen and each later reveal stay capped to `16` cards, and additional batches only arm after real downward scroll interaction has been observed.
+- 🔒 **FOLLOW list swapping is now fully deferred**: manual pull-to-refresh no longer lets refreshed cards appear before the pull indicator has fully returned to rest.
+- ♻️ **Load-more recovers right after refresh**: FOLLOW can trigger the next batch again as soon as refresh completion and top-reset handling finish, without requiring a tab switch.
+- 🧪 **The home refresh regressions were re-tested**: this release reruns the relevant FOLLOW refresh/paging policy tests and release build validation before publishing.
 
 ---
 

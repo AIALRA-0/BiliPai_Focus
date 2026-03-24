@@ -1114,6 +1114,7 @@ fun HomeScreen(
                         val pullRefreshState = rememberPullToRefreshState()
                         val pullDistanceFraction = pullRefreshState.distanceFraction
                         val isPageRefreshing = isRefreshing && state.currentCategory == category
+                        val isPullRefreshStateAnimating = pullRefreshState.isAnimating
 
                         //  [新增] 下拉回弹物理动画状态 (Moved from outer scope)
                         val targetPullOffset = resolvePullContentOffsetFraction(
@@ -1143,6 +1144,27 @@ fun HomeScreen(
                         //  每个页面独立的 GridState
                         //  使用 saveable 记住滚动位置
                         val pageGridState = gridStates[category] ?: rememberLazyGridState()
+
+                        LaunchedEffect(
+                            category,
+                            state.currentCategory,
+                            state.followRefreshPresentationPending,
+                            isPageRefreshing,
+                            isPullRefreshStateAnimating,
+                            pullDistanceFraction
+                        ) {
+                            if (!shouldCommitFollowRefreshPresentationAfterPullSettles(
+                                    currentCategory = category,
+                                    hasPendingPresentation = state.followRefreshPresentationPending,
+                                    isRefreshing = isPageRefreshing,
+                                    isStateAnimating = isPullRefreshStateAnimating,
+                                    distanceFraction = pullDistanceFraction
+                                )
+                            ) {
+                                return@LaunchedEffect
+                            }
+                            viewModel.commitPendingFollowRefreshPresentationAfterUiSettles()
+                        }
                         
                         //  把 GridState 提升给父级用于控制 Header? 
                         

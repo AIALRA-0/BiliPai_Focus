@@ -129,7 +129,17 @@ internal fun HomeCategoryPageContent(
     )
 
     // Check for load more
-    val shouldLoadMore by remember {
+    val shouldLoadMore by remember(
+        category,
+        gridState,
+        categoryState.videos.size,
+        categoryState.liveRooms.size,
+        categoryState.followedLiveRooms.size,
+        categoryState.isLoading,
+        categoryState.hasMore,
+        autoLoadMoreEnabled,
+        followLoadMoreArmed
+    ) {
         derivedStateOf {
             val layoutInfo = gridState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount

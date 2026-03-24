@@ -138,6 +138,71 @@ class HomePullRefreshUiPolicyTest {
     }
 
     @Test
+    fun `follow refresh presentation should commit only after pull state is fully settled`() {
+        assertFalse(
+            shouldCommitFollowRefreshPresentationAfterPullSettles(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true,
+                isRefreshing = true,
+                isStateAnimating = true,
+                distanceFraction = 0.8f
+            )
+        )
+        assertFalse(
+            shouldCommitFollowRefreshPresentationAfterPullSettles(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true,
+                isRefreshing = false,
+                isStateAnimating = true,
+                distanceFraction = 0.2f
+            )
+        )
+        assertFalse(
+            shouldCommitFollowRefreshPresentationAfterPullSettles(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true,
+                isRefreshing = false,
+                isStateAnimating = false,
+                distanceFraction = 0.2f
+            )
+        )
+        assertTrue(
+            shouldCommitFollowRefreshPresentationAfterPullSettles(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true,
+                isRefreshing = false,
+                isStateAnimating = false,
+                distanceFraction = 0f
+            )
+        )
+    }
+
+    @Test
+    fun `follow refresh preview should be deferred while visible follow page is still refreshing`() {
+        assertTrue(
+            shouldDeferFollowRefreshPreviewWhilePullRefreshing(
+                currentCategory = HomeCategory.FOLLOW,
+                isRefreshing = true,
+                hasPendingPresentation = false
+            )
+        )
+        assertTrue(
+            shouldDeferFollowRefreshPreviewWhilePullRefreshing(
+                currentCategory = HomeCategory.FOLLOW,
+                isRefreshing = false,
+                hasPendingPresentation = true
+            )
+        )
+        assertFalse(
+            shouldDeferFollowRefreshPreviewWhilePullRefreshing(
+                currentCategory = HomeCategory.POPULAR,
+                isRefreshing = true,
+                hasPendingPresentation = true
+            )
+        )
+    }
+
+    @Test
     fun `resolvePullRefreshHintText shows pull text while indicator animates back`() {
         assertEquals(
             "下拉刷新...",

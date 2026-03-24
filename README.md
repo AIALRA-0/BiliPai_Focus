@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.1</sub>
+  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.1.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.2.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.1.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.2.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.4-focus.1` |
+| Focus 版本 | `7.1.4-focus.2` |
 | 上游基线 | `7.1.4` |
-| 发布标签 | `v7.1.4-focus.1` |
-| Release Notes | [docs/releases/focus-7.1.4-focus.1.md](docs/releases/focus-7.1.4-focus.1.md) |
-| 主要收口 | 同步上游 `7.1.4` 的竖屏视频封面/进度条修复；首页“关注”手动下拉刷新改成“刷新完成后再切新列表”；刷新新内容会优先排在旧内容前；首屏与每次继续下滑都严格按 `16` 条一组展示 |
-| 对外 APK | `BliPai-Focus-release-7.1.4-focus.1.apk` |
+| 发布标签 | `v7.1.4-focus.2` |
+| Release Notes | [docs/releases/focus-7.1.4-focus.2.md](docs/releases/focus-7.1.4-focus.2.md) |
+| 主要收口 | 彻底延后 FOLLOW 手动下拉刷新的列表提交时机，避免刷新动画未结束就提前换新列表；修复刷新完成后底部分页门闩不同步、必须切标签才能继续加载的问题 |
+| 对外 APK | `BliPai-Focus-release-7.1.4-focus.2.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.4-focus.1.md` | Focus `v7.1.4-focus.1` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.4-focus.1-en.md` | Focus `v7.1.4-focus.1` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.2.md` | Focus `v7.1.4-focus.2` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.2-en.md` | Focus `v7.1.4-focus.2` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
@@ -718,12 +718,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.1.4 / v7.1.4-focus.1 · 2026-03-24)
+### 最近更新 (v7.1.4 / v7.1.4-focus.2 · 2026-03-24)
 
-- ▶️ **同步上游竖屏视频修复**：合并官方 `v7.1.4` 的竖屏视频封面比例、封面到首帧衔接，以及竖屏进度拖动回弹修复。
-- 🔄 **首页“关注”下拉刷新时序收口**：手动下拉时会先保持旧列表并显示“正在刷新”，等刷新结束后再一次性切成新的排序结果，不再边下拉边换列表。
-- 🆕 **新内容优先靠前**：刷新时抓到的最新关注视频会优先排在旧内容前面，同时继续保留跨 UP 交错随机，减少刷新后看不到刚更新内容的情况。
-- 📦 **分页继续严格 16 条一组**：首次进入和每次继续下滑都以 `16` 条为展示窗口；必须观察到真实下滚后，才允许继续触发下一批，避免首屏在大屏设备上偷偷灌出几十条。
+- 🔒 **FOLLOW 新列表提交时机继续后移**：手动下拉刷新时，新的关注视频列表会一直等到刷新指示器完全收回后才一次性替换，修掉了间歇性“刷新还没结束内容就先顶上来”的问题。
+- ♻️ **刷新后底部分页恢复稳定**：FOLLOW 在刷新并回顶完成后，不再卡死在无法继续触发底部加载的状态，也不需要切去别的标签再回来才能恢复。
+- 🧪 **相关 home 回归已补测**：这次额外覆盖了 FOLLOW 刷新提交时机、分页门闩和下滚触发条件相关的策略测试，并重新通过编译与 release 出包验证。
 
 ### 历史版本
 

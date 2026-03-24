@@ -871,7 +871,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 cancelUndoDismiss()
             }
             _isRefreshing.value = false
-            commitPendingFollowRefreshPresentationIfNeeded(refreshingCategory)
         }
     }
 
@@ -1186,6 +1185,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = current.copy(followAutoLoadMoreEnabled = enabled)
     }
 
+    private fun setFollowRefreshPresentationPending(pending: Boolean) {
+        val current = _uiState.value
+        if (current.followRefreshPresentationPending == pending) return
+        _uiState.value = current.copy(followRefreshPresentationPending = pending)
+    }
+
     private fun setFollowLoadMoreArmed(armed: Boolean) {
         val current = _uiState.value
         if (current.followLoadMoreArmed == armed) return
@@ -1194,11 +1199,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun beginFollowPresentationRefreshWindow() {
         pendingFollowRefreshPresentation = null
+        setFollowRefreshPresentationPending(false)
         setFollowAutoLoadMoreEnabled(false)
     }
 
     private fun scheduleFollowPresentationTopReset() {
         pendingFollowRefreshPresentation = null
+        setFollowRefreshPresentationPending(false)
         followPresentationTopResetCounter += 1L
         val current = _uiState.value
         _uiState.value = current.copy(
@@ -1241,6 +1248,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         cancelFollowFeedBackgroundHydration()
         pendingFollowRefreshPresentation = null
+        setFollowRefreshPresentationPending(false)
         if (!isLoadMore) {
             setFollowAutoLoadMoreEnabled(true)
         }
@@ -1360,6 +1368,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         scheduleTopReset: Boolean
     ) {
         pendingFollowRefreshPresentation = null
+        setFollowRefreshPresentationPending(false)
         presentedFollowFeedVisibleVideos = presentation.presentedVisibleVideos
         followFeedDisplayedVisibleCount = presentation.displayedVisibleCount
         followFeedSourceHasMore = presentation.sourceHasMore
@@ -1375,6 +1384,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun commitPendingFollowRefreshPresentationIfNeeded(category: HomeCategory) {
         if (category != HomeCategory.FOLLOW) {
             pendingFollowRefreshPresentation = null
+            setFollowRefreshPresentationPending(false)
             return
         }
         val presentation = pendingFollowRefreshPresentation ?: return
@@ -1382,6 +1392,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             presentation = presentation,
             scheduleTopReset = true
         )
+    }
+
+    fun commitPendingFollowRefreshPresentationAfterUiSettles() {
+        if (_isRefreshing.value) return
+        commitPendingFollowRefreshPresentationIfNeeded(_uiState.value.currentCategory)
     }
 
     private fun publishPresentedHomeFollowVideos(
@@ -1423,6 +1438,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
         if (!isLoadMore && deferPublicationUntilRefreshCompletes) {
             pendingFollowRefreshPresentation = presentation
+            setFollowRefreshPresentationPending(true)
             return
         }
         applyPendingFollowRefreshPresentation(
@@ -1515,6 +1531,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             followState.videos.isNotEmpty() ||
             _uiState.value.currentCategory == HomeCategory.FOLLOW
         if (!shouldReload) return
+        if (shouldDeferFollowRefreshPreviewWhilePullRefreshing(
+                currentCategory = _uiState.value.currentCategory,
+                isRefreshing = _isRefreshing.value,
+                hasPendingPresentation = pendingFollowRefreshPresentation != null
+            )
+        ) {
+            return
+        }
 
         followFeedFocusRefreshJob?.cancel()
         cancelFollowFeedBackgroundHydration()
@@ -1654,6 +1678,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             followFeedSourceHasMore = false
             hasResolvedFollowFeedOnce = false
             pendingFollowRefreshPresentation = null
+            setFollowRefreshPresentationPending(false)
             if (!isLoadMore) {
                 setFollowAutoLoadMoreEnabled(true)
             }
@@ -1708,6 +1733,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     sourceHasMore = false,
                     error = emptyMessage
                 )
+                setFollowRefreshPresentationPending(true)
             } else {
                 presentedFollowFeedVisibleVideos = emptyList()
                 followFeedDisplayedVisibleCount = HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE

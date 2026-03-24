@@ -60,6 +60,29 @@ internal fun shouldResetFollowToTopAfterRefreshCompletion(
     return resetKey > handledKey
 }
 
+internal fun shouldCommitFollowRefreshPresentationAfterPullSettles(
+    currentCategory: HomeCategory,
+    hasPendingPresentation: Boolean,
+    isRefreshing: Boolean,
+    isStateAnimating: Boolean,
+    distanceFraction: Float,
+    settledDistanceTolerance: Float = 0.01f
+): Boolean {
+    if (currentCategory != HomeCategory.FOLLOW) return false
+    if (!hasPendingPresentation) return false
+    if (isRefreshing || isStateAnimating) return false
+    return distanceFraction <= settledDistanceTolerance.coerceAtLeast(0f)
+}
+
+internal fun shouldDeferFollowRefreshPreviewWhilePullRefreshing(
+    currentCategory: HomeCategory,
+    isRefreshing: Boolean,
+    hasPendingPresentation: Boolean
+): Boolean {
+    if (currentCategory != HomeCategory.FOLLOW) return false
+    return isRefreshing || hasPendingPresentation
+}
+
 internal fun shouldShowReleaseToRefreshHint(
     progress: Float,
     isRefreshing: Boolean,

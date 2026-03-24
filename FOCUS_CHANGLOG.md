@@ -1,5 +1,25 @@
 # Focus Changelog
 
+## v7.1.4 Focus / focus.2 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.4` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.4-focus.2`。
+- 为保证已发布 `v7.1.4-focus.1 / 146` 用户可直接升级，`versionCode` 继续递增到 `147`。
+- `focus.2` 本轮只收口首页“关注”的手动下拉刷新时序与刷新后的底部分页恢复，不改动 Focus 的包名、更新源或其他既有定制能力。
+
+### FOLLOW 刷新时序彻底收口
+- 手动下拉刷新时，FOLLOW 的新列表结果现在会继续暂存，直到下拉刷新指示器完全回弹、刷新态真正结束后，才一次性提交到页面。
+- 这次同时补上了“刷新中禁止来自后台预览/配置刷新链路提前改写可见列表”的保护，避免间歇性出现还在下拉时新视频已经顶上来的问题。
+
+### 刷新后底部分页恢复
+- FOLLOW 刷新完成后的底部分页判定现在不再记住旧的自动加载门闩状态；页面完成回顶后，只要重新观察到用户下滚并到达尾部，就能继续稳定触发下一批。
+- 底部触发条件继续保持“自动补批已重新解锁 + 已观察到真实下滚 + 当前确实到达尾部”，但这次把刷新后的状态同步漏洞补齐，避免必须切去别的标签再回来才恢复分页。
+
+### 验证
+- 已通过 `:app:compileDebugKotlin`。
+- 已通过 `HomePullRefreshUiPolicyTest`、`HomeCategoryPagePolicyTest`、`HomeFollowFocusPolicyTest` 与 `HomeFollowFastFeedCoordinatorTest`。
+- 已通过 `:app:assembleRelease`。
+
 ## v7.1.4 Focus / focus.1 (2026-03-24)
 
 ### 版本信息

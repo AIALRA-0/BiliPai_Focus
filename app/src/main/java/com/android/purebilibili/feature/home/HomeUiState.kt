@@ -170,6 +170,8 @@ data class HomeUiState(
     val followPresentationTopResetKey: Long = 0L,
     //  [Focus] FOLLOW 回顶事件已处理键
     val followPresentationTopResetHandledKey: Long = 0L,
+    //  [Focus] FOLLOW 手动刷新后是否仍有待提交的新列表
+    val followRefreshPresentationPending: Boolean = false,
     //  [Focus] FOLLOW 是否允许自动触发下一批 loadMore
     val followAutoLoadMoreEnabled: Boolean = true,
     //  [Focus] FOLLOW 是否已经观察到本轮展示后的用户下滚交互
