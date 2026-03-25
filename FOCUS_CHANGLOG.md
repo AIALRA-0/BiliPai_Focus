@@ -1,5 +1,22 @@
 # Focus Changelog
 
+## v7.1.4 Focus / focus.7 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.4` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.4-focus.7`。
+- 为保证已发布 `v7.1.4-focus.6 / 151` 用户可直接升级，`versionCode` 继续递增到 `152`。
+- `focus.7` 重新调整首页 FOLLOW 的默认排序与随机排序语义，避免随机排序退化成“几乎等于时间倒序”。
+
+### 首页 FOLLOW 排序调整
+- `随机排序` 重新恢复成整池随机推送，刷新时会对整个可见池做随机交错，而不是继续按发布时间主序排好后只做轻微扰动。
+- 随机模式仍保留跨 UP 交错与新内容优先前置，不再和 `时间倒序` 近似重合。
+- 新安装和未设置用户的首页 FOLLOW 默认排序已从 `随机排序` 调整为 `时间倒序`，默认体验改为“最新内容优先显示”。
+- `时间倒序/正序` 与 `UP聚类倒序/正序` 继续沿用 `focus.6` 已修复的真实发布时间排序基础。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest --tests "*HomeFollowFocusPolicyTest" --tests "*HomeFollowFeedMappingPolicyTest" --tests "*FocusFollowGroupStorePolicyTest"`。
+- 已通过 `:app:assembleRelease`。
+
 ## v7.1.4 Focus / focus.6 (2026-03-24)
 
 ### 版本信息

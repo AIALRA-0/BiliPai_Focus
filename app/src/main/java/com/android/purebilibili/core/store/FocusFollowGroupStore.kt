@@ -35,7 +35,7 @@ enum class FocusFollowHomeFeedSortMode {
 data class FocusFollowGroupConfig(
     val groups: List<FocusFollowGroup> = listOf(defaultFocusFollowGroup()),
     val assignments: Map<String, String> = emptyMap(),
-    val homeFeedSortMode: FocusFollowHomeFeedSortMode = FocusFollowHomeFeedSortMode.RANDOM
+    val homeFeedSortMode: FocusFollowHomeFeedSortMode = FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC
 )
 
 private val KEY_FOCUS_FOLLOW_GROUP_CONFIG =

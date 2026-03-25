@@ -8,10 +8,10 @@ import kotlin.test.assertTrue
 class FocusFollowGroupStorePolicyTest {
 
     @Test
-    fun normalizeConfig_keepsRandomHomeFeedSortModeByDefault() {
+    fun normalizeConfig_keepsPublishTimeDescendingHomeFeedSortModeByDefault() {
         val result = normalizeFocusFollowGroupConfig(FocusFollowGroupConfig())
 
-        assertEquals(FocusFollowHomeFeedSortMode.RANDOM, result.homeFeedSortMode)
+        assertEquals(FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC, result.homeFeedSortMode)
     }
 
     @Test
