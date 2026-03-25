@@ -77,28 +77,32 @@ class HomeFollowFocusPolicyTest {
     @Test
     fun `follow incoming randomization should be deterministic per seed and vary across seeds`() {
         val source = listOf(
-            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 101L),
-            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 202L),
-            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 303L),
-            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 404L)
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 101L, pubdate = 200L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 202L, pubdate = 200L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 303L, pubdate = 100L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 404L, pubdate = 100L)
         )
 
-        val seedAOrder = randomizeHomeFollowIncomingVideos(source, seed = 11L).map { it.dynamicId }
+        val seedAResult = randomizeHomeFollowIncomingVideos(source, seed = 11L)
+        val seedAOrder = seedAResult.map { it.dynamicId }
         val seedAOrderAgain = randomizeHomeFollowIncomingVideos(source, seed = 11L).map { it.dynamicId }
-        val seedBOrder = randomizeHomeFollowIncomingVideos(source, seed = 29L).map { it.dynamicId }
+        val seedBResult = randomizeHomeFollowIncomingVideos(source, seed = 29L)
+        val seedBOrder = seedBResult.map { it.dynamicId }
 
         assertEquals(seedAOrder, seedAOrderAgain)
         assertNotEquals(seedAOrder, seedBOrder)
+        assertEquals(listOf(200L, 200L, 100L, 100L), seedAResult.map { it.pubdate })
+        assertEquals(listOf(200L, 200L, 100L, 100L), seedBResult.map { it.pubdate })
     }
 
     @Test
     fun `follow incoming randomization should interleave creators before repeating same up`() {
         val source = listOf(
-            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L),
-            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L),
-            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L),
-            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L),
-            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L)
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L, pubdate = 100L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L, pubdate = 100L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L, pubdate = 100L),
+            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L, pubdate = 100L)
         )
 
         val randomized = randomizeHomeFollowIncomingVideos(source, seed = 7L)
@@ -109,10 +113,10 @@ class HomeFollowFocusPolicyTest {
     @Test
     fun `refresh presentation should reshuffle the full visible follow list`() {
         val source = listOf(
-            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L),
-            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L),
-            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L),
-            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 33L)
+            video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L, pubdate = 100L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L, pubdate = 100L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 33L, pubdate = 100L)
         )
 
         val refreshed = presentHomeFollowVisibleVideos(
@@ -131,27 +135,27 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
-    fun `refresh presentation should keep newly fetched videos ahead of cached videos`() {
-        val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-old-1", ownerMid = 11L)
-        val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-old-2", ownerMid = 22L)
-        val newA = video(id = 3, bvid = "BV3", dynamicId = "dyn-new-1", ownerMid = 33L)
-        val newB = video(id = 4, bvid = "BV4", dynamicId = "dyn-new-2", ownerMid = 44L)
+    fun `random refresh should still keep publish time descending even when older fetched keys are prioritized`() {
+        val latestOld = video(id = 1, bvid = "BV1", dynamicId = "dyn-old-1", ownerMid = 11L, pubdate = 300L)
+        val middleOld = video(id = 2, bvid = "BV2", dynamicId = "dyn-old-2", ownerMid = 22L, pubdate = 200L)
+        val olderNew = video(id = 3, bvid = "BV3", dynamicId = "dyn-new-1", ownerMid = 33L, pubdate = 100L)
+        val oldestNew = video(id = 4, bvid = "BV4", dynamicId = "dyn-new-2", ownerMid = 44L, pubdate = 90L)
 
         val refreshed = presentHomeFollowVisibleVideos(
             existingPresentedVisibleVideos = emptyList(),
-            incomingVisibleVideos = listOf(oldA, oldB, newA, newB),
+            incomingVisibleVideos = listOf(latestOld, middleOld, olderNew, oldestNew),
             isLoadMore = false,
             seed = 5L,
             reshuffleOnRefresh = true,
             prioritizedVideoKeys = setOf(
-                resolveHomeFollowVideoKey(newA),
-                resolveHomeFollowVideoKey(newB)
+                resolveHomeFollowVideoKey(olderNew),
+                resolveHomeFollowVideoKey(oldestNew)
             )
         )
 
         assertEquals(
-            setOf("dyn-new-1", "dyn-new-2"),
-            refreshed.take(2).map { it.dynamicId }.toSet()
+            listOf(300L, 200L, 100L, 90L),
+            refreshed.map { it.pubdate }
         )
     }
 
@@ -310,13 +314,13 @@ class HomeFollowFocusPolicyTest {
 
     @Test
     fun `load more presentation should keep existing order and append only new entries`() {
-        val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-1")
-        val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-2")
-        val newA = video(id = 3, bvid = "BV3", dynamicId = "dyn-3")
-        val newB = video(id = 4, bvid = "BV4", dynamicId = "dyn-4")
+        val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-1", pubdate = 400L)
+        val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-2", pubdate = 300L)
+        val newA = video(id = 3, bvid = "BV3", dynamicId = "dyn-3", pubdate = 200L)
+        val newB = video(id = 4, bvid = "BV4", dynamicId = "dyn-4", pubdate = 100L)
 
         val presented = presentHomeFollowVisibleVideos(
-            existingPresentedVisibleVideos = listOf(oldB, oldA),
+            existingPresentedVisibleVideos = listOf(oldA, oldB),
             incomingVisibleVideos = listOf(oldA, oldB, newA, newB),
             isLoadMore = true,
             seed = 99L,
@@ -324,8 +328,29 @@ class HomeFollowFocusPolicyTest {
         )
 
         assertEquals(
-            listOf(oldB, oldA, newA, newB).map { it.dynamicId },
+            listOf(oldA, oldB, newA, newB).map { it.dynamicId },
             presented.map { it.dynamicId }
+        )
+    }
+
+    @Test
+    fun `random load more should append unseen videos using publish time descending order`() {
+        val latest = video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 300L)
+        val second = video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 22L, pubdate = 250L)
+        val third = video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 33L, pubdate = 200L)
+        val oldest = video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 44L, pubdate = 150L)
+
+        val presented = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = listOf(latest, second),
+            incomingVisibleVideos = listOf(oldest, latest, third, second),
+            isLoadMore = true,
+            seed = 99L,
+            reshuffleOnRefresh = true
+        )
+
+        assertEquals(
+            listOf(300L, 250L, 200L, 150L),
+            presented.map { it.pubdate }
         )
     }
 

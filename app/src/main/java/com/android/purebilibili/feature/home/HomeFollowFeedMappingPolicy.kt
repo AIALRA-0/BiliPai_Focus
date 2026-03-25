@@ -39,6 +39,7 @@ internal fun mapHomeFollowDynamicItemsToVideoItems(
             aid = resolvedAid,
             title = archive.title,
             pic = archive.cover,
+            pubdate = item.modules.module_author?.pub_ts ?: 0L,
             duration = parseHomeFollowDurationText(archive.duration_text),
             owner = Owner(
                 mid = item.modules.module_author?.mid ?: 0L,

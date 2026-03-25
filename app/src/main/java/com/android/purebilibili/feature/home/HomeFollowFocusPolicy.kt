@@ -122,11 +122,7 @@ internal fun presentHomeFollowVisibleVideos(
         !isLoadMore -> orderedVisibleVideos
         else -> appendDistinctByKey(
             existingPresentedVisibleVideos,
-            if (sortMode == FocusFollowHomeFeedSortMode.RANDOM) {
-                incomingVisibleVideos
-            } else {
-                orderedVisibleVideos
-            },
+            orderedVisibleVideos,
             ::resolveHomeFollowVideoKey
         )
     }
@@ -282,27 +278,25 @@ internal fun randomizeHomeFollowIncomingVideos(
     prioritizedVideoKeys: Set<String> = emptySet()
 ): List<VideoItem> {
     if (videos.size <= 1) return videos
-
-    if (prioritizedVideoKeys.isNotEmpty()) {
-        val prioritizedVideos = videos.filter { video ->
-            resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+    return videos
+        .groupBy { it.pubdate }
+        .entries
+        .sortedByDescending { it.key }
+        .flatMap { (pubdate, sameTimeVideos) ->
+            val prioritizedVideos = sameTimeVideos.filter { video ->
+                resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+            }
+            val historicalVideos = sameTimeVideos.filterNot { video ->
+                resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
+            }
+            interleaveHomeFollowVideosByCreator(
+                videos = prioritizedVideos,
+                seed = seed xor pubdate
+            ) + interleaveHomeFollowVideosByCreator(
+                videos = historicalVideos,
+                seed = seed xor pubdate xor HOME_FOLLOW_RANDOM_MIX2
+            )
         }
-        val historicalVideos = videos.filterNot { video ->
-            resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
-        }
-        return interleaveHomeFollowVideosByCreator(
-            videos = prioritizedVideos,
-            seed = seed
-        ) + interleaveHomeFollowVideosByCreator(
-            videos = historicalVideos,
-            seed = seed xor HOME_FOLLOW_RANDOM_MIX2
-        )
-    }
-
-    return interleaveHomeFollowVideosByCreator(
-        videos = videos,
-        seed = seed
-    )
 }
 
 private fun interleaveHomeFollowVideosByCreator(

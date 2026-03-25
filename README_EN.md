@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.5</sub>
+  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.6</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.5-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.6-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.5-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.6-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.5-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.6-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.4-focus.5` |
+| Focus version | `7.1.4-focus.6` |
 | Upstream base | `7.1.4` |
-| Release tag | `v7.1.4-focus.5` |
-| Release notes | [docs/releases/focus-7.1.4-focus.5-en.md](docs/releases/focus-7.1.4-focus.5-en.md) |
-| Main refinements | FOLLOW refresh semantics are now split cleanly: `Random` still reshuffles, while `Creator cluster` and `Publish time` refresh deterministically and only absorb new items |
-| Public APK | `BliPai-Focus-release-7.1.4-focus.5.apk` |
+| Release tag | `v7.1.4-focus.6` |
+| Release notes | [docs/releases/focus-7.1.4-focus.6-en.md](docs/releases/focus-7.1.4-focus.6-en.md) |
+| Main refinements | FOLLOW sorting now uses the real dynamic publish timestamp, direction-correct creator/time ordering, and a random mode that still keeps newest items at the top |
+| Public APK | `BliPai-Focus-release-7.1.4-focus.6.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.4-focus.5.md` | Chinese release notes for `v7.1.4-focus.5` |
-| Added | `docs/releases/focus-7.1.4-focus.5-en.md` | English release notes for `v7.1.4-focus.5` |
+| Added | `docs/releases/focus-7.1.4-focus.6.md` | Chinese release notes for `v7.1.4-focus.6` |
+| Added | `docs/releases/focus-7.1.4-focus.6-en.md` | English release notes for `v7.1.4-focus.6` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -563,11 +563,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.1.4 / v7.1.4-focus.5 · 2026-03-24)
+### Latest (v7.1.4 / v7.1.4-focus.6 · 2026-03-24)
 
-- 🎯 **Random and deterministic ordering are now separated**: `Random` refreshes still reshuffle, while `Creator cluster` and `Publish time` refreshes no longer inject extra randomization.
-- 🧭 **Non-random refreshes are now predictable**: creator-cluster and publish-time modes simply absorb new items and re-sort by their own rules.
-- ✅ **Policy tests now lock this behavior in**: this prevents future regressions where every refresh behaves like `Random`.
+- 🕒 **FOLLOW sorting now uses the real publish timestamp**: the dynamic-to-video mapping now preserves `pub_ts`, so ordering modes no longer degrade when publish time was missing.
+- 🔀 **Random still means newest-to-oldest overall**: randomness is kept inside the same publish-time layer, while the global list stays ordered from newest at the top to oldest at the bottom.
+- ✅ **Creator/time asc and desc are corrected again**: `Creator cluster` and `Publish time` now properly split early-to-late from late-to-early.
 
 ---
 
