@@ -353,6 +353,7 @@ internal fun HomeCategoryPageContent(
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
+                                        showPublishTime = true,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
                                         onClick = { bvid, cid ->
@@ -378,6 +379,7 @@ internal fun HomeCategoryPageContent(
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
+                                        showPublishTime = true,
                                         isDataSaverActive = isDataSaverActive,
                                         compactStatsOnCover = compactStatsOnCover,
                                         showCoverGlassBadges = showCoverGlassBadges,

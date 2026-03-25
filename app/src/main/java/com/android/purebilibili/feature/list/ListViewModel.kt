@@ -72,8 +72,8 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     private val _historyItemsMap = mutableMapOf<String, com.android.purebilibili.data.model.response.HistoryItem>()
     private val _historyItemsByRenderKey = mutableMapOf<String, com.android.purebilibili.data.model.response.HistoryItem>()
 
-    private val _dissolvingIds = MutableStateFlow<Set<String>>(emptySet())
-    val dissolvingIds = _dissolvingIds.asStateFlow()
+    private val _deleteSession = MutableStateFlow<HistoryDeleteSession?>(null)
+    internal val deleteSession = _deleteSession.asStateFlow()
     
     /**
      * 根据 bvid 获取历史记录项的导航信息
@@ -103,21 +103,31 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     }
 
     fun startVideoDissolve(renderKey: String) {
-        val key = renderKey.trim()
-        if (key.isEmpty()) return
-        _dissolvingIds.value = _dissolvingIds.value + key
+        startDeleteSession(setOf(renderKey))
     }
 
     fun startBatchVideoDissolve(renderKeys: Set<String>) {
-        if (renderKeys.isEmpty()) return
-        _dissolvingIds.value = _dissolvingIds.value + renderKeys
+        startDeleteSession(renderKeys)
+    }
+
+    private fun startDeleteSession(renderKeys: Set<String>) {
+        val session = createHistoryDeleteSession(renderKeys) ?: return
+        _deleteSession.value = session
     }
 
     fun completeVideoDissolve(renderKey: String) {
         val key = renderKey.trim()
         if (key.isEmpty()) return
-        _dissolvingIds.value = _dissolvingIds.value - key
-        deleteHistoryItems(setOf(key))
+        val currentSession = _deleteSession.value ?: return
+        if (key !in currentSession.targetKeys) return
+
+        val nextSession = reduceHistoryDeleteSessionOnAnimationComplete(currentSession, key)
+        if (shouldFinalizeHistoryDeleteSession(nextSession)) {
+            deleteHistoryItems(nextSession.targetKeys)
+            _deleteSession.value = null
+        } else {
+            _deleteSession.value = nextSession
+        }
     }
 
     private fun enrichHistoryProgress(
@@ -153,7 +163,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         cursorBusiness = ""
         _historyItemsMap.clear()
         _historyItemsByRenderKey.clear()
-        _dissolvingIds.value = emptySet()
+        _deleteSession.value = null
         
         val result = com.android.purebilibili.data.repository.HistoryRepository.getHistoryList(
             ps = 30,
@@ -232,17 +242,18 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 
                 // 保存历史记录项并转换为 VideoItem
                 val historyItems = enrichHistoryProgress(historyResult.list.map { it.toHistoryItem() })
-                cacheHistoryItems(historyItems)
+                val uniqueNewHistoryItems = filterAppendableHistoryItems(
+                    currentRenderKeys = _historyItemsByRenderKey.keys,
+                    incomingItems = historyItems
+                )
+                cacheHistoryItems(uniqueNewHistoryItems)
                 
-                val newItems = historyItems.map { it.videoItem }
+                val newItems = uniqueNewHistoryItems.map { it.videoItem }
                 com.android.purebilibili.core.util.Logger.d("HistoryVM", " Loaded ${newItems.size} more items, hasMore=$hasMore")
                 
                 if (newItems.isNotEmpty()) {
-                    // 追加到现有列表（过滤重复）
                     val currentItems = _uiState.value.items
-                    val existingBvids = currentItems.map { it.bvid }.toSet()
-                    val uniqueNewItems = newItems.filter { it.bvid !in existingBvids }
-                    _uiState.value = _uiState.value.copy(items = currentItems + uniqueNewItems)
+                    _uiState.value = _uiState.value.copy(items = currentItems + newItems)
                     com.android.purebilibili.core.util.Logger.d("HistoryVM", " Total items: ${_uiState.value.items.size}")
                 }
             } catch (e: Exception) {
@@ -351,13 +362,13 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         val snapshotCursorMax = cursorMax
         val snapshotCursorViewAt = cursorViewAt
         val snapshotCursorBusiness = cursorBusiness
-        val snapshotDissolvingIds = _dissolvingIds.value
+        val snapshotDeleteSession = _deleteSession.value
         if (snapshotItems.isEmpty()) return
 
         _uiState.value = _uiState.value.copy(items = emptyList())
         _historyItemsByRenderKey.clear()
         _historyItemsMap.clear()
-        _dissolvingIds.value = emptySet()
+        _deleteSession.value = null
         hasMore = false
         _hasMoreState.value = false
         cursorMax = 0L
@@ -369,7 +380,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
                 if (csrf.isBlank()) {
                     restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                    _dissolvingIds.value = snapshotDissolvingIds
+                    _deleteSession.value = snapshotDeleteSession
                     hasMore = snapshotHasMore
                     _hasMoreState.value = snapshotHasMore
                     cursorMax = snapshotCursorMax
@@ -388,7 +399,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                     ).show()
                 } else {
                     restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                    _dissolvingIds.value = snapshotDissolvingIds
+                    _deleteSession.value = snapshotDeleteSession
                     hasMore = snapshotHasMore
                     _hasMoreState.value = snapshotHasMore
                     cursorMax = snapshotCursorMax
@@ -402,7 +413,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 }
             } catch (e: Exception) {
                 restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                _dissolvingIds.value = snapshotDissolvingIds
+                _deleteSession.value = snapshotDeleteSession
                 hasMore = snapshotHasMore
                 _hasMoreState.value = snapshotHasMore
                 cursorMax = snapshotCursorMax

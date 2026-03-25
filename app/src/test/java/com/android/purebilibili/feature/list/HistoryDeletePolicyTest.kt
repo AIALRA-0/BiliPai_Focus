@@ -90,4 +90,108 @@ class HistoryDeletePolicyTest {
 
         assertEquals("pgc_2468", resolveHistoryRenderKey(item))
     }
+
+    @Test
+    fun `single delete should use single dissolve mode`() {
+        assertEquals(
+            HistoryDeleteAnimationMode.SINGLE_DISSOLVE,
+            resolveHistoryDeleteAnimationMode(itemCount = 1)
+        )
+    }
+
+    @Test
+    fun `batch delete should keep dissolve animation but switch to batch mode`() {
+        assertEquals(
+            HistoryDeleteAnimationMode.BATCH_DISSOLVE,
+            resolveHistoryDeleteAnimationMode(itemCount = 2)
+        )
+        assertEquals(
+            HistoryDeleteAnimationMode.BATCH_DISSOLVE,
+            resolveHistoryDeleteAnimationMode(itemCount = 30)
+        )
+    }
+
+    @Test
+    fun `batch dissolve should disable jiggle and collapse`() {
+        assertEquals(false, shouldJiggleHistoryDeleteCards(HistoryDeleteAnimationMode.BATCH_DISSOLVE))
+        assertEquals(false, shouldCollapseHistoryDeleteCard(HistoryDeleteAnimationMode.BATCH_DISSOLVE))
+    }
+
+    @Test
+    fun `single dissolve should keep jiggle and collapse`() {
+        assertEquals(true, shouldJiggleHistoryDeleteCards(HistoryDeleteAnimationMode.SINGLE_DISSOLVE))
+        assertEquals(true, shouldCollapseHistoryDeleteCard(HistoryDeleteAnimationMode.SINGLE_DISSOLVE))
+    }
+
+    @Test
+    fun `batch delete should only finalize after every dissolving card completes`() {
+        assertEquals(
+            false,
+            shouldFinalizeBatchHistoryDelete(
+                targetKeys = setOf("a", "b", "c"),
+                completedKeys = setOf("a", "b")
+            )
+        )
+        assertEquals(
+            true,
+            shouldFinalizeBatchHistoryDelete(
+                targetKeys = setOf("a", "b", "c"),
+                completedKeys = setOf("a", "b", "c")
+            )
+        )
+    }
+
+    @Test
+    fun `create delete session normalizes keys and chooses batch mode`() {
+        val session = createHistoryDeleteSession(setOf(" a ", "b", ""))
+
+        assertEquals(
+            HistoryDeleteSession(
+                targetKeys = setOf("a", "b"),
+                completedKeys = emptySet(),
+                animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+            ),
+            session
+        )
+    }
+
+    @Test
+    fun `reduce delete session tracks completions until finalize`() {
+        val session = HistoryDeleteSession(
+            targetKeys = setOf("a", "b"),
+            completedKeys = emptySet(),
+            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+        )
+
+        val afterFirst = reduceHistoryDeleteSessionOnAnimationComplete(session, "a")
+        val afterSecond = reduceHistoryDeleteSessionOnAnimationComplete(afterFirst, "b")
+
+        assertEquals(setOf("a"), afterFirst.completedKeys)
+        assertEquals(false, shouldFinalizeHistoryDeleteSession(afterFirst))
+        assertEquals(setOf("a", "b"), afterSecond.completedKeys)
+        assertEquals(true, shouldFinalizeHistoryDeleteSession(afterSecond))
+    }
+
+    @Test
+    fun `active delete keys exclude completed items`() {
+        val session = HistoryDeleteSession(
+            targetKeys = setOf("a", "b", "c"),
+            completedKeys = setOf("b"),
+            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+        )
+
+        assertEquals(setOf("a", "c"), resolveActiveHistoryDeleteKeys(session))
+    }
+
+    @Test
+    fun `completed batch item should stay hidden until session ends`() {
+        val session = HistoryDeleteSession(
+            targetKeys = setOf("a", "b"),
+            completedKeys = setOf("a"),
+            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+        )
+
+        assertEquals(true, shouldKeepHistoryDeletePlaceholderHidden(session, "a"))
+        assertEquals(false, shouldKeepHistoryDeletePlaceholderHidden(session, "b"))
+    }
 }
