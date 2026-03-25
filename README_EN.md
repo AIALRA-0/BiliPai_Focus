@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.8</sub>
+  <sub>Last updated: 2026-03-24 · Upstream base v7.1.4 · Current Focus release v7.1.4-focus.9</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.8-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.9-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.8-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.9-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.8-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.9-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.1.4-focus.8` |
+| Focus version | `7.1.4-focus.9` |
 | Upstream base | `7.1.4` |
-| Release tag | `v7.1.4-focus.8` |
-| Release notes | [docs/releases/focus-7.1.4-focus.8-en.md](docs/releases/focus-7.1.4-focus.8-en.md) |
-| Main refinements | FOLLOW manual pull-to-refresh now waits for a stable post-bounce settle window before swapping in the new list, preventing flicker and content jumping above the refresh chrome |
-| Public APK | `BliPai-Focus-release-7.1.4-focus.8.apk` |
+| Release tag | `v7.1.4-focus.9` |
+| Release notes | [docs/releases/focus-7.1.4-focus.9-en.md](docs/releases/focus-7.1.4-focus.9-en.md) |
+| Main refinements | FOLLOW random refresh now uses a no-overshoot settle path and longer commit window, while `Random` itself is back to full pool-wide random ordering |
+| Public APK | `BliPai-Focus-release-7.1.4-focus.9.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.1.4-focus.8.md` | Chinese release notes for `v7.1.4-focus.8` |
-| Added | `docs/releases/focus-7.1.4-focus.8-en.md` | English release notes for `v7.1.4-focus.8` |
+| Added | `docs/releases/focus-7.1.4-focus.9.md` | Chinese release notes for `v7.1.4-focus.9` |
+| Added | `docs/releases/focus-7.1.4-focus.9-en.md` | English release notes for `v7.1.4-focus.9` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -563,11 +563,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.1.4 / v7.1.4-focus.8 · 2026-03-24)
+### Latest (v7.1.4 / v7.1.4-focus.9 · 2026-03-24)
 
-- 🧷 **FOLLOW refresh commit now waits for a stable settle window**: manual pull-to-refresh applies the new list only after refresh completion, indicator reset, content-offset reset, and one extra settle delay.
-- ⬆️ **New cards no longer jump upward early**: the refreshed list and jump-to-top now happen together after the bounce is fully done, reducing flicker and refresh-chrome overlap.
-- ✅ **The scope is limited to FOLLOW manual refresh**: this does not change other tabs, FOLLOW load-more, the 16-card first batch, or the current sort behavior.
+- 🎲 **Random is now full-pool random again**: the `Random` mode no longer uses creator interleaving or new-item front-loading; it randomizes the whole candidate pool.
+- 🧷 **FOLLOW random refresh uses a stricter settle path**: the pending refresh path now uses no-overshoot return motion plus a longer stable commit window before the new list is applied.
+- ✅ **Other ordering and paging rules stay intact**: default `Publish time desc`, the 16-card first batch, and FOLLOW load-more grouping are unchanged.
 
 ---
 

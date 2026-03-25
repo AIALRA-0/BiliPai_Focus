@@ -1,5 +1,21 @@
 # Focus Changelog
 
+## v7.1.4 Focus / focus.9 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.4` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.4-focus.9`。
+- 为保证已发布 `v7.1.4-focus.8 / 153` 用户可直接升级，`versionCode` 继续递增到 `154`。
+- `focus.9` 继续修 FOLLOW 随机排序下的刷新闪烁，并把随机模式改回真正的整池纯随机。
+
+### 首页 FOLLOW 刷新与随机排序修复
+- FOLLOW 待提交刷新阶段的内容回弹现在改成无过冲回弹，并把稳定提交窗口进一步拉长，避免随机排序下列表在回弹结束前提前替换。
+- 随机排序不再做 `UP` 交错，也不再把新抓到的内容强行前置；现在是对整个候选池按随机键做纯随机排序。
+- 因为随机模式现在是真正的整池随机，之前总是更容易排在前面的那一批视频不再被固定在前部。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest --tests "*HomePullRefreshUiPolicyTest" --tests "*HomeFollowFocusPolicyTest"`。
+- 已通过 `:app:assembleRelease`。
+
 ## v7.1.4 Focus / focus.8 (2026-03-24)
 
 ### 版本信息

@@ -1122,14 +1122,25 @@ fun HomeScreen(
                             isRefreshing = isPageRefreshing,
                             motionStyle = pullRefreshMotionStyle
                         )
+                        val useStrictFollowRefreshSettleMotion = shouldUseStrictFollowRefreshSettleMotion(
+                            currentCategory = category,
+                            hasPendingPresentation = state.followRefreshPresentationPending
+                        )
                         
                         //  使用 animateFloatAsState 包装偏移量
                         val animatedDragOffsetFraction by androidx.compose.animation.core.animateFloatAsState(
                             targetValue = targetPullOffset,
-                            animationSpec = androidx.compose.animation.core.spring(
-                                dampingRatio = 0.5f,  // 0.5 = 明显的弹性 (Bouncy)
-                                stiffness = 350f      // 350 = 中等刚度
-                            ),
+                            animationSpec = if (useStrictFollowRefreshSettleMotion) {
+                                androidx.compose.animation.core.spring(
+                                    dampingRatio = 1f,
+                                    stiffness = 900f
+                                )
+                            } else {
+                                androidx.compose.animation.core.spring(
+                                    dampingRatio = 0.5f,  // 0.5 = 明显的弹性 (Bouncy)
+                                    stiffness = 350f      // 350 = 中等刚度
+                                )
+                            },
                             label = "pull_bounce"
                         )
 

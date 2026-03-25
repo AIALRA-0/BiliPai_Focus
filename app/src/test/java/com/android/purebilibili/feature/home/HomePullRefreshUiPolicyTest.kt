@@ -208,7 +208,7 @@ class HomePullRefreshUiPolicyTest {
     @Test
     fun `follow refresh presentation commit delay applies only to pending follow refresh`() {
         assertEquals(
-            120L,
+            280L,
             resolveFollowRefreshPresentationCommitDelayMillis(
                 currentCategory = HomeCategory.FOLLOW,
                 hasPendingPresentation = true
@@ -224,6 +224,28 @@ class HomePullRefreshUiPolicyTest {
         assertEquals(
             0L,
             resolveFollowRefreshPresentationCommitDelayMillis(
+                currentCategory = HomeCategory.POPULAR,
+                hasPendingPresentation = true
+            )
+        )
+    }
+
+    @Test
+    fun `strict follow settle motion applies only while follow has pending presentation`() {
+        assertTrue(
+            shouldUseStrictFollowRefreshSettleMotion(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true
+            )
+        )
+        assertFalse(
+            shouldUseStrictFollowRefreshSettleMotion(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = false
+            )
+        )
+        assertFalse(
+            shouldUseStrictFollowRefreshSettleMotion(
                 currentCategory = HomeCategory.POPULAR,
                 hasPendingPresentation = true
             )

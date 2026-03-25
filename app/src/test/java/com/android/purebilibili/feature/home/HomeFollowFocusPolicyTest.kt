@@ -102,18 +102,29 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
-    fun `follow incoming randomization should interleave creators before repeating same up`() {
+    fun `follow incoming randomization should ignore prioritized videos and randomize the full pool`() {
         val source = listOf(
             video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 11L, pubdate = 100L),
-            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L, pubdate = 100L),
-            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L, pubdate = 100L),
-            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L, pubdate = 100L),
-            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L, pubdate = 100L)
+            video(id = 2, bvid = "BV2", dynamicId = "dyn-2", ownerMid = 11L, pubdate = 90L),
+            video(id = 3, bvid = "BV3", dynamicId = "dyn-3", ownerMid = 22L, pubdate = 80L),
+            video(id = 4, bvid = "BV4", dynamicId = "dyn-4", ownerMid = 22L, pubdate = 70L),
+            video(id = 5, bvid = "BV5", dynamicId = "dyn-5", ownerMid = 33L, pubdate = 60L)
         )
 
-        val randomized = randomizeHomeFollowIncomingVideos(source, seed = 7L)
+        val baseline = randomizeHomeFollowIncomingVideos(source, seed = 7L)
+        val prioritized = randomizeHomeFollowIncomingVideos(
+            videos = source,
+            seed = 7L,
+            prioritizedVideoKeys = setOf(
+                resolveHomeFollowVideoKey(source[3]),
+                resolveHomeFollowVideoKey(source[4])
+            )
+        )
 
-        assertEquals(3, randomized.take(3).map { it.owner.mid }.distinct().size)
+        assertEquals(
+            baseline.map { it.dynamicId },
+            prioritized.map { it.dynamicId }
+        )
     }
 
     @Test
@@ -141,7 +152,7 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
-    fun `random refresh should keep newly fetched videos ahead of cached videos`() {
+    fun `random refresh should not front load newly fetched videos`() {
         val oldA = video(id = 1, bvid = "BV1", dynamicId = "dyn-old-1", ownerMid = 11L)
         val oldB = video(id = 2, bvid = "BV2", dynamicId = "dyn-old-2", ownerMid = 22L)
         val newA = video(id = 3, bvid = "BV3", dynamicId = "dyn-new-1", ownerMid = 33L)
@@ -158,10 +169,17 @@ class HomeFollowFocusPolicyTest {
                 resolveHomeFollowVideoKey(newB)
             )
         )
+        val refreshedWithoutPrioritization = presentHomeFollowVisibleVideos(
+            existingPresentedVisibleVideos = emptyList(),
+            incomingVisibleVideos = listOf(oldA, oldB, newA, newB),
+            isLoadMore = false,
+            seed = 5L,
+            reshuffleOnRefresh = true
+        )
 
         assertEquals(
-            setOf("dyn-new-1", "dyn-new-2"),
-            refreshed.take(2).map { it.dynamicId }.toSet()
+            refreshedWithoutPrioritization.map { it.dynamicId },
+            refreshed.map { it.dynamicId }
         )
     }
 

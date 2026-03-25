@@ -5,7 +5,7 @@ import kotlin.math.min
 import kotlin.math.max
 import kotlin.math.abs
 
-private const val FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS = 120L
+private const val FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS = 280L
 
 internal fun resolvePullRefreshThresholdDp(): Float = 56f
 
@@ -87,6 +87,14 @@ internal fun resolveFollowRefreshPresentationCommitDelayMillis(
     if (currentCategory != HomeCategory.FOLLOW) return 0L
     if (!hasPendingPresentation) return 0L
     return FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS
+}
+
+internal fun shouldUseStrictFollowRefreshSettleMotion(
+    currentCategory: HomeCategory,
+    hasPendingPresentation: Boolean
+): Boolean {
+    if (currentCategory != HomeCategory.FOLLOW) return false
+    return hasPendingPresentation
 }
 
 internal fun shouldDeferFollowRefreshPreviewWhilePullRefreshing(

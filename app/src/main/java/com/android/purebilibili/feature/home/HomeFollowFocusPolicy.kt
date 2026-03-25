@@ -6,7 +6,6 @@ import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.VideoItem
-import java.util.ArrayDeque
 
 internal const val HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE = 16
 private const val HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT = 12
@@ -278,60 +277,10 @@ internal fun randomizeHomeFollowIncomingVideos(
     prioritizedVideoKeys: Set<String> = emptySet()
 ): List<VideoItem> {
     if (videos.size <= 1) return videos
-
-    if (prioritizedVideoKeys.isNotEmpty()) {
-        val prioritizedVideos = videos.filter { video ->
-            resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
-        }
-        val historicalVideos = videos.filterNot { video ->
-            resolveHomeFollowVideoKey(video) in prioritizedVideoKeys
-        }
-        return interleaveHomeFollowVideosByCreator(
-            videos = prioritizedVideos,
-            seed = seed
-        ) + interleaveHomeFollowVideosByCreator(
-            videos = historicalVideos,
-            seed = seed xor HOME_FOLLOW_RANDOM_MIX2
-        )
-    }
-
-    return interleaveHomeFollowVideosByCreator(
-        videos = videos,
-        seed = seed
+    return videos.sortedWith(
+        compareBy<VideoItem> { resolveHomeFollowRandomOrderValue(it, seed) }
+            .thenBy { resolveHomeFollowVideoKey(it) }
     )
-}
-
-private fun interleaveHomeFollowVideosByCreator(
-    videos: List<VideoItem>,
-    seed: Long
-): List<VideoItem> {
-    if (videos.size <= 1) return videos
-    val creators = videos
-        .groupBy { it.owner.mid }
-        .mapValues { (creatorMid, creatorVideos) ->
-            ArrayDeque(
-                creatorVideos.sortedWith(
-                    compareByDescending<VideoItem> { it.pubdate }
-                        .thenBy { resolveHomeFollowRandomOrderValue(it, seed xor creatorMid) }
-                )
-            )
-        }
-    val creatorOrder = creators.keys.sortedBy { creatorMid ->
-        resolveHomeFollowCreatorRandomOrderValue(creatorMid = creatorMid, seed = seed)
-    }
-    return buildList(videos.size) {
-        while (true) {
-            var appendedInRound = false
-            creatorOrder.forEach { creatorMid ->
-                val creatorQueue = creators[creatorMid] ?: return@forEach
-                if (creatorQueue.isEmpty()) return@forEach
-                val nextVideo = creatorQueue.removeFirst()
-                add(nextVideo)
-                appendedInRound = true
-            }
-            if (!appendedInRound) return@buildList
-        }
-    }
 }
 
 internal fun resolveHomeFollowVideoKey(video: VideoItem): String {
