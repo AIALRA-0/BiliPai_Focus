@@ -5,6 +5,8 @@ import kotlin.math.min
 import kotlin.math.max
 import kotlin.math.abs
 
+private const val FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS = 120L
+
 internal fun resolvePullRefreshThresholdDp(): Float = 56f
 
 enum class HomePullRefreshMotionStyle {
@@ -76,6 +78,15 @@ internal fun shouldCommitFollowRefreshPresentationAfterPullSettles(
     val tolerance = settledDistanceTolerance.coerceAtLeast(0f)
     if (distanceFraction > tolerance) return false
     return abs(contentOffsetFraction) <= tolerance
+}
+
+internal fun resolveFollowRefreshPresentationCommitDelayMillis(
+    currentCategory: HomeCategory,
+    hasPendingPresentation: Boolean
+): Long {
+    if (currentCategory != HomeCategory.FOLLOW) return 0L
+    if (!hasPendingPresentation) return 0L
+    return FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS
 }
 
 internal fun shouldDeferFollowRefreshPreviewWhilePullRefreshing(

@@ -1165,6 +1165,13 @@ fun HomeScreen(
                             ) {
                                 return@LaunchedEffect
                             }
+                            val commitDelayMillis = resolveFollowRefreshPresentationCommitDelayMillis(
+                                currentCategory = category,
+                                hasPendingPresentation = state.followRefreshPresentationPending
+                            )
+                            if (commitDelayMillis > 0L) {
+                                delay(commitDelayMillis)
+                            }
                             viewModel.commitPendingFollowRefreshPresentationAfterUiSettles()
                         }
                         

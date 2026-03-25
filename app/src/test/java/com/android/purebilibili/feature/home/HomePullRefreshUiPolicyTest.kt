@@ -206,6 +206,31 @@ class HomePullRefreshUiPolicyTest {
     }
 
     @Test
+    fun `follow refresh presentation commit delay applies only to pending follow refresh`() {
+        assertEquals(
+            120L,
+            resolveFollowRefreshPresentationCommitDelayMillis(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = true
+            )
+        )
+        assertEquals(
+            0L,
+            resolveFollowRefreshPresentationCommitDelayMillis(
+                currentCategory = HomeCategory.FOLLOW,
+                hasPendingPresentation = false
+            )
+        )
+        assertEquals(
+            0L,
+            resolveFollowRefreshPresentationCommitDelayMillis(
+                currentCategory = HomeCategory.POPULAR,
+                hasPendingPresentation = true
+            )
+        )
+    }
+
+    @Test
     fun `follow refresh preview should be deferred while visible follow page is still refreshing`() {
         assertTrue(
             shouldDeferFollowRefreshPreviewWhilePullRefreshing(

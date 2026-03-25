@@ -1,5 +1,21 @@
 # Focus Changelog
 
+## v7.1.4 Focus / focus.8 (2026-03-24)
+
+### 版本信息
+- 基于上游 `BiliPai v7.1.4` 继续维护 Focus 发布线，当前推荐对外版本为 `7.1.4-focus.8`。
+- 为保证已发布 `v7.1.4-focus.7 / 152` 用户可直接升级，`versionCode` 继续递增到 `153`。
+- `focus.8` 继续收口首页 FOLLOW 下拉刷新完成前的提前换列表问题，目标是彻底消除回弹边缘的闪烁和 UI 越界。
+
+### 首页 FOLLOW 下拉刷新稳定性修复
+- FOLLOW 手动下拉刷新现在在“刷新完成、指示器回弹归零、内容位移归零”之后，还会额外等待一小段稳定窗口，再提交新的列表。
+- 这个提交延迟只作用于 FOLLOW 的待提交刷新结果，不影响其他分类，也不会改变正常的加载更多和首次首批展示逻辑。
+- 新列表与回顶动作现在会一起后移到稳定窗口之后，避免条目先顶上去、内容瞬时跑到下拉边框上方造成闪烁。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest --tests "*HomePullRefreshUiPolicyTest" --tests "*HomeFollowFocusPolicyTest" --tests "*HomeFollowFeedMappingPolicyTest" --tests "*FocusFollowGroupStorePolicyTest"`。
+- 已通过 `:app:assembleRelease`。
+
 ## v7.1.4 Focus / focus.7 (2026-03-24)
 
 ### 版本信息

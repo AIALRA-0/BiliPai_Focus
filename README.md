@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.7</sub>
+  <sub>最后更新：2026-03-24 · 上游基线 v7.1.4 · 当前 Focus 发布 v7.1.4-focus.8</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.7-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.1.4--focus.8-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.1.4-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.7.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.1.4-focus.8.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.7.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.1.4-focus.8.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.1.4-focus.7` |
+| Focus 版本 | `7.1.4-focus.8` |
 | 上游基线 | `7.1.4` |
-| 发布标签 | `v7.1.4-focus.7` |
-| Release Notes | [docs/releases/focus-7.1.4-focus.7.md](docs/releases/focus-7.1.4-focus.7.md) |
-| 主要收口 | `随机排序` 恢复整池随机推送，应用默认排序切到 `时间倒序`，同时保留 `focus.6` 修复后的真实发布时间排序基础 |
-| 对外 APK | `BliPai-Focus-release-7.1.4-focus.7.apk` |
+| 发布标签 | `v7.1.4-focus.8` |
+| Release Notes | [docs/releases/focus-7.1.4-focus.8.md](docs/releases/focus-7.1.4-focus.8.md) |
+| 主要收口 | FOLLOW 手动下拉刷新增加稳定提交窗口，确保指示器完全回弹后才替换列表，避免内容提前顶上来闪烁 |
+| 对外 APK | `BliPai-Focus-release-7.1.4-focus.8.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.1.4-focus.7.md` | Focus `v7.1.4-focus.7` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.1.4-focus.7-en.md` | Focus `v7.1.4-focus.7` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.8.md` | Focus `v7.1.4-focus.8` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.1.4-focus.8-en.md` | Focus `v7.1.4-focus.8` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
@@ -718,11 +718,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.1.4 / v7.1.4-focus.7 · 2026-03-24)
+### 最近更新 (v7.1.4 / v7.1.4-focus.8 · 2026-03-24)
 
-- 🔀 **随机排序恢复整池随机**：首页 FOLLOW 的随机模式现在重新对整池内容做随机交错，不再近似等于 `时间倒序`。
-- ⬇️ **默认排序改成时间倒序**：新安装和未设置用户现在默认看到“最新在上”的 FOLLOW 列表。
-- ✅ **真实发布时间排序基础继续保留**：`时间` 和 `UP聚类` 的正序/倒序仍然建立在 `focus.6` 修好的 `pubdate` 上。
+- 🧷 **FOLLOW 刷新提交增加稳定窗口**：手动下拉刷新现在会等到刷新结束、指示器归零和内容回弹归零之后，再额外等待一小段稳定时间才替换列表。
+- ⬆️ **新列表不再提前顶上来**：刷新结果和回顶动作一起后移，避免内容瞬时窜到下拉刷新边框上方，减少闪烁和 UI 错乱。
+- ✅ **影响范围只限 FOLLOW 手动刷新**：这次修复不改变其他分类，也不改变 FOLLOW 的 `loadMore`、首批 16 条和现有排序逻辑。
 
 ### 历史版本
 
