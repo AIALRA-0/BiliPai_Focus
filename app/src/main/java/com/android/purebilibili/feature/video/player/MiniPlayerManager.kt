@@ -155,6 +155,22 @@ internal fun shouldTrimDanmakuCachesOnEnterBackground(
     return shouldDisableVideoTrack
 }
 
+internal fun shouldRefreshVideoFrameOnEnterForeground(
+    hadSavedTrackParams: Boolean,
+    hasMediaItems: Boolean,
+    playbackState: Int
+): Boolean {
+    return hadSavedTrackParams && hasMediaItems && playbackState != Player.STATE_IDLE
+}
+
+internal fun shouldResumePlaybackOnEnterForeground(
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int
+): Boolean {
+    return playWhenReady && !isPlaying && playbackState == Player.STATE_READY
+}
+
 internal fun resolveTrackSelectionParametersForBackground(
     currentTrackSelectionParameters: androidx.media3.common.TrackSelectionParameters,
     shouldDisableVideoTrack: Boolean
@@ -586,12 +602,34 @@ class MiniPlayerManager private constructor(private val context: Context) :
         
         isLowMemoryMode = false
         val currentPlayer = player ?: return
+        val hadSavedTrackParams = savedTrackParams != null
         
         // 恢复视频轨道
         savedTrackParams?.let { originalParams ->
             currentPlayer.trackSelectionParameters = originalParams
             savedTrackParams = null
             Logger.d(TAG, "🌅 前台模式：恢复视频轨道")
+        }
+
+        if (shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = hadSavedTrackParams,
+                hasMediaItems = currentPlayer.mediaItemCount > 0,
+                playbackState = currentPlayer.playbackState
+            )
+        ) {
+            val restorePositionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
+            currentPlayer.seekTo(restorePositionMs)
+            Logger.d(TAG, "🎬 前台模式：请求重新渲染当前帧，避免返回视频页黑屏")
+        }
+
+        if (shouldResumePlaybackOnEnterForeground(
+                playWhenReady = currentPlayer.playWhenReady,
+                isPlaying = currentPlayer.isPlaying,
+                playbackState = currentPlayer.playbackState
+            )
+        ) {
+            currentPlayer.play()
+            Logger.d(TAG, "▶️ 前台模式：恢复卡在 READY 的播放会话")
         }
     }
 

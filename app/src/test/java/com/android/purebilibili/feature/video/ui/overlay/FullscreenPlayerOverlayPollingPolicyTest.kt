@@ -76,4 +76,26 @@ class FullscreenPlayerOverlayPollingPolicyTest {
             )
         )
     }
+
+    @Test
+    fun foregroundResumeRebindsFullscreenSurface_onlyWhenViewAndPlayerExist() {
+        assertTrue(
+            shouldRebindFullscreenSurfaceOnResume(
+                hasPlayerView = true,
+                hasPlayer = true
+            )
+        )
+        assertFalse(
+            shouldRebindFullscreenSurfaceOnResume(
+                hasPlayerView = false,
+                hasPlayer = true
+            )
+        )
+        assertFalse(
+            shouldRebindFullscreenSurfaceOnResume(
+                hasPlayerView = true,
+                hasPlayer = false
+            )
+        )
+    }
 }

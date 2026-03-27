@@ -46,7 +46,6 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowDownCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.Bookmark
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronForward
 import io.github.alexzhirkevich.cupertino.icons.outlined.Clock
-import io.github.alexzhirkevich.cupertino.icons.outlined.Envelope
 import io.github.alexzhirkevich.cupertino.icons.outlined.RectanglePortraitAndArrowForward
 import kotlinx.coroutines.launch
 
@@ -395,7 +394,7 @@ fun MineSideDrawer(
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
                         icon = inboxIcon,
-                        title = "我的私信",
+                        title = "消息中心",
                         onClick = { closeAndRun(onInboxClick) },
                         iconTint = iOSPink,
                         textColor = activeContentColor,

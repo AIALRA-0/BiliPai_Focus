@@ -70,6 +70,7 @@ import com.android.purebilibili.feature.video.ui.components.CollectionSheet
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
@@ -617,6 +618,7 @@ private fun VideoCommentTab(
     onCommentUrlClick: (String) -> Unit,
     lightweightCommentRendering: Boolean
 ) {
+    val commentAppearance = rememberVideoCommentAppearance()
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -639,13 +641,13 @@ private fun VideoCommentTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    color = commentAppearance.composerHintBackgroundColor,
                     shape = RoundedCornerShape(16.dp),
                     onClick = onRootCommentClick
                 ) {
                     Text(
                         text = "说点什么，直接评论 UP 主和大家",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = commentAppearance.secondaryTextColor,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                     )
@@ -663,7 +665,7 @@ private fun VideoCommentTab(
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text(
                             text = if (upOnlyFilter) "这个视频没有 UP 主的评论" else "暂无评论",
-                            color = Color.Gray
+                            color = commentAppearance.secondaryTextColor
                         )
                     }
                 }
@@ -740,7 +742,7 @@ private fun VideoCommentTab(
                         when {
                             isRepliesLoading -> CupertinoActivityIndicator()
                             isRepliesEnd || replies.size >= replyCount -> {
-                                Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
+                                Text("—— end ——", color = commentAppearance.secondaryTextColor, fontSize = 12.sp)
                             }
                             // 当 shouldLoadMore 为 true 时才显示加载指示器
                             shouldLoadMore -> CupertinoActivityIndicator()

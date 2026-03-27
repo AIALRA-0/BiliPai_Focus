@@ -70,6 +70,54 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun homeRoute_bypassesGlobalNavigationDebounce() {
+        assertTrue(
+            canProceedWithNavigation(
+                currentTimeMillis = 1_000L,
+                lastNavigationTimeMillis = 950L,
+                debounceWindowMillis = 300L,
+                bypassDebounce = shouldBypassNavigationDebounceForRoute(ScreenRoutes.Home.route)
+            )
+        )
+    }
+
+    @Test
+    fun dynamicRoute_bypassesGlobalNavigationDebounce() {
+        assertTrue(
+            canProceedWithNavigation(
+                currentTimeMillis = 1_000L,
+                lastNavigationTimeMillis = 950L,
+                debounceWindowMillis = 300L,
+                bypassDebounce = shouldBypassNavigationDebounceForRoute(ScreenRoutes.Dynamic.route)
+            )
+        )
+    }
+
+    @Test
+    fun profileRoute_bypassesGlobalNavigationDebounce() {
+        assertTrue(
+            canProceedWithNavigation(
+                currentTimeMillis = 1_000L,
+                lastNavigationTimeMillis = 950L,
+                debounceWindowMillis = 300L,
+                bypassDebounce = shouldBypassNavigationDebounceForRoute(ScreenRoutes.Profile.route)
+            )
+        )
+    }
+
+    @Test
+    fun nonHomeRoute_stillRespectsGlobalNavigationDebounce() {
+        assertFalse(
+            canProceedWithNavigation(
+                currentTimeMillis = 1_000L,
+                lastNavigationTimeMillis = 950L,
+                debounceWindowMillis = 300L,
+                bypassDebounce = shouldBypassNavigationDebounceForRoute(ScreenRoutes.Search.route)
+            )
+        )
+    }
+
+    @Test
     fun profileShortcutsToTopLevelDestinations_useTopLevelNavigation() {
         assertTrue(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.Settings.route))
         assertTrue(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.History.route))

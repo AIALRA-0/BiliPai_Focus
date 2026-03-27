@@ -53,6 +53,30 @@ class VideoPlaybackUseCaseQualitySwitchTest {
     }
 
     @Test
+    fun `changeQualityFromCache prefers supported codec when same quality has multiple tracks`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.changeQualityFromCache(
+            qualityId = 80,
+            cachedVideos = listOf(
+                DashVideo(id = 80, baseUrl = "https://example.com/1080-hevc.m4s", codecs = "hev1"),
+                DashVideo(id = 80, baseUrl = "https://example.com/1080-avc.m4s", codecs = "avc1"),
+                DashVideo(id = 64, baseUrl = "https://example.com/720-avc.m4s", codecs = "avc1")
+            ),
+            cachedAudios = cachedAudios,
+            currentPos = 0L,
+            videoCodecPreference = "hev1",
+            videoSecondCodecPreference = "avc1",
+            isHevcSupported = false,
+            isAv1Supported = false
+        )
+
+        assertNotNull(result)
+        assertEquals(80, result?.actualQuality)
+        assertEquals("https://example.com/1080-avc.m4s", result?.videoUrl)
+    }
+
+    @Test
     fun `mergeQualityOptions keeps api high tiers when dash list misses them`() {
         val useCase = VideoPlaybackUseCase()
 

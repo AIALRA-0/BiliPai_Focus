@@ -114,6 +114,8 @@ class DanmakuManager private constructor(
     private val _advancedDanmakuFlow = kotlinx.coroutines.flow.MutableStateFlow<List<AdvancedDanmakuData>>(emptyList())
     val advancedDanmakuFlow: kotlinx.coroutines.flow.StateFlow<List<AdvancedDanmakuData>> = _advancedDanmakuFlow.asStateFlow()
     private var cachedCid: Long = 0L
+    private var lastExplicitSeekPositionMs: Long? = null
+    private var lastExplicitSeekElapsedRealtimeMs: Long? = null
     
     //  [新增] 记录原始弹幕滚动时间（用于倍速同步）
     private var originalMoveTime: Long = 8000L  // 默认 8 秒
@@ -336,6 +338,25 @@ class DanmakuManager private constructor(
             isPlaying = false
         }
         Log.w(TAG, " Resynced danmaku timeline ($reason) at ${positionMs}ms, play=$shouldPlay")
+    }
+
+    private fun markExplicitSeekResync(positionMs: Long) {
+        lastExplicitSeekPositionMs = positionMs
+        lastExplicitSeekElapsedRealtimeMs = SystemClock.elapsedRealtime()
+    }
+
+    private fun clearExplicitSeekResyncMarker() {
+        lastExplicitSeekPositionMs = null
+        lastExplicitSeekElapsedRealtimeMs = null
+    }
+
+    private fun shouldSuppressFollowupHardResync(positionMs: Long): Boolean {
+        return shouldSuppressFollowupDanmakuHardResync(
+            positionMs = positionMs,
+            explicitSeekPositionMs = lastExplicitSeekPositionMs,
+            nowElapsedRealtimeMs = SystemClock.elapsedRealtime(),
+            explicitSeekElapsedRealtimeMs = lastExplicitSeekElapsedRealtimeMs
+        )
     }
 
     private fun TextData.copyForPluginPipeline(): TextData {
@@ -990,17 +1011,25 @@ class DanmakuManager private constructor(
                 ) {
                     DanmakuSyncAction.HardResync -> {
                         val position = exoPlayer.currentPosition
+                        val shouldSuppressResync = shouldSuppressFollowupHardResync(position)
                         cachedDanmakuList?.let { list ->
-                            resyncDanmakuTimeline(
-                                list = list,
-                                positionMs = position,
-                                shouldPlay = true,
-                                reason = "is_playing_changed"
-                            )
+                            if (shouldSuppressResync) {
+                                Log.w(TAG, " Skip duplicate danmaku hard resync after explicit seek at ${position}ms (is_playing_changed)")
+                            } else {
+                                resyncDanmakuTimeline(
+                                    list = list,
+                                    positionMs = position,
+                                    shouldPlay = true,
+                                    reason = "is_playing_changed"
+                                )
+                            }
                         }
                         isPlaying = true
                         wasBufferingWhilePlaying = false
                         startDriftSync()
+                        if (shouldSuppressResync) {
+                            clearExplicitSeekResyncMarker()
+                        }
                         Log.w(TAG, " Danmaku HARD RESYNC at ${position}ms with frame sync")
                     }
                     DanmakuSyncAction.PauseOnly -> {
@@ -1030,17 +1059,25 @@ class DanmakuManager private constructor(
                 ) {
                     DanmakuSyncAction.HardResync -> {
                         val position = exoPlayer.currentPosition
+                        val shouldSuppressResync = shouldSuppressFollowupHardResync(position)
                         cachedDanmakuList?.let { list ->
-                            resyncDanmakuTimeline(
-                                list = list,
-                                positionMs = position,
-                                shouldPlay = true,
-                                reason = "state_ready_resume"
-                            )
+                            if (shouldSuppressResync) {
+                                Log.w(TAG, " Skip duplicate danmaku hard resync after explicit seek at ${position}ms (state_ready_resume)")
+                            } else {
+                                resyncDanmakuTimeline(
+                                    list = list,
+                                    positionMs = position,
+                                    shouldPlay = true,
+                                    reason = "state_ready_resume"
+                                )
+                            }
                         }
                         isPlaying = true
                         wasBufferingWhilePlaying = false
                         startDriftSync()
+                        if (shouldSuppressResync) {
+                            clearExplicitSeekResyncMarker()
+                        }
                     }
                     DanmakuSyncAction.PauseOnly -> {
                         if (playbackState == Player.STATE_BUFFERING) {
@@ -1077,20 +1114,23 @@ class DanmakuManager private constructor(
                     ) == DanmakuSyncAction.HardResync
                 ) {
                     Log.w(TAG, " Seek detected: ${oldPosition.positionMs}ms -> ${newPosition.positionMs}ms")
-                    
-                    //  关键修复：Seek 时重新调用 setData(list, 0) + start(newPosition)
-                    cachedDanmakuList?.let { list ->
-                        Log.w(TAG, " Re-setting data with playTime=0, then start at ${newPosition.positionMs}ms")
-                        resyncDanmakuTimeline(
-                            list = list,
-                            positionMs = newPosition.positionMs,
-                            shouldPlay = exoPlayer.isPlaying,
-                            reason = "seek_discontinuity"
-                        )
-                        Log.w(TAG, " Danmaku resynced at ${newPosition.positionMs}ms")
-                    } ?: run {
-                        controller?.clear()
-                        Log.w(TAG, " No cached danmaku, just cleared screen")
+                    if (shouldSuppressFollowupHardResync(newPosition.positionMs)) {
+                        Log.w(TAG, " Skip duplicate danmaku hard resync after explicit seek at ${newPosition.positionMs}ms (seek_discontinuity)")
+                    } else {
+                        //  关键修复：Seek 时重新调用 setData(list, 0) + start(newPosition)
+                        cachedDanmakuList?.let { list ->
+                            Log.w(TAG, " Re-setting data with playTime=0, then start at ${newPosition.positionMs}ms")
+                            resyncDanmakuTimeline(
+                                list = list,
+                                positionMs = newPosition.positionMs,
+                                shouldPlay = exoPlayer.isPlaying,
+                                reason = "seek_discontinuity"
+                            )
+                            Log.w(TAG, " Danmaku resynced at ${newPosition.positionMs}ms")
+                        } ?: run {
+                            controller?.clear()
+                            Log.w(TAG, " No cached danmaku, just cleared screen")
+                        }
                     }
                 }
             }
@@ -1186,6 +1226,7 @@ class DanmakuManager private constructor(
         Log.w(TAG, " loadDanmaku: New cid=$cid, loading from network")
         isLoading = true
         cachedCid = cid
+        clearExplicitSeekResyncMarker()
         cachedDanmakuList = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
@@ -1357,7 +1398,7 @@ class DanmakuManager private constructor(
      */
     fun seekTo(positionMs: Long) {
         Log.w(TAG, "⏭️ seekTo($positionMs) - refreshing danmaku")
-        
+        markExplicitSeekResync(positionMs)
         cachedDanmakuList?.let { list ->
             resyncDanmakuTimeline(
                 list = list,
@@ -1498,6 +1539,7 @@ class DanmakuManager private constructor(
         
         isPlaying = false
         isLoading = false
+        clearExplicitSeekResyncMarker()
         
         Log.d(TAG, " All references cleared")
     }
@@ -1567,6 +1609,7 @@ class DanmakuManager private constructor(
         rawDanmakuList = null
         _advancedDanmakuFlow.value = emptyList()
         cachedCid = 0L
+        clearExplicitSeekResyncMarker()
         
         Log.d(TAG, " DanmakuManager fully released")
     }

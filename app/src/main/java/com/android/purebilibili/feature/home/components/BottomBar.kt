@@ -570,11 +570,21 @@ fun FrostedBottomBar(
     
     // 🔒 [防抖]
     var lastClickTime by remember { mutableStateOf(0L) }
+    var lastClickedItem by remember { mutableStateOf<BottomNavItem?>(null) }
     val debounceClick: (BottomNavItem, () -> Unit) -> Unit = remember {
         { item, action ->
             val currentTime = System.currentTimeMillis()
-            if (currentTime - lastClickTime > 200) {
+            if (
+                shouldAcceptBottomBarTap(
+                    tappedItem = item,
+                    lastTappedItem = lastClickedItem,
+                    currentTimeMillis = currentTime,
+                    lastTapTimeMillis = lastClickTime,
+                    debounceWindowMillis = 200L
+                )
+            ) {
                 lastClickTime = currentTime
+                lastClickedItem = item
                 action()
             }
         }
@@ -1253,6 +1263,18 @@ internal fun performMaterialBottomBarTap(
 ) {
     haptic(HapticType.LIGHT)
     onClick()
+}
+
+internal fun shouldAcceptBottomBarTap(
+    tappedItem: BottomNavItem,
+    lastTappedItem: BottomNavItem?,
+    currentTimeMillis: Long,
+    lastTapTimeMillis: Long,
+    debounceWindowMillis: Long
+): Boolean {
+    if (lastTappedItem == null) return true
+    if (tappedItem != lastTappedItem) return true
+    return currentTimeMillis - lastTapTimeMillis > debounceWindowMillis
 }
 
 internal fun shouldUseBottomReselectCombinedClickable(

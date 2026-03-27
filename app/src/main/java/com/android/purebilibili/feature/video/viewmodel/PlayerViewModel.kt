@@ -187,6 +187,12 @@ internal data class FavoriteFolderMutation(
     val removeFolderIds: Set<Long>
 )
 
+internal data class FavoriteFolderSaveEvent(
+    val aid: Long,
+    val isFavorited: Boolean,
+    val version: Long
+)
+
 internal data class ExternalPlaylistSyncDecision(
     val keepExternalPlaylist: Boolean,
     val matchedIndex: Int = -1
@@ -207,6 +213,20 @@ internal fun shouldBootstrapPlayerContext(
     hasGlobalContext: Boolean
 ): Boolean {
     return !hasBoundContext && hasGlobalContext
+}
+
+internal fun resolveFavoriteFolderDialogTargetAid(
+    requestedAid: Long?,
+    currentAid: Long?
+): Long? {
+    return requestedAid?.takeIf { it > 0L } ?: currentAid?.takeIf { it > 0L }
+}
+
+internal fun shouldSyncFavoriteFolderUiState(
+    targetAid: Long?,
+    currentAid: Long?
+): Boolean {
+    return targetAid != null && currentAid != null && targetAid > 0L && targetAid == currentAid
 }
 
 internal fun shouldApplyVideoLoadResult(
@@ -382,6 +402,18 @@ internal fun clearSubtitleFields(state: PlayerUiState.Success): PlayerUiState.Su
         subtitlePrimaryCues = emptyList(),
         subtitleSecondaryCues = emptyList()
     )
+}
+
+internal fun clearTransientPlaybackPreviewData(state: PlayerUiState.Success): PlayerUiState.Success {
+    return if (state.videoshotData == null) state else state.copy(videoshotData = null)
+}
+
+internal fun shouldApplyVideoshotResult(
+    currentState: PlayerUiState.Success,
+    videoshotBvid: String,
+    videoshotCid: Long
+): Boolean {
+    return currentState.info.bvid == videoshotBvid && currentState.info.cid == videoshotCid
 }
 
 internal data class SubtitleTrackLoadDecision(
@@ -812,8 +844,12 @@ class PlayerViewModel : ViewModel() {
     private val _isSavingFavoriteFolders = MutableStateFlow(false)
     val isSavingFavoriteFolders = _isSavingFavoriteFolders.asStateFlow()
 
+    private val _favoriteFolderSaveEvent = MutableStateFlow<FavoriteFolderSaveEvent?>(null)
+    internal val favoriteFolderSaveEvent = _favoriteFolderSaveEvent.asStateFlow()
+
     private var lastSavedFavoriteFolderIds: Set<Long> = emptySet()
     private var favoriteFoldersBoundAid: Long? = null
+    private var favoriteFolderSaveEventVersion: Long = 0L
 
     private val _followGroupDialogVisible = MutableStateFlow(false)
     val followGroupDialogVisible = _followGroupDialogVisible.asStateFlow()
@@ -832,9 +868,13 @@ class PlayerViewModel : ViewModel() {
 
     private var followGroupTargetMid: Long = 0L
     
-    fun showFavoriteFolderDialog() {
-        val current = _uiState.value as? PlayerUiState.Success ?: return
-        if (favoriteFoldersBoundAid != null && favoriteFoldersBoundAid != current.info.aid) {
+    fun showFavoriteFolderDialog(requestedAid: Long? = null) {
+        val currentAid = (_uiState.value as? PlayerUiState.Success)?.info?.aid
+        val targetAid = resolveFavoriteFolderDialogTargetAid(
+            requestedAid = requestedAid,
+            currentAid = currentAid
+        ) ?: return
+        if (favoriteFoldersBoundAid != null && favoriteFoldersBoundAid != targetAid) {
             lastSavedFavoriteFolderIds = emptySet()
             _favoriteSelectedFolderIds.value = emptySet()
             _favoriteFolders.value = emptyList()
@@ -842,9 +882,9 @@ class PlayerViewModel : ViewModel() {
         _favoriteFolderDialogVisible.value = true
         _favoriteSelectedFolderIds.value = lastSavedFavoriteFolderIds
         val hasCacheForCurrentAid =
-            favoriteFoldersBoundAid == current.info.aid && _favoriteFolders.value.isNotEmpty()
+            favoriteFoldersBoundAid == targetAid && _favoriteFolders.value.isNotEmpty()
         if (!hasCacheForCurrentAid) {
-            loadFavoriteFolders(aid = current.info.aid)
+            loadFavoriteFolders(aid = targetAid)
         }
     }
     
@@ -885,7 +925,10 @@ class PlayerViewModel : ViewModel() {
                         selectedFromServer
                     }
 
-                    updateFavoriteUiState(lastSavedFavoriteFolderIds)
+                    updateFavoriteUiState(
+                        targetAid = aid,
+                        selectedFolderIds = lastSavedFavoriteFolderIds
+                    )
                 },
                 onFailure = { e ->
                     toast("加载收藏夹失败: ${e.message}")
@@ -911,8 +954,12 @@ class PlayerViewModel : ViewModel() {
     }
 
     fun saveFavoriteFolderSelection() {
-        val current = _uiState.value as? PlayerUiState.Success ?: return
         if (_isSavingFavoriteFolders.value) return
+        val currentAid = (_uiState.value as? PlayerUiState.Success)?.info?.aid
+        val targetAid = resolveFavoriteFolderDialogTargetAid(
+            requestedAid = favoriteFoldersBoundAid,
+            currentAid = currentAid
+        ) ?: return
 
         val selectedFolderIds = _favoriteSelectedFolderIds.value
         val originalFolderIds = lastSavedFavoriteFolderIds
@@ -930,7 +977,7 @@ class PlayerViewModel : ViewModel() {
         viewModelScope.launch {
             _isSavingFavoriteFolders.value = true
             val result = interactionUseCase.updateFavoriteFolders(
-                aid = current.info.aid,
+                aid = targetAid,
                 addFolderIds = mutation.addFolderIds,
                 removeFolderIds = mutation.removeFolderIds
             )
@@ -944,9 +991,17 @@ class PlayerViewModel : ViewModel() {
                         )
                     }
                 }
-                applyFavoriteSaveUiState(
-                    originalFolderIds = originalFolderIds,
-                    selectedFolderIds = selectedFolderIds
+                if (shouldSyncFavoriteFolderUiState(targetAid = targetAid, currentAid = currentAid)) {
+                    applyFavoriteSaveUiState(
+                        originalFolderIds = originalFolderIds,
+                        selectedFolderIds = selectedFolderIds
+                    )
+                }
+                favoriteFolderSaveEventVersion += 1L
+                _favoriteFolderSaveEvent.value = FavoriteFolderSaveEvent(
+                    aid = targetAid,
+                    isFavorited = selectedFolderIds.isNotEmpty(),
+                    version = favoriteFolderSaveEventVersion
                 )
                 dismissFavoriteFolderDialog()
                 toast(if (selectedFolderIds.isEmpty()) "已取消收藏" else "收藏设置已保存")
@@ -980,7 +1035,11 @@ class PlayerViewModel : ViewModel() {
         }
     }
 
-    private fun updateFavoriteUiState(selectedFolderIds: Set<Long>) {
+    private fun updateFavoriteUiState(targetAid: Long?, selectedFolderIds: Set<Long>) {
+        val currentAid = (_uiState.value as? PlayerUiState.Success)?.info?.aid
+        if (!shouldSyncFavoriteFolderUiState(targetAid = targetAid, currentAid = currentAid)) {
+            return
+        }
         _uiState.update { state ->
             if (state is PlayerUiState.Success) {
                 state.copy(isFavorited = selectedFolderIds.isNotEmpty())
@@ -2479,17 +2538,40 @@ class PlayerViewModel : ViewModel() {
     
     fun toggleLike() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
+        toggleLikeForVideo(
+            aid = current.info.aid,
+            bvid = current.info.bvid,
+            currentlyLiked = current.isLiked
+        )
+    }
+
+    fun toggleLikeForVideo(
+        aid: Long,
+        bvid: String,
+        currentlyLiked: Boolean,
+        onResult: ((Boolean) -> Unit)? = null
+    ) {
+        if (aid <= 0L || bvid.isBlank()) return
         viewModelScope.launch {
-            interactionUseCase.toggleLike(current.info.aid, current.isLiked, currentBvid)
-                .onSuccess { 
-                    val newStat = current.info.stat.copy(like = current.info.stat.like + if (it) 1 else -1)
-                    _uiState.value = current.copy(info = current.info.copy(stat = newStat), isLiked = it)
-                    if (it) _likeBurstVisible.value = true
+            interactionUseCase.toggleLike(aid, currentlyLiked, bvid)
+                .onSuccess { liked ->
+                    val current = _uiState.value as? PlayerUiState.Success
+                    if (current != null && current.info.aid == aid && current.info.bvid == bvid) {
+                        val newStat = current.info.stat.copy(
+                            like = (current.info.stat.like + if (liked) 1 else -1).coerceAtLeast(0)
+                        )
+                        _uiState.value = current.copy(
+                            info = current.info.copy(stat = newStat),
+                            isLiked = liked
+                        )
+                    }
+                    onResult?.invoke(liked)
+                    if (liked) _likeBurstVisible.value = true
                     //  彩蛋：使用趣味消息（如果设置开启）
-                    val message = if (it && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
+                    val message = if (liked && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
                         com.android.purebilibili.core.util.EasterEggs.getLikeMessage()
                     } else {
-                        if (it) "已点赞" else "已取消点赞"
+                        if (liked) "已点赞" else "已取消点赞"
                     }
                     toast(message)
                 }
@@ -3304,7 +3386,13 @@ class PlayerViewModel : ViewModel() {
                 val videoshotData = VideoRepository.getVideoshot(bvid, cid)
                 if (videoshotData != null && videoshotData.isValid) {
                     _uiState.update { current ->
-                        if (current is PlayerUiState.Success) {
+                        if (current is PlayerUiState.Success &&
+                            shouldApplyVideoshotResult(
+                                currentState = current,
+                                videoshotBvid = bvid,
+                                videoshotCid = cid
+                            )
+                        ) {
                             current.copy(videoshotData = videoshotData)
                         } else current
                     }
@@ -4545,9 +4633,32 @@ class PlayerViewModel : ViewModel() {
             val audioPref = appContext?.let { 
                 com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it) 
             } ?: -1
+            val videoCodecPreference = _videoCodecPreference.value
+            val videoSecondCodecPreference = _videoSecondCodecPreference.value
+            val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+            val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
             
-            val result = playbackUseCase.changeQualityFromCache(qualityId, current.cachedDashVideos, current.cachedDashAudios, currentPos, audioPref)
-                ?: playbackUseCase.changeQualityFromApi(currentBvid, currentCid, qualityId, currentPos, audioPref)
+            val result = playbackUseCase.changeQualityFromCache(
+                qualityId = qualityId,
+                cachedVideos = current.cachedDashVideos,
+                cachedAudios = current.cachedDashAudios,
+                currentPos = currentPos,
+                audioQualityPreference = audioPref,
+                videoCodecPreference = videoCodecPreference,
+                videoSecondCodecPreference = videoSecondCodecPreference,
+                isHevcSupported = isHevcSupported,
+                isAv1Supported = isAv1Supported
+            ) ?: playbackUseCase.changeQualityFromApi(
+                bvid = currentBvid,
+                cid = currentCid,
+                qualityId = qualityId,
+                currentPos = currentPos,
+                audioQualityPreference = audioPref,
+                videoCodecPreference = videoCodecPreference,
+                videoSecondCodecPreference = videoSecondCodecPreference,
+                isHevcSupported = isHevcSupported,
+                isAv1Supported = isAv1Supported
+            )
             
             if (result != null) {
                 _uiState.value = current.copy(
@@ -4587,7 +4698,7 @@ class PlayerViewModel : ViewModel() {
         if (page.cid == currentCid) { toast("\u5df2\u662f\u5f53\u524d\u5206P"); return }
         playbackCoordinator.dismissResumeSuggestion()
         subtitleLoadToken += 1
-        val subtitleClearedState = clearSubtitleFields(current)
+        val subtitleClearedState = clearTransientPlaybackPreviewData(clearSubtitleFields(current))
         val previousCid = currentCid
         if (currentBvid.isNotEmpty() && previousCid > 0L) {
             playbackUseCase.savePosition(currentBvid, previousCid)
@@ -4642,6 +4753,7 @@ class PlayerViewModel : ViewModel() {
                         )
                         interactiveCurrentEdgeId = 0L
                         loadPlayerInfo(currentBvid, page.cid)
+                        loadVideoshot(currentBvid, page.cid)
                         toast("\u5df2\u5207\u6362\u81f3 P${pageIndex + 1}")
                         return@launch
                     }
@@ -4779,7 +4891,7 @@ class PlayerViewModel : ViewModel() {
 
             currentCid = targetCid
             subtitleLoadToken += 1
-            _uiState.value = clearSubtitleFields(current).copy(
+            _uiState.value = clearTransientPlaybackPreviewData(clearSubtitleFields(current)).copy(
                 info = current.info.copy(cid = targetCid),
                 playUrl = selection.videoUrl,
                 audioUrl = selection.audioUrl,

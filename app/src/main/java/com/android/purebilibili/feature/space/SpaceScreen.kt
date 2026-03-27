@@ -640,36 +640,11 @@ private fun SpaceContent(
                                 )
                                 
                                 Spacer(Modifier.weight(1f))
-                                
-                                // 排序下拉 - 简化显示当前排序方式
-                                Row(
-                                    modifier = Modifier.clickable { 
-                                        // 切换排序
-                                        val next = when (state.sortOrder) {
-                                            VideoSortOrder.PUBDATE -> VideoSortOrder.CLICK
-                                            VideoSortOrder.CLICK -> VideoSortOrder.STOW
-                                            VideoSortOrder.STOW -> VideoSortOrder.PUBDATE
-                                        }
-                                        onSortOrderClick(next)
-                                    },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = when (state.sortOrder) {
-                                            VideoSortOrder.PUBDATE -> "最新发布"
-                                            VideoSortOrder.CLICK -> "最多播放"
-                                            VideoSortOrder.STOW -> "最多收藏"
-                                        },
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Icon(
-                                        CupertinoIcons.Default.ChevronDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+
+                                SpaceVideoSortDropdown(
+                                    currentOrder = state.sortOrder,
+                                    onOrderClick = onSortOrderClick
+                                )
                             }
                         }
                         
@@ -1808,6 +1783,68 @@ private fun CategoryChip(
             else 
                 MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * 投稿视频排序下拉
+ */
+@Composable
+private fun SpaceVideoSortDropdown(
+    currentOrder: VideoSortOrder,
+    onOrderClick: (VideoSortOrder) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = currentOrder.displayName,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Icon(
+                CupertinoIcons.Default.ChevronDown,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+        ) {
+            VideoSortOrder.entries.forEach { order ->
+                DropdownMenuItem(
+                    text = { Text(order.displayName) },
+                    onClick = {
+                        expanded = false
+                        if (order != currentOrder) {
+                            onOrderClick(order)
+                        }
+                    },
+                    leadingIcon = {
+                        if (order == currentOrder) {
+                            Icon(
+                                CupertinoIcons.Default.Checkmark,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                )
+            }
+        }
     }
 }
 

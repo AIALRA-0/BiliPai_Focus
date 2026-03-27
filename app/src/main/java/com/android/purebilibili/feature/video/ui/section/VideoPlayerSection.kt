@@ -277,6 +277,13 @@ internal fun shouldShowDanmakuLayers(
     return true
 }
 
+internal fun resolveDanmakuLayerTopOffsetPx(
+    isFullscreen: Boolean,
+    statusBarHeightPx: Int
+): Int {
+    return 0
+}
+
 internal fun resolveHorizontalSeekDeltaMs(
     isFullscreen: Boolean,
     fullscreenSwipeSeekEnabled: Boolean,
@@ -1744,7 +1751,7 @@ fun VideoPlayerSection(
                                 offset.x > screenWidth * 2 / 3 -> {
                                     val seekMs = seekForwardSeconds * 1000L
                                     val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
-                                    player.seekTo(newPos)
+                                    seekPlayerFromUserAction(player, newPos)
                                     danmakuManager.seekTo(newPos)
                                     seekFeedbackText = "+${seekForwardSeconds}s"
                                     seekFeedbackVisible = true
@@ -1756,7 +1763,7 @@ fun VideoPlayerSection(
                                 offset.x < screenWidth / 3 -> {
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
-                                    player.seekTo(newPos)
+                                    seekPlayerFromUserAction(player, newPos)
                                     danmakuManager.seekTo(newPos)
                                     seekFeedbackText = "-${seekBackwardSeconds}s"
                                     seekFeedbackVisible = true
@@ -2515,7 +2522,10 @@ fun VideoPlayerSection(
             }
             
             //  非全屏时的顶部偏移量
-            val topOffset = if (isFullscreen) 0 else statusBarHeightPx + 20
+            val topOffset = resolveDanmakuLayerTopOffsetPx(
+                isFullscreen = isFullscreen,
+                statusBarHeightPx = statusBarHeightPx
+            )
             
             //  [修复] 移除 key(isFullscreen)，避免横竖屏切换时重建 DanmakuView 导致弹幕消失
             // 使用 remember 保存 DanmakuView 引用，在 update 回调中处理尺寸变化

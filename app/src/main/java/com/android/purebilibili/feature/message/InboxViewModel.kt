@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
+import com.android.purebilibili.data.model.response.MessageFeedUnreadData
 import com.android.purebilibili.data.model.response.MessageUnreadData
 import com.android.purebilibili.data.model.response.SessionItem
 import com.android.purebilibili.data.repository.MessageRepository
@@ -29,6 +30,7 @@ data class InboxUiState(
     val isRefreshing: Boolean = false,
     val sessions: List<SessionItem> = emptyList(),
     val unreadData: MessageUnreadData? = null,
+    val feedUnreadData: MessageFeedUnreadData? = null,
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
     val error: String? = null,
@@ -71,6 +73,7 @@ class InboxViewModel : ViewModel() {
             
             // 并行加载未读数和会话列表
             val unreadResult = MessageRepository.getUnreadCount()
+            val feedUnreadResult = MessageRepository.getFeedUnread()
             // 初始加载，endTs = 0
             val sessionsResult = MessageRepository.getSessions(
                 sessionType = 4, // 4=所有消息 (包含企业号自动回复)
@@ -79,6 +82,10 @@ class InboxViewModel : ViewModel() {
             
             unreadResult.onSuccess { data ->
                 _uiState.value = _uiState.value.copy(unreadData = data)
+            }
+
+            feedUnreadResult.onSuccess { data ->
+                _uiState.value = _uiState.value.copy(feedUnreadData = data)
             }
             
             sessionsResult.fold(
@@ -263,6 +270,7 @@ class InboxViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(isRefreshing = true, error = null)
             
             val unreadResult = MessageRepository.getUnreadCount()
+            val feedUnreadResult = MessageRepository.getFeedUnread()
             // 刷新时重置游标
             val sessionsResult = MessageRepository.getSessions(
                 sessionType = 4, // 4=所有消息
@@ -271,6 +279,10 @@ class InboxViewModel : ViewModel() {
             
             unreadResult.onSuccess { data ->
                 _uiState.value = _uiState.value.copy(unreadData = data)
+            }
+
+            feedUnreadResult.onSuccess { data ->
+                _uiState.value = _uiState.value.copy(feedUnreadData = data)
             }
             
             sessionsResult.fold(

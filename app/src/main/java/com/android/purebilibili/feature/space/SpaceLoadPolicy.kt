@@ -5,6 +5,8 @@ import com.android.purebilibili.data.model.response.SeasonArchiveItem
 import com.android.purebilibili.data.model.response.SeasonItem
 import com.android.purebilibili.data.model.response.SeriesArchiveItem
 import com.android.purebilibili.data.model.response.SeriesItem
+import com.android.purebilibili.data.model.response.SpaceVideoItem
+import com.android.purebilibili.data.model.response.VideoSortOrder
 
 enum class SpaceSearchScope {
     NONE,
@@ -76,4 +78,39 @@ internal fun applySpaceSupplementalData(
             it.copy(hasLoaded = hasCollectionsLoaded)
         }
     )
+}
+
+internal fun resolveInitialSpaceVideoPage(
+    order: VideoSortOrder,
+    totalCount: Int,
+    pageSize: Int
+): Int {
+    val lastPage = resolveSpaceVideoLastPage(totalCount = totalCount, pageSize = pageSize)
+    return if (order == VideoSortOrder.OLDEST_PUBDATE) lastPage else 1
+}
+
+internal fun resolveNextSpaceVideoPage(
+    order: VideoSortOrder,
+    currentPage: Int,
+    totalCount: Int,
+    pageSize: Int
+): Int? {
+    val lastPage = resolveSpaceVideoLastPage(totalCount = totalCount, pageSize = pageSize)
+    if (lastPage <= 0) return null
+    return when (order) {
+        VideoSortOrder.OLDEST_PUBDATE -> currentPage.takeIf { it > 1 }?.minus(1)
+        else -> currentPage.takeIf { it < lastPage }?.plus(1)
+    }
+}
+
+internal fun normalizeSpaceVideoPage(
+    order: VideoSortOrder,
+    videos: List<SpaceVideoItem>
+): List<SpaceVideoItem> {
+    return if (order == VideoSortOrder.OLDEST_PUBDATE) videos.asReversed() else videos
+}
+
+private fun resolveSpaceVideoLastPage(totalCount: Int, pageSize: Int): Int {
+    if (totalCount <= 0 || pageSize <= 0) return 1
+    return ((totalCount - 1) / pageSize) + 1
 }

@@ -6,6 +6,9 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.UUID
 
 /**
@@ -14,6 +17,7 @@ import java.util.UUID
  */
 object MessageRepository {
     private val api = NetworkModule.messageApi
+    private val bilibiliApi = NetworkModule.api
     
     // 设备ID缓存 (用于发送私信)
     private var deviceIdCache: String? = null
@@ -24,6 +28,59 @@ object MessageRepository {
     private fun getDeviceId(): String {
         return deviceIdCache ?: UUID.randomUUID().toString().also {
             deviceIdCache = it
+        }
+    }
+
+    private suspend fun sendMessage(
+        receiverId: Long,
+        receiverType: Int,
+        msgType: Int,
+        content: String
+    ): Result<SendMessageData> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = TokenManager.csrfCache
+            if (csrf.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("请先登录"))
+            }
+
+            val senderUid = TokenManager.midCache
+            if (senderUid == null || senderUid <= 0) {
+                return@withContext Result.failure(Exception("无法获取用户信息，请重新登录"))
+            }
+
+            val response = api.sendMsg(
+                senderUid = senderUid,
+                receiverId = receiverId,
+                receiverType = receiverType,
+                msgType = msgType,
+                content = content,
+                timestamp = System.currentTimeMillis() / 1000,
+                devId = getDeviceId(),
+                csrf = csrf,
+                csrfToken = csrf
+            )
+
+            if (response.code == 0 && response.data != null) {
+                Result.success(response.data)
+            } else {
+                val errorMsg = when (response.code) {
+                    -101 -> "请先登录"
+                    -400 -> "请求参数错误"
+                    21007 -> "消息过长，无法发送"
+                    21015 -> "需绑定手机号才能发送消息"
+                    21020 -> "发送频率过快，请稍后再试"
+                    21026 -> "不能给自己发消息"
+                    21046 -> "发送过于频繁，请24小时后再试"
+                    21047 -> "对方未关注你，最多发送1条消息"
+                    25003 -> "对方隐私设置限制，无法发送"
+                    25005 -> "已拉黑对方，请先解除拉黑"
+                    else -> response.message.ifEmpty { "发送失败 (${response.code})" }
+                }
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "sendMessage exception: ${e.message}", e)
+            Result.failure(e)
         }
     }
     
@@ -45,6 +102,142 @@ object MessageRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("MessageRepo", "getUnreadCount exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getFeedUnread(): Result<MessageFeedUnreadData> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getFeedUnread()
+            if (response.code == 0 && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "获取消息中心未读数失败 (${response.code})" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "getFeedUnread exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getReplyFeed(cursor: Long? = null, cursorTime: Long? = null): Result<MessageFeedReplyData> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.getReplyFeed(cursor = cursor, cursorTime = cursorTime)
+                if (response.code == 0 && response.data != null) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "获取回复消息失败 (${response.code})" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MessageRepo", "getReplyFeed exception: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    suspend fun getAtFeed(cursor: Long? = null, cursorTime: Long? = null): Result<MessageFeedAtData> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.getAtFeed(cursor = cursor, cursorTime = cursorTime)
+                if (response.code == 0 && response.data != null) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "获取@我消息失败 (${response.code})" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MessageRepo", "getAtFeed exception: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    suspend fun getLikeFeed(cursor: Long? = null, cursorTime: Long? = null): Result<MessageFeedLikeData> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.getLikeFeed(cursor = cursor, cursorTime = cursorTime)
+                if (response.code == 0 && response.data != null) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "获取点赞消息失败 (${response.code})" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MessageRepo", "getLikeFeed exception: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    suspend fun getSystemNotices(cursor: Long? = null): Result<List<SystemNoticeItem>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.getSystemNotices(cursor = cursor)
+                if (response.code == 0) {
+                    Result.success(response.data ?: emptyList())
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "获取系统通知失败 (${response.code})" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MessageRepo", "getSystemNotices exception: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    suspend fun updateSystemNoticeCursor(cursor: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = TokenManager.csrfCache
+            if (csrf.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("请先登录"))
+            }
+
+            val response = api.updateSystemNoticeCursor(csrf = csrf, cursor = cursor)
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "更新系统通知已读失败" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "updateSystemNoticeCursor exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteFeedItem(type: Int, id: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = TokenManager.csrfCache
+            if (csrf.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("请先登录"))
+            }
+
+            val response = api.deleteFeedItem(type = type, id = id, csrf = csrf, csrfToken = csrf)
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "删除消息失败" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "deleteFeedItem exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setLikeFeedNotice(id: Long, enabled: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = TokenManager.csrfCache
+            if (csrf.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("请先登录"))
+            }
+
+            val response = api.setFeedNotice(
+                id = id,
+                noticeState = if (enabled) 0 else 1,
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "更新点赞通知设置失败" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "setLikeFeedNotice exception: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -152,56 +345,107 @@ object MessageRepository {
         receiverType: Int = 1
     ): Result<SendMessageData> = withContext(Dispatchers.IO) {
         try {
+            com.android.purebilibili.core.util.Logger.d("MessageRepo", "sendTextMessage: to=$receiverId, content=$content")
+
+            sendMessage(
+                receiverId = receiverId,
+                receiverType = receiverType,
+                msgType = 1,
+                content = MessageSendPayloadFactory.buildTextContent(content)
+            ).also { result ->
+                result.onSuccess { data ->
+                    com.android.purebilibili.core.util.Logger.d("MessageRepo", "sendTextMessage success: msgKey=${data.msg_key}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "sendTextMessage exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun withdrawMessage(
+        receiverId: Long,
+        msgKey: Long,
+        receiverType: Int = 1
+    ): Result<SendMessageData> = withContext(Dispatchers.IO) {
+        try {
+            com.android.purebilibili.core.util.Logger.d("MessageRepo", "withdrawMessage: to=$receiverId, msgKey=$msgKey")
+
+            sendMessage(
+                receiverId = receiverId,
+                receiverType = receiverType,
+                msgType = 5,
+                content = MessageSendPayloadFactory.buildWithdrawContent(msgKey)
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "withdrawMessage exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun uploadPrivateImage(
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): Result<UploadCommentImageData> = withContext(Dispatchers.IO) {
+        try {
             val csrf = TokenManager.csrfCache
             if (csrf.isNullOrEmpty()) {
                 return@withContext Result.failure(Exception("请先登录"))
             }
-            
-            // 获取当前用户 mid
-            val senderUid = TokenManager.midCache
-            if (senderUid == null || senderUid <= 0) {
-                return@withContext Result.failure(Exception("无法获取用户信息，请重新登录"))
-            }
-            
-            // 构造消息内容 JSON
-            val contentJson = """{"content":"${content.replace("\"", "\\\"").replace("\n", "\\n")}"}"""
-            
-            com.android.purebilibili.core.util.Logger.d("MessageRepo", "sendTextMessage: to=$receiverId, content=$content")
-            
-            val response = api.sendMsg(
-                senderUid = senderUid,
-                receiverId = receiverId,
-                receiverType = receiverType,
-                msgType = 1,  // 1=文字消息
-                content = contentJson,
-                timestamp = System.currentTimeMillis() / 1000,
-                devId = getDeviceId(),
-                csrf = csrf,
-                csrfToken = csrf
+
+            val mediaType = mimeType.toMediaType()
+            val fileBody = bytes.toRequestBody(mediaType)
+            val part = MultipartBody.Part.createFormData(
+                "file_up",
+                fileName.ifBlank { "message_image.jpg" },
+                fileBody
             )
-            
+            val textMedia = "text/plain".toMediaType()
+            val bizBody = "im".toRequestBody(textMedia)
+            val csrfBody = csrf.toRequestBody(textMedia)
+
+            val response = bilibiliApi.uploadPrivateMessageImage(
+                fileUp = part,
+                biz = bizBody,
+                csrf = csrfBody
+            )
+
             if (response.code == 0 && response.data != null) {
-                com.android.purebilibili.core.util.Logger.d("MessageRepo", "sendTextMessage success: msgKey=${response.data.msg_key}")
                 Result.success(response.data)
             } else {
-                val errorMsg = when (response.code) {
-                    -101 -> "请先登录"
-                    -400 -> "请求参数错误"
-                    21007 -> "消息过长，无法发送"
-                    21015 -> "需绑定手机号才能发送消息"
-                    21020 -> "发送频率过快，请稍后再试"
-                    21026 -> "不能给自己发消息"
-                    21046 -> "发送过于频繁，请24小时后再试"
-                    21047 -> "对方未关注你，最多发送1条消息"
-                    25003 -> "对方隐私设置限制，无法发送"
-                    25005 -> "已拉黑对方，请先解除拉黑"
-                    else -> response.message.ifEmpty { "发送失败 (${response.code})" }
-                }
-                android.util.Log.e("MessageRepo", "sendTextMessage failed: ${response.code} - ${response.message}")
-                Result.failure(Exception(errorMsg))
+                Result.failure(Exception(response.message.ifEmpty { "图片上传失败 (${response.code})" }))
             }
         } catch (e: Exception) {
-            android.util.Log.e("MessageRepo", "sendTextMessage exception: ${e.message}", e)
+            android.util.Log.e("MessageRepo", "uploadPrivateImage exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendImageMessage(
+        receiverId: Long,
+        imageUrl: String,
+        width: Int,
+        height: Int,
+        imageType: String,
+        size: Float,
+        receiverType: Int = 1
+    ): Result<SendMessageData> = withContext(Dispatchers.IO) {
+        try {
+            sendMessage(
+                receiverId = receiverId,
+                receiverType = receiverType,
+                msgType = 2,
+                content = MessageSendPayloadFactory.buildImageContent(
+                    imageUrl = imageUrl,
+                    width = width,
+                    height = height,
+                    imageType = imageType,
+                    size = size
+                )
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "sendImageMessage exception: ${e.message}", e)
             Result.failure(e)
         }
     }

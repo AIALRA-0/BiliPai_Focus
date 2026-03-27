@@ -468,6 +468,7 @@ fun ReplyItemView(
     hideSubPreview: Boolean = false,
     onAvatarClick: (String) -> Unit
 ) {
+    val appearance = rememberVideoCommentAppearance()
     val isUpComment = upMid > 0 && item.mid == upMid
     val showAncillaryDecorations = shouldShowReplyAncillaryDecorations(lightweightMode)
     val showSubPreview = shouldShowReplySubPreview(
@@ -548,7 +549,7 @@ fun ReplyItemView(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface) // White background for iOS list feel
+            .background(appearance.panelColor)
             .clickable { onClick() }
     ) {
         Row(
@@ -566,7 +567,7 @@ fun ReplyItemView(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(appearance.placeholderColor)
                     .clickable { onAvatarClick(item.member.mid) }
             )
             
@@ -590,7 +591,11 @@ fun ReplyItemView(
                                 text = item.member.uname,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (item.member.vip?.vipStatus == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                color = if (item.member.vip?.vipStatus == 1) {
+                                    appearance.accentColor
+                                } else {
+                                    appearance.primaryTextColor.copy(alpha = 0.9f)
+                                },
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
@@ -626,7 +631,7 @@ fun ReplyItemView(
                     ReplyMessageText(
                         text = item.content.message,
                         fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = appearance.primaryTextColor,
                         emoteMap = localEmoteMap,
                         onTimestampClick = onTimestampClick,
                         onUrlClick = onUrlClick
@@ -666,7 +671,7 @@ fun ReplyItemView(
                             }
                         },
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = appearance.secondaryTextColor.copy(alpha = 0.7f)
                     )
 
                     Spacer(modifier = Modifier.weight(1f))
@@ -681,7 +686,7 @@ fun ReplyItemView(
                         Icon(
                             imageVector = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup,
                             contentDescription = "Like",
-                            tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isLiked) appearance.accentColor else appearance.actionTint,
                             modifier = Modifier.size(16.dp)
                         )
                         if (displayLikeCount > 0) {
@@ -689,7 +694,7 @@ fun ReplyItemView(
                             Text(
                                 text = FormatUtils.formatStat(displayLikeCount.toLong()),
                                 fontSize = 12.sp,
-                                color = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isLiked) appearance.accentColor else appearance.actionTint
                             )
                         }
                     }
@@ -700,7 +705,7 @@ fun ReplyItemView(
                     Icon(
                         imageVector = CupertinoIcons.Default.MinusCircle, // Fallback Dislike
                         contentDescription = "Dislike",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = appearance.actionTint,
                         modifier = Modifier
                             .size(16.dp)
                             .clickable { /* TODO: Dislike */ }
@@ -712,7 +717,7 @@ fun ReplyItemView(
                     Icon(
                         imageVector = CupertinoIcons.Default.BubbleLeft, // iOS Bubble icon
                         contentDescription = "Reply",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = appearance.actionTint,
                         modifier = Modifier
                             .size(16.dp)
                             .clickable { onReplyClick?.invoke() ?: onSubClick(item) }
@@ -724,7 +729,7 @@ fun ReplyItemView(
                         Icon(
                             imageVector = CupertinoIcons.Default.Trash,
                             contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = appearance.actionTint,
                             modifier = Modifier
                                 .size(16.dp)
                                 .clickable { onDeleteClick() }
@@ -759,9 +764,9 @@ fun ReplyItemView(
                                     isUpComment = upMid > 0 && subReply.mid == upMid
                                 )
                             }
-                            val prefixTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                            val prefixSeparatorColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            val upTagColor = MaterialTheme.colorScheme.primary
+                            val prefixTextColor = appearance.primaryTextColor.copy(alpha = 0.8f)
+                            val prefixSeparatorColor = appearance.secondaryTextColor
+                            val upTagColor = appearance.accentColor
                             val prefix = remember(prefixTokens, prefixTextColor, prefixSeparatorColor, upTagColor) {
                                 buildAnnotatedString {
                                     prefixTokens.forEach { token ->
@@ -809,7 +814,7 @@ fun ReplyItemView(
                                 ReplyMessageText(
                                     text = subReply.content.message,
                                     fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    color = appearance.primaryTextColor.copy(alpha = 0.8f),
                                     emoteMap = subEmoteMap,
                                     maxLines = 3,
                                     onTimestampClick = onTimestampClick,
@@ -824,7 +829,7 @@ fun ReplyItemView(
                             Text(
                                 text = resolveInlineSubReplyToggleLabel(expanded = isSubPreviewExpanded),
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = appearance.accentColor,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
                                     .clickable { isSubPreviewExpanded = !isSubPreviewExpanded }
@@ -834,15 +839,22 @@ fun ReplyItemView(
                         
                         if (item.rcount > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "查看全部 ${item.rcount} 条回复 >",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium,
+                            Box(
                                 modifier = Modifier
-                                    .clickable { onSubClick(item) }
-                                    .padding(vertical = 4.dp) // Increase touch target
-                            )
+                                    .fillMaxWidth()
+                                    .heightIn(min = 44.dp)
+                                    .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
+                                    .clickable { onSubClick(item) },
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "查看全部 ${item.rcount} 条回复 >",
+                                    fontSize = 13.sp,
+                                    color = appearance.accentColor,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+                                )
+                            }
                         }
                     }
                     }
@@ -863,7 +875,7 @@ fun ReplyItemView(
         HorizontalDivider(
             modifier = Modifier.padding(start = 68.dp),
             thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+            color = appearance.dividerColor.copy(alpha = 0.25f)
         )
     }
 }
@@ -873,7 +885,7 @@ fun ReplyItemView(
  * 若整条评论是视频引用，则异步解析标题后替换为主题色标题。
  */
 @Composable
-private fun ReplyMessageText(
+internal fun ReplyMessageText(
     text: String,
     fontSize: TextUnit,
     color: Color = MaterialTheme.colorScheme.onSurface,
@@ -910,7 +922,8 @@ private fun ReplyMessageText(
             maxLines = maxLines,
             url = videoReference.navigationUrl,
             onUrlClick = onUrlClick,
-            prefix = prefix
+            prefix = prefix,
+            copyText = text.trim()
         )
     } else {
         RichCommentText(
@@ -933,7 +946,8 @@ private fun ReplyVideoReferenceText(
     maxLines: Int,
     url: String,
     onUrlClick: ((String) -> Unit)?,
-    prefix: AnnotatedString? = null
+    prefix: AnnotatedString? = null,
+    copyText: String = text
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val annotatedString = remember(text, url, prefix, primaryColor) {
@@ -954,20 +968,28 @@ private fun ReplyVideoReferenceText(
         }
     }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
     val modifier = if (onUrlClick != null) {
         Modifier.pointerInput(annotatedString, url) {
-            detectTapGestures { offset ->
-                textLayoutResult?.let { layoutResult ->
-                    val position = layoutResult.getOffsetForPosition(offset)
-                    annotatedString.getStringAnnotations(
-                        tag = "URL",
-                        start = maxOf(0, position - 1),
-                        end = minOf(annotatedString.length, position + 1)
-                    ).firstOrNull()?.let { annotation ->
-                        onUrlClick(annotation.item)
+            detectTapGestures(
+                onLongPress = {
+                    if (copyText.isNotEmpty()) {
+                        showCopySelectionDialog = true
+                    }
+                },
+                onTap = { offset ->
+                    textLayoutResult?.let { layoutResult ->
+                        val position = layoutResult.getOffsetForPosition(offset)
+                        annotatedString.getStringAnnotations(
+                            tag = "URL",
+                            start = maxOf(0, position - 1),
+                            end = minOf(annotatedString.length, position + 1)
+                        ).firstOrNull()?.let { annotation ->
+                            onUrlClick(annotation.item)
+                        }
                     }
                 }
-            }
+            )
         }
     } else {
         Modifier
@@ -982,6 +1004,14 @@ private fun ReplyVideoReferenceText(
         onTextLayout = { textLayoutResult = it },
         modifier = modifier
     )
+
+    if (showCopySelectionDialog) {
+        CopySelectionDialog(
+            text = copyText,
+            title = "选择评论内容",
+            onDismiss = { showCopySelectionDialog = false }
+        )
+    }
 }
 
 /**

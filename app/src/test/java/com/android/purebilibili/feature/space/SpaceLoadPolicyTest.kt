@@ -9,12 +9,95 @@ import com.android.purebilibili.data.model.response.SeriesItem
 import com.android.purebilibili.data.model.response.SeriesMeta
 import com.android.purebilibili.data.model.response.SpaceTopArcData
 import com.android.purebilibili.data.model.response.SpaceUserInfo
+import com.android.purebilibili.data.model.response.SpaceVideoItem
+import com.android.purebilibili.data.model.response.VideoSortOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SpaceLoadPolicyTest {
+
+    @Test
+    fun `oldest publish sort keeps pubdate api key but exposes dedicated label`() {
+        assertEquals("pubdate", VideoSortOrder.OLDEST_PUBDATE.apiValue)
+        assertEquals("最早发布", VideoSortOrder.OLDEST_PUBDATE.displayName)
+    }
+
+    @Test
+    fun `resolveInitialSpaceVideoPage starts from last page for oldest publish sort`() {
+        assertEquals(
+            4,
+            resolveInitialSpaceVideoPage(
+                order = VideoSortOrder.OLDEST_PUBDATE,
+                totalCount = 95,
+                pageSize = 30
+            )
+        )
+        assertEquals(
+            1,
+            resolveInitialSpaceVideoPage(
+                order = VideoSortOrder.PUBDATE,
+                totalCount = 95,
+                pageSize = 30
+            )
+        )
+    }
+
+    @Test
+    fun `resolveNextSpaceVideoPage walks backward for oldest publish sort`() {
+        assertEquals(
+            3,
+            resolveNextSpaceVideoPage(
+                order = VideoSortOrder.OLDEST_PUBDATE,
+                currentPage = 4,
+                totalCount = 95,
+                pageSize = 30
+            )
+        )
+        assertNull(
+            resolveNextSpaceVideoPage(
+                order = VideoSortOrder.OLDEST_PUBDATE,
+                currentPage = 1,
+                totalCount = 95,
+                pageSize = 30
+            )
+        )
+        assertEquals(
+            2,
+            resolveNextSpaceVideoPage(
+                order = VideoSortOrder.PUBDATE,
+                currentPage = 1,
+                totalCount = 95,
+                pageSize = 30
+            )
+        )
+    }
+
+    @Test
+    fun `normalizeSpaceVideoPage reverses page items for oldest publish sort`() {
+        val videos = listOf(
+            SpaceVideoItem(bvid = "BV1", title = "first"),
+            SpaceVideoItem(bvid = "BV2", title = "second"),
+            SpaceVideoItem(bvid = "BV3", title = "third")
+        )
+
+        assertEquals(
+            listOf("BV3", "BV2", "BV1"),
+            normalizeSpaceVideoPage(
+                order = VideoSortOrder.OLDEST_PUBDATE,
+                videos = videos
+            ).map { it.bvid }
+        )
+        assertEquals(
+            listOf("BV1", "BV2", "BV3"),
+            normalizeSpaceVideoPage(
+                order = VideoSortOrder.PUBDATE,
+                videos = videos
+            ).map { it.bvid }
+        )
+    }
 
     @Test
     fun resolveSpaceSearchScope_supportsDynamicAndVideoContributionOnly() {

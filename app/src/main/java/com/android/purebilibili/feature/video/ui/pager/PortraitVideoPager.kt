@@ -93,6 +93,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.RelatedVideo
+import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
@@ -122,6 +123,24 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+
+internal data class PortraitVideoInteractionOverride(
+    val isLiked: Boolean? = null,
+    val isFavorited: Boolean? = null,
+    val likeCount: Int? = null,
+    val favoriteCount: Int? = null
+)
+
+internal data class PortraitVideoInteractionUiState(
+    val isLiked: Boolean,
+    val isFavorited: Boolean,
+    val likeCount: Int,
+    val favoriteCount: Int
+)
+
+internal enum class PortraitFavoriteAction {
+    OpenFavoriteFolders
+}
 
 /**
  * 竖屏无缝滑动播放页面 (TikTok Style)
@@ -1201,8 +1220,9 @@ private fun VideoPageItem(
                     },
                     onDragEnd = {
                         if (isCurrentPage && isSeekGesture) {
-                            exoPlayer.seekTo(seekTargetPosition.toLong())
-                            danmakuManager.seekTo(seekTargetPosition.toLong())
+                            val targetPosition = seekTargetPosition.toLong()
+                            seekPlayerFromUserAction(exoPlayer, targetPosition)
+                            danmakuManager.seekTo(targetPosition)
                             isSeekGesture = false
                         }
                     },
@@ -1525,7 +1545,18 @@ private fun VideoPageItem(
     val currentUiState = viewModel.uiState.collectAsState().value
     val isCurrentModelVideo = (currentUiState as? PlayerUiState.Success)?.info?.bvid == bvid
     val currentSuccess = currentUiState as? PlayerUiState.Success
+    var portraitInteractionOverride by remember(bvid) {
+        mutableStateOf(PortraitVideoInteractionOverride())
+    }
+    val favoriteSaveEvent by viewModel.favoriteFolderSaveEvent.collectAsState()
+    var consumedFavoriteSaveEventVersion by remember(bvid) { mutableLongStateOf(0L) }
     val stat = if (item is ViewInfo) item.stat else (item as RelatedVideo).stat
+    val resolvedInteractionState = resolvePortraitVideoInteractionUiState(
+        targetBvid = bvid,
+        fallbackStat = stat,
+        sharedState = currentSuccess,
+        localOverride = portraitInteractionOverride
+    )
     val isFollowing = (currentUiState as? PlayerUiState.Success)?.followingMids?.contains(authorMid) == true
     val fallbackDetailInfo = when (item) {
         is ViewInfo -> item
@@ -1571,6 +1602,31 @@ private fun VideoPageItem(
         }
         Unit
     }
+    val canHandlePortraitInteraction = shouldHandlePortraitVideoInteraction(
+        isCurrentPage = isCurrentPage,
+        aid = aid,
+        bvid = bvid
+    )
+
+    LaunchedEffect(favoriteSaveEvent?.version, aid) {
+        val event = favoriteSaveEvent ?: return@LaunchedEffect
+        if (event.aid != aid || event.version == consumedFavoriteSaveEventVersion) {
+            return@LaunchedEffect
+        }
+        val nextFavoriteCount = (
+            resolvedInteractionState.favoriteCount +
+                when {
+                    event.isFavorited == resolvedInteractionState.isFavorited -> 0
+                    event.isFavorited -> 1
+                    else -> -1
+                }
+            ).coerceAtLeast(0)
+        portraitInteractionOverride = portraitInteractionOverride.copy(
+            isFavorited = event.isFavorited,
+            favoriteCount = nextFavoriteCount
+        )
+        consumedFavoriteSaveEventVersion = event.version
+    }
 
     LaunchedEffect(isCurrentPage, authorMid) {
         if (isCurrentPage && authorMid > 0L) {
@@ -1586,15 +1642,15 @@ private fun VideoPageItem(
             progress = progressState,
             
             statView = if(isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.view else stat.view,
-            statLike = if(isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.like else stat.like,
+            statLike = resolvedInteractionState.likeCount,
             statDanmaku = if(isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.danmaku else stat.danmaku,
             statReply = if(isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
-            statFavorite = if(isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.favorite else stat.favorite,
+            statFavorite = resolvedInteractionState.favoriteCount,
             statShare = if(isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.share else stat.share,
             
-            isLiked = if(isCurrentModelVideo) currentSuccess?.isLiked == true else false,
+            isLiked = resolvedInteractionState.isLiked,
             isCoined = false,
-            isFavorited = if(isCurrentModelVideo) currentSuccess?.isFavorited == true else false,
+            isFavorited = resolvedInteractionState.isFavorited,
             
             isFollowing = isFollowing,
             onFollowClick = { 
@@ -1619,9 +1675,40 @@ private fun VideoPageItem(
                     showDetailSheet = true
                 }
             },
-            onLikeClick = { if (isCurrentModelVideo) viewModel.toggleLike() },
+            onLikeClick = {
+                if (canHandlePortraitInteraction) {
+                    val currentLikeState = resolvedInteractionState.isLiked
+                    val currentLikeCount = resolvedInteractionState.likeCount
+                    viewModel.toggleLikeForVideo(
+                        aid = aid,
+                        bvid = bvid,
+                        currentlyLiked = currentLikeState
+                    ) { liked ->
+                        val nextLikeCount = (
+                            currentLikeCount +
+                                when {
+                                    liked == currentLikeState -> 0
+                                    liked -> 1
+                                    else -> -1
+                                }
+                            ).coerceAtLeast(0)
+                        portraitInteractionOverride = portraitInteractionOverride.copy(
+                            isLiked = liked,
+                            likeCount = nextLikeCount
+                        )
+                    }
+                }
+            },
             onCoinClick = { },
-            onFavoriteClick = { if (isCurrentModelVideo) viewModel.toggleFavorite() },
+            onFavoriteClick = {
+                if (canHandlePortraitInteraction) {
+                    when (resolvePortraitFavoriteAction()) {
+                        PortraitFavoriteAction.OpenFavoriteFolders -> {
+                            viewModel.showFavoriteFolderDialog(aid)
+                        }
+                    }
+                }
+            },
             onCommentClick = { showCommentSheet = true },
             onShareClick = {
                 val shareText = buildPortraitShareText(title = title, bvid = bvid)
@@ -1736,6 +1823,42 @@ internal fun resolvePortraitInitialPageIndex(
     val recommendationIndex = recommendations.indexOfFirst { it.bvid == initialBvid }
     if (recommendationIndex < 0) return 0
     return recommendationIndex + 1
+}
+
+internal fun shouldHandlePortraitVideoInteraction(
+    isCurrentPage: Boolean,
+    aid: Long,
+    bvid: String
+): Boolean {
+    return isCurrentPage && aid > 0L && bvid.isNotBlank()
+}
+
+internal fun resolvePortraitFavoriteAction(): PortraitFavoriteAction {
+    return PortraitFavoriteAction.OpenFavoriteFolders
+}
+
+internal fun resolvePortraitVideoInteractionUiState(
+    targetBvid: String,
+    fallbackStat: Stat,
+    sharedState: PlayerUiState.Success?,
+    localOverride: PortraitVideoInteractionOverride? = null
+): PortraitVideoInteractionUiState {
+    val shouldUseSharedState = sharedState?.info?.bvid == targetBvid
+    return if (shouldUseSharedState && sharedState != null) {
+        PortraitVideoInteractionUiState(
+            isLiked = sharedState.isLiked,
+            isFavorited = sharedState.isFavorited,
+            likeCount = sharedState.info.stat.like,
+            favoriteCount = sharedState.info.stat.favorite
+        )
+    } else {
+        PortraitVideoInteractionUiState(
+            isLiked = localOverride?.isLiked ?: false,
+            isFavorited = localOverride?.isFavorited ?: false,
+            likeCount = localOverride?.likeCount ?: fallbackStat.like,
+            favoriteCount = localOverride?.favoriteCount ?: fallbackStat.favorite
+        )
+    }
 }
 
 internal fun resolvePortraitPagerRepeatMode(): Int = Player.REPEAT_MODE_OFF

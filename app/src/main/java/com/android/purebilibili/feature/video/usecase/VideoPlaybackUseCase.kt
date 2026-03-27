@@ -492,7 +492,11 @@ class VideoPlaybackUseCase(
         cachedVideos: List<DashVideo>,
         cachedAudios: List<DashAudio>,
         currentPos: Long,
-        audioQualityPreference: Int = -1 // [新增] 传入音频偏好
+        audioQualityPreference: Int = -1, // [新增] 传入音频偏好
+        videoCodecPreference: String = "hev1",
+        videoSecondCodecPreference: String = "avc1",
+        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
     ): QualitySwitchResult? {
         if (cachedVideos.isEmpty()) {
             Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: cache is EMPTY, returning null")
@@ -503,14 +507,27 @@ class VideoPlaybackUseCase(
         val availableIds = cachedVideos.map { it.id }.distinct().sortedDescending()
         Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: target=$qualityId, available=$availableIds")
         
-        // 只接受精确匹配；没有目标轨道时返回 null，让上层走 API 请求。
-        val match = cachedVideos.find { it.id == qualityId }
-        if (match == null) {
+        val exactQualityVideos = cachedVideos.filter { it.id == qualityId }
+        if (exactQualityVideos.isEmpty()) {
             Logger.d("VideoPlaybackUseCase", " Cache exact match missing for $qualityId, fallback to API")
             return null
         }
 
-        Logger.d("VideoPlaybackUseCase", " Match found in cache: ${match.id}")
+        val match = Dash(video = exactQualityVideos).getBestVideo(
+            targetQn = qualityId,
+            preferCodec = videoCodecPreference,
+            secondPreferCodec = videoSecondCodecPreference,
+            isHevcSupported = isHevcSupported,
+            isAv1Supported = isAv1Supported
+        ) ?: run {
+            Logger.d("VideoPlaybackUseCase", " Cache exact match has no playable URL for $qualityId")
+            return null
+        }
+
+        Logger.d(
+            "VideoPlaybackUseCase",
+            " Match found in cache: quality=${match.id}, codec=${match.codecs.ifBlank { "unknown" }}"
+        )
         val videoUrl = match.getValidUrl()
         
         // [修复] 音频也应该重新选择最佳匹配，而不是盲目取第一个
@@ -548,7 +565,11 @@ class VideoPlaybackUseCase(
         cid: Long,
         qualityId: Int,
         currentPos: Long,
-        audioQualityPreference: Int = -1 // [新增] 传入音频偏好
+        audioQualityPreference: Int = -1, // [新增] 传入音频偏好
+        videoCodecPreference: String = "hev1",
+        videoSecondCodecPreference: String = "avc1",
+        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
     ): QualitySwitchResult? {
         Logger.d("VideoPlaybackUseCase", " changeQualityFromApi: bvid=$bvid, cid=$cid, target=$qualityId")
         
@@ -567,7 +588,11 @@ class VideoPlaybackUseCase(
         val selection = resolvePlaybackSelection(
             playUrlData = playUrlData,
             targetQuality = qualityId,
-            audioQualityPreference = audioQualityPreference
+            audioQualityPreference = audioQualityPreference,
+            videoCodecPreference = videoCodecPreference,
+            videoSecondCodecPreference = videoSecondCodecPreference,
+            isHevcSupported = isHevcSupported,
+            isAv1Supported = isAv1Supported
         ) ?: run {
             Logger.d("VideoPlaybackUseCase", " Video URL is empty")
             return null

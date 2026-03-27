@@ -47,6 +47,7 @@ fun SubReplySheet(
                 isEnd = state.isEnd,
                 emoteMap = emoteMap,
                 onLoadMore = onLoadMore,
+                onDismiss = onDismiss,
                 onTimestampClick = onTimestampClick,
                 upMid = state.upMid,
                 showUpFlag = showUpFlag,

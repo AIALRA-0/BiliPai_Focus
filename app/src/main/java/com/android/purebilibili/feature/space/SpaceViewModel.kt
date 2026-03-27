@@ -76,6 +76,11 @@ sealed class SpaceUiState {
 class SpaceViewModel(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    private data class SpaceVideoLoadResult(
+        val data: SpaceVideoData,
+        val resolvedPage: Int
+    )
     
     private val spaceApi = NetworkModule.spaceApi
     
@@ -128,6 +133,8 @@ class SpaceViewModel(
 
         currentMid = mid
         currentPage = 1
+        currentTid = 0
+        currentOrder = VideoSortOrder.PUBDATE
         currentKeyword = ""
         activeSpaceSearchJob?.cancel()
         activeSpaceLoadGeneration += 1
@@ -157,7 +164,16 @@ class SpaceViewModel(
                 val infoDeferred = async { fetchSpaceInfo(mid, cachedImgKey, cachedSubKey) }
                 val relationDeferred = async { fetchRelationStat(mid) }
                 val upStatDeferred = async { fetchUpStat(mid) }
-                val videosDeferred = async { fetchSpaceVideos(mid, 1, cachedImgKey, cachedSubKey) }
+                val videosDeferred = async {
+                    fetchInitialSpaceVideos(
+                        mid = mid,
+                        imgKey = cachedImgKey,
+                        subKey = cachedSubKey,
+                        tid = currentTid,
+                        order = currentOrder,
+                        keyword = currentKeyword
+                    )
+                }
                 val cardTopPhotoDeferred = async { fetchUserCardSpaceTopPhoto(mid) }
                 
                 
@@ -177,7 +193,9 @@ class SpaceViewModel(
                         cardSmallPhoto = userCardTopPhoto.second
                     )
                     val userInfo = userInfoRaw.copy(topPhoto = resolvedTopPhoto)
-                    val videos = videosResult?.list?.vlist ?: emptyList()
+                    currentPage = videosResult?.resolvedPage ?: 1
+                    val videoData = videosResult?.data
+                    val videos = videoData?.list?.vlist ?: emptyList()
                     
                     //  调试日志
                     com.android.purebilibili.core.util.Logger.d("SpaceVM", " Videos loaded: ${videos.size}")
@@ -193,8 +211,13 @@ class SpaceViewModel(
                         relationStat = relationStat,
                         upStat = upStat,
                         videos = videos,
-                        totalVideos = videosResult?.page?.count ?: 0,
-                        hasMoreVideos = videos.size >= pageSize,
+                        totalVideos = videoData?.page?.count ?: 0,
+                        hasMoreVideos = resolveNextSpaceVideoPage(
+                            order = currentOrder,
+                            currentPage = currentPage,
+                            totalCount = videoData?.page?.count ?: 0,
+                            pageSize = pageSize
+                        ) != null,
                         categories = categories,
                         headerState = buildHeaderState(
                             userInfo = userInfo,
@@ -304,14 +327,18 @@ class SpaceViewModel(
         val current = _uiState.value as? SpaceUiState.Success ?: return
         if (current.isLoadingMore || !current.hasMoreVideos) return
         
-        android.util.Log.d("SpaceVM", " loadMoreVideos: page=${currentPage+1}, tid=$currentTid, order=$currentOrder")
+        val nextPage = resolveNextSpaceVideoPage(
+            order = currentOrder,
+            currentPage = currentPage,
+            totalCount = current.totalVideos,
+            pageSize = pageSize
+        ) ?: return
+        android.util.Log.d("SpaceVM", " loadMoreVideos: page=$nextPage, tid=$currentTid, order=$currentOrder")
         
         viewModelScope.launch {
             _uiState.value = current.copy(isLoadingMore = true)
             
             try {
-                val nextPage = currentPage + 1
-                //  修复: 使用当前的 tid 和 order
                 val result = fetchSpaceVideos(
                     currentMid,
                     nextPage,
@@ -324,12 +351,18 @@ class SpaceViewModel(
                 
                 if (result != null) {
                     currentPage = nextPage
-                    val newVideos = current.videos + (result.list.vlist)
+                    val normalizedVideos = normalizeSpaceVideoPage(currentOrder, result.list.vlist)
+                    val newVideos = current.videos + normalizedVideos
                     android.util.Log.d("SpaceVM", " loadMoreVideos success: +${result.list.vlist.size} videos, total=${newVideos.size}")
                     _uiState.value = current.copy(
                         videos = newVideos,
                         isLoadingMore = false,
-                        hasMoreVideos = result.list.vlist.size >= pageSize
+                        hasMoreVideos = resolveNextSpaceVideoPage(
+                            order = currentOrder,
+                            currentPage = currentPage,
+                            totalCount = result.page.count,
+                            pageSize = pageSize
+                        ) != null
                     )
                 } else {
                     android.util.Log.e("SpaceVM", " loadMoreVideos failed: result is null")
@@ -433,6 +466,61 @@ class SpaceViewModel(
             null
         }
     }
+
+    private suspend fun fetchInitialSpaceVideos(
+        mid: Long,
+        imgKey: String,
+        subKey: String,
+        tid: Int = 0,
+        order: VideoSortOrder = VideoSortOrder.PUBDATE,
+        keyword: String = ""
+    ): SpaceVideoLoadResult? {
+        val firstPageResult = fetchSpaceVideos(
+            mid = mid,
+            page = 1,
+            imgKey = imgKey,
+            subKey = subKey,
+            tid = tid,
+            order = order,
+            keyword = keyword
+        ) ?: return null
+
+        val resolvedPage = resolveInitialSpaceVideoPage(
+            order = order,
+            totalCount = firstPageResult.page.count,
+            pageSize = pageSize
+        )
+        if (resolvedPage == 1) {
+            return SpaceVideoLoadResult(
+                data = firstPageResult.copy(
+                    list = firstPageResult.list.copy(
+                        vlist = normalizeSpaceVideoPage(order, firstPageResult.list.vlist)
+                    )
+                ),
+                resolvedPage = 1
+            )
+        }
+
+        val resolvedPageResult = fetchSpaceVideos(
+            mid = mid,
+            page = resolvedPage,
+            imgKey = imgKey,
+            subKey = subKey,
+            tid = tid,
+            order = order,
+            keyword = keyword
+        ) ?: return null
+
+        return SpaceVideoLoadResult(
+            data = resolvedPageResult.copy(
+                page = resolvedPageResult.page.copy(count = firstPageResult.page.count),
+                list = resolvedPageResult.list.copy(
+                    vlist = normalizeSpaceVideoPage(order, resolvedPageResult.list.vlist)
+                )
+            ),
+            resolvedPage = resolvedPage
+        )
+    }
     
     //  分类选择
     private var currentTid = 0
@@ -446,7 +534,6 @@ class SpaceViewModel(
         android.util.Log.d("SpaceVM", " selectSortOrder: order=${order.apiValue}, currentTid=$currentTid")
         
         currentOrder = order
-        currentPage = 1
         
         viewModelScope.launch {
             _uiState.value = current.copy(
@@ -456,22 +543,27 @@ class SpaceViewModel(
             )
             
             try {
-                val result = fetchSpaceVideos(
-                    currentMid,
-                    1,
-                    cachedImgKey,
-                    cachedSubKey,
-                    currentTid,
-                    order,
-                    currentKeyword
+                val result = fetchInitialSpaceVideos(
+                    mid = currentMid,
+                    imgKey = cachedImgKey,
+                    subKey = cachedSubKey,
+                    tid = currentTid,
+                    order = order,
+                    keyword = currentKeyword
                 )
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 
                 if (result != null) {
+                    currentPage = result.resolvedPage
                     _uiState.value = currentState.copy(
-                        videos = result.list.vlist,
-                        totalVideos = result.page.count,
-                        hasMoreVideos = result.list.vlist.size >= pageSize,
+                        videos = result.data.list.vlist,
+                        totalVideos = result.data.page.count,
+                        hasMoreVideos = resolveNextSpaceVideoPage(
+                            order = order,
+                            currentPage = currentPage,
+                            totalCount = result.data.page.count,
+                            pageSize = pageSize
+                        ) != null,
                         isLoadingMore = false
                     )
                 } else {
@@ -491,7 +583,6 @@ class SpaceViewModel(
         android.util.Log.d("SpaceVM", " selectCategory: tid=$tid, currentOrder=$currentOrder")
         
         currentTid = tid
-        currentPage = 1
         
         viewModelScope.launch {
             _uiState.value = current.copy(
@@ -501,24 +592,28 @@ class SpaceViewModel(
             )
             
             try {
-                //  修复: 使用当前排序方式
-                val result = fetchSpaceVideos(
-                    currentMid,
-                    1,
-                    cachedImgKey,
-                    cachedSubKey,
-                    tid,
-                    currentOrder,
-                    currentKeyword
+                val result = fetchInitialSpaceVideos(
+                    mid = currentMid,
+                    imgKey = cachedImgKey,
+                    subKey = cachedSubKey,
+                    tid = tid,
+                    order = currentOrder,
+                    keyword = currentKeyword
                 )
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 
                 if (result != null) {
-                    android.util.Log.d("SpaceVM", " selectCategory success: ${result.list.vlist.size} videos")
+                    currentPage = result.resolvedPage
+                    android.util.Log.d("SpaceVM", " selectCategory success: ${result.data.list.vlist.size} videos")
                     _uiState.value = currentState.copy(
-                        videos = result.list.vlist,
-                        totalVideos = result.page.count,
-                        hasMoreVideos = result.list.vlist.size >= pageSize,
+                        videos = result.data.list.vlist,
+                        totalVideos = result.data.page.count,
+                        hasMoreVideos = resolveNextSpaceVideoPage(
+                            order = currentOrder,
+                            currentPage = currentPage,
+                            totalCount = result.data.page.count,
+                            pageSize = pageSize
+                        ) != null,
                         isLoadingMore = false
                     )
                 } else {
@@ -1147,9 +1242,8 @@ class SpaceViewModel(
             _uiState.value = loadingState
 
             try {
-                val result = fetchSpaceVideos(
+                val result = fetchInitialSpaceVideos(
                     mid = currentMid,
-                    page = 1,
                     imgKey = cachedImgKey,
                     subKey = cachedSubKey,
                     tid = currentTid,
@@ -1158,11 +1252,16 @@ class SpaceViewModel(
                 )
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 if (result != null) {
-                    currentPage = 1
+                    currentPage = result.resolvedPage
                     _uiState.value = currentState.copy(
-                        videos = result.list.vlist,
-                        totalVideos = result.page.count,
-                        hasMoreVideos = result.list.vlist.size >= pageSize,
+                        videos = result.data.list.vlist,
+                        totalVideos = result.data.page.count,
+                        hasMoreVideos = resolveNextSpaceVideoPage(
+                            order = currentOrder,
+                            currentPage = currentPage,
+                            totalCount = result.data.page.count,
+                            pageSize = pageSize
+                        ) != null,
                         isLoadingMore = false
                     )
                 } else {

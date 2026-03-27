@@ -279,6 +279,70 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun foregroundEntryRequestsFrameRefresh_whenVideoTrackWasRestored() {
+        assertTrue(
+            shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = true,
+                hasMediaItems = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = false,
+                hasMediaItems = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = true,
+                hasMediaItems = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldRefreshVideoFrameOnEnterForeground(
+                hadSavedTrackParams = true,
+                hasMediaItems = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
+    fun foregroundEntryResumesPlaybackOnlyWhenPlaybackIntentWasStillActive() {
+        assertTrue(
+            shouldResumePlaybackOnEnterForeground(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldResumePlaybackOnEnterForeground(
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldResumePlaybackOnEnterForeground(
+                playWhenReady = true,
+                isPlaying = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldResumePlaybackOnEnterForeground(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
     fun bufferingWithPlayWhenReadyShouldNotBeTreatedAsInactiveInBackground() {
         assertFalse(
             shouldPauseBackgroundBuffering(

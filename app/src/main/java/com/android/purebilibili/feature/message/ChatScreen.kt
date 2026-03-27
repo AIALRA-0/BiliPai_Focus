@@ -3,8 +3,12 @@ package com.android.purebilibili.feature.message
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +23,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,6 +68,15 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    var pendingWithdrawMessage by remember { mutableStateOf<PrivateMessageItem?>(null) }
+    val context = LocalContext.current
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.sendImageMessage(context, uri)
+        }
+    }
     
     // 滚动到底部
     LaunchedEffect(uiState.messages.size) {
@@ -92,7 +106,13 @@ fun ChatScreen(
                         inputText = ""
                     }
                 },
-                isSending = uiState.isSending
+                onPickImage = {
+                    imagePickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                isSending = uiState.isSending,
+                isUploadingImage = uiState.isUploadingImage
             )
         }
     ) { paddingValues ->
@@ -162,6 +182,10 @@ fun ChatScreen(
                                 isOwnMessage = message.sender_uid == viewModel.currentUserMid,
                                 emoteInfos = uiState.emoteInfos,
                                 videoPreviews = uiState.videoPreviews,
+                                canWithdraw = message.sender_uid == viewModel.currentUserMid && message.msg_status != 1,
+                                onLongPress = {
+                                    pendingWithdrawMessage = message
+                                },
                                 onVideoClick = { bvid ->
                                     onNavigateToVideo(bvid)
                                 }
@@ -188,6 +212,44 @@ fun ChatScreen(
             }
         }
     }
+
+    pendingWithdrawMessage?.let { targetMessage ->
+        AlertDialog(
+            onDismissRequest = {
+                if (uiState.withdrawingMessageKey == null) {
+                    pendingWithdrawMessage = null
+                }
+            },
+            title = { Text("撤回消息") },
+            text = { Text("要撤回这条消息吗？") },
+            confirmButton = {
+                TextButton(
+                    enabled = uiState.withdrawingMessageKey == null,
+                    onClick = {
+                        viewModel.withdrawMessage(targetMessage)
+                    }
+                ) {
+                    Text(if (uiState.withdrawingMessageKey == targetMessage.msg_key) "撤回中..." else "确认")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = uiState.withdrawingMessageKey == null,
+                    onClick = {
+                        pendingWithdrawMessage = null
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(uiState.withdrawingMessageKey) {
+        if (uiState.withdrawingMessageKey == null) {
+            pendingWithdrawMessage = null
+        }
+    }
 }
 
 @Composable
@@ -195,8 +257,13 @@ fun ChatInputBar(
     text: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
-    isSending: Boolean
+    onPickImage: () -> Unit,
+    isSending: Boolean,
+    isUploadingImage: Boolean
 ) {
+    val showSendAction = text.isNotBlank()
+    val isBusy = isSending || isUploadingImage
+
     Surface(
         tonalElevation = 3.dp,
         shadowElevation = 4.dp
@@ -221,19 +288,25 @@ fun ChatInputBar(
             Spacer(modifier = Modifier.width(8.dp))
             
             IconButton(
-                onClick = onSend,
-                enabled = text.isNotBlank() && !isSending
+                onClick = {
+                    if (showSendAction) {
+                        onSend()
+                    } else {
+                        onPickImage()
+                    }
+                },
+                enabled = !isBusy
             ) {
-                if (isSending) {
+                if (isBusy) {
                     com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "发送",
-                        tint = if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        imageVector = if (showSendAction) Icons.AutoMirrored.Filled.Send else Icons.Filled.AddCircle,
+                        contentDescription = if (showSendAction) "发送" else "图片",
+                        tint = if (showSendAction) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -247,6 +320,8 @@ fun MessageBubble(
     isOwnMessage: Boolean,
     emoteInfos: List<EmoteInfo> = emptyList(),
     videoPreviews: Map<String, VideoPreviewInfo> = emptyMap(),
+    canWithdraw: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
     onVideoClick: ((String) -> Unit)? = null
 ) {
     val bubbleColor = if (isOwnMessage) {
@@ -282,6 +357,16 @@ fun MessageBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 280.dp)
+                .then(
+                    if (canWithdraw && onLongPress != null) {
+                        Modifier.combinedClickable(
+                            onClick = {},
+                            onLongClick = onLongPress
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
                 .clip(
                     RoundedCornerShape(
                         topStart = 16.dp,
@@ -361,6 +446,29 @@ fun MessageBubble(
                         fontSize = 14.sp
                     )
                 }
+                message.msg_type == 11 -> {
+                    MessagePreviewParser.parseVideoCard(message.content)?.let { videoCard ->
+                        VideoLinkPreviewCard(
+                            preview = VideoPreviewInfo(
+                                bvid = videoCard.bvid,
+                                title = videoCard.title,
+                                cover = videoCard.cover,
+                                ownerName = "",
+                                viewCount = 0,
+                                duration = videoCard.duration
+                            ),
+                            onClick = {
+                                if (videoCard.bvid.isNotBlank()) {
+                                    onVideoClick?.invoke(videoCard.bvid)
+                                }
+                            }
+                        )
+                    } ?: Text(
+                        text = "[视频]",
+                        color = textColor,
+                        fontSize = 15.sp
+                    )
+                }
                 else -> {
                     Text(
                         text = "[${getMessageTypeName(message.msg_type)}]",
@@ -400,8 +508,6 @@ fun VideoLinkPreviewCard(
     preview: VideoPreviewInfo,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    
     Card(
         modifier = Modifier
             .widthIn(max = 260.dp)
@@ -474,21 +580,32 @@ fun VideoLinkPreviewCard(
                 
                 Spacer(modifier = Modifier.height(4.dp))
                 
-                // UP主 + 播放量
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = preview.ownerName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    Text(
-                        text = " · ${formatViewCount(preview.viewCount)}播放",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
+                if (preview.ownerName.isNotBlank() || preview.viewCount > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (preview.ownerName.isNotBlank()) {
+                            Text(
+                                text = preview.ownerName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        if (preview.viewCount > 0) {
+                            Text(
+                                text = if (preview.ownerName.isNotBlank()) {
+                                    " · ${formatViewCount(preview.viewCount)}播放"
+                                } else {
+                                    "${formatViewCount(preview.viewCount)}播放"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
                 }
             }
         }

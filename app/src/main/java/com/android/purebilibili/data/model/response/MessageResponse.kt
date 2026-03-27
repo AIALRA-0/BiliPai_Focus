@@ -3,6 +3,15 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 // ==================== 未读私信数 ====================
 
@@ -176,3 +185,248 @@ data class KeyHitInfo(
     val toast: String = "",             // 提示信息
     val rule_id: Int = 0
 )
+
+// ==================== 消息中心顶部未读 ====================
+
+@Serializable
+data class MessageFeedUnreadResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageFeedUnreadData? = null
+)
+
+@Serializable
+data class MessageFeedUnreadData(
+    val reply: Int = 0,
+    val at: Int = 0,
+    val like: Int = 0,
+    @SerialName("sys_msg")
+    val sysMsg: Int = 0
+)
+
+// ==================== 回复我的 / @我 / 收到的赞 ====================
+
+@Serializable
+data class MessageFeedCursor(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val time: Long = 0,
+    @SerialName("is_end")
+    val isEnd: Boolean = false
+)
+
+@Serializable
+data class MessageFeedUser(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val mid: Long = 0,
+    val nickname: String = "",
+    @Serializable(with = MessageFeedImageUrlSerializer::class)
+    val avatar: String = ""
+)
+
+@Serializable
+data class MessageFeedReplyResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageFeedReplyData? = null
+)
+
+@Serializable
+data class MessageFeedReplyData(
+    val cursor: MessageFeedCursor? = null,
+    val items: List<MessageFeedReplyItem>? = null,
+    @SerialName("last_view_at")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val lastViewAt: Long = 0
+)
+
+@Serializable
+data class MessageFeedReplyItem(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    val user: MessageFeedUser? = null,
+    val item: MessageFeedReplyContent? = null,
+    val counts: Int = 0,
+    @SerialName("is_multi")
+    val isMulti: Int = 0,
+    @SerialName("reply_time")
+    val replyTime: Int = 0
+)
+
+@Serializable
+data class MessageFeedReplyContent(
+    val business: String = "",
+    @SerialName("business_id")
+    val businessId: Int = 0,
+    val title: String = "",
+    @Serializable(with = MessageFeedImageUrlSerializer::class)
+    val image: String = "",
+    val uri: String = "",
+    @SerialName("native_uri")
+    val nativeUri: String = "",
+    @SerialName("root_reply_content")
+    val rootReplyContent: String = "",
+    @SerialName("source_content")
+    val sourceContent: String = "",
+    @SerialName("target_reply_content")
+    val targetReplyContent: String = ""
+)
+
+@Serializable
+data class MessageFeedAtResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageFeedAtData? = null
+)
+
+@Serializable
+data class MessageFeedAtData(
+    val cursor: MessageFeedCursor? = null,
+    val items: List<MessageFeedAtItem>? = null
+)
+
+@Serializable
+data class MessageFeedAtItem(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    val user: MessageFeedUser? = null,
+    val item: MessageFeedAtContent? = null,
+    @SerialName("at_time")
+    val atTime: Int = 0
+)
+
+@Serializable
+data class MessageFeedAtContent(
+    val business: String = "",
+    @SerialName("business_id")
+    val businessId: Int = 0,
+    val title: String = "",
+    @Serializable(with = MessageFeedImageUrlSerializer::class)
+    val image: String = "",
+    val uri: String = "",
+    @SerialName("native_uri")
+    val nativeUri: String = "",
+    @SerialName("source_content")
+    val sourceContent: String = ""
+)
+
+@Serializable
+data class MessageFeedLikeResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageFeedLikeData? = null
+)
+
+@Serializable
+data class MessageFeedLikeData(
+    val latest: MessageFeedLikeBucket? = null,
+    val total: MessageFeedLikeBucket? = null
+)
+
+@Serializable
+data class MessageFeedLikeBucket(
+    val cursor: MessageFeedCursor? = null,
+    val items: List<MessageFeedLikeItem>? = null
+)
+
+@Serializable
+data class MessageFeedLikeItem(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    val users: List<MessageFeedUser>? = null,
+    val item: MessageFeedLikeContent? = null,
+    val counts: Int = 0,
+    @SerialName("like_time")
+    val likeTime: Int = 0,
+    @SerialName("notice_state")
+    val noticeState: Int = 0
+)
+
+@Serializable
+data class MessageFeedLikeContent(
+    val business: String = "",
+    @SerialName("business_id")
+    val businessId: Int = 0,
+    val title: String = "",
+    @Serializable(with = MessageFeedImageUrlSerializer::class)
+    val image: String = "",
+    val uri: String = "",
+    @SerialName("native_uri")
+    val nativeUri: String = ""
+)
+
+// ==================== 系统通知 ====================
+
+@Serializable
+data class SystemNoticeResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: List<SystemNoticeItem>? = null
+)
+
+@Serializable
+data class SystemNoticeItem(
+    val id: Int = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val cursor: Long = 0,
+    val title: String = "",
+    @Serializable(with = SystemNoticeContentSerializer::class)
+    val content: String = "",
+    @SerialName("time_at")
+    val timeAt: String = ""
+)
+
+object SystemNoticeContentSerializer : kotlinx.serialization.KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("SystemNoticeContent", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String {
+        val raw = decoder.decodeString()
+        return runCatching {
+            val element = Json.parseToJsonElement(raw)
+            if (element is JsonObject) {
+                element["web"]?.jsonPrimitive?.contentOrNull ?: raw
+            } else {
+                raw
+            }
+        }.getOrDefault(raw)
+    }
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
+}
+
+object MessageFeedImageUrlSerializer : kotlinx.serialization.KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("MessageFeedImageUrl", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String {
+        val raw = if (decoder is kotlinx.serialization.json.JsonDecoder) {
+            decoder.decodeJsonElement().jsonPrimitive.contentOrNull.orEmpty()
+        } else {
+            decoder.decodeString()
+        }
+        val value = raw.trim()
+        return when {
+            value.startsWith("//") -> "https:$value"
+            value.startsWith("http://") || value.startsWith("https://") -> value
+            else -> value
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
+}

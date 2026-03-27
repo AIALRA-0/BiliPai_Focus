@@ -1,6 +1,9 @@
 // 聊天详情 ViewModel
 package com.android.purebilibili.feature.message
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -10,10 +13,12 @@ import com.android.purebilibili.data.model.response.PrivateMessageItem
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.VideoRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 视频预览信息 (用于链接预览)
@@ -30,7 +35,9 @@ data class VideoPreviewInfo(
 data class ChatUiState(
     val isLoading: Boolean = true,
     val isSending: Boolean = false,
+    val isUploadingImage: Boolean = false,
     val isLoadingMore: Boolean = false,
+    val withdrawingMessageKey: Long? = null,
     val messages: List<PrivateMessageItem> = emptyList(),
     val emoteInfos: List<EmoteInfo> = emptyList(),
     val hasMore: Boolean = false,
@@ -270,6 +277,93 @@ class ChatViewModel(
             )
         }
     }
+
+    fun sendImageMessage(context: Context, imageUri: Uri) {
+        if (_uiState.value.isUploadingImage || _uiState.value.isSending) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isUploadingImage = true, sendError = null)
+
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = context.contentResolver.openInputStream(imageUri)?.use { stream ->
+                        stream.readBytes()
+                    } ?: error("无法读取图片文件")
+
+                    if (bytes.isEmpty()) {
+                        error("图片内容为空")
+                    }
+                    if (bytes.size > 15 * 1024 * 1024) {
+                        error("图片过大（单张最大 15MB）")
+                    }
+
+                    val mimeType = context.contentResolver.getType(imageUri) ?: "image/jpeg"
+                    val fileName = queryDisplayName(context, imageUri)
+                        ?: "message_${System.currentTimeMillis()}.jpg"
+
+                    val uploadData = MessageRepository.uploadPrivateImage(
+                        fileName = fileName,
+                        mimeType = mimeType,
+                        bytes = bytes
+                    ).getOrElse { throw it }
+
+                    MessageRepository.sendImageMessage(
+                        receiverId = talkerId,
+                        imageUrl = uploadData.imageUrl,
+                        width = uploadData.imageWidth,
+                        height = uploadData.imageHeight,
+                        imageType = mimeType.substringAfter('/', "jpg"),
+                        size = uploadData.imgSize,
+                        receiverType = sessionType
+                    ).getOrElse { throw it }
+                }
+            }.fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(isUploadingImage = false)
+                    loadMessages()
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isUploadingImage = false,
+                        sendError = error.message ?: "图片发送失败"
+                    )
+                }
+            )
+        }
+    }
+
+    fun withdrawMessage(message: PrivateMessageItem) {
+        if (message.msg_key <= 0L || message.msg_status == 1) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                withdrawingMessageKey = message.msg_key,
+                sendError = null
+            )
+
+            MessageRepository.withdrawMessage(
+                receiverId = talkerId,
+                msgKey = message.msg_key,
+                receiverType = sessionType
+            ).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(
+                        withdrawingMessageKey = null,
+                        messages = ChatMessageMutationPolicy.markWithdrawn(
+                            messages = _uiState.value.messages,
+                            msgKey = message.msg_key
+                        )
+                    )
+                },
+                onFailure = { e ->
+                    _uiState.value = _uiState.value.copy(
+                        withdrawingMessageKey = null,
+                        sendError = e.message ?: "撤回失败"
+                    )
+                }
+            )
+        }
+    }
     
     /**
      * 标记为已读
@@ -285,6 +379,16 @@ class ChatViewModel(
      */
     fun clearSendError() {
         _uiState.value = _uiState.value.copy(sendError = null)
+    }
+
+    private fun queryDisplayName(context: Context, uri: Uri): String? {
+        return runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+                }
+        }.getOrNull()
     }
     
     /**

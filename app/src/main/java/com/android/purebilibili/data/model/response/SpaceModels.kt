@@ -154,6 +154,7 @@ data class SpaceVideoCategory(
 //  视频排序方式
 enum class VideoSortOrder(val apiValue: String, val displayName: String) {
     PUBDATE("pubdate", "最新发布"),
+    OLDEST_PUBDATE("pubdate", "最早发布"),
     CLICK("click", "最多播放"),
     STOW("stow", "最多收藏")
 }

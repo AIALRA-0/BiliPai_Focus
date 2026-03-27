@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertSame
 
 class VideoLoadRequestPolicyTest {
 
@@ -414,6 +415,73 @@ class VideoLoadRequestPolicyTest {
         assertNull(cleared.subtitleSecondaryTrackKey)
         assertTrue(cleared.subtitlePrimaryCues.isEmpty())
         assertTrue(cleared.subtitleSecondaryCues.isEmpty())
+    }
+
+    @Test
+    fun `clearTransientPlaybackPreviewData removes stale videoshot data when switching playback target`() {
+        val state = PlayerUiState.Success(
+            info = com.android.purebilibili.data.model.response.ViewInfo(
+                bvid = "BV1test",
+                cid = 2233L
+            ),
+            playUrl = "https://example.com/video.mp4",
+            videoshotData = com.android.purebilibili.data.model.response.VideoshotData(
+                image = listOf("https://example.com/p1.jpg"),
+                index = listOf(0L, 1000L)
+            )
+        )
+
+        val cleared = clearTransientPlaybackPreviewData(state)
+
+        assertNull(cleared.videoshotData)
+    }
+
+    @Test
+    fun `shouldApplyVideoshotResult only accepts videoshot matching current playback target`() {
+        val current = PlayerUiState.Success(
+            info = com.android.purebilibili.data.model.response.ViewInfo(
+                bvid = "BV1test",
+                cid = 4455L
+            ),
+            playUrl = "https://example.com/video.mp4"
+        )
+
+        assertTrue(
+            shouldApplyVideoshotResult(
+                currentState = current,
+                videoshotBvid = "BV1test",
+                videoshotCid = 4455L
+            )
+        )
+        assertFalse(
+            shouldApplyVideoshotResult(
+                currentState = current,
+                videoshotBvid = "BV1test",
+                videoshotCid = 2233L
+            )
+        )
+        assertFalse(
+            shouldApplyVideoshotResult(
+                currentState = current,
+                videoshotBvid = "BV_other",
+                videoshotCid = 4455L
+            )
+        )
+    }
+
+    @Test
+    fun `clearTransientPlaybackPreviewData keeps same instance when no videoshot exists`() {
+        val state = PlayerUiState.Success(
+            info = com.android.purebilibili.data.model.response.ViewInfo(
+                bvid = "BV1test",
+                cid = 2233L
+            ),
+            playUrl = "https://example.com/video.mp4"
+        )
+
+        val cleared = clearTransientPlaybackPreviewData(state)
+
+        assertSame(state, cleared)
     }
 
     @Test

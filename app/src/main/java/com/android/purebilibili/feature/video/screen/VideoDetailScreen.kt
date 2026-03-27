@@ -121,6 +121,7 @@ import kotlin.math.roundToInt
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModePreference
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.policy.reduceVideoDetailPostScroll
 import com.android.purebilibili.feature.video.policy.reduceVideoDetailPreScroll
 import com.android.purebilibili.feature.video.policy.resolveVideoDetailCollapseProgress
@@ -438,6 +439,30 @@ internal fun resolveAutoPlayOverrideForInternalBvidSync(
     forceAutoPlay: Boolean
 ): Boolean? {
     return if (forceAutoPlay) true else null
+}
+
+internal data class VideoPlayerSectionTarget(
+    val bvid: String,
+    val entryCoverUrl: String
+)
+
+internal fun resolveVideoPlayerSectionTarget(
+    routeBvid: String,
+    routeCoverUrl: String,
+    currentBvid: String
+): VideoPlayerSectionTarget {
+    val normalizedCurrentBvid = currentBvid.trim()
+    val normalizedRouteBvid = routeBvid.trim()
+    val resolvedBvid = normalizedCurrentBvid.ifBlank { normalizedRouteBvid }
+    val resolvedCoverUrl = if (resolvedBvid == normalizedRouteBvid) {
+        routeCoverUrl
+    } else {
+        ""
+    }
+    return VideoPlayerSectionTarget(
+        bvid = resolvedBvid,
+        entryCoverUrl = resolvedCoverUrl
+    )
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -1793,6 +1818,13 @@ fun VideoDetailScreen(
     }
 
     val uiSuccessState = uiState as? PlayerUiState.Success
+    val videoPlayerSectionTarget = remember(bvid, coverUrl, currentBvid) {
+        resolveVideoPlayerSectionTarget(
+            routeBvid = bvid,
+            routeCoverUrl = coverUrl,
+            currentBvid = currentBvid
+        )
+    }
     val shouldSuppressSubtitleOverlay = useSharedPortraitPlayer &&
         !isPortraitFullscreen &&
         pendingMainReloadBvidAfterPortrait != null &&
@@ -1819,8 +1851,8 @@ fun VideoDetailScreen(
                 onBack = { toggleFullscreen() },
                 onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                 // 🔗 [新增] 分享功能
-                bvid = bvid,
-                coverUrl = coverUrl,
+                bvid = videoPlayerSectionTarget.bvid,
+                coverUrl = videoPlayerSectionTarget.entryCoverUrl,
                 //  实验性功能：双击点赞
                 onDoubleTapLike = { viewModel.toggleLike() },
                 //  [新增] 重载视频
@@ -2199,8 +2231,8 @@ fun VideoDetailScreen(
                                 onBack = handleBack,
                                 onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                                 // 🔗 [新增] 分享功能
-                                bvid = bvid,
-                                coverUrl = coverUrl,
+                                bvid = videoPlayerSectionTarget.bvid,
+                                coverUrl = videoPlayerSectionTarget.entryCoverUrl,
                                 onDoubleTapLike = { viewModel.toggleLike() },
                                 //  [新增] 重载视频
                                 onReloadVideo = { viewModel.reloadVideo() },
@@ -2418,8 +2450,7 @@ fun VideoDetailScreen(
                                                         onWatchLaterClick = { viewModel.toggleWatchLater() },
                                                         //  [新增] 时间戳点击跳转
                                                         onTimestampClick = { positionMs ->
-                                                            playerState.player.seekTo(positionMs)
-                                                            playPlayerFromUserAction(playerState.player)
+                                                            seekPlayerFromUserAction(playerState.player, positionMs)
                                                         },
                                                         //  [新增] 弹幕发送
                                                         onDanmakuSendClick = {
@@ -3293,8 +3324,7 @@ fun VideoDetailScreen(
             screenHeightPx = screenHeightPx,
             topReservedPx = danmakuDialogTopReservePx,
             onTimestampClick = { positionMs ->
-                playerState.player.seekTo(positionMs)
-                playPlayerFromUserAction(playerState.player)
+                seekPlayerFromUserAction(playerState.player, positionMs)
                 commentViewModel.closeSubReply()
             }
         )

@@ -12,6 +12,7 @@ import com.android.purebilibili.feature.video.danmaku.installFaceOcclusionModule
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
+import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
@@ -68,6 +69,7 @@ import com.android.purebilibili.core.ui.blur.unifiedBlur
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.video.ui.gesture.GestureMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureIndicator
 import com.android.purebilibili.feature.video.ui.gesture.rememberPlayerGestureState
@@ -95,6 +97,13 @@ private const val AUTO_HIDE_DELAY = 4000L
 
 // Keep for backward compatibility, maps to new GestureMode
 enum class FullscreenGestureMode { None, Brightness, Volume, Seek }
+
+internal fun shouldRebindFullscreenSurfaceOnResume(
+    hasPlayerView: Boolean,
+    hasPlayer: Boolean
+): Boolean {
+    return hasPlayerView && hasPlayer
+}
 
 /**
  *  全屏播放器覆盖层
@@ -217,7 +226,7 @@ fun FullscreenPlayerOverlay(
     }
     
     // 进入全屏时设置横屏和沉浸式
-    DisposableEffect(Unit) {
+    DisposableEffect(lifecycleOwner, player, playerViewRef) {
         val activity = (context as? Activity) ?: return@DisposableEffect onDispose {}
         val window = activity.window
         val originalOrientation = activity.requestedOrientation
@@ -248,6 +257,19 @@ fun FullscreenPlayerOverlay(
         val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 applyImmersiveMode()
+                val view = playerViewRef
+                val exoPlayer = player
+                if (shouldRebindFullscreenSurfaceOnResume(
+                        hasPlayerView = view != null,
+                        hasPlayer = exoPlayer != null
+                    )
+                ) {
+                    rebindPlayerSurfaceIfNeeded(
+                        playerView = view!!,
+                        player = exoPlayer!!
+                    )
+                    Logger.d("FullscreenPlayer", "🎬 ON_RESUME fullscreen surface rebind applied")
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
@@ -360,7 +382,7 @@ fun FullscreenPlayerOverlay(
                                 FullscreenDoubleTapAction.SeekBackward -> {
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (p.currentPosition - seekMs).coerceAtLeast(0L)
-                                    p.seekTo(newPos)
+                                    seekPlayerFromUserAction(p, newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
                                 FullscreenDoubleTapAction.SeekForward -> {
@@ -372,7 +394,7 @@ fun FullscreenPlayerOverlay(
                                     } else {
                                         target
                                     }
-                                    p.seekTo(newPos)
+                                    seekPlayerFromUserAction(p, newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
                                 FullscreenDoubleTapAction.TogglePlayPause -> {
@@ -427,7 +449,7 @@ fun FullscreenPlayerOverlay(
                             )
                         ) {
                             player?.let {
-                                it.seekTo(seekPreviewPosition)
+                                seekPlayerFromUserAction(it, seekPreviewPosition)
                                 danmakuManager.seekTo(seekPreviewPosition)
                             }
                         }

@@ -31,4 +31,40 @@ class PlayerViewModelContextPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `favorite folder dialog should prefer explicitly requested aid`() {
+        assertTrue(
+            resolveFavoriteFolderDialogTargetAid(
+                requestedAid = 2002L,
+                currentAid = 1001L
+            ) == 2002L
+        )
+    }
+
+    @Test
+    fun `favorite folder dialog should fall back to current aid when request missing`() {
+        assertTrue(
+            resolveFavoriteFolderDialogTargetAid(
+                requestedAid = null,
+                currentAid = 1001L
+            ) == 1001L
+        )
+    }
+
+    @Test
+    fun `favorite ui sync should only affect current player video`() {
+        assertTrue(
+            shouldSyncFavoriteFolderUiState(
+                targetAid = 1001L,
+                currentAid = 1001L
+            )
+        )
+        assertFalse(
+            shouldSyncFavoriteFolderUiState(
+                targetAid = 2002L,
+                currentAid = 1001L
+            )
+        )
+    }
 }

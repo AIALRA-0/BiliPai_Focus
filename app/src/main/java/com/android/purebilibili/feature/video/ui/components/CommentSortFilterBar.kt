@@ -43,6 +43,7 @@ fun CommentSortFilterBar(
     modifier: Modifier = Modifier
 ) {
     val sortModes = remember { CommentSortMode.entries.toList() }
+    val appearance = rememberVideoCommentAppearance()
 
     Row(
         modifier = modifier
@@ -57,14 +58,14 @@ fun CommentSortFilterBar(
                 text = "评论",
                 fontSize = 20.sp, // iOS Large Title style scale
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface 
+                color = appearance.primaryTextColor
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = FormatUtils.formatStat(count.toLong()),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = appearance.secondaryTextColor
             )
         }
 
@@ -101,10 +102,11 @@ fun iOSSegmentedControl(
     selectedIndex: Int,
     onScaleChange: (Int) -> Unit
 ) {
-    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    val indicatorColor = MaterialTheme.colorScheme.surface
-    val selectedTextColor = MaterialTheme.colorScheme.onSurface
-    val unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val appearance = rememberVideoCommentAppearance()
+    val backgroundColor = appearance.segmentedBackgroundColor
+    val indicatorColor = appearance.segmentedIndicatorColor
+    val selectedTextColor = appearance.segmentedSelectedTextColor
+    val unselectedTextColor = appearance.segmentedUnselectedTextColor
     val cornerRadius = 8.dp
     val segmentWidth = if (items.size >= 4) 52.dp else 60.dp
 
@@ -166,8 +168,17 @@ fun iOSToggleButton(
     onToggle: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    val backgroundColor = if (isChecked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    val contentColor = if (isChecked) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    val appearance = rememberVideoCommentAppearance()
+    val backgroundColor = if (isChecked) {
+        appearance.toggleCheckedBackgroundColor
+    } else {
+        appearance.toggleUncheckedBackgroundColor
+    }
+    val contentColor = if (isChecked) {
+        appearance.toggleCheckedContentColor
+    } else {
+        appearance.toggleUncheckedContentColor
+    }
     
     Box(
         modifier = Modifier

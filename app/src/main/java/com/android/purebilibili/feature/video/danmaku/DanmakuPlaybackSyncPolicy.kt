@@ -5,6 +5,8 @@ import kotlin.math.abs
 private const val NORMAL_SYNC_INTERVAL_MS = 3200L
 private const val NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 6
 private const val NON_NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 3
+private const val EXPLICIT_SEEK_RESYNC_TOLERANCE_MS = 500L
+private const val EXPLICIT_SEEK_RESYNC_WINDOW_MS = 1500L
 
 internal enum class DanmakuSyncAction {
     None,
@@ -109,4 +111,19 @@ internal inline fun executeExplicitDanmakuResync(
     pause()
     setData()
     start()
+}
+
+internal fun shouldSuppressFollowupDanmakuHardResync(
+    positionMs: Long,
+    explicitSeekPositionMs: Long?,
+    nowElapsedRealtimeMs: Long,
+    explicitSeekElapsedRealtimeMs: Long?,
+    positionToleranceMs: Long = EXPLICIT_SEEK_RESYNC_TOLERANCE_MS,
+    suppressionWindowMs: Long = EXPLICIT_SEEK_RESYNC_WINDOW_MS
+): Boolean {
+    val seekPosition = explicitSeekPositionMs ?: return false
+    val seekElapsedRealtimeMs = explicitSeekElapsedRealtimeMs ?: return false
+    if (nowElapsedRealtimeMs < seekElapsedRealtimeMs) return false
+    if (nowElapsedRealtimeMs - seekElapsedRealtimeMs > suppressionWindowMs) return false
+    return abs(positionMs - seekPosition) <= positionToleranceMs
 }

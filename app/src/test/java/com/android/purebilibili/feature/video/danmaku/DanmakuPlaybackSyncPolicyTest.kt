@@ -44,4 +44,40 @@ class DanmakuPlaybackSyncPolicyTest {
 
         assertEquals(listOf("pause", "setData", "start"), calls)
     }
+
+    @Test
+    fun `follow-up hard resync should be suppressed right after explicit user seek to same position`() {
+        assertTrue(
+            shouldSuppressFollowupDanmakuHardResync(
+                positionMs = 48_200L,
+                explicitSeekPositionMs = 48_000L,
+                nowElapsedRealtimeMs = 8_800L,
+                explicitSeekElapsedRealtimeMs = 8_000L
+            )
+        )
+    }
+
+    @Test
+    fun `follow-up hard resync should not be suppressed when explicit seek window already expired`() {
+        assertFalse(
+            shouldSuppressFollowupDanmakuHardResync(
+                positionMs = 48_050L,
+                explicitSeekPositionMs = 48_000L,
+                nowElapsedRealtimeMs = 12_000L,
+                explicitSeekElapsedRealtimeMs = 8_000L
+            )
+        )
+    }
+
+    @Test
+    fun `follow-up hard resync should not be suppressed for different seek target`() {
+        assertFalse(
+            shouldSuppressFollowupDanmakuHardResync(
+                positionMs = 54_000L,
+                explicitSeekPositionMs = 48_000L,
+                nowElapsedRealtimeMs = 8_500L,
+                explicitSeekElapsedRealtimeMs = 8_000L
+            )
+        )
+    }
 }

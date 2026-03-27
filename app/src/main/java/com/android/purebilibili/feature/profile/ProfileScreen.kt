@@ -316,7 +316,7 @@ fun ProfileScreen(
                     
                     // 重试按钮
                     Button(
-                        onClick = { viewModel.loadProfile() },
+                        onClick = { viewModel.loadProfile(force = true) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
@@ -1524,7 +1524,7 @@ fun ServicesSection(
             Triple("历史记录", historyIcon, onHistoryClick),
             Triple("我的收藏", bookmarkIcon, onFavoriteClick),
             Triple("稍后再看", bookmarkIcon, onWatchLaterClick),
-            Triple("我的私信", inboxIcon, onInboxClick)  //  [新增]
+            Triple("消息中心", inboxIcon, onInboxClick)
         )
         
         // Simple Grid implementation since LazyVerticalGrid might be overkill inside a Column if not scrolling?
@@ -1612,7 +1612,7 @@ fun ServicesSection(
             )
             IOSClickableItem(
                 icon = inboxIcon,
-                title = "我的私信",
+                title = "消息中心",
                 onClick = onInboxClick,
                 iconTint = com.android.purebilibili.core.theme.iOSPink,  //  粉色图标
                 textColor = contentColor

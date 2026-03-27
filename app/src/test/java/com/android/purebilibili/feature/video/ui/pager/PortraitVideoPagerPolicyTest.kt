@@ -1,7 +1,11 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
+import com.android.purebilibili.data.model.response.Stat
+import com.android.purebilibili.data.model.response.ViewInfo
 import androidx.media3.common.Player
+import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -149,5 +153,56 @@ class PortraitVideoPagerPolicyTest {
                 sharedPlayerHasFrameAtEntry = true
             )
         )
+    }
+
+    @Test
+    fun portraitInteraction_staysEnabledForCurrentPageEvenWhenSharedModelStillPointsToPreviousVideo() {
+        assertTrue(
+            shouldHandlePortraitVideoInteraction(
+                isCurrentPage = true,
+                aid = 2002L,
+                bvid = "BV_NEXT"
+            )
+        )
+    }
+
+    @Test
+    fun portraitFavoriteTap_opensFavoriteFoldersInsteadOfImmediateDefaultFavorite() {
+        assertEquals(
+            PortraitFavoriteAction.OpenFavoriteFolders,
+            resolvePortraitFavoriteAction()
+        )
+    }
+
+    @Test
+    fun portraitInteractionUi_prefersLocalOverrideWhenSharedPlayerStateBelongsToAnotherVideo() {
+        val sharedState = PlayerUiState.Success(
+            info = ViewInfo(
+                bvid = "BV_PREV",
+                aid = 1001L,
+                owner = Owner(mid = 1L, name = "up"),
+                stat = Stat(like = 20, favorite = 10)
+            ),
+            playUrl = "https://example.com/video.mp4",
+            isLiked = true,
+            isFavorited = true
+        )
+
+        val resolved = resolvePortraitVideoInteractionUiState(
+            targetBvid = "BV_NEXT",
+            fallbackStat = Stat(like = 8, favorite = 3),
+            sharedState = sharedState,
+            localOverride = PortraitVideoInteractionOverride(
+                isLiked = true,
+                isFavorited = true,
+                likeCount = 9,
+                favoriteCount = 4
+            )
+        )
+
+        assertTrue(resolved.isLiked)
+        assertTrue(resolved.isFavorited)
+        assertEquals(9, resolved.likeCount)
+        assertEquals(4, resolved.favoriteCount)
     }
 }

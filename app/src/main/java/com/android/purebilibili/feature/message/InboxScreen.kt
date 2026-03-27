@@ -16,8 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,9 +26,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.data.model.response.SessionItem
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -36,6 +33,7 @@ import java.util.*
 @Composable
 fun InboxScreen(
     onBack: () -> Unit,
+    onTopItemClick: (MessageCenterDestination) -> Unit,
     onSessionClick: (talkerId: Long, sessionType: Int, userName: String) -> Unit,
     viewModel: InboxViewModel = viewModel()
 ) {
@@ -51,12 +49,12 @@ fun InboxScreen(
                 },
                 title = { 
                     Column {
-                        Text("私信")
+                        Text("消息")
                         uiState.unreadData?.let { unread ->
-                            val total = unread.follow_unread + unread.unfollow_unread
+                            val total = totalPrivateUnreadCount(unread)
                             if (total > 0) {
                                 Text(
-                                    text = "${total}条未读",
+                                    text = "私信 ${total} 条未读",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -106,6 +104,13 @@ fun InboxScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(vertical = 8.dp)
                         ) {
+                            item {
+                                MessageCenterTopShortcutRow(
+                                    items = buildMessageCenterTopItems(uiState.feedUnreadData),
+                                    onItemClick = onTopItemClick
+                                )
+                            }
+
                             items(
                                 items = uiState.sessions,
                                 key = { "${it.talker_id}_${it.session_type}" }
@@ -151,6 +156,141 @@ fun InboxScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MessageCenterTopShortcutRow(
+    items: List<MessageCenterTopItem>,
+    onItemClick: (MessageCenterDestination) -> Unit
+) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        val columns = if (maxWidth >= 820.dp) 4 else 2
+
+        Column {
+            Text(
+                text = "消息分类",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+
+            items.chunked(columns).forEachIndexed { rowIndex, rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    rowItems.forEach { item ->
+                        MessageCenterShortcutCard(
+                            item = item,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onItemClick(item.destination) }
+                        )
+                    }
+
+                    repeat(columns - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+
+                if (rowIndex != items.chunked(columns).lastIndex) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageCenterShortcutCard(
+    item: MessageCenterTopItem,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .height(96.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Start
+                )
+
+                if (item.unreadCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(999.dp)
+                            )
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (item.unreadCount > 99) "99+" else item.unreadCount.toString(),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Text(
+                text = if (item.unreadCount > 0) "${item.unreadCount} 条" else "查看",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Start
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageUnreadBadge(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+            .background(
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 12.sp
+        )
     }
 }
 
@@ -205,26 +345,12 @@ fun SessionListItem(
                     session.unread_count > 99 -> "99+"
                     else -> session.unread_count.toString()
                 }
-                Box(
+                MessageUnreadBadge(
+                    text = badgeText,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .offset(x = 2.dp, y = (-2).dp)
-                        .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
-                        .background(
-                            color = Color(0xFFFF6699),  // 粉红色，更符合iOS风格
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 1.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = badgeText,
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        lineHeight = 12.sp
-                    )
-                }
+                )
             }
         }
         
@@ -265,7 +391,10 @@ fun SessionListItem(
             
             // 消息预览
             Text(
-                text = parseMessagePreview(session.last_msg?.content, session.last_msg?.msg_type ?: 1),
+                text = MessagePreviewParser.parseSessionPreview(
+                    content = session.last_msg?.content,
+                    msgType = session.last_msg?.msg_type ?: 1
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -319,36 +448,6 @@ fun SessionListItem(
                 }
             }
         }
-    }
-}
-
-/**
- * 解析消息预览
- */
-private fun parseMessagePreview(content: String?, msgType: Int): String {
-    if (content.isNullOrEmpty()) return ""
-    
-    return when (msgType) {
-        1 -> { // 文字消息
-             if (!content.trim().startsWith("{")) {
-                 content
-             } else {
-                 try {
-                     val json = Json.parseToJsonElement(content)
-                     json.jsonObject["content"]?.jsonPrimitive?.content ?: content
-                 } catch (e: Exception) {
-                     content
-                 }
-             }
-        }
-        2 -> "[图片]"
-        5 -> "[消息已撤回]"
-        6 -> "[表情]"
-        7 -> "[分享]"
-        10 -> "[通知]"
-        11 -> "[视频推送]"
-        12 -> "[专栏推送]"
-        else -> "[消息]"
     }
 }
 

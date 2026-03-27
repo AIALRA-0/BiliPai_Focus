@@ -9,6 +9,24 @@ import kotlin.test.assertTrue
 class VideoPlayerSectionPolicyTest {
 
     @Test
+    fun danmakuLayerTopOffset_keepsInlinePortraitDanmakuAnchoredToViewportTop() {
+        assertEquals(
+            0,
+            resolveDanmakuLayerTopOffsetPx(
+                isFullscreen = false,
+                statusBarHeightPx = 96
+            )
+        )
+        assertEquals(
+            0,
+            resolveDanmakuLayerTopOffsetPx(
+                isFullscreen = true,
+                statusBarHeightPx = 96
+            )
+        )
+    }
+
+    @Test
     fun inlinePlayerTakeover_disablesKeepingLastFrame_whenPortraitFullscreenOwnsPlayback() {
         assertFalse(
             shouldKeepInlinePlayerContentOnReset(

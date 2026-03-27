@@ -143,6 +143,10 @@ sealed class ScreenRoutes(val route: String) {
     
     // [新增] 私信相关页面
     object Inbox : ScreenRoutes("inbox")  // 收件箱
+    object ReplyMe : ScreenRoutes("message/reply_me")
+    object AtMe : ScreenRoutes("message/at_me")
+    object LikeMe : ScreenRoutes("message/like_me")
+    object SystemNotice : ScreenRoutes("message/system_notice")
     object Chat : ScreenRoutes("chat/{talkerId}/{sessionType}?name={name}") {
         fun createRoute(talkerId: Long, sessionType: Int, userName: String): String {
             return "chat/$talkerId/$sessionType?name=${android.net.Uri.encode(userName)}"

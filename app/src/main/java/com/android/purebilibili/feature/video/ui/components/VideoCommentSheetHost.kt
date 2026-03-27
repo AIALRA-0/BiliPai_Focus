@@ -146,6 +146,7 @@ fun VideoCommentSheetHost(
         topReservedPx = topReservedPx
     )
     val scrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
+    val appearance = rememberVideoCommentAppearance()
 
     var fallbackPreviewVisible by remember { mutableStateOf(false) }
     var fallbackPreviewImages by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -285,7 +286,7 @@ fun VideoCommentSheetHost(
                             indication = null,
                             onClick = {}
                         ),
-                    color = MaterialTheme.colorScheme.surface
+                    color = appearance.panelColor
                 ) {
                     when (hostContent) {
                         VideoCommentSheetHostContent.MAIN_LIST -> {
@@ -310,6 +311,8 @@ fun VideoCommentSheetHost(
                                     isEnd = subReplyState.isEnd,
                                     emoteMap = emoteMap,
                                     onLoadMore = { commentViewModel.loadMoreSubReplies() },
+                                    onDismiss = { commentViewModel.closeSubReply() },
+                                    onRootCommentClick = onRootCommentClick,
                                     onTimestampClick = onTimestampClick,
                                     upMid = subReplyState.upMid,
                                     showUpFlag = commentState.showUpFlag,
@@ -350,6 +353,7 @@ private fun VideoCommentMainList(
     val state by viewModel.commentState.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val appearance = rememberVideoCommentAppearance()
 
     Column(modifier = Modifier.fillMaxSize()) {
         CommentSortFilterBar(
@@ -382,13 +386,13 @@ private fun VideoCommentMainList(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 14.dp, vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        color = appearance.composerHintBackgroundColor,
                         shape = RoundedCornerShape(16.dp),
                         onClick = onRootCommentClick
                     ) {
                         Text(
                             text = "说点什么，直接评论 UP 主和大家",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = appearance.secondaryTextColor,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         )
@@ -453,6 +457,7 @@ private fun LoadingFooter() {
 
 @Composable
 private fun NoMoreFooter() {
+    val appearance = rememberVideoCommentAppearance()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -461,7 +466,7 @@ private fun NoMoreFooter() {
     ) {
         Text(
             text = "没有更多了",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = appearance.secondaryTextColor,
             fontWeight = FontWeight.Normal
         )
     }

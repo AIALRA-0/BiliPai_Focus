@@ -35,15 +35,36 @@ sealed class ProfileUiState {
     data class Error(val message: String) : ProfileUiState()
 }
 
+internal fun shouldStartProfileLoad(
+    hasLoadedOnce: Boolean,
+    isLoadInFlight: Boolean,
+    force: Boolean
+): Boolean {
+    if (isLoadInFlight) return false
+    return force || !hasLoadedOnce
+}
+
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
     val uiState = _uiState.asStateFlow()
+    private var hasLoadedProfileOnce = false
+    private var isProfileLoadInFlight = false
 
     init {
         loadProfile()
     }
 
-    fun loadProfile() {
+    fun loadProfile(force: Boolean = false) {
+        if (!shouldStartProfileLoad(
+                hasLoadedOnce = hasLoadedProfileOnce,
+                isLoadInFlight = isProfileLoadInFlight,
+                force = force
+            )
+        ) {
+            return
+        }
+        hasLoadedProfileOnce = true
+        isProfileLoadInFlight = true
         viewModelScope.launch {
             var customBgUri = ""
             try {
@@ -161,6 +182,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     } else customBgUri
                     _uiState.value = ProfileUiState.LoggedOut(topPhoto = finalUri) 
                 }
+            } finally {
+                isProfileLoadInFlight = false
             }
         }
     }
@@ -201,7 +224,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 SettingsManager.setProfileBgUri(context, savedUri)
                 
                 // 5. 刷新界面 (重新加载)
-                loadProfile()
+                loadProfile(force = true)
                 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -328,7 +351,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             runCatching {
                 File(context.filesDir, "images/profile_bg.jpg").delete()
             }
-            loadProfile()
+            loadProfile(force = true)
         }
     }
 
@@ -373,7 +396,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     val savedUri = Uri.fromFile(destFile).toString()
                     SettingsManager.setProfileBgUri(context, savedUri)
                     
-                    loadProfile() // 刷新
+                    loadProfile(force = true) // 刷新
                     
                     withContext(Dispatchers.Main) {
                         _wallpaperSaveState.value = WallpaperSaveState.Success

@@ -272,6 +272,36 @@ fun AppNavigation(
         }
     }
 
+    fun openMessageLink(rawLink: String) {
+        when (val action = resolveMessageLinkNavigationAction(rawLink)) {
+            is MessageLinkNavigationAction.Video -> {
+                navigateToVideo(action.videoId, 0L, "")
+            }
+            is MessageLinkNavigationAction.Dynamic -> {
+                navController.navigate(ScreenRoutes.DynamicDetail.createRoute(action.dynamicId))
+            }
+            is MessageLinkNavigationAction.Space -> {
+                navController.navigate(ScreenRoutes.Space.createRoute(action.mid))
+            }
+            is MessageLinkNavigationAction.Live -> {
+                navController.navigate(ScreenRoutes.Live.createRoute(action.roomId, "", ""))
+            }
+            is MessageLinkNavigationAction.BangumiSeason -> {
+                navController.navigate(ScreenRoutes.BangumiDetail.createRoute(action.seasonId))
+            }
+            is MessageLinkNavigationAction.BangumiEpisode -> {
+                navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId = 0L, epId = action.epId))
+            }
+            is MessageLinkNavigationAction.Music -> {
+                action.musicId.toLongOrNull()?.let { navController.navigate(ScreenRoutes.MusicDetail.createRoute(it)) }
+                    ?: navController.navigate(ScreenRoutes.Web.createRoute(rawLink))
+            }
+            is MessageLinkNavigationAction.Web -> {
+                navController.navigate(ScreenRoutes.Web.createRoute(action.url))
+            }
+        }
+    }
+
     //  [修复] 通用单例跳转（防止重复打开相同页面）
     fun navigateTo(route: String) {
         if (!canNavigate()) return
@@ -1974,9 +2004,67 @@ fun AppNavigation(
         ) {
             com.android.purebilibili.feature.message.InboxScreen(
                 onBack = { navController.popBackStack() },
+                onTopItemClick = { destination ->
+                    when (destination) {
+                        com.android.purebilibili.feature.message.MessageCenterDestination.ReplyMe ->
+                            navController.navigate(ScreenRoutes.ReplyMe.route)
+                        com.android.purebilibili.feature.message.MessageCenterDestination.AtMe ->
+                            navController.navigate(ScreenRoutes.AtMe.route)
+                        com.android.purebilibili.feature.message.MessageCenterDestination.LikeMe ->
+                            navController.navigate(ScreenRoutes.LikeMe.route)
+                        com.android.purebilibili.feature.message.MessageCenterDestination.SystemNotice ->
+                            navController.navigate(ScreenRoutes.SystemNotice.route)
+                    }
+                },
                 onSessionClick = { talkerId, sessionType, userName ->
                     navController.navigate(ScreenRoutes.Chat.createRoute(talkerId, sessionType, userName))
                 }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.ReplyMe.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.message.feed.ReplyMeScreen(
+                onBack = { navController.popBackStack() },
+                onOpenLink = ::openMessageLink,
+                onOpenSpace = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.AtMe.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.message.feed.AtMeScreen(
+                onBack = { navController.popBackStack() },
+                onOpenLink = ::openMessageLink,
+                onOpenSpace = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.LikeMe.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.message.feed.LikeMeScreen(
+                onBack = { navController.popBackStack() },
+                onOpenLink = ::openMessageLink,
+                onOpenSpace = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.SystemNotice.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.message.feed.SystemNoticeScreen(
+                onBack = { navController.popBackStack() }
             )
         }
         
