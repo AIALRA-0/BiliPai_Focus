@@ -93,6 +93,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var isFollowingsLoading: Boolean = false
     private var cacheSaveJob: Job? = null
     private var startupFollowingsHydrationScheduled: Boolean = false
+    private var followingCacheObserverJob: Job? = null
+    private var observedFollowingMid: Long = 0L
 
     private val _uiState = MutableStateFlow(DynamicUiState())
     val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
@@ -174,6 +176,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         loadCachedDynamics()
         hydrateFollowingsFromLocalCache()
         rebuildFollowedUsers()
+        viewModelScope.launch {
+            ensureFollowingCacheObservation()
+        }
         refreshInBackground(startupPlan)
     }
     
@@ -309,6 +314,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         isFollowingsLoading = true
         try {
             val myMid = resolveCurrentUserMid() ?: return
+            startFollowingCacheObservation(myMid)
             hydrateFollowingsFromLocalCache(mid = myMid)
 
             val now = System.currentTimeMillis()
@@ -347,15 +353,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             _focusFollowingUsers.value = cachedFollowings
             hasCompleteFocusFollowingUsers = loadAllPages || reportedTotal <= cachedFollowings.size
             lastFollowingsLoadMs = now
-            if (cachedFollowings.isNotEmpty()) {
-                FollowingCacheStore.saveSnapshot(
-                    context = appContext,
-                    mid = myMid,
-                    total = reportedTotal.coerceAtLeast(cachedFollowings.size),
-                    users = cachedFollowings,
-                    cachedAtMs = now
-                )
-            }
+            FollowingCacheStore.saveSnapshot(
+                context = appContext,
+                mid = myMid,
+                total = reportedTotal.coerceAtLeast(cachedFollowings.size),
+                users = cachedFollowings,
+                cachedAtMs = now
+            )
             rebuildFollowedUsers()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -379,6 +383,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             loadAllFollowings(force = true)
         }
+    }
+
+    fun requestFollowingsAutoSyncIfStale() {
+        requestFollowingsRefreshIfStale()
     }
 
     private fun scheduleStartupFollowingsHydration(startupPlan: DynamicStartupLoadPlan) {
@@ -489,7 +497,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private fun hydrateFollowingsFromLocalCache(mid: Long? = TokenManager.midCache) {
         val cachedMid = mid ?: return
         val snapshot = FollowingCacheStore.getSnapshot(appContext, cachedMid) ?: return
-        if (snapshot.users.isEmpty()) return
         cachedFollowings = snapshot.users
         _focusFollowingUsers.value = snapshot.users
         _hasResolvedFollowedUsers.value = true
@@ -711,7 +718,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadFocusFollowingUsersForSettings(force: Boolean = true) {
-        if (!force && hasCompleteFocusFollowingUsers && cachedFollowings.isNotEmpty()) {
+        val now = System.currentTimeMillis()
+        val shouldReload = force || shouldReloadFollowings(
+            nowMs = now,
+            lastLoadMs = lastFollowingsLoadMs,
+            cachedUsersCount = cachedFollowings.size,
+            preferredUserCount = DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT,
+            hasCompleteSnapshot = hasCompleteFocusFollowingUsers
+        ) || (!hasCompleteFocusFollowingUsers && cachedFollowings.isNotEmpty())
+        if (!shouldReload) {
             return
         }
         viewModelScope.launch {
@@ -755,6 +770,45 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             FocusFollowGroupStore.assignUserToGroup(appContext, mid, groupId)
         }
+    }
+
+    private suspend fun ensureFollowingCacheObservation() {
+        val currentMid = resolveCurrentUserMid() ?: return
+        startFollowingCacheObservation(currentMid)
+    }
+
+    private fun startFollowingCacheObservation(mid: Long) {
+        if (mid <= 0L) return
+        if (observedFollowingMid == mid && followingCacheObserverJob?.isActive == true) return
+        observedFollowingMid = mid
+        followingCacheObserverJob?.cancel()
+        followingCacheObserverJob = viewModelScope.launch {
+            FollowingCacheStore.observeSnapshot(appContext, mid).collect { snapshot ->
+                applyObservedFollowingSnapshot(mid = mid, snapshot = snapshot)
+            }
+        }
+    }
+
+    private fun applyObservedFollowingSnapshot(
+        mid: Long,
+        snapshot: com.android.purebilibili.core.store.FollowingCacheSnapshot?
+    ) {
+        if (mid != observedFollowingMid) return
+        if (snapshot == null) {
+            cachedFollowings = emptyList()
+            _focusFollowingUsers.value = emptyList()
+            hasCompleteFocusFollowingUsers = false
+            lastFollowingsLoadMs = 0L
+            _hasResolvedFollowedUsers.value = true
+            rebuildFollowedUsers()
+            return
+        }
+        cachedFollowings = snapshot.users
+        _focusFollowingUsers.value = snapshot.users
+        hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
+        lastFollowingsLoadMs = snapshot.cachedAtMs
+        _hasResolvedFollowedUsers.value = true
+        rebuildFollowedUsers()
     }
 
     fun setFocusHomeFeedSortMode(sortMode: FocusFollowHomeFeedSortMode) {
@@ -913,6 +967,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         cacheSaveJob?.cancel()
         userDynamicsJob?.cancel()
+        followingCacheObserverJob?.cancel()
         super.onCleared()
     }
 

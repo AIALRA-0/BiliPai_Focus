@@ -274,6 +274,7 @@ fun DynamicScreen(
     //  [埋点] 页面浏览追踪
     LaunchedEffect(Unit) {
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("DynamicScreen")
+        viewModel.requestFollowingsAutoSyncIfStale()
     }
     
     //  [修改] 加载更多 - 区分全部动态和用户动态

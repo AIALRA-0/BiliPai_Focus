@@ -164,9 +164,9 @@ fun FocusFollowGroupSheet(
                                 )
                                 Text(
                                     text = if (isLoading) {
-                                        "正在刷新完整关注列表..."
+                                        "自动同步中，正在补齐完整关注列表..."
                                     } else {
-                                        "当前已载入 ${followings.size} 位关注对象"
+                                        "已自动同步 ${followings.size} 位关注对象，默认会在后台静默更新"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -186,7 +186,7 @@ fun FocusFollowGroupSheet(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("刷新")
+                                Text("立即重拉")
                             }
                         }
 

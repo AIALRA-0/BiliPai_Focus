@@ -116,12 +116,13 @@ internal fun shouldUseFollowingPersistentCache(
     forceRefresh: Boolean,
     requestMid: Long,
     cachedMid: Long,
-    cachedUsersCount: Int
+    cachedUsersCount: Int,
+    cachedTotal: Int = cachedUsersCount
 ): Boolean {
     if (forceRefresh) return false
     if (requestMid <= 0L) return false
     if (cachedMid != requestMid) return false
-    return cachedUsersCount > 0
+    return cachedUsersCount > 0 || cachedTotal == 0
 }
 
 internal fun isRetryableBatchOperationError(message: String?): Boolean {
@@ -231,7 +232,8 @@ class FollowingListViewModel : ViewModel() {
                 forceRefresh = forceRefresh,
                 requestMid = mid,
                 cachedMid = snapshot.mid,
-                cachedUsersCount = snapshot.users.size
+                cachedUsersCount = snapshot.users.size,
+                cachedTotal = snapshot.total
             )
         ) {
             return false
@@ -240,7 +242,6 @@ class FollowingListViewModel : ViewModel() {
         val users = snapshot.users
             .filterNot { removedUserMids.contains(it.mid) }
             .distinctBy { it.mid }
-        if (users.isEmpty()) return false
 
         _uiState.value = FollowingListUiState.Success(
             users = users,
@@ -384,7 +385,7 @@ class FollowingListViewModel : ViewModel() {
     }
 
     private fun persistFollowingCache(mid: Long, total: Int, users: List<FollowingUser>) {
-        if (mid <= 0L || users.isEmpty()) return
+        if (mid <= 0L) return
         val context = NetworkModule.appContext ?: return
         val snapshotUsers = users.toList()
 

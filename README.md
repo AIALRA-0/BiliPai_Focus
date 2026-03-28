@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-27 · 上游基线 v7.2.2 · 当前 Focus 发布 v7.2.2-focus.1</sub>
+  <sub>最后更新：2026-03-28 · 上游基线 v7.2.2 · 当前 Focus 发布 v7.2.2-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.2.2--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.2.2--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.2.2-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.2.2-focus.1.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.2.2-focus.2.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.2.2-focus.1.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.2.2-focus.2.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.2.2-focus.1` |
+| Focus 版本 | `7.2.2-focus.2` |
 | 上游基线 | `7.2.2` |
-| 发布标签 | `v7.2.2-focus.1` |
-| Release Notes | [docs/releases/focus-7.2.2-focus.1.md](docs/releases/focus-7.2.2-focus.1.md) |
-| 主要收口 | 同步上游 `7.2.1/7.2.2` 的消息中心、个人空间、播放器与评论区更新，同时保留 Focus 共存包名、Focus-only 更新源、FOLLOW 过滤与排序链路 |
-| 对外 APK | `BliPai-Focus-release-7.2.2-focus.1.apk` |
+| 发布标签 | `v7.2.2-focus.2` |
+| Release Notes | [docs/releases/focus-7.2.2-focus.2.md](docs/releases/focus-7.2.2-focus.2.md) |
+| 主要收口 | 统一关注对象自动同步与首页 FOLLOW 联动，移除首页私有关注 mids 缓存，并保留 Focus 共存包名、Focus-only 更新源与 FOLLOW 过滤链路 |
+| 对外 APK | `BliPai-Focus-release-7.2.2-focus.2.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.2.2-focus.1.md` | Focus `v7.2.2-focus.1` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.2.2-focus.1-en.md` | Focus `v7.2.2-focus.1` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.2.2-focus.2.md` | Focus `v7.2.2-focus.2` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.2.2-focus.2-en.md` | Focus `v7.2.2-focus.2` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
@@ -718,11 +718,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.2.2 / v7.2.2-focus.1 · 2026-03-27)
+### 最近更新 (v7.2.2 / v7.2.2-focus.2 · 2026-03-28)
 
-- 📨 **上游 7.2.1/7.2.2 已并入**：消息中心补齐了 `@我 / 回复我的 / 收到的赞 / 系统通知` 等提醒流、消息预览解析与相关导航链路。
-- 🎬 **播放器、评论区和个人空间继续细修**：同步了 seek 预览气泡、小窗播放、竖屏页、视频详情、评论区样式与空间页加载收口。
-- 🧩 **Focus 定制继续保留**：共存包名、Focus-only 更新源、首页 FOLLOW 的过滤/排序/刷新链路继续保留在 `7.2.2` 基线上。
+- 🔄 **关注对象默认自动同步**：动态页和关注列表页现在会先显示缓存，再按 `5` 分钟 TTL 静默补拉，设置页里的按钮改成“立即重拉”兜底。
+- 🏠 **首页 FOLLOW 终于跟关注名单联动**：新增关注会在同一会话里纳入首页候选，取关后对应内容会立刻被剔除，不再卡在旧的一小时 mids 缓存。
+- 🧩 **Focus 定制继续保留**：共存包名、Focus-only 更新源、FOLLOW 过滤/排序/批次展示链路继续保持在 `7.2.2` 基线之上。
 
 ### 历史版本
 

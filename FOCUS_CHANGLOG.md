@@ -1,5 +1,26 @@
 # Focus Changelog
 
+## v7.2.2 Focus / focus.2 (2026-03-28)
+
+### 版本信息
+- 基于上游 `BiliPai v7.2.2` 继续维护 Focus 发布线，当前推荐对外版本为 `7.2.2-focus.2`。
+- 为保证已发布 `v7.2.2-focus.1 / 156` 用户可直接升级，`versionCode` 继续递增到 `157`。
+- 这一版不切换上游基线，重点修复“关注对象同步必须手动刷新”和“关注名单变化后首页 FOLLOW 不联动”的体验断层。
+
+### 关注对象自动同步
+- 动态页与关注列表页现在共用同一份关注快照缓存，并把缓存 TTL 统一为 `5` 分钟；进入动态页后会先显示已有缓存，再按过期状态静默补拉。
+- “关注对象同步”入口从手动主流程调整为默认自动同步；设置面板里的按钮降级为“立即重拉”兜底，不再承担首次加载职责。
+- 关注对象缓存现在允许稳定保存“0 个关注对象”的合法空快照，空关注状态不会因为缓存判定被误当成加载失败。
+
+### 首页 FOLLOW 联动修复
+- 首页已移除独立的 `following_mids_*` 私有一小时缓存，改为直接订阅共享关注快照。
+- 当关注名单新增 UP 时，首页 FOLLOW 会在同一会话内重算并把新 UP 纳入候选；当关注名单删除 UP 时，首页会立即剔除对应内容并按当前批次规则补足显示。
+- 若关注 mids 集合没有变化、只是昵称或头像变化，首页不会再无意义整页刷新。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest --tests "*DynamicFollowingsRefreshPolicyTest" --tests "*HomeFollowingSyncPolicyTest" --tests "*FollowingBatchSelectionPolicyTest" --tests "*HomeFollowFocusPolicyTest"`。
+- 已通过 `:app:assembleRelease`。
+
 ## v7.2.2 Focus / focus.1 (2026-03-27)
 
 ### 版本信息

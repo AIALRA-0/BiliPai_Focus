@@ -7,9 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.FocusFollowGroupStore
+import com.android.purebilibili.core.store.FollowingCacheSnapshot
+import com.android.purebilibili.core.store.FollowingCacheStore
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TodayWatchFeedbackStore
 import com.android.purebilibili.core.store.TodayWatchProfileStore
+import com.android.purebilibili.core.store.shouldReloadFollowingCacheSnapshot
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.prependDistinctByKey
@@ -97,6 +100,8 @@ internal fun applyHomeRefreshUndoSnapshot(
 
 private const val HISTORY_SAMPLE_CACHE_TTL_MS = 10 * 60 * 1000L
 private const val HOME_REFRESH_UNDO_TIMEOUT_MS = 5_000L
+private const val HOME_FOLLOWING_API_PAGE_SIZE = 50
+private const val HOME_FOLLOWING_PREFERRED_COUNT = 1_000
 
 private fun TodayWatchPluginMode.toUiMode(): TodayWatchMode {
     return when (this) {
@@ -128,6 +133,7 @@ private data class TodayWatchRuntimeConfig(
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
+    private val appContext = getApplication<Application>()
     private val _uiState = MutableStateFlow(
         HomeUiState(
             isLoading = true,
@@ -163,6 +169,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var hasResolvedFollowFeedOnce: Boolean = false
     private var followFeedFocusRefreshJob: Job? = null
     private var followFeedBackgroundHydrationJob: Job? = null
+    private var followingSnapshotObserverJob: Job? = null
+    private var followingSnapshotRefreshJob: Job? = null
+    private var observedFollowingSnapshotMid: Long = 0L
     private var followFeedShuffleSeed: Long = System.currentTimeMillis()
     private var followPresentationTopResetCounter: Long = 0L
     private var followRefreshPresentationTokenCounter: Long = 0L
@@ -1913,9 +1922,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         isVip = isVip
                     )
                 )
-                
-                //  获取关注列表（异步，不阻塞主流程）
-                fetchFollowingList(navData.mid)
+                startFollowingSnapshotObservation(navData.mid)
+                refreshFollowingSnapshotInBackground(navData.mid, force = false)
             } else {
                 com.android.purebilibili.core.store.TokenManager.isVipCache = false
                 com.android.purebilibili.core.store.TokenManager.midCache = null
@@ -1929,49 +1937,156 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     user = UserState(isLogin = false),
                     followingMids = emptySet()
                 )
+                stopFollowingSnapshotObservation(clearUiState = false)
             }
         }
     }
-    
-    //  获取关注列表（并行分页获取，支持更多关注，带本地缓存）
-    private suspend fun fetchFollowingList(mid: Long) {
-        val context = getApplication<android.app.Application>()
-        val prefs = context.getSharedPreferences("following_cache", android.content.Context.MODE_PRIVATE)
-        val cacheKey = "following_mids_$mid"
-        val cacheTimeKey = "following_time_$mid"
-        
-        //  检查缓存（1小时内有效）
-        val cachedTime = prefs.getLong(cacheTimeKey, 0)
-        val cacheValidDuration = 60 * 60 * 1000L  // 1小时
-        if (System.currentTimeMillis() - cachedTime < cacheValidDuration) {
-            val cachedMids = prefs.getStringSet(cacheKey, null)
-            if (!cachedMids.isNullOrEmpty()) {
-                val mids = cachedMids.mapNotNull { it.toLongOrNull() }.toSet()
-                _uiState.value = _uiState.value.copy(followingMids = mids)
-                com.android.purebilibili.core.util.Logger.d("HomeVM", " Loaded ${mids.size} following mids from cache")
-                requestFollowFeedRefreshAfterFocusConfigChange()
-                return
+
+    private fun startFollowingSnapshotObservation(mid: Long) {
+        if (mid <= 0L) return
+        if (observedFollowingSnapshotMid == mid && followingSnapshotObserverJob?.isActive == true) {
+            return
+        }
+        followingSnapshotRefreshJob?.cancel()
+        followingSnapshotObserverJob?.cancel()
+        if (observedFollowingSnapshotMid != mid) {
+            _uiState.value = _uiState.value.copy(followingMids = emptySet())
+        }
+        observedFollowingSnapshotMid = mid
+        followingSnapshotObserverJob = viewModelScope.launch {
+            FollowingCacheStore.observeSnapshot(appContext, mid).collect { snapshot ->
+                applyObservedFollowingSnapshot(mid = mid, snapshot = snapshot)
             }
         }
-        
-        //  动态获取所有关注列表（无上限）
+    }
+
+    private fun stopFollowingSnapshotObservation(clearUiState: Boolean) {
+        followingSnapshotObserverJob?.cancel()
+        followingSnapshotObserverJob = null
+        followingSnapshotRefreshJob?.cancel()
+        followingSnapshotRefreshJob = null
+        observedFollowingSnapshotMid = 0L
+        if (clearUiState && _uiState.value.followingMids.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(followingMids = emptySet())
+        }
+    }
+
+    private fun applyObservedFollowingSnapshot(
+        mid: Long,
+        snapshot: FollowingCacheSnapshot?
+    ) {
+        if (mid != observedFollowingSnapshotMid) return
+        val nextFollowingMids = snapshot
+            ?.users
+            .orEmpty()
+            .asSequence()
+            .map { it.mid }
+            .filter { it > 0L }
+            .toSet()
+        val previousFollowingMids = _uiState.value.followingMids
+        val change = resolveHomeFollowingSnapshotChange(
+            previousFollowingMids = previousFollowingMids,
+            nextFollowingMids = nextFollowingMids,
+            blockedMids = blockedMids,
+            config = focusFollowGroupConfig,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
+        if (previousFollowingMids != nextFollowingMids) {
+            _uiState.value = _uiState.value.copy(followingMids = nextFollowingMids)
+        }
+        if (!shouldRefreshHomeFollowAfterFollowingChange(
+                hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce,
+                rawFollowFeedCount = rawFollowFeedVideos.size,
+                displayedFollowFeedCount = (_uiState.value.categoryStates[HomeCategory.FOLLOW]?.videos ?: emptyList()).size,
+                currentCategory = _uiState.value.currentCategory
+            )
+        ) {
+            return
+        }
+        when (change.kind) {
+            HomeFollowingSnapshotChangeKind.NONE -> Unit
+            HomeFollowingSnapshotChangeKind.REMOVED_ONLY -> {
+                pendingFollowRefreshPresentation = null
+                setFollowRefreshPresentationPending(false)
+                pruneHomeFollowCreatorsAfterFollowingRemoval(change.removedVisibleMids)
+            }
+            HomeFollowingSnapshotChangeKind.RELOAD_REQUIRED -> {
+                pendingFollowRefreshPresentation = null
+                setFollowRefreshPresentationPending(false)
+                followFeedFocusRefreshJob?.cancel()
+                followFeedFocusRefreshJob = viewModelScope.launch {
+                    fetchFollowFeed(isLoadMore = false)
+                }
+            }
+        }
+    }
+
+    private fun pruneHomeFollowCreatorsAfterFollowingRemoval(removedVisibleMids: Set<Long>) {
+        if (removedVisibleMids.isEmpty()) return
+        rawFollowFeedVideos = rawFollowFeedVideos.filterNot { it.owner.mid in removedVisibleMids }
+        presentedFollowFeedVisibleVideos =
+            presentedFollowFeedVisibleVideos.filterNot { it.owner.mid in removedVisibleMids }
+        followFeedDisplayedVisibleCount = followFeedDisplayedVisibleCount
+            .coerceAtLeast(0)
+            .coerceAtMost(presentedFollowFeedVisibleVideos.size)
+        publishPresentedHomeFollowVideos(
+            isLoading = false,
+            error = resolveHomeFollowEmptyMessage(
+                visibleVideoCount = resolveDisplayedHomeFollowVisibleVideos(
+                    presentedVisibleVideos = presentedFollowFeedVisibleVideos,
+                    displayCount = followFeedDisplayedVisibleCount
+                ).size,
+                hasResolvedFollowFeedOnce = hasResolvedFollowFeedOnce
+            )
+        )
+        if (followFeedDisplayedVisibleCount < HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE && canLoadMoreFollowFeed()) {
+            followFeedFocusRefreshJob?.cancel()
+            followFeedFocusRefreshJob = viewModelScope.launch {
+                fetchFollowFeed(isLoadMore = true)
+            }
+        }
+    }
+
+    private fun refreshFollowingSnapshotInBackground(mid: Long, force: Boolean) {
+        if (mid <= 0L) return
+        if (!force && followingSnapshotRefreshJob?.isActive == true) return
+        followingSnapshotRefreshJob?.cancel()
+        followingSnapshotRefreshJob = viewModelScope.launch {
+            refreshFollowingSnapshot(mid = mid, force = force)
+        }
+    }
+
+    private suspend fun refreshFollowingSnapshot(mid: Long, force: Boolean) {
+        val cachedSnapshot = FollowingCacheStore.getSnapshot(appContext, mid)
+        val now = System.currentTimeMillis()
+        val shouldReload = force || cachedSnapshot == null || shouldReloadFollowingCacheSnapshot(
+            nowMs = now,
+            lastLoadMs = cachedSnapshot.cachedAtMs,
+            cachedUsersCount = cachedSnapshot.users.size,
+            preferredUserCount = HOME_FOLLOWING_PREFERRED_COUNT,
+            hasCompleteSnapshot = cachedSnapshot.total <= cachedSnapshot.users.size
+        )
+        if (!shouldReload) {
+            return
+        }
+
         try {
-            val pageSize = 50
-            val allMids = mutableSetOf<Long>()
+            val allUsers = mutableListOf<com.android.purebilibili.data.model.response.FollowingUser>()
             val firstPageResult = kotlinx.coroutines.withContext(Dispatchers.IO) {
                 com.android.purebilibili.core.network.NetworkModule.api.getFollowings(
                     vmid = mid,
                     pn = 1,
-                    ps = pageSize
+                    ps = HOME_FOLLOWING_API_PAGE_SIZE
                 )
             }
             val firstPageData = firstPageResult.data
                 ?.takeIf { firstPageResult.code == 0 }
                 ?: return
-            firstPageData.list.orEmpty().forEach { user -> allMids += user.mid }
+            allUsers += firstPageData.list.orEmpty()
 
-            val totalFollowings = firstPageData.total.coerceAtLeast(allMids.size)
-            val totalPages = ((totalFollowings + pageSize - 1) / pageSize).coerceAtLeast(1)
+            val totalFollowings = firstPageData.total.coerceAtLeast(allUsers.size)
+            val totalPages = ((totalFollowings + HOME_FOLLOWING_API_PAGE_SIZE - 1) / HOME_FOLLOWING_API_PAGE_SIZE)
+                .coerceAtLeast(1)
             if (totalPages > 1) {
                 (2..totalPages)
                     .toList()
@@ -1984,7 +2099,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                                         com.android.purebilibili.core.network.NetworkModule.api.getFollowings(
                                             vmid = mid,
                                             pn = page,
-                                            ps = pageSize
+                                            ps = HOME_FOLLOWING_API_PAGE_SIZE
                                         )
                                     }
                                 }
@@ -1994,9 +2109,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             .sortedBy { (page, _) -> page }
                             .forEach { (page, result) ->
                                 result.onSuccess { response ->
-                                    response.data?.list.orEmpty().forEach { user ->
-                                        allMids += user.mid
-                                    }
+                                    allUsers += response.data?.list.orEmpty()
                                 }.onFailure { error ->
                                     com.android.purebilibili.core.util.Logger.e(
                                         "HomeVM",
@@ -2007,16 +2120,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             }
                     }
             }
-            
-            //  保存到本地缓存
-            prefs.edit()
-                .putStringSet(cacheKey, allMids.map { it.toString() }.toSet())
-                .putLong(cacheTimeKey, System.currentTimeMillis())
-                .apply()
-            
-            _uiState.value = _uiState.value.copy(followingMids = allMids.toSet())
-            com.android.purebilibili.core.util.Logger.d("HomeVM", " Total following mids fetched and cached: ${allMids.size}")
-            requestFollowFeedRefreshAfterFocusConfigChange()
+            if (mid != observedFollowingSnapshotMid) return
+            FollowingCacheStore.saveSnapshot(
+                context = appContext,
+                mid = mid,
+                total = totalFollowings,
+                users = allUsers.distinctBy { it.mid },
+                cachedAtMs = now
+            )
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("HomeVM", " Error fetching following list", e)
         }
@@ -2030,5 +2141,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             e.printStackTrace()
             null
         }
+    }
+
+    override fun onCleared() {
+        followingSnapshotObserverJob?.cancel()
+        followingSnapshotRefreshJob?.cancel()
+        super.onCleared()
     }
 }

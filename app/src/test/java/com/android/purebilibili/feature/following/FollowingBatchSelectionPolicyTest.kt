@@ -118,4 +118,16 @@ class FollowingBatchSelectionPolicyTest {
         )
         assertFalse(useCache)
     }
+
+    @Test
+    fun `shouldUseFollowingPersistentCache should keep empty snapshot for zero followings`() {
+        val useCache = shouldUseFollowingPersistentCache(
+            forceRefresh = false,
+            requestMid = 123L,
+            cachedMid = 123L,
+            cachedUsersCount = 0,
+            cachedTotal = 0
+        )
+        assertTrue(useCache)
+    }
 }
