@@ -48,6 +48,25 @@ object SponsorActionType {
     const val POI = "poi"       // 精彩片段点
 }
 
+@Serializable
+enum class SponsorBlockMarkerMode {
+    OFF,
+    SPONSOR_ONLY,
+    ALL_SKIPPABLE
+}
+
+fun resolveSponsorBlockMarkerMode(rawValue: String?): SponsorBlockMarkerMode {
+    return SponsorBlockMarkerMode.entries.firstOrNull { entry ->
+        entry.name.equals(rawValue, ignoreCase = true)
+    } ?: SponsorBlockMarkerMode.SPONSOR_ONLY
+}
+
+fun SponsorBlockMarkerMode.displayLabel(): String = when (this) {
+    SponsorBlockMarkerMode.OFF -> "关闭"
+    SponsorBlockMarkerMode.SPONSOR_ONLY -> "仅恰饭"
+    SponsorBlockMarkerMode.ALL_SKIPPABLE -> "全部可跳过"
+}
+
 /**
  * 空降片段数据
  */
@@ -82,3 +101,10 @@ data class SponsorSegment(
     /** 是否为跳过类型 */
     val isSkipType: Boolean get() = actionType == SponsorActionType.SKIP
 }
+
+data class SponsorProgressMarker(
+    val segmentId: String,
+    val category: String,
+    val startTimeMs: Long,
+    val endTimeMs: Long
+)

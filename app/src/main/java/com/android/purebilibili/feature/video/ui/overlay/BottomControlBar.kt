@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
 //  Cupertino Icons
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
 import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
 import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
@@ -289,6 +291,7 @@ fun BottomControlBar(
     // Features
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
+    sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     currentChapter: String? = null,
     onChapterClick: () -> Unit = {},
     
@@ -470,6 +473,7 @@ fun BottomControlBar(
             onScrubbingChanged = onScrubbingChanged,
             videoshotData = videoshotData,
             viewPoints = viewPoints,
+            sponsorMarkers = sponsorMarkers,
             currentChapter = currentChapter,
             onChapterClick = onChapterClick
         )
@@ -954,6 +958,7 @@ fun VideoProgressBar(
     onScrubbingChanged: (Boolean) -> Unit = {},
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
+    sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     currentChapter: String? = null,
     onChapterClick: () -> Unit = {}
 ) {
@@ -978,6 +983,12 @@ fun VideoProgressBar(
         pendingSettledProgress = seekState.pendingSettledProgress
     )
     val primaryColor = MaterialTheme.colorScheme.primary
+    val resolvedSponsorMarkers = remember(duration, sponsorMarkers) {
+        resolveSponsorProgressBarMarkers(
+            durationMs = duration,
+            markers = sponsorMarkers
+        )
+    }
     val targetPositionMs = (displayProgress * duration).toLong()
     val baseHeight = if (currentChapter != null) {
         layoutPolicy.baseHeightWithChapterDp.dp
@@ -1137,6 +1148,27 @@ fun VideoProgressBar(
                         .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
                         .height(layoutPolicy.trackHeightDp.dp)
                         .background(primaryColor, RoundedCornerShape(trackCornerRadius))
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(layoutPolicy.trackHeightDp.dp)
+                        .drawWithContent {
+                            drawContent()
+                            resolvedSponsorMarkers.forEach { marker ->
+                                val startX = size.width * marker.startFraction
+                                val endX = size.width * marker.endFraction
+                                val centerY = size.height / 2f
+                                drawLine(
+                                    color = marker.color,
+                                    start = Offset(startX, centerY),
+                                    end = Offset(endX, centerY),
+                                    strokeWidth = size.height,
+                                    cap = StrokeCap.Round
+                                )
+                            }
+                        }
                 )
                 
                 Box(

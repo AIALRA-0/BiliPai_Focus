@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.model.response.SponsorCategory
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,6 +37,14 @@ data class CenterPlaybackButtonStyle(
     val innerColor: Color,
     val borderColor: Color,
     val iconTint: Color
+)
+
+data class ProgressBarMarkerUiState(
+    val segmentId: String,
+    val category: String,
+    val startFraction: Float,
+    val endFraction: Float,
+    val color: Color
 )
 
 internal enum class PlaybackIssueType {
@@ -230,5 +240,35 @@ internal fun resolveCenterPlaybackButtonStyle(
             borderColor = Color.Black.copy(alpha = 0.16f),
             iconTint = Color.White
         )
+    }
+}
+
+internal fun resolveSponsorProgressBarMarkers(
+    durationMs: Long,
+    markers: List<SponsorProgressMarker>
+): List<ProgressBarMarkerUiState> {
+    if (durationMs <= 0L || markers.isEmpty()) return emptyList()
+    return markers.mapNotNull { marker ->
+        val startFraction = (marker.startTimeMs.toFloat() / durationMs).coerceIn(0f, 1f)
+        val endFraction = (marker.endTimeMs.toFloat() / durationMs).coerceIn(0f, 1f)
+        if (endFraction <= startFraction) {
+            null
+        } else {
+            ProgressBarMarkerUiState(
+                segmentId = marker.segmentId,
+                category = marker.category,
+                startFraction = startFraction,
+                endFraction = endFraction,
+                color = resolveSponsorProgressMarkerColor(marker.category)
+            )
+        }
+    }
+}
+
+private fun resolveSponsorProgressMarkerColor(category: String): Color {
+    return if (category == SponsorCategory.SPONSOR) {
+        Color(0xFFFF8A65)
+    } else {
+        Color(0xFFFDE68A).copy(alpha = 0.72f)
     }
 }

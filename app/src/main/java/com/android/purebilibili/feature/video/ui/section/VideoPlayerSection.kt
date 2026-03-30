@@ -943,6 +943,8 @@ fun VideoPlayerSection(
     
     // 📖 [新增] 视频章节数据
     viewPoints: List<ViewPoint> = emptyList(),
+    sponsorMarkers: List<com.android.purebilibili.data.model.response.SponsorProgressMarker> = emptyList(),
+    onUserSeek: (Long) -> Unit = {},
     
     // 📱 [新增] 竖屏全屏模式
     isVerticalVideo: Boolean = false,
@@ -3806,6 +3808,7 @@ fun VideoPlayerSection(
                 
                 // 📖 [新增] 视频章节数据
                 viewPoints = viewPoints,
+                sponsorMarkers = sponsorMarkers,
                 
                 // 📱 [新增] 竖屏全屏模式
                 isVerticalVideo = isVerticalVideo,
@@ -3819,6 +3822,7 @@ fun VideoPlayerSection(
                 onSeekTo = { position ->
                     seekPlayerFromUserAction(playerState.player, position)
                     danmakuManager.seekTo(position)
+                    onUserSeek(position)
                 },
                 previewSeekPositionMs = seekTargetTime,
                 previewSeekActive = gestureMode == VideoGestureMode.Seek,
@@ -3886,6 +3890,16 @@ fun VideoPlayerSection(
                 currentPageIndex = currentPageIndex,
                 onPageSelect = onPageSelect,
                 drawerHazeState = overlayDrawerHazeState
+            )
+
+            SponsorSkipButton(
+                segment = sponsorSegment,
+                visible = showSponsorSkipButton,
+                onSkip = onSponsorSkip,
+                onDismiss = onSponsorDismiss,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 60.dp, end = 16.dp)
             )
     }
 

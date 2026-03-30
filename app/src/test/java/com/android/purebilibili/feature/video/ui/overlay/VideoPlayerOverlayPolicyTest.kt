@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.media3.common.Player
+import com.android.purebilibili.data.model.response.SponsorCategory
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,6 +14,61 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 class VideoPlayerOverlayPolicyTest {
+
+    @Test
+    fun sponsorProgressBarMarkers_areClampedIntoTrackBounds() {
+        val markers = resolveSponsorProgressBarMarkers(
+            durationMs = 100_000L,
+            markers = listOf(
+                SponsorProgressMarker(
+                    segmentId = "segment",
+                    category = SponsorCategory.SPONSOR,
+                    startTimeMs = -5_000L,
+                    endTimeMs = 130_000L
+                )
+            )
+        )
+
+        assertEquals(1, markers.size)
+        assertEquals(0f, markers.single().startFraction)
+        assertEquals(1f, markers.single().endFraction)
+    }
+
+    @Test
+    fun sponsorProgressBarMarkers_areEmptyWhenDurationIsInvalid() {
+        val markers = resolveSponsorProgressBarMarkers(
+            durationMs = 0L,
+            markers = listOf(
+                SponsorProgressMarker(
+                    segmentId = "segment",
+                    category = SponsorCategory.SPONSOR,
+                    startTimeMs = 10_000L,
+                    endTimeMs = 20_000L
+                )
+            )
+        )
+
+        assertTrue(markers.isEmpty())
+    }
+
+    @Test
+    fun sponsorProgressBarMarkers_useSecondaryStyleForNonSponsorSegments() {
+        val markers = resolveSponsorProgressBarMarkers(
+            durationMs = 100_000L,
+            markers = listOf(
+                SponsorProgressMarker(
+                    segmentId = "segment",
+                    category = SponsorCategory.INTRO,
+                    startTimeMs = 10_000L,
+                    endTimeMs = 20_000L
+                )
+            )
+        )
+
+        assertEquals(1, markers.size)
+        assertEquals(SponsorCategory.INTRO, markers.single().category)
+        assertTrue(markers.single().color.alpha < 1f)
+    }
 
     @Test
     fun inlineOverlayProgressPolling_stopsWhenHostLifecycleStops() {

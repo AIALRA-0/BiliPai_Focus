@@ -95,6 +95,34 @@ import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitle
 import com.android.purebilibili.feature.video.subtitle.orderSubtitleTracksByPreference
 import com.android.purebilibili.feature.video.subtitle.resolveDefaultSubtitleLanguages
 
+data class SponsorSkipUiState(
+    val visible: Boolean = false,
+    val segmentId: String? = null,
+    val skipToMs: Long = 0L,
+    val label: String? = null
+)
+
+internal fun reduceSponsorSkipUiState(
+    previous: SponsorSkipUiState,
+    action: SkipAction?
+): SponsorSkipUiState {
+    return when (action) {
+        is SkipAction.ShowButton -> SponsorSkipUiState(
+            visible = true,
+            segmentId = action.segmentId,
+            skipToMs = action.skipToMs,
+            label = action.label
+        )
+
+        else -> previous.copy(
+            visible = false,
+            segmentId = null,
+            skipToMs = 0L,
+            label = null
+        )
+    }
+}
+
 // ========== UI State ==========
 sealed class PlayerUiState {
     data class Loading(
@@ -626,6 +654,12 @@ class PlayerViewModel : ViewModel() {
     val showSkipButton = _showSkipButton.asStateFlow()
     private val _currentSkipReason = MutableStateFlow<String?>( null)
     val currentSkipReason = _currentSkipReason.asStateFlow()
+    private val _currentSponsorSegment = MutableStateFlow<SponsorSegment?>(null)
+    val currentSponsorSegment = _currentSponsorSegment.asStateFlow()
+    private val _sponsorSkipUiState = MutableStateFlow(SponsorSkipUiState())
+    private val _sponsorProgressMarkers =
+        MutableStateFlow<List<com.android.purebilibili.data.model.response.SponsorProgressMarker>>(emptyList())
+    val sponsorProgressMarkers = _sponsorProgressMarkers.asStateFlow()
     
     //  Download state
     private val _downloadProgress = MutableStateFlow(-1f)
@@ -5036,9 +5070,13 @@ class PlayerViewModel : ViewModel() {
                             )
                             PlaybackPostLoadTask.HEARTBEAT -> startHeartbeat()
                             PlaybackPostLoadTask.PLUGIN_ON_VIDEO_LOAD -> {
+                                _sponsorProgressMarkers.value = emptyList()
                                 PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
                                     try {
                                         plugin.onVideoLoad(loadedBvid, loadedCid)
+                                        if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                                            _sponsorProgressMarkers.value = plugin.getProgressMarkers()
+                                        }
                                     } catch (e: Exception) {
                                         Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoLoad failed", e)
                                     }
@@ -5060,6 +5098,12 @@ class PlayerViewModel : ViewModel() {
         pluginCheckJob = viewModelScope.launch {
             while (true) {
                 val plugins = PluginManager.getEnabledPlayerPlugins()
+                if (plugins.none { it is com.android.purebilibili.feature.plugin.SponsorBlockPlugin } &&
+                    _sponsorProgressMarkers.value.isNotEmpty()
+                ) {
+                    _sponsorProgressMarkers.value = emptyList()
+                    clearSponsorSkipUi()
+                }
                 val intervalMs = resolvePluginPollingIntervalMs(
                     hasPlugins = plugins.isNotEmpty(),
                     isPlaying = exoPlayer?.isPlaying == true
@@ -5081,9 +5125,25 @@ class PlayerViewModel : ViewModel() {
                     try {
                         when (val action = plugin.onPositionUpdate(currentPos)) {
                             is SkipAction.SkipTo -> {
+                                clearSponsorSkipUi()
                                 playbackUseCase.seekTo(action.positionMs)
                                 toast(action.reason)
                                 Logger.d("PlayerVM", " Plugin ${plugin.name} skipped to ${action.positionMs}ms")
+                            }
+                            is SkipAction.ShowButton -> {
+                                val nextUiState = reduceSponsorSkipUiState(
+                                    previous = _sponsorSkipUiState.value,
+                                    action = action
+                                )
+                                _sponsorSkipUiState.value = nextUiState
+                                _showSkipButton.value = nextUiState.visible
+                                _currentSkipReason.value = action.label
+                                if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                                    _currentSponsorSegment.value = plugin.getActiveSegment()
+                                }
+                            }
+                            SkipAction.None -> {
+                                clearSponsorSkipUi()
                             }
                             else -> {}
                         }
@@ -5095,7 +5155,56 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    fun dismissSponsorSkipButton() { _showSkipButton.value = false }
+    fun dismissSponsorSkipButton() {
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                plugin.markAsSkipped(_sponsorSkipUiState.value.segmentId ?: return@forEach)
+            }
+        }
+        clearSponsorSkipUi()
+    }
+
+    fun skipCurrentSponsorSegment() {
+        val targetPosition = _sponsorSkipUiState.value.skipToMs.takeIf { it > 0L } ?: return
+        val segmentId = _sponsorSkipUiState.value.segmentId
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin && segmentId != null) {
+                plugin.markAsSkipped(segmentId)
+            }
+        }
+        playbackUseCase.seekTo(targetPosition)
+        clearSponsorSkipUi()
+    }
+
+    fun notifyPluginsOfExplicitSeek(positionMs: Long) {
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            plugin.onUserSeek(positionMs)
+            if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                _currentSponsorSegment.value = plugin.getActiveSegment()
+            }
+        }
+        val currentSegment = _currentSponsorSegment.value
+        if (currentSegment != null) {
+            val action = SkipAction.ShowButton(
+                skipToMs = currentSegment.endTimeMs,
+                label = "跳过${currentSegment.categoryName}",
+                segmentId = currentSegment.UUID
+            )
+            val nextUiState = reduceSponsorSkipUiState(_sponsorSkipUiState.value, action)
+            _sponsorSkipUiState.value = nextUiState
+            _showSkipButton.value = nextUiState.visible
+            _currentSkipReason.value = action.label
+        } else {
+            clearSponsorSkipUi()
+        }
+    }
+
+    private fun clearSponsorSkipUi() {
+        _sponsorSkipUiState.value = reduceSponsorSkipUiState(_sponsorSkipUiState.value, SkipAction.None)
+        _showSkipButton.value = false
+        _currentSkipReason.value = null
+        _currentSponsorSegment.value = null
+    }
     
     // ========== Playback Control ==========
     

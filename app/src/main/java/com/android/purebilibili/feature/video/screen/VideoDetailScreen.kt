@@ -636,12 +636,8 @@ fun VideoDetailScreen(
     // [Blur] Haze State
     val hazeState = rememberRecoverableHazeState()
     
-    //  空降助手 - 已由插件系统自动处理
-    // val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
-    // val showSponsorSkipButton by viewModel.showSkipButton.collectAsState()
-    // val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
-    //     .getSponsorBlockEnabled(context)
-    //     .collectAsState(initial = false)
+    val sponsorSegment by viewModel.currentSponsorSegment.collectAsStateWithLifecycle()
+    val showSponsorSkipButton by viewModel.showSkipButton.collectAsStateWithLifecycle()
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -709,6 +705,7 @@ fun VideoDetailScreen(
     // 📖 [新增] 监听视频章节数据
     // 📖 [新增] 监听视频章节数据
     val viewPoints by viewModel.viewPoints.collectAsStateWithLifecycle()
+    val sponsorProgressMarkers by viewModel.sponsorProgressMarkers.collectAsStateWithLifecycle()
     
     // [New] Codec & Audio Preferences
     val codecPreference by viewModel.videoCodecPreference.collectAsStateWithLifecycle()
@@ -1861,6 +1858,10 @@ fun VideoDetailScreen(
                 coverUrl = videoPlayerSectionTarget.entryCoverUrl,
                 //  实验性功能：双击点赞
                 onDoubleTapLike = { viewModel.toggleLike() },
+                sponsorSegment = sponsorSegment,
+                showSponsorSkipButton = showSponsorSkipButton,
+                onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                onSponsorDismiss = { viewModel.dismissSponsorSkipButton() },
                 //  [新增] 重载视频
                 onReloadVideo = { viewModel.reloadVideo() },
                 //  [新增] CDN 线路切换
@@ -1893,8 +1894,10 @@ fun VideoDetailScreen(
                 // 🖼️ [新增] 视频预览图数据
                     videoshotData = (uiState as? PlayerUiState.Success)?.videoshotData,
                     
-                    // 📖 [新增] 视频章节数据
+                // 📖 [新增] 视频章节数据
                     viewPoints = viewPoints,
+                    sponsorMarkers = sponsorProgressMarkers,
+                    onUserSeek = { position -> viewModel.notifyPluginsOfExplicitSeek(position) },
                 // 📱 [新增] 竖屏全屏模式
                 isVerticalVideo = isVerticalVideo && allowStandalonePortraitExperience,
                 isPortraitFullscreen = isPortraitFullscreen,
@@ -2242,6 +2245,10 @@ fun VideoDetailScreen(
                                 bvid = videoPlayerSectionTarget.bvid,
                                 coverUrl = videoPlayerSectionTarget.entryCoverUrl,
                                 onDoubleTapLike = { viewModel.toggleLike() },
+                                sponsorSegment = sponsorSegment,
+                                showSponsorSkipButton = showSponsorSkipButton,
+                                onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                                onSponsorDismiss = { viewModel.dismissSponsorSkipButton() },
                                 //  [新增] 重载视频
                                 onReloadVideo = { viewModel.reloadVideo() },
                                 //  [新增] CDN 线路切换
@@ -2267,6 +2274,8 @@ fun VideoDetailScreen(
                                 
                                 // 📖 [新增] 视频章节数据
                         viewPoints = viewPoints,
+                        sponsorMarkers = sponsorProgressMarkers,
+                        onUserSeek = { position -> viewModel.notifyPluginsOfExplicitSeek(position) },
                         
                         // 📱 [新增] 竖屏全屏模式
                         isVerticalVideo = isVerticalVideo && (allowStandalonePortraitExperience || useOfficialInlinePortraitDetailExperience),

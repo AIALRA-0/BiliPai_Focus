@@ -46,6 +46,7 @@ import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.ChapterListPanel
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.data.repository.VideoRepository
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
@@ -322,6 +323,7 @@ fun VideoPlayerOverlay(
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     // 📖 [新增] 视频章节数据
     viewPoints: List<ViewPoint> = emptyList(),
+    sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     // 📱 [新增] 竖屏全屏模式
     isVerticalVideo: Boolean = false,
     onPortraitFullscreen: () -> Unit = {},
@@ -979,6 +981,7 @@ fun VideoPlayerOverlay(
                     videoshotData = videoshotData,
                     // 📖 [新增] 视频章节数据
                     viewPoints = viewPoints,
+                    sponsorMarkers = sponsorMarkers,
                     currentChapter = currentChapter,
                     onChapterClick = { showChapterList = true },
                     // 📱 [新增] 竖屏全屏模式
