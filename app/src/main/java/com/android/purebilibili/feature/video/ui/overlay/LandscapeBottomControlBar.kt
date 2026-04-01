@@ -25,6 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
+import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
+import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 
 private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
@@ -102,30 +108,36 @@ fun LandscapeBottomControlBar(
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 // 进度条
-                var tempProgress by remember { mutableFloatStateOf(0f) }
-                var isDragging by remember { mutableStateOf(false) }
+                var seekState by remember { mutableStateOf(PlaybackSeekUiState()) }
                 val progressValue = if (progress.duration > 0) 
                     progress.current.toFloat() / progress.duration 
                 else 0f
                 
-                LaunchedEffect(progressValue) {
-                    if (!isDragging) {
-                        tempProgress = progressValue
-                    }
+                LaunchedEffect(progressValue, seekState.pendingSettledProgress, seekState.isScrubbing) {
+                    seekState = settlePlaybackSeekSession(
+                        state = seekState,
+                        playbackProgress = progressValue
+                    )
                 }
+                val displayProgress = resolvePlaybackSeekDisplayProgress(
+                    playbackProgress = progressValue,
+                    state = seekState
+                )
                 
                 Slider(
-                    value = if (isDragging) tempProgress else progressValue,
+                    value = displayProgress,
                     onValueChange = {
-                        if (!isDragging) {
+                        if (!seekState.isScrubbing) {
                             onSeekStart()  //  拖动开始时清除弹幕
+                            seekState = startPlaybackSeekSession(it)
+                        } else {
+                            seekState = updatePlaybackSeekSession(seekState, it)
                         }
-                        isDragging = true
-                        tempProgress = it
                     },
                     onValueChangeFinished = {
-                        isDragging = false
-                        onSeek((tempProgress * progress.duration).toLong())
+                        val result = finishPlaybackSeekSession(seekState)
+                        seekState = result.state
+                        onSeek((result.committedProgress * progress.duration).toLong())
                     },
                     colors = SliderDefaults.colors(
                         thumbColor = MaterialTheme.colorScheme.primary,

@@ -14,6 +14,8 @@ import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.video.controller.PlaybackProgressManager
 import com.android.purebilibili.feature.video.controller.QualityManager
+import com.android.purebilibili.feature.video.playback.session.PlaybackUserActionTracker
+import com.android.purebilibili.feature.video.ui.overlay.PlaybackUserActionType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -96,11 +98,58 @@ internal fun shouldPreparePlayerBeforeExplicitPlay(
     return hasMediaItems && playbackState == Player.STATE_IDLE
 }
 
+internal fun shouldForceCompatibilitySeekOnUserResume(
+    playbackState: Int,
+    currentPositionMs: Long,
+    isPlaying: Boolean
+): Boolean {
+    return !isPlaying &&
+        playbackState == Player.STATE_READY &&
+        currentPositionMs > 0L
+}
+
 internal fun playPlayerFromUserAction(player: Player) {
+    playPlayerForUserIntent(player, trackUserAction = true)
+}
+
+private fun playPlayerForUserIntent(
+    player: Player,
+    trackUserAction: Boolean
+) {
+    if (trackUserAction) {
+        PlaybackUserActionTracker.recordAction(
+            player = player,
+            type = PlaybackUserActionType.PLAY
+        )
+    }
+    Logger.d(
+        "VideoPlaybackUseCase",
+        "USER_DBG playPlayerFromUserAction before: " +
+            "state=${player.playbackState}, isPlaying=${player.isPlaying}, " +
+            "playWhenReady=${player.playWhenReady}, mediaItemCount=${player.mediaItemCount}, pos=${player.currentPosition}"
+    )
     if (shouldPreparePlayerBeforeExplicitPlay(player.playbackState, player.mediaItemCount > 0)) {
         player.prepare()
     }
+    if (shouldForceCompatibilitySeekOnUserResume(
+            playbackState = player.playbackState,
+            currentPositionMs = player.currentPosition,
+            isPlaying = player.isPlaying
+        )
+    ) {
+        Logger.d(
+            "VideoPlaybackUseCase",
+            "USER_DBG playPlayerFromUserAction compatibility seek: pos=${player.currentPosition}"
+        )
+        player.seekTo(player.currentPosition)
+    }
     player.play()
+    Logger.d(
+        "VideoPlaybackUseCase",
+        "USER_DBG playPlayerFromUserAction after: " +
+            "state=${player.playbackState}, isPlaying=${player.isPlaying}, " +
+            "playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+    )
 }
 
 internal fun shouldResumePlaybackAfterUserSeek(
@@ -115,15 +164,34 @@ internal fun seekPlayerFromUserAction(player: Player, positionMs: Long) {
         playWhenReadyBeforeSeek = player.playWhenReady,
         playbackStateBeforeSeek = player.playbackState
     )
+    Logger.d(
+        "VideoPlaybackUseCase",
+        "USER_DBG seekPlayerFromUserAction: target=$positionMs, shouldResume=$shouldResume, " +
+            "beforeState=${player.playbackState}, beforePlaying=${player.isPlaying}, beforePwr=${player.playWhenReady}"
+    )
     player.seekTo(positionMs)
     if (shouldResume) {
-        playPlayerFromUserAction(player)
+        playPlayerForUserIntent(player, trackUserAction = false)
     }
 }
 
 internal fun togglePlayerPlaybackFromUserAction(player: Player) {
+    Logger.d(
+        "VideoPlaybackUseCase",
+        "USER_DBG togglePlayerPlaybackFromUserAction before: " +
+            "state=${player.playbackState}, isPlaying=${player.isPlaying}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+    )
     if (player.isPlaying) {
+        PlaybackUserActionTracker.recordAction(
+            player = player,
+            type = PlaybackUserActionType.PAUSE
+        )
         player.pause()
+        Logger.d(
+            "VideoPlaybackUseCase",
+            "USER_DBG togglePlayerPlaybackFromUserAction paused: " +
+                "state=${player.playbackState}, isPlaying=${player.isPlaying}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+        )
         return
     }
     playPlayerFromUserAction(player)
@@ -443,7 +511,7 @@ class VideoPlaybackUseCase(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
         val dataSourceFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-            NetworkModule.okHttpClient
+            NetworkModule.playbackOkHttpClient
         ).setDefaultRequestProperties(headers)
         
         val mediaSourceFactory = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)

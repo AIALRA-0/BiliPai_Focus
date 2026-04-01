@@ -17,6 +17,7 @@ object PlayerSettingsCache {
     private const val PREFS_NAME = "player_settings_cache"
     private const val KEY_HW_DECODE = "hw_decode_enabled"
     private const val KEY_SEEK_FAST = "seek_fast_enabled"
+    private const val KEY_PLAYER_DIAGNOSTIC_LOGGING = "player_diagnostic_logging_enabled"
     
     // 内存缓存
     @Volatile
@@ -24,6 +25,9 @@ object PlayerSettingsCache {
     
     @Volatile
     private var seekFastEnabled: Boolean? = null
+
+    @Volatile
+    private var playerDiagnosticLoggingEnabled: Boolean? = null
     
     /**
      * 初始化缓存（在 Application.onCreate 中调用）
@@ -32,7 +36,12 @@ object PlayerSettingsCache {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         hwDecodeEnabled = prefs.getBoolean(KEY_HW_DECODE, true)
         seekFastEnabled = prefs.getBoolean(KEY_SEEK_FAST, true)
-        Logger.d(TAG, "✅ 初始化完成: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled")
+        playerDiagnosticLoggingEnabled = prefs.getBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, true)
+        Logger.d(
+            TAG,
+            "✅ 初始化完成: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
+                "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled"
+        )
     }
     
     /**
@@ -82,6 +91,37 @@ object PlayerSettingsCache {
             .apply()
         Logger.d(TAG, "💾 快速 Seek 设置已更新: $enabled")
     }
+
+    /**
+     * 获取播放器诊断日志开关
+     */
+    fun isPlayerDiagnosticLoggingEnabled(context: Context): Boolean {
+        return playerDiagnosticLoggingEnabled ?: run {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val value = prefs.getBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, true)
+            playerDiagnosticLoggingEnabled = value
+            value
+        }
+    }
+
+    /**
+     * 获取播放器诊断日志开关（仅读取内存缓存）
+     */
+    fun isPlayerDiagnosticLoggingEnabled(): Boolean {
+        return playerDiagnosticLoggingEnabled ?: true
+    }
+
+    /**
+     * 设置播放器诊断日志开关
+     */
+    fun setPlayerDiagnosticLoggingEnabled(context: Context, enabled: Boolean) {
+        playerDiagnosticLoggingEnabled = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, enabled)
+            .apply()
+        Logger.d(TAG, "💾 播放器诊断日志设置已更新: $enabled")
+    }
     
     /**
      * 强制刷新缓存（设置页面修改后调用）
@@ -90,6 +130,11 @@ object PlayerSettingsCache {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         hwDecodeEnabled = prefs.getBoolean(KEY_HW_DECODE, true)
         seekFastEnabled = prefs.getBoolean(KEY_SEEK_FAST, true)
-        Logger.d(TAG, "🔄 缓存已刷新: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled")
+        playerDiagnosticLoggingEnabled = prefs.getBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, true)
+        Logger.d(
+            TAG,
+            "🔄 缓存已刷新: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
+                "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled"
+        )
     }
 }

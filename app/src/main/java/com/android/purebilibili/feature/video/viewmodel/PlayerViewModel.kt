@@ -58,6 +58,7 @@ import com.android.purebilibili.feature.video.playback.loader.PlaybackLoader
 import com.android.purebilibili.feature.video.playback.policy.PlaybackPostLoadTask
 import com.android.purebilibili.feature.video.playback.policy.resolveOnlineCountPollingDelayMs
 import com.android.purebilibili.feature.video.playback.policy.buildPlaybackPostLoadPlan
+import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.video.playback.policy.resolvePluginPollingIntervalMs
 import com.android.purebilibili.feature.video.playback.policy.shouldRefreshOnlineCount
 import com.android.purebilibili.feature.video.playback.policy.shouldSendPlaybackHeartbeat
@@ -94,6 +95,34 @@ import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitle
 import com.android.purebilibili.feature.video.subtitle.orderSubtitleTracksByPreference
 import com.android.purebilibili.feature.video.subtitle.resolveDefaultSubtitleLanguages
 
+data class SponsorSkipUiState(
+    val visible: Boolean = false,
+    val segmentId: String? = null,
+    val skipToMs: Long = 0L,
+    val label: String? = null
+)
+
+internal fun reduceSponsorSkipUiState(
+    previous: SponsorSkipUiState,
+    action: SkipAction?
+): SponsorSkipUiState {
+    return when (action) {
+        is SkipAction.ShowButton -> SponsorSkipUiState(
+            visible = true,
+            segmentId = action.segmentId,
+            skipToMs = action.skipToMs,
+            label = action.label
+        )
+
+        else -> previous.copy(
+            visible = false,
+            segmentId = null,
+            skipToMs = 0L,
+            label = null
+        )
+    }
+}
+
 // ========== UI State ==========
 sealed class PlayerUiState {
     data class Loading(
@@ -113,6 +142,7 @@ sealed class PlayerUiState {
         val qualityLabels: List<String> = emptyList(),
         val qualityIds: List<Int> = emptyList(),
         val startPosition: Long = 0L,
+        val pendingPlaybackTransitionPositionMs: Long? = null,
         val cachedDashVideos: List<DashVideo> = emptyList(),
         val cachedDashAudios: List<DashAudio> = emptyList(),
         val isQualitySwitching: Boolean = false,
@@ -624,6 +654,12 @@ class PlayerViewModel : ViewModel() {
     val showSkipButton = _showSkipButton.asStateFlow()
     private val _currentSkipReason = MutableStateFlow<String?>( null)
     val currentSkipReason = _currentSkipReason.asStateFlow()
+    private val _currentSponsorSegment = MutableStateFlow<SponsorSegment?>(null)
+    val currentSponsorSegment = _currentSponsorSegment.asStateFlow()
+    private val _sponsorSkipUiState = MutableStateFlow(SponsorSkipUiState())
+    private val _sponsorProgressMarkers =
+        MutableStateFlow<List<com.android.purebilibili.data.model.response.SponsorProgressMarker>>(emptyList())
+    val sponsorProgressMarkers = _sponsorProgressMarkers.asStateFlow()
     
     //  Download state
     private val _downloadProgress = MutableStateFlow(-1f)
@@ -3406,6 +3442,7 @@ class PlayerViewModel : ViewModel() {
     
     // 👀 [新增] 在线观看人数定时刷新 Job
     private var onlineCountJob: Job? = null
+    private var playbackTransitionMonitorJob: Job? = null
     
     // 👀 [新增] 获取并更新在线观看人数
     private fun startOnlineCountPolling(bvid: String, cid: Long) {
@@ -4558,6 +4595,30 @@ class PlayerViewModel : ViewModel() {
     }
     
     // ========== Quality ==========
+
+    private fun monitorPlaybackTransitionPosition(targetPositionMs: Long) {
+        playbackTransitionMonitorJob?.cancel()
+        playbackTransitionMonitorJob = viewModelScope.launch {
+            while (true) {
+                val current = _uiState.value as? PlayerUiState.Success ?: return@launch
+                val pendingPositionMs = current.pendingPlaybackTransitionPositionMs ?: return@launch
+                if (pendingPositionMs != targetPositionMs) return@launch
+                val playerPositionMs = playbackUseCase.getCurrentPosition().coerceAtLeast(0L)
+                if (!shouldHoldPlaybackTransitionPosition(playerPositionMs, targetPositionMs)) {
+                    _uiState.update { state ->
+                        val success = state as? PlayerUiState.Success ?: return@update state
+                        if (success.pendingPlaybackTransitionPositionMs != targetPositionMs) {
+                            state
+                        } else {
+                            success.copy(pendingPlaybackTransitionPositionMs = null)
+                        }
+                    }
+                    return@launch
+                }
+                delay(50)
+            }
+        }
+    }
     
     fun changeQuality(qualityId: Int, currentPos: Long) {
         val current = _uiState.value as? PlayerUiState.Success ?: return
@@ -4626,7 +4687,12 @@ class PlayerViewModel : ViewModel() {
             }
         }
         
-        _uiState.value = current.copy(isQualitySwitching = true, requestedQuality = qualityId)
+        val transitionPositionMs = currentPos.coerceAtLeast(0L)
+        _uiState.value = current.copy(
+            isQualitySwitching = true,
+            requestedQuality = qualityId,
+            pendingPlaybackTransitionPositionMs = transitionPositionMs
+        )
         
         viewModelScope.launch {
             // [新增] 获取当前音频偏好
@@ -4664,12 +4730,14 @@ class PlayerViewModel : ViewModel() {
                 _uiState.value = current.copy(
                     playUrl = result.videoUrl, audioUrl = result.audioUrl,
                     currentQuality = result.actualQuality, isQualitySwitching = false, requestedQuality = null,
+                    pendingPlaybackTransitionPositionMs = transitionPositionMs,
                     qualityIds = result.qualityIds.ifEmpty { current.qualityIds },
                     qualityLabels = result.qualityLabels.ifEmpty { current.qualityLabels },
                     //  [修复] 更新缓存的DASH流，否则后续画质切换可能失败
                     cachedDashVideos = result.cachedDashVideos.ifEmpty { current.cachedDashVideos },
                     cachedDashAudios = result.cachedDashAudios.ifEmpty { current.cachedDashAudios }
                 )
+                monitorPlaybackTransitionPosition(transitionPositionMs)
                 val label = current.qualityLabels.getOrNull(
                     current.qualityIds.indexOf(result.actualQuality)
                 ) ?: qualityManager.getQualityLabel(result.actualQuality)
@@ -4684,7 +4752,11 @@ class PlayerViewModel : ViewModel() {
                 //  记录画质切换事件
                 AnalyticsHelper.logQualityChange(currentBvid, current.currentQuality, result.actualQuality)
             } else {
-                _uiState.value = current.copy(isQualitySwitching = false, requestedQuality = null)
+                _uiState.value = current.copy(
+                    isQualitySwitching = false,
+                    requestedQuality = null,
+                    pendingPlaybackTransitionPositionMs = null
+                )
                 toast("清晰度切换失败", PlayerToastPresentation.CenteredHighlight)
             }
         }
@@ -4704,7 +4776,10 @@ class PlayerViewModel : ViewModel() {
             playbackUseCase.savePosition(currentBvid, previousCid)
         }
         currentCid = page.cid
-        _uiState.value = subtitleClearedState.copy(isQualitySwitching = true)
+        _uiState.value = subtitleClearedState.copy(
+            isQualitySwitching = true,
+            pendingPlaybackTransitionPositionMs = 0L
+        )
         
         viewModelScope.launch {
             try {
@@ -4746,11 +4821,13 @@ class PlayerViewModel : ViewModel() {
                         _uiState.value = subtitleClearedState.copy(
                             info = current.info.copy(cid = page.cid), playUrl = selection.videoUrl, audioUrl = selection.audioUrl,
                             startPosition = restoredPosition, isQualitySwitching = false,
+                            pendingPlaybackTransitionPositionMs = restoredPosition.coerceAtLeast(0L),
                             qualityIds = selection.qualityIds,
                             qualityLabels = selection.qualityLabels,
                             cachedDashVideos = selection.cachedDashVideos,
                             cachedDashAudios = selection.cachedDashAudios
                         )
+                        monitorPlaybackTransitionPosition(restoredPosition.coerceAtLeast(0L))
                         interactiveCurrentEdgeId = 0L
                         loadPlayerInfo(currentBvid, page.cid)
                         loadVideoshot(currentBvid, page.cid)
@@ -4758,10 +4835,16 @@ class PlayerViewModel : ViewModel() {
                         return@launch
                     }
                 }
-                _uiState.value = current.copy(isQualitySwitching = false)
+                _uiState.value = current.copy(
+                    isQualitySwitching = false,
+                    pendingPlaybackTransitionPositionMs = null
+                )
                 toast("\u5206P\u5207\u6362\u5931\u8d25")
             } catch (e: Exception) {
-                _uiState.value = current.copy(isQualitySwitching = false)
+                _uiState.value = current.copy(
+                    isQualitySwitching = false,
+                    pendingPlaybackTransitionPositionMs = null
+                )
             }
         }
     }
@@ -4982,9 +5065,13 @@ class PlayerViewModel : ViewModel() {
                             )
                             PlaybackPostLoadTask.HEARTBEAT -> startHeartbeat()
                             PlaybackPostLoadTask.PLUGIN_ON_VIDEO_LOAD -> {
+                                _sponsorProgressMarkers.value = emptyList()
                                 PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
                                     try {
                                         plugin.onVideoLoad(loadedBvid, loadedCid)
+                                        if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                                            _sponsorProgressMarkers.value = plugin.getProgressMarkers()
+                                        }
                                     } catch (e: Exception) {
                                         Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoLoad failed", e)
                                     }
@@ -5006,6 +5093,12 @@ class PlayerViewModel : ViewModel() {
         pluginCheckJob = viewModelScope.launch {
             while (true) {
                 val plugins = PluginManager.getEnabledPlayerPlugins()
+                if (plugins.none { it is com.android.purebilibili.feature.plugin.SponsorBlockPlugin } &&
+                    _sponsorProgressMarkers.value.isNotEmpty()
+                ) {
+                    _sponsorProgressMarkers.value = emptyList()
+                    clearSponsorSkipUi()
+                }
                 val intervalMs = resolvePluginPollingIntervalMs(
                     hasPlugins = plugins.isNotEmpty(),
                     isPlaying = exoPlayer?.isPlaying == true
@@ -5027,9 +5120,25 @@ class PlayerViewModel : ViewModel() {
                     try {
                         when (val action = plugin.onPositionUpdate(currentPos)) {
                             is SkipAction.SkipTo -> {
+                                clearSponsorSkipUi()
                                 playbackUseCase.seekTo(action.positionMs)
                                 toast(action.reason)
                                 Logger.d("PlayerVM", " Plugin ${plugin.name} skipped to ${action.positionMs}ms")
+                            }
+                            is SkipAction.ShowButton -> {
+                                val nextUiState = reduceSponsorSkipUiState(
+                                    previous = _sponsorSkipUiState.value,
+                                    action = action
+                                )
+                                _sponsorSkipUiState.value = nextUiState
+                                _showSkipButton.value = nextUiState.visible
+                                _currentSkipReason.value = action.label
+                                if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                                    _currentSponsorSegment.value = plugin.getActiveSegment()
+                                }
+                            }
+                            SkipAction.None -> {
+                                clearSponsorSkipUi()
                             }
                             else -> {}
                         }
@@ -5041,7 +5150,56 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    fun dismissSponsorSkipButton() { _showSkipButton.value = false }
+    fun dismissSponsorSkipButton() {
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                plugin.markAsSkipped(_sponsorSkipUiState.value.segmentId ?: return@forEach)
+            }
+        }
+        clearSponsorSkipUi()
+    }
+
+    fun skipCurrentSponsorSegment() {
+        val targetPosition = _sponsorSkipUiState.value.skipToMs.takeIf { it > 0L } ?: return
+        val segmentId = _sponsorSkipUiState.value.segmentId
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin && segmentId != null) {
+                plugin.markAsSkipped(segmentId)
+            }
+        }
+        playbackUseCase.seekTo(targetPosition)
+        clearSponsorSkipUi()
+    }
+
+    fun notifyPluginsOfExplicitSeek(positionMs: Long) {
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            plugin.onUserSeek(positionMs)
+            if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
+                _currentSponsorSegment.value = plugin.getActiveSegment()
+            }
+        }
+        val currentSegment = _currentSponsorSegment.value
+        if (currentSegment != null) {
+            val action = SkipAction.ShowButton(
+                skipToMs = currentSegment.endTimeMs,
+                label = "跳过${currentSegment.categoryName}",
+                segmentId = currentSegment.UUID
+            )
+            val nextUiState = reduceSponsorSkipUiState(_sponsorSkipUiState.value, action)
+            _sponsorSkipUiState.value = nextUiState
+            _showSkipButton.value = nextUiState.visible
+            _currentSkipReason.value = action.label
+        } else {
+            clearSponsorSkipUi()
+        }
+    }
+
+    private fun clearSponsorSkipUi() {
+        _sponsorSkipUiState.value = reduceSponsorSkipUiState(_sponsorSkipUiState.value, SkipAction.None)
+        _showSkipButton.value = false
+        _currentSkipReason.value = null
+        _currentSponsorSegment.value = null
+    }
     
     // ========== Playback Control ==========
     
@@ -5145,6 +5303,7 @@ class PlayerViewModel : ViewModel() {
         heartbeatJob?.cancel()
         pluginCheckJob?.cancel()
         onlineCountJob?.cancel()  // 👀 取消在线人数轮询
+        playbackTransitionMonitorJob?.cancel()
         aiSummaryJob?.cancel()
         activeLoadJob?.cancel()
         playerInfoJob?.cancel()

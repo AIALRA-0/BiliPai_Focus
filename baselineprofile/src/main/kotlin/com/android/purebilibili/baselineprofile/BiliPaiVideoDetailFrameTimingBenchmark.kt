@@ -81,8 +81,9 @@ class BiliPaiVideoDetailFrameTimingBenchmark {
 
     private fun MacrobenchmarkScope.startVideoDetailActivity() {
         val benchmarkBvid = resolveBenchmarkBvid()
-        val component = "$TARGET_PACKAGE_NAME/.feature.video.VideoActivity"
-        device.executeShellCommand("am start -W -n $component --es bvid $benchmarkBvid")
+        device.executeShellCommand(
+            "am start -W -n $TARGET_VIDEO_ACTIVITY_COMPONENT --es bvid $benchmarkBvid"
+        )
         device.waitForIdle()
     }
 

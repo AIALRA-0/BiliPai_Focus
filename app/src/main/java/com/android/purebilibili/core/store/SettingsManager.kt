@@ -3218,6 +3218,8 @@ object SettingsManager {
     private val KEY_SHOW_FULLSCREEN_TIME = booleanPreferencesKey("show_fullscreen_time")
     private val KEY_SHOW_FULLSCREEN_ACTION_ITEMS = booleanPreferencesKey("show_fullscreen_action_items")
     private val KEY_SHOW_ONLINE_COUNT = booleanPreferencesKey("show_online_count")
+    private val KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED =
+        booleanPreferencesKey("player_diagnostic_logging_enabled")
     private val KEY_SUBTITLE_AUTO_PREFERENCE = intPreferencesKey("subtitle_auto_preference")
     private val KEY_BOTTOM_PROGRESS_BEHAVIOR = intPreferencesKey("bottom_progress_behavior")
     private val KEY_HORIZONTAL_ADAPTATION = booleanPreferencesKey("horizontal_adaptation_enabled")
@@ -3368,6 +3370,16 @@ object SettingsManager {
     fun getShowOnlineCountSync(context: Context): Boolean {
         return context.getSharedPreferences("video_overlay_cache", Context.MODE_PRIVATE)
             .getBoolean("show_online_count", false)
+    }
+
+    fun getPlayerDiagnosticLoggingEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED] ?: true }
+
+    suspend fun setPlayerDiagnosticLoggingEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED] = enabled
+        }
+        PlayerSettingsCache.setPlayerDiagnosticLoggingEnabled(context, enabled)
     }
 
     fun getSubtitleAutoPreference(context: Context): Flow<SubtitleAutoPreference> =

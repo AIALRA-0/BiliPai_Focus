@@ -1,14 +1,74 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import androidx.media3.common.Player
+import com.android.purebilibili.data.model.response.SponsorCategory
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import com.android.purebilibili.core.store.BottomProgressBehavior
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
 class VideoPlayerOverlayPolicyTest {
+
+    @Test
+    fun sponsorProgressBarMarkers_areClampedIntoTrackBounds() {
+        val markers = resolveSponsorProgressBarMarkers(
+            durationMs = 100_000L,
+            markers = listOf(
+                SponsorProgressMarker(
+                    segmentId = "segment",
+                    category = SponsorCategory.SPONSOR,
+                    startTimeMs = -5_000L,
+                    endTimeMs = 130_000L
+                )
+            )
+        )
+
+        assertEquals(1, markers.size)
+        assertEquals(0f, markers.single().startFraction)
+        assertEquals(1f, markers.single().endFraction)
+    }
+
+    @Test
+    fun sponsorProgressBarMarkers_areEmptyWhenDurationIsInvalid() {
+        val markers = resolveSponsorProgressBarMarkers(
+            durationMs = 0L,
+            markers = listOf(
+                SponsorProgressMarker(
+                    segmentId = "segment",
+                    category = SponsorCategory.SPONSOR,
+                    startTimeMs = 10_000L,
+                    endTimeMs = 20_000L
+                )
+            )
+        )
+
+        assertTrue(markers.isEmpty())
+    }
+
+    @Test
+    fun sponsorProgressBarMarkers_useSecondaryStyleForNonSponsorSegments() {
+        val markers = resolveSponsorProgressBarMarkers(
+            durationMs = 100_000L,
+            markers = listOf(
+                SponsorProgressMarker(
+                    segmentId = "segment",
+                    category = SponsorCategory.INTRO,
+                    startTimeMs = 10_000L,
+                    endTimeMs = 20_000L
+                )
+            )
+        )
+
+        assertEquals(1, markers.size)
+        assertEquals(SponsorCategory.INTRO, markers.single().category)
+        assertTrue(markers.single().color.alpha < 1f)
+    }
 
     @Test
     fun inlineOverlayProgressPolling_stopsWhenHostLifecycleStops() {
@@ -150,7 +210,8 @@ class VideoPlayerOverlayPolicyTest {
                 isQualitySwitching = false,
                 isFullscreen = true,
                 isBuffering = true,
-                isScrubbing = false
+                isScrubbing = false,
+                isSeekTransitionPending = false
             )
         )
         assertFalse(
@@ -160,7 +221,8 @@ class VideoPlayerOverlayPolicyTest {
                 isQualitySwitching = false,
                 isFullscreen = true,
                 isBuffering = false,
-                isScrubbing = true
+                isScrubbing = true,
+                isSeekTransitionPending = false
             )
         )
         assertTrue(
@@ -170,7 +232,23 @@ class VideoPlayerOverlayPolicyTest {
                 isQualitySwitching = false,
                 isFullscreen = true,
                 isBuffering = false,
-                isScrubbing = false
+                isScrubbing = false,
+                isSeekTransitionPending = false
+            )
+        )
+    }
+
+    @Test
+    fun centerPlayButtonHiddenDuringSeekResumeTransition() {
+        assertFalse(
+            shouldShowCenterPlayButton(
+                isVisible = true,
+                isPlaying = false,
+                isQualitySwitching = false,
+                isFullscreen = true,
+                isBuffering = false,
+                isScrubbing = false,
+                isSeekTransitionPending = true
             )
         )
     }
@@ -206,7 +284,15 @@ class VideoPlayerOverlayPolicyTest {
                 audioCodec = "AAC LC",
                 frameRate = "60 fps",
                 videoDecoder = "c2.qti.hevc.decoder",
-                audioDecoder = ""
+                audioDecoder = "",
+                playbackState = "READY",
+                playWhenReady = "true",
+                isPlaying = "true",
+                firstFrame = "rendered",
+                droppedFrames = "12",
+                bandwidthEstimate = "8.6 Mbps",
+                lastVideoEvent = "first frame rendered",
+                lastAudioEvent = "audio sink recovered"
             )
         )
 
@@ -218,9 +304,214 @@ class VideoPlayerOverlayPolicyTest {
                 DebugStatRow("Video codec", "HEVC"),
                 DebugStatRow("Audio codec", "AAC LC"),
                 DebugStatRow("Frame rate", "60 fps"),
-                DebugStatRow("Video decoder", "c2.qti.hevc.decoder")
+                DebugStatRow("Video decoder", "c2.qti.hevc.decoder"),
+                DebugStatRow("Playback state", "READY"),
+                DebugStatRow("Play when ready", "true"),
+                DebugStatRow("Is playing", "true"),
+                DebugStatRow("First frame", "rendered"),
+                DebugStatRow("Dropped frames", "12"),
+                DebugStatRow("Bandwidth", "8.6 Mbps"),
+                DebugStatRow("Last video event", "first frame rendered"),
+                DebugStatRow("Last audio event", "audio sink recovered")
             ),
             rows
+        )
+    }
+
+    @Test
+    fun appendPlaybackDiagnosticEvent_keepsNewestEntriesWithinLimit() {
+        val result = (1..4).fold(emptyList<String>()) { events, index ->
+            appendPlaybackDiagnosticEvent(
+                current = events,
+                event = "event-$index",
+                maxEntries = 3
+            )
+        }
+
+        assertEquals(
+            listOf("event-2", "event-3", "event-4"),
+            result
+        )
+    }
+
+    @Test
+    fun buildPlaybackDiagnosticReport_formatsStructuredUserShareText() {
+        val report = buildPlaybackDiagnosticReport(
+            title = "Test video",
+            bvid = "BV1xx411c7mD",
+            cid = 123456L,
+            currentPositionMs = 125_000L,
+            bufferedPositionMs = 188_000L,
+            debugInfo = PlaybackDebugInfo(
+                resolution = "1920 x 1080",
+                videoCodec = "HEVC",
+                audioCodec = "AAC",
+                playbackState = "READY",
+                playWhenReady = "true",
+                isPlaying = "false",
+                firstFrame = "rendered",
+                droppedFrames = "12",
+                bandwidthEstimate = "8.6 Mbps",
+                lastVideoEvent = "first frame rendered",
+                lastAudioEvent = "audio sink recovered"
+            ),
+            recentEvents = listOf(
+                "pause requested at 01:40",
+                "resume requested at 02:05"
+            ),
+            generatedAtMillis = 1_711_701_234_000L
+        )
+
+        assertTrue(report.contains("BiliPai Player Diagnostics"))
+        assertTrue(report.contains("Title: Test video"))
+        assertTrue(report.contains("BVID: BV1xx411c7mD"))
+        assertTrue(report.contains("CID: 123456"))
+        assertTrue(report.contains("Position: 02:05"))
+        assertTrue(report.contains("Buffered: 03:08"))
+        assertTrue(report.contains("Playback state: READY"))
+        assertTrue(report.contains("Bandwidth: 8.6 Mbps"))
+        assertTrue(report.contains("Recent events:"))
+        assertTrue(report.contains("- pause requested at 01:40"))
+        assertTrue(report.contains("- resume requested at 02:05"))
+    }
+
+    @Test
+    fun resolvePlaybackIssueSignal_flagsLongBufferingAsStutter() {
+        val signal = resolvePlaybackIssueSignal(
+            playbackState = Player.STATE_BUFFERING,
+            playWhenReady = true,
+            firstFrameRendered = true,
+            bufferingDurationMs = 12_000L,
+            waitingFirstFrameDurationMs = 0L
+        )
+
+        assertNotNull(signal)
+        assertEquals(PlaybackIssueType.STUTTER, signal.type)
+        assertTrue(signal.title.contains("卡顿"))
+    }
+
+    @Test
+    fun resolvePlaybackIssueSignal_flagsReadyWithoutFirstFrameAsBlackScreen() {
+        val signal = resolvePlaybackIssueSignal(
+            playbackState = Player.STATE_READY,
+            playWhenReady = true,
+            firstFrameRendered = false,
+            bufferingDurationMs = 0L,
+            waitingFirstFrameDurationMs = 6_000L
+        )
+
+        assertNotNull(signal)
+        assertEquals(PlaybackIssueType.BLACK_SCREEN, signal.type)
+        assertTrue(signal.title.contains("黑屏"))
+    }
+
+    @Test
+    fun resolvePlaybackIssueSignal_ignoresShortWaitsAndRecoveredFirstFrame() {
+        assertNull(
+            resolvePlaybackIssueSignal(
+                playbackState = Player.STATE_BUFFERING,
+                playWhenReady = true,
+                firstFrameRendered = true,
+                bufferingDurationMs = 3_000L,
+                waitingFirstFrameDurationMs = 0L
+            )
+        )
+        assertNull(
+            resolvePlaybackIssueSignal(
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                firstFrameRendered = true,
+                bufferingDurationMs = 0L,
+                waitingFirstFrameDurationMs = 10_000L
+            )
+        )
+    }
+
+    @Test
+    fun resolvePlaybackActionNoResponseSignal_flagsPlayActionTimeout() {
+        val signal = resolvePlaybackActionNoResponseSignal(
+            actionType = PlaybackUserActionType.PLAY,
+            actionAgeMs = 2_200L,
+            hasPlayerResponded = false
+        )
+
+        assertNotNull(signal)
+        assertEquals(PlaybackIssueType.NO_RESPONSE, signal.type)
+        assertTrue(signal.title.contains("无响应"))
+    }
+
+    @Test
+    fun resolvePlaybackActionNoResponseSignal_ignoresFastOrRecoveredActions() {
+        assertNull(
+            resolvePlaybackActionNoResponseSignal(
+                actionType = PlaybackUserActionType.PLAY,
+                actionAgeMs = 1_000L,
+                hasPlayerResponded = false
+            )
+        )
+        assertNull(
+            resolvePlaybackActionNoResponseSignal(
+                actionType = PlaybackUserActionType.PAUSE,
+                actionAgeMs = 5_000L,
+                hasPlayerResponded = true
+            )
+        )
+    }
+
+    @Test
+    fun resolvePlaybackDiagnosticEvents_skipsCollectionWhenLoggingDisabled() {
+        assertEquals(
+            listOf("00:10 | first frame rendered"),
+            resolvePlaybackDiagnosticEvents(
+                current = listOf("00:10 | first frame rendered"),
+                event = "00:15 | buffering started",
+                diagnosticsEnabled = false
+            )
+        )
+
+        assertEquals(
+            listOf("00:10 | first frame rendered", "00:15 | buffering started"),
+            resolvePlaybackDiagnosticEvents(
+                current = listOf("00:10 | first frame rendered"),
+                event = "00:15 | buffering started",
+                diagnosticsEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun shouldMonitorPlaybackIssues_requiresLoggingEnabledAndActiveSignals() {
+        assertFalse(
+            shouldMonitorPlaybackIssues(
+                diagnosticsEnabled = false,
+                bufferingStartedAtMs = 10L,
+                waitingFirstFrameStartedAtMs = 0L,
+                hasPendingUserAction = false
+            )
+        )
+        assertFalse(
+            shouldMonitorPlaybackIssues(
+                diagnosticsEnabled = true,
+                bufferingStartedAtMs = 0L,
+                waitingFirstFrameStartedAtMs = 0L,
+                hasPendingUserAction = false
+            )
+        )
+        assertTrue(
+            shouldMonitorPlaybackIssues(
+                diagnosticsEnabled = true,
+                bufferingStartedAtMs = 10L,
+                waitingFirstFrameStartedAtMs = 0L,
+                hasPendingUserAction = false
+            )
+        )
+        assertTrue(
+            shouldMonitorPlaybackIssues(
+                diagnosticsEnabled = true,
+                bufferingStartedAtMs = 0L,
+                waitingFirstFrameStartedAtMs = 0L,
+                hasPendingUserAction = true
+            )
         )
     }
 

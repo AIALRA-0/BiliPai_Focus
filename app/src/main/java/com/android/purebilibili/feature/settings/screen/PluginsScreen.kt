@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import com.android.purebilibili.R
 import com.android.purebilibili.core.plugin.PluginInfo
 import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.iOSPink  // 插件图标色
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -39,7 +40,21 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.plugin.SPONSOR_BLOCK_PLUGIN_ID
 import kotlinx.coroutines.launch
+
+internal suspend fun dispatchBuiltInPluginToggle(
+    pluginId: String,
+    enabled: Boolean,
+    onSponsorBlockToggle: suspend (Boolean) -> Unit,
+    onGenericPluginToggle: suspend (String, Boolean) -> Unit
+) {
+    if (pluginId == SPONSOR_BLOCK_PLUGIN_ID) {
+        onSponsorBlockToggle(enabled)
+    } else {
+        onGenericPluginToggle(pluginId, enabled)
+    }
+}
 
 /**
  *  插件中心页面
@@ -219,7 +234,16 @@ fun PluginsContent(
                                 iconTint = getPluginColor(index),
                                 onToggle = { enabled ->
                                     scope.launch {
-                                        PluginManager.setEnabled(pluginInfo.plugin.id, enabled)
+                                        dispatchBuiltInPluginToggle(
+                                            pluginId = pluginInfo.plugin.id,
+                                            enabled = enabled,
+                                            onSponsorBlockToggle = { sponsorEnabled ->
+                                                SettingsManager.setSponsorBlockEnabled(context, sponsorEnabled)
+                                            },
+                                            onGenericPluginToggle = { pluginId, pluginEnabled ->
+                                                PluginManager.setEnabled(pluginId, pluginEnabled)
+                                            }
+                                        )
                                     }
                                 },
                                 onExpandToggle = {

@@ -28,6 +28,12 @@ interface PlayerPlugin : Plugin {
      * @return 跳过动作，返回 null 或 SkipAction.None 表示不跳过
      */
     suspend fun onPositionUpdate(positionMs: Long): SkipAction?
+
+    /**
+     * 用户显式 seek 时回调
+     * 用于让插件在拖动进度条、点击章节等场景下同步内部状态
+     */
+    fun onUserSeek(positionMs: Long) {}
     
     /**
      * 视频播放结束时回调

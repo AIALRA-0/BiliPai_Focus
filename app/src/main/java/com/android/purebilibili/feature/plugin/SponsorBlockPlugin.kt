@@ -25,16 +25,82 @@ import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.plugin.SkipAction
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.data.model.response.SponsorBlockMarkerMode
 import com.android.purebilibili.data.model.response.SponsorSegment
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.repository.SponsorBlockRepository
+import com.android.purebilibili.feature.settings.IOSSlidingSegmentedSetting
+import com.android.purebilibili.feature.settings.PlaybackSegmentOption
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.coroutines.flow.first
 
 private const val TAG = "SponsorBlockPlugin"
+const val SPONSOR_BLOCK_PLUGIN_ID = "sponsor_block"
+
+internal fun normalizeSponsorSegments(
+    segments: List<SponsorSegment>
+): List<SponsorSegment> {
+    return segments
+        .asSequence()
+        .filter { segment -> segment.isSkipType && segment.endTimeMs > segment.startTimeMs }
+        .sortedWith(compareBy<SponsorSegment> { it.startTimeMs }.thenBy { it.endTimeMs })
+        .toList()
+}
+
+internal fun resolveSponsorProgressMarkers(
+    segments: List<SponsorSegment>,
+    markerMode: SponsorBlockMarkerMode
+): List<SponsorProgressMarker> {
+    if (markerMode == SponsorBlockMarkerMode.OFF) return emptyList()
+    return segments.asSequence()
+        .filter { segment ->
+            when (markerMode) {
+                SponsorBlockMarkerMode.OFF -> false
+                SponsorBlockMarkerMode.SPONSOR_ONLY -> segment.category == com.android.purebilibili.data.model.response.SponsorCategory.SPONSOR
+                SponsorBlockMarkerMode.ALL_SKIPPABLE -> true
+            }
+        }
+        .map { segment ->
+            SponsorProgressMarker(
+                segmentId = segment.UUID,
+                category = segment.category,
+                startTimeMs = segment.startTimeMs,
+                endTimeMs = segment.endTimeMs
+            )
+        }
+        .toList()
+}
+
+internal fun resetSkippedSegmentsForSeek(
+    segments: List<SponsorSegment>,
+    skippedIds: Set<String>,
+    seekPositionMs: Long
+): Set<String> {
+    return skippedIds.filterTo(mutableSetOf()) { skippedId ->
+        val segment = segments.firstOrNull { it.UUID == skippedId } ?: return@filterTo true
+        seekPositionMs > segment.endTimeMs
+    }
+}
+
+internal data class SponsorBlockAboutItemModel(
+    val title: String,
+    val subtitle: String?,
+    val value: String?
+)
+
+internal fun resolveSponsorBlockAboutItemModel(): SponsorBlockAboutItemModel {
+    return SponsorBlockAboutItemModel(
+        title = "关于空降助手",
+        subtitle = "BilibiliSponsorBlock",
+        value = null
+    )
+}
 
 /**
  *  空降助手插件
@@ -43,7 +109,7 @@ private const val TAG = "SponsorBlockPlugin"
  */
 class SponsorBlockPlugin : PlayerPlugin {
     
-    override val id = "sponsor_block"
+    override val id = SPONSOR_BLOCK_PLUGIN_ID
     override val name = "空降助手"
     override val description = "自动跳过视频中的广告、赞助、片头片尾等片段"
     override val version = "1.0.0"
@@ -52,6 +118,9 @@ class SponsorBlockPlugin : PlayerPlugin {
     
     // 当前视频的跳过片段
     private var segments: List<SponsorSegment> = emptyList()
+    private var progressMarkers: List<SponsorProgressMarker> = emptyList()
+    private var nextSegmentIndex: Int = 0
+    private var activeSegment: SponsorSegment? = null
     
     // 已跳过的片段 UUID（防止重复跳过）
     private val skippedIds = mutableSetOf<String>()
@@ -65,22 +134,37 @@ class SponsorBlockPlugin : PlayerPlugin {
     
     override suspend fun onDisable() {
         segments = emptyList()
+        progressMarkers = emptyList()
         skippedIds.clear()
+        nextSegmentIndex = 0
+        activeSegment = null
         Logger.d(TAG, "🔴 空降助手已禁用")
     }
     
     override suspend fun onVideoLoad(bvid: String, cid: Long) {
         // 重置状态
         segments = emptyList()
+        progressMarkers = emptyList()
         skippedIds.clear()
+        nextSegmentIndex = 0
+        activeSegment = null
+        lastPositionMs = 0
+        lastAutoSkipTime = 0
         
         //  [修复] 加载配置
         loadConfigSuspend()
         
         // 加载片段数据
         try {
-            segments = SponsorBlockRepository.getSegments(bvid)
-            Logger.d(TAG, " 加载了 ${segments.size} 个片段 for $bvid, autoSkip=${config.autoSkip}")
+            segments = normalizeSponsorSegments(SponsorBlockRepository.getSegments(bvid))
+            progressMarkers = resolveSponsorProgressMarkers(
+                segments = segments,
+                markerMode = config.markerMode
+            )
+            Logger.d(
+                TAG,
+                " Loaded ${segments.size} SponsorBlock segments for $bvid, autoSkip=${config.autoSkip}, markers=${progressMarkers.size}"
+            )
         } catch (e: Exception) {
             Logger.w(TAG, " 加载片段失败: ${e.message}")
         }
@@ -100,14 +184,15 @@ class SponsorBlockPlugin : PlayerPlugin {
         
         if (!isGracePeriod) {
             if (positionMs < lastPositionMs - 2000) {  // 回拉超过2秒
-                // 检查是否回拉到了某些已跳过片段之前
-                val segmentsToReset = segments.filter { seg ->
-                    seg.UUID in skippedIds && positionMs < seg.startTimeMs - 1000
-                }
-                segmentsToReset.forEach { seg ->
-                    skippedIds.remove(seg.UUID)
-                    Logger.d(TAG, " 回拉检测: 重置片段 ${seg.categoryName} 的跳过状态")
-                }
+                val nextSkippedIds =
+                    resetSkippedSegmentsForSeek(
+                        segments = segments,
+                        skippedIds = skippedIds.toSet(),
+                        seekPositionMs = positionMs
+                    )
+                skippedIds.clear()
+                skippedIds.addAll(nextSkippedIds)
+                nextSegmentIndex = findCandidateSegmentIndex(positionMs)
             }
             // 只有在非 Grace Period 才更新 lastPositionMs
             // 这样如果出现跳过后的瞬间 0ms/149ms 异常值，会被忽略，保留上次的高位值
@@ -120,27 +205,32 @@ class SponsorBlockPlugin : PlayerPlugin {
             }
         }
         
-        //  调试日志（每5秒一次）
-        val firstSeg = segments.firstOrNull()
-        if (firstSeg != null && positionMs % 5000 < 600) {
-            Logger.d(TAG, "📍 当前位置: ${positionMs}ms, 片段范围: ${firstSeg.startTimeMs}ms - ${firstSeg.endTimeMs}ms, autoSkip=${config.autoSkip}")
+        while (nextSegmentIndex < segments.size) {
+            val candidate = segments[nextSegmentIndex]
+            if (candidate.UUID in skippedIds || positionMs > candidate.endTimeMs) {
+                nextSegmentIndex += 1
+                continue
+            }
+            break
         }
-        
-        // 查找当前位置是否在某个片段内
-        val segment = segments.find { seg ->
-            positionMs in seg.startTimeMs..seg.endTimeMs && seg.UUID !in skippedIds
-        } ?: return SkipAction.None
-        
-        Logger.d(TAG, "🎯 命中片段: ${segment.categoryName}, 位置${positionMs}ms在[${segment.startTimeMs}-${segment.endTimeMs}]ms范围内")
+
+        val segment = segments.getOrNull(nextSegmentIndex)
+            ?.takeIf { candidate -> positionMs in candidate.startTimeMs..candidate.endTimeMs }
+            ?: run {
+                activeSegment = null
+                return SkipAction.None
+            }
+        activeSegment = segment
         
         // 如果配置为自动跳过
         if (config.autoSkip) {
             skippedIds.add(segment.UUID)
             lastAutoSkipTime = System.currentTimeMillis() // 记录跳过时间
-            Logger.d(TAG, " 自动跳过: ${segment.categoryName}")
+            nextSegmentIndex += 1
+            activeSegment = null
             //  记录空降助手跳过事件
             com.android.purebilibili.core.util.AnalyticsHelper.logSponsorBlockSkip(
-                videoId = skippedIds.firstOrNull() ?: "",
+                videoId = segment.UUID,
                 segmentType = segment.categoryName
             )
             return SkipAction.SkipTo(
@@ -157,17 +247,46 @@ class SponsorBlockPlugin : PlayerPlugin {
             segmentId = segment.UUID
         )
     }
+
+    override fun onUserSeek(positionMs: Long) {
+        val nextSkippedIds =
+            resetSkippedSegmentsForSeek(
+                segments = segments,
+                skippedIds = skippedIds.toSet(),
+                seekPositionMs = positionMs
+            )
+        skippedIds.clear()
+        skippedIds.addAll(nextSkippedIds)
+        nextSegmentIndex = findCandidateSegmentIndex(positionMs)
+        activeSegment = segments.getOrNull(nextSegmentIndex)
+            ?.takeIf { segment -> positionMs in segment.startTimeMs..segment.endTimeMs }
+        lastPositionMs = positionMs
+        if (positionMs >= 0L) {
+            lastAutoSkipTime = 0L
+        }
+    }
     
     /** 手动跳过时调用，标记片段已跳过 */
     fun markAsSkipped(segmentId: String) {
         skippedIds.add(segmentId)
         Logger.d(TAG, " 手动跳过完成: $segmentId")
     }
+
+    fun getProgressMarkers(): List<SponsorProgressMarker> = progressMarkers
+    fun getActiveSegment(): SponsorSegment? = activeSegment
+
+    private fun findCandidateSegmentIndex(positionMs: Long): Int {
+        val index = segments.indexOfFirst { segment -> positionMs <= segment.endTimeMs }
+        return if (index >= 0) index else segments.size
+    }
     
     override fun onVideoEnd() {
         segments = emptyList()
+        progressMarkers = emptyList()
         skippedIds.clear()
         lastPositionMs = 0
+        nextSegmentIndex = 0
+        activeSegment = null
     }
 
     /**  suspend版本的配置加载 */
@@ -176,15 +295,14 @@ class SponsorBlockPlugin : PlayerPlugin {
             val context = PluginManager.getContext()
             val jsonStr = PluginStore.getConfigJson(context, id)
             if (jsonStr != null) {
-                config = Json.decodeFromString<SponsorBlockConfig>(jsonStr)
+                config = Json.decodeFromString<SponsorBlockConfig>(jsonStr).normalized()
             } else {
-                //  没有保存的配置时，使用默认值（autoSkip=true）
+                //  没有保存的配置时，使用默认值
                 config = SponsorBlockConfig(autoSkip = true)
             }
-            Logger.d(TAG, "📖 配置已加载: autoSkip=${config.autoSkip}")
+            Logger.d(TAG, "Loaded SponsorBlock config: autoSkip=${config.autoSkip}, markerMode=${config.markerMode}")
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to load config", e)
-            // 出错时也使用默认值
             config = SponsorBlockConfig(autoSkip = true)
         }
     }
@@ -195,11 +313,22 @@ class SponsorBlockPlugin : PlayerPlugin {
         val uriHandler = LocalUriHandler.current
         val scope = rememberCoroutineScope()
         var autoSkip by remember { mutableStateOf(config.autoSkip) }
+        var markerMode by remember { mutableStateOf(config.markerMode) }
+        val aboutItem = remember { resolveSponsorBlockAboutItemModel() }
+        val markerOptions = remember {
+            SponsorBlockMarkerMode.entries.map { mode ->
+                PlaybackSegmentOption(
+                    value = mode,
+                    label = mode.label
+                )
+            }
+        }
         
         // 加载配置
         LaunchedEffect(Unit) {
             loadConfigSuspend()
             autoSkip = config.autoSkip
+            markerMode = config.markerMode
         }
         
         Column(
@@ -223,6 +352,29 @@ class SponsorBlockPlugin : PlayerPlugin {
                 },
                 iconTint = androidx.compose.ui.graphics.Color(0xFFFF9800) // iOS Orange
             )
+
+            androidx.compose.material3.HorizontalDivider(
+                modifier = Modifier.padding(start = 56.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            IOSSlidingSegmentedSetting(
+                title = "进度条提示：${markerMode.label}",
+                subtitle = "可选关闭、仅提示恰饭，或显示全部可跳过片段",
+                options = markerOptions,
+                selectedValue = markerMode,
+                onSelectionChange = { newValue ->
+                    markerMode = newValue
+                    config = config.copy(markerModeRaw = newValue.name)
+                    progressMarkers = resolveSponsorProgressMarkers(
+                        segments = segments,
+                        markerMode = newValue
+                    )
+                    scope.launch {
+                        PluginStore.setConfigJson(context, id, Json.encodeToString(config))
+                    }
+                }
+            )
             
             androidx.compose.material3.HorizontalDivider(
                 modifier = Modifier.padding(start = 56.dp),
@@ -232,8 +384,9 @@ class SponsorBlockPlugin : PlayerPlugin {
             // 使用原设置组件 - 关于空降助手
             IOSClickableItem(
                 icon = CupertinoIcons.Default.InfoCircle,
-                title = "关于空降助手",
-                value = "BilibiliSponsorBlock",
+                title = aboutItem.title,
+                subtitle = aboutItem.subtitle,
+                value = aboutItem.value,
                 onClick = { uriHandler.openUri("https://github.com/hanydd/BilibiliSponsorBlock") },
                 iconTint = androidx.compose.ui.graphics.Color(0xFF2196F3) // iOS Blue
             )
@@ -247,8 +400,25 @@ class SponsorBlockPlugin : PlayerPlugin {
 @Serializable
 data class SponsorBlockConfig(
     val autoSkip: Boolean = true,
+    val markerModeRaw: String = SponsorBlockMarkerMode.SPONSOR_ONLY.name,
     val skipSponsor: Boolean = true,
     val skipIntro: Boolean = true,
     val skipOutro: Boolean = true,
     val skipInteraction: Boolean = true
-)
+) {
+    val markerMode: SponsorBlockMarkerMode
+        get() = com.android.purebilibili.data.model.response.resolveSponsorBlockMarkerMode(markerModeRaw)
+
+    fun normalized(): SponsorBlockConfig = copy(markerModeRaw = markerMode.name)
+
+    companion object {
+        fun default(): SponsorBlockConfig = SponsorBlockConfig()
+    }
+}
+
+private val SponsorBlockMarkerMode.label: String
+    get() = when (this) {
+        SponsorBlockMarkerMode.OFF -> "关闭"
+        SponsorBlockMarkerMode.SPONSOR_ONLY -> "仅恰饭"
+        SponsorBlockMarkerMode.ALL_SKIPPABLE -> "全部可跳过"
+    }

@@ -138,6 +138,8 @@ fun PlaybackSettingsContent(
         .getAudioFocusEnabled(context).collectAsState(initial = true)
     val audioModeAutoPipEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAudioModeAutoPipEnabled(context).collectAsState(initial = false)
+    val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getPlayerDiagnosticLoggingEnabled(context).collectAsState(initial = true)
     val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getDefaultPlaybackSpeed(context).collectAsState(initial = 1.0f)
     val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
@@ -609,6 +611,20 @@ fun PlaybackSettingsContent(
                                 prefs.edit().putBoolean("show_stats", it).apply()
                             },
                             iconTint = iOSSystemGray
+                        )
+                        IOSDivider()
+                        val scope = rememberCoroutineScope()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.InfoCircle,
+                            title = "播放器诊断日志",
+                            subtitle = "记录黑屏、卡顿、点击无响应等播放器诊断信息",
+                            checked = playerDiagnosticLoggingEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setPlayerDiagnosticLoggingEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
                         )
                     }
                 }

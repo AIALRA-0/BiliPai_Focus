@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-28 · Upstream base v7.2.2 · Current Focus release v7.2.2-focus.2</sub>
+  <sub>Last updated: 2026-03-31 · Upstream base v7.3.0 · Current Focus release v7.3.0-focus.1</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.2.2--focus.2-fb7299?style=flat-square" alt="Focus Version">
-  <img src="https://img.shields.io/badge/Upstream-7.2.2-00a1d6?style=flat-square" alt="Upstream Version">
+  <img src="https://img.shields.io/badge/Focus-7.3.0--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Upstream-7.3.0-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.2.2-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.3.0-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.2.2-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.3.0-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.2.2-focus.2` |
-| Upstream base | `7.2.2` |
-| Release tag | `v7.2.2-focus.2` |
-| Release notes | [docs/releases/focus-7.2.2-focus.2-en.md](docs/releases/focus-7.2.2-focus.2-en.md) |
-| Main refinements | Unifies automatic following sync and Home FOLLOW linkage, removes the stale private mids cache from Home, and keeps the Focus coexist package and Focus-only update flow intact |
-| Public APK | `BliPai-Focus-release-7.2.2-focus.2.apk` |
+| Focus version | `7.3.0-focus.1` |
+| Upstream base | `7.3.0` |
+| Release tag | `v7.3.0-focus.1` |
+| Release notes | [docs/releases/focus-7.3.0-focus.1-en.md](docs/releases/focus-7.3.0-focus.1-en.md) |
+| Main refinements | Syncs the upstream `7.2.3/7.3.0` playback recovery, seek-session, SponsorBlock stabilization, and progress-marker work while keeping the Focus coexist package, Focus-only updates, and FOLLOW customizations intact |
+| Public APK | `BliPai-Focus-release-7.3.0-focus.1.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.2.2-focus.2.md` | Chinese release notes for `v7.2.2-focus.2` |
-| Added | `docs/releases/focus-7.2.2-focus.2-en.md` | English release notes for `v7.2.2-focus.2` |
+| Added | `docs/releases/focus-7.3.0-focus.1.md` | Chinese release notes for `v7.3.0-focus.1` |
+| Added | `docs/releases/focus-7.3.0-focus.1-en.md` | English release notes for `v7.3.0-focus.1` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -205,6 +205,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | **In-app Update** | 🆕 Check updates, download APK in-app, and hand off to the system installer |
 | **Background Play** | Continue listening when screen is off or in background, with dedicated background-play and audio-focus toggles plus more reliable prev/next controls from notifications and system media controls |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
+| **Portrait Interaction Fixes** | Fixes like/favorite actions after swiping to the next portrait video, and favorites now open the folder picker directly |
+| **Seek Preview Optimization** | Preview image updates are quantized to videoshot frame boundaries to reduce redraw cost during drag/tap seeking |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
 | **TV Login** | Scan QR code to login as TV client to unlock high quality |
@@ -387,6 +389,16 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 | **Image Preview** | Global non-dialog overlay with iOS-style open/close motion; comment scene uses top caption to avoid covering image content, with 3D-like text transition |
 | **@ Highlighting** | Auto-highlight @User mentions |
 
+### 💬 Message Center & Direct Messages
+
+| Feature | Description |
+|-----|-----|
+| **Message Center** | Unified entry for replies, mentions, likes, and system notices |
+| **History List** | View session history with pagination |
+| **Rich Content** | Supports stickers, mentions, and image viewing |
+| **Video Link Preview** | Detects BV links and renders inline preview cards |
+| **Deep Link Routing** | Opens video, dynamic, space, live, bangumi, music, and web targets directly from messages |
+
 ### 📥 Offline Cache
 
 | Feature | Description |
@@ -525,7 +537,8 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-03-24 (v7.1.4). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-03-30 (v7.3.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+
 ### ✅ Completed
 
 - [x] Home Waterfall Feed
@@ -544,6 +557,9 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] In-app update flow (manual + auto-check + startup prompt + in-app download/install)
 - [x] Plugin System Core
 - [x] Built-in Plugins
+- [x] Message Center category pages (Replies / Mentions / Likes / System Notices) with deep-link routing
+- [x] Portrait video like/favorite interaction fixes with favorite-folder sync
+- [x] Seek preview redraw optimization and cross-tab bottom-bar switching polish
 
 ### 🚧 WIP
 
@@ -563,11 +579,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.2.2 / v7.2.2-focus.2 · 2026-03-28)
+### Latest (v7.3.0 / v7.3.0-focus.1 · 2026-03-31)
 
-- 🔄 **Followings now sync automatically**: Dynamic and Following screens restore cache first, then silently refresh in the background with a shared 5-minute TTL; the settings button is now just a manual “pull now” fallback.
-- 🏠 **Home FOLLOW now reacts to follow-list changes**: newly followed creators are pulled into the same-session Home FOLLOW candidate pool, and unfollowed creators are removed immediately instead of lingering behind a stale one-hour mids cache.
-- 🧩 **Focus customizations remain intact**: the coexist package name, Focus-only update source, and the FOLLOW filter/sort/batch presentation flow are all still preserved on the `7.2.2` baseline.
+- ▶️ **Playback recovery is now on the upstream 7.3.0 path**: Focus now carries over the lifecycle coordinator, explicit user-action tracking, seek sessions, and richer debug diagnostics to reduce false resume, silent foreground returns, and progress bounce-back.
+- ⏭️ **SponsorBlock is fully tightened up**: the enable state is unified, segments are pre-filtered and cached, seek now rearms skipping correctly, the progress bar can show markers, and manual-skip UI is wired through.
+- 🧹 **Sync-scoped cleanup only**: two unused legacy SponsorBlock use-case wrappers are removed so the regular video path no longer keeps redundant historical layers around.
+- 🧩 **Focus customizations remain intact**: coexist package name, Focus-only update source, Home FOLLOW grouping/sorting/auto-sync, and the first-use Focus entry points all remain preserved on top of `7.3.0`.
 
 ---
 

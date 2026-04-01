@@ -1,5 +1,33 @@
 # Focus Changelog
 
+## v7.3.0 Focus / focus.1 (2026-03-31)
+
+### 版本信息
+- 基于上游 `BiliPai v7.3.0` 建立新的 Focus 发布线，当前推荐对外版本为 `7.3.0-focus.1`。
+- 为保证已发布 `v7.2.2-focus.2 / 157` 用户可直接升级，`versionCode` 继续递增到 `158`。
+- 这一版重点并入上游 `7.2.3/7.3.0` 的播放器恢复、seek 会话、SponsorBlock 稳定化与进度条标记能力，并保留 Focus 的共存包名、Focus-only 更新源与首页 FOLLOW 定制链路。
+
+### 上游 7.2.3 / 7.3.0 同步
+- 并入上游播放器播放生命周期协调、用户主动操作跟踪、兼容恢复 seek、scrubbing 会话与更完整的播放器调试信息，前后台切换、小窗/画中画和手动恢复播放的状态边界更清晰。
+- 并入上游 SponsorBlock 稳定 seek、片段预过滤/排序/缓存、视频切换时的片段状态重置、手动跳过交互和进度条提示模式。
+- 插件中心与播放设置页的 SponsorBlock 开关已统一写回同一份设置源，减少启用状态互相覆盖造成的“像自动关闭”问题。
+
+### 同步内性能与冗余清理
+- 接受上游 SponsorBlock 片段预过滤与轻量候选判断，避免播放中继续做高频全表扫描。
+- 并入上游播放器恢复日志降噪与调试信息分层，减少恢复链路的无效日志开销。
+- 删除两份未被引用的历史 `SponsorBlockUseCase` 包装层，只保留 bangumi 仍在使用的 `BasePlayerViewModel` 公共 SponsorBlock 基础能力。
+- `baselineprofile` / Macrobenchmark 目标包名与视频详情组件已切到 Focus 共存包，`7.3.0-focus.1` 可以继续跑受管设备性能门槛。
+
+### Focus 定制保留
+- `applicationId` 继续保持 `com.android.purebilibili.focus`，可与官方版共存安装。
+- 应用内更新继续只跟踪 Focus 仓库的正式 `release` 资产，不接官方更新推送。
+- 首页 FOLLOW 的过滤、首批/分页展示、分组排序、自动同步和 Focus 设置入口继续保留在 `7.3.0` 基线之上。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest`。
+- 已通过 `:app:assembleRelease`。
+- 已通过 `:baselineprofile:pixel6Api31BenchmarkAndroidTest`（Home Feed benchmark 仍按仓库现状保持 `@Ignore`，启动与视频详情基准通过）。
+
 ## v7.2.2 Focus / focus.2 (2026-03-28)
 
 ### 版本信息

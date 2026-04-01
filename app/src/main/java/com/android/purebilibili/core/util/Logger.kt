@@ -32,6 +32,13 @@ internal fun resolveCrashSnapshotMarkerFile(baseDir: File): File =
 internal fun resolveCrashSnapshotExportRelativePath(): String =
     "$DOWNLOAD_LOG_RELATIVE_PATH/$CRASH_SNAPSHOT_FILE_NAME"
 
+internal fun resolvePlayerDiagnosticExportFileName(
+    exportedAtMillis: Long
+): String {
+    val formatter = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+    return "player_diagnostic_${formatter.format(Date(exportedAtMillis))}.txt"
+}
+
 internal fun shouldEnableVerboseRuntimeLogs(
     isDebugBuild: Boolean,
     verboseDebugLogsEnabled: Boolean
@@ -221,6 +228,21 @@ object Logger {
                 dir.deleteRecursively()
             }
         }
+    }
+
+    fun exportPlayerDiagnostic(
+        context: Context,
+        content: String,
+        exportedAtMillis: Long = System.currentTimeMillis()
+    ): String? {
+        init(context)
+        val fileName = resolvePlayerDiagnosticExportFileName(exportedAtMillis)
+        return LogCollector.saveTextArtifact(
+            context = context,
+            fileName = fileName,
+            content = content,
+            replaceExisting = false
+        )
     }
 }
 
@@ -599,6 +621,20 @@ object LogCollector {
             Log.e("LogCollector", "导出日志失败", e)
             Toast.makeText(context, "导出失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    fun saveTextArtifact(
+        context: Context,
+        fileName: String,
+        content: String,
+        replaceExisting: Boolean = false
+    ): String? {
+        return saveToExternalDownload(
+            context = context,
+            fileName = fileName,
+            content = content,
+            replaceExisting = replaceExisting
+        )
     }
     
     /**

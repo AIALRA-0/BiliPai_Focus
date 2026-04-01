@@ -33,7 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.FormatUtils
-import kotlin.math.abs
+import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
+import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
+import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.shouldHoldPlaybackSeekSettledProgress
+import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
 
 private const val PORTRAIT_PROGRESS_SETTLED_TOLERANCE = 0.01f
 
@@ -42,8 +49,11 @@ internal fun shouldHoldPortraitSettledProgress(
     pendingSettledProgress: Float?,
     tolerance: Float = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
 ): Boolean {
-    val settledProgress = pendingSettledProgress ?: return false
-    return abs(progress - settledProgress) > tolerance
+    return shouldHoldPlaybackSeekSettledProgress(
+        playbackProgress = progress,
+        pendingSettledProgress = pendingSettledProgress,
+        tolerance = tolerance
+    )
 }
 
 internal fun resolvePortraitProgressDisplayProgress(
@@ -52,11 +62,15 @@ internal fun resolvePortraitProgressDisplayProgress(
     isDragging: Boolean,
     pendingSettledProgress: Float?
 ): Float {
-    return when {
-        isDragging -> dragProgress
-        shouldHoldPortraitSettledProgress(progress, pendingSettledProgress) -> pendingSettledProgress ?: progress
-        else -> progress
-    }.coerceIn(0f, 1f)
+    return resolvePlaybackSeekDisplayProgress(
+        playbackProgress = progress,
+        state = PlaybackSeekUiState(
+            isScrubbing = isDragging,
+            dragProgress = dragProgress,
+            pendingSettledProgress = pendingSettledProgress
+        ),
+        tolerance = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
+    )
 }
 
 /**
@@ -118,26 +132,26 @@ fun ThinWigglyProgressBar(
     duration: Long,
     bufferProgress: Float = 0f
 ) {
-    var isDragging by remember { mutableStateOf(false) }
-    var dragProgress by remember { mutableFloatStateOf(0f) }
-    var pendingSettledProgress by remember { mutableStateOf<Float?>(null) }
+    var seekState by remember { mutableStateOf(PlaybackSeekUiState()) }
     
-    LaunchedEffect(progress, pendingSettledProgress, isDragging) {
-        if (!isDragging && !shouldHoldPortraitSettledProgress(progress, pendingSettledProgress)) {
-            pendingSettledProgress = null
-        }
+    LaunchedEffect(progress, seekState.pendingSettledProgress, seekState.isScrubbing) {
+        seekState = settlePlaybackSeekSession(
+            state = seekState,
+            playbackProgress = progress,
+            tolerance = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
+        )
     }
 
     val displayProgress = resolvePortraitProgressDisplayProgress(
         progress = progress,
-        dragProgress = dragProgress,
-        isDragging = isDragging,
-        pendingSettledProgress = pendingSettledProgress
+        dragProgress = seekState.dragProgress,
+        isDragging = seekState.isScrubbing,
+        pendingSettledProgress = seekState.pendingSettledProgress
     )
     
     // 动画状态
     val barHeight by animateDpAsState(
-        targetValue = if (isDragging) {
+        targetValue = if (seekState.isScrubbing) {
             layoutPolicy.draggingTrackHeightDp.dp
         } else {
             layoutPolicy.idleTrackHeightDp.dp
@@ -146,7 +160,7 @@ fun ThinWigglyProgressBar(
     )
     
     val thumbSize by animateDpAsState(
-        targetValue = if (isDragging) layoutPolicy.draggingThumbSizeDp.dp else 0.dp,
+        targetValue = if (seekState.isScrubbing) layoutPolicy.draggingThumbSizeDp.dp else 0.dp,
         label = "thumbSize"
     )
 
@@ -157,26 +171,23 @@ fun ThinWigglyProgressBar(
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
-                        isDragging = true
-                        pendingSettledProgress = null
+                        seekState = startPlaybackSeekSession(offset.x / size.width)
                         onSeekStart()
-                        val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                        dragProgress = newProgress
                     },
                     onDragEnd = {
-                        val committedProgress = dragProgress
-                        pendingSettledProgress = committedProgress
-                        onSeek(committedProgress)
-                        isDragging = false
+                        val result = finishPlaybackSeekSession(seekState)
+                        seekState = result.state
+                        onSeek(result.committedProgress)
                     },
                     onDragCancel = {
-                        pendingSettledProgress = null
-                        isDragging = false
+                        seekState = cancelPlaybackSeekSession(seekState)
                     },
                     onHorizontalDrag = { change, dragAmount ->
                         change.consume()
-                        val newProgress = (dragProgress + dragAmount / size.width).coerceIn(0f, 1f)
-                        dragProgress = newProgress
+                        seekState = updatePlaybackSeekSession(
+                            state = seekState,
+                            progress = seekState.dragProgress + dragAmount / size.width
+                        )
                     }
                 )
             }
@@ -184,18 +195,15 @@ fun ThinWigglyProgressBar(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = { offset ->
-                        isDragging = true // 按下变成拖拽态
-                        pendingSettledProgress = null
+                        seekState = startPlaybackSeekSession(offset.x / size.width)
                         onSeekStart()
-                        val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                        dragProgress = newProgress
-                        try {
-                            tryAwaitRelease()
-                        } finally {
-                            val committedProgress = dragProgress
-                            pendingSettledProgress = committedProgress
-                            onSeek(committedProgress)
-                            isDragging = false
+                        val released = tryAwaitRelease()
+                        if (released) {
+                            val result = finishPlaybackSeekSession(seekState)
+                            seekState = result.state
+                            onSeek(result.committedProgress)
+                        } else {
+                            seekState = cancelPlaybackSeekSession(seekState)
                         }
                     }
                 ) 
@@ -226,7 +234,7 @@ fun ThinWigglyProgressBar(
         )
         
         // 滑块 (Thumb) - 仅拖拽时显示
-        if (isDragging) {
+        if (seekState.isScrubbing) {
             // 使用 Box + BiasAlignment 来定位滑块
             Box(
                 modifier = Modifier.fillMaxWidth(),

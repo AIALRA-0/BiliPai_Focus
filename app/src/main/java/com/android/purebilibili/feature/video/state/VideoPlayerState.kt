@@ -41,6 +41,10 @@ import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
+import com.android.purebilibili.feature.video.playback.session.resolvePlaybackPauseDecision
+import com.android.purebilibili.feature.video.playback.session.resolvePlaybackResumeDecision
+import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
+import com.android.purebilibili.feature.video.playback.session.PlaybackUserActionTracker
 import com.android.purebilibili.feature.video.player.resolveHandleAudioFocusByPolicy
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 import kotlinx.coroutines.CoroutineScope
@@ -216,6 +220,81 @@ internal fun applyAudioFormatDebugInfo(
     return updated
 }
 
+internal fun resolvePlaybackStateDebugLabel(playbackState: Int): String {
+    return when (playbackState) {
+        Player.STATE_IDLE -> "IDLE"
+        Player.STATE_BUFFERING -> "BUFFERING"
+        Player.STATE_READY -> "READY"
+        Player.STATE_ENDED -> "ENDED"
+        else -> playbackState.toString()
+    }
+}
+
+internal fun applyPlaybackStateDebugInfo(
+    current: PlaybackDebugInfo,
+    playbackState: Int,
+    playWhenReady: Boolean,
+    isPlaying: Boolean
+): PlaybackDebugInfo {
+    return current.copy(
+        playbackState = resolvePlaybackStateDebugLabel(playbackState),
+        playWhenReady = playWhenReady.toString(),
+        isPlaying = isPlaying.toString()
+    )
+}
+
+internal fun applyRenderedFirstFrameDebugInfo(
+    current: PlaybackDebugInfo
+): PlaybackDebugInfo {
+    return current.copy(
+        firstFrame = "rendered",
+        lastVideoEvent = "first frame rendered"
+    )
+}
+
+internal fun applyDroppedVideoFramesDebugInfo(
+    current: PlaybackDebugInfo,
+    droppedFrameCount: Int
+): PlaybackDebugInfo {
+    if (droppedFrameCount <= 0) return current
+    val previousCount = current.droppedFrames.toIntOrNull() ?: 0
+    val totalDroppedFrames = previousCount + droppedFrameCount
+    return current.copy(
+        droppedFrames = totalDroppedFrames.toString(),
+        lastVideoEvent = "dropped $droppedFrameCount frames"
+    )
+}
+
+internal fun applyBandwidthEstimateDebugInfo(
+    current: PlaybackDebugInfo,
+    bitrateEstimate: Long
+): PlaybackDebugInfo {
+    if (bitrateEstimate <= 0L) return current
+    return current.copy(
+        bandwidthEstimate = formatPlaybackDebugBitrate(
+            bitrateEstimate.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        )
+    )
+}
+
+internal fun applyVideoEventDebugInfo(
+    current: PlaybackDebugInfo,
+    eventSummary: String
+): PlaybackDebugInfo {
+    val normalizedEvent = eventSummary.trim()
+    if (normalizedEvent.isBlank()) return current
+    return current.copy(lastVideoEvent = normalizedEvent)
+}
+
+internal fun applyAudioEventDebugInfo(
+    current: PlaybackDebugInfo,
+    eventSummary: String
+): PlaybackDebugInfo {
+    val normalizedEvent = eventSummary.trim()
+    if (normalizedEvent.isBlank()) return current
+    return current.copy(lastAudioEvent = normalizedEvent)
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoPlayerState(
     val context: Context,
@@ -242,6 +321,10 @@ class VideoPlayerState(
 
     private val _debugInfo = MutableStateFlow(PlaybackDebugInfo())
     val debugInfo: StateFlow<PlaybackDebugInfo> = _debugInfo.asStateFlow()
+    private val _diagnosticEvents = MutableStateFlow<List<String>>(emptyList())
+    val diagnosticEvents: StateFlow<List<String>> = _diagnosticEvents.asStateFlow()
+    val pendingUserAction: StateFlow<PendingPlaybackUserAction?> =
+        PlaybackUserActionTracker.stateFor(player)
     
     // 📱 竖屏全屏模式状态
     private val _isPortraitFullscreen = MutableStateFlow(false)
@@ -261,6 +344,20 @@ class VideoPlayerState(
     private var currentArtist: String = ""
     private var currentCoverUrl: String = ""
     private var currentBitmap: Bitmap? = null
+
+    private fun appendDiagnosticEvent(event: String) {
+        val positionLabel = FormatUtils.formatDuration(player.currentPosition.coerceAtLeast(0L))
+        _diagnosticEvents.value = com.android.purebilibili.feature.video.ui.overlay.resolvePlaybackDiagnosticEvents(
+            current = _diagnosticEvents.value,
+            event = "$positionLabel | $event",
+            diagnosticsEnabled = com.android.purebilibili.core.store.PlayerSettingsCache
+                .isPlayerDiagnosticLoggingEnabled()
+        )
+    }
+
+    fun recordDiagnosticEvent(event: String) {
+        appendDiagnosticEvent(event)
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -295,6 +392,25 @@ class VideoPlayerState(
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            PlaybackUserActionTracker.resolveIfResponded(
+                player = player,
+                playbackState = player.playbackState,
+                playWhenReady = player.playWhenReady,
+                isPlaying = isPlaying,
+                currentPositionMs = player.currentPosition
+            )
+            _debugInfo.value = applyPlaybackStateDebugInfo(
+                current = _debugInfo.value,
+                playbackState = player.playbackState,
+                playWhenReady = player.playWhenReady,
+                isPlaying = isPlaying
+            )
+            appendDiagnosticEvent("isPlaying=$isPlaying")
+            Logger.d(
+                "VideoPlayerState",
+                "USER_DBG onIsPlayingChanged: isPlaying=$isPlaying, " +
+                    "state=${player.playbackState}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+            )
             // 当播放状态改变时，更新通知栏（主要是播放/暂停按钮）
             if (currentTitle.isNotEmpty()) {
                 scope.launch(Dispatchers.Main) {
@@ -302,6 +418,50 @@ class VideoPlayerState(
                     miniPlayerManager.updateMediaMetadata(currentTitle, currentArtist, currentCoverUrl)
                 }
             }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            PlaybackUserActionTracker.resolveIfResponded(
+                player = player,
+                playbackState = playbackState,
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying,
+                currentPositionMs = player.currentPosition
+            )
+            _debugInfo.value = applyPlaybackStateDebugInfo(
+                current = _debugInfo.value,
+                playbackState = playbackState,
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying
+            )
+            appendDiagnosticEvent("state=${resolvePlaybackStateDebugLabel(playbackState)}")
+            Logger.d(
+                "VideoPlayerState",
+                "USER_DBG onPlaybackStateChanged: state=$playbackState, " +
+                    "isPlaying=${player.isPlaying}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+            )
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            PlaybackUserActionTracker.resolveIfResponded(
+                player = player,
+                playbackState = player.playbackState,
+                playWhenReady = playWhenReady,
+                isPlaying = player.isPlaying,
+                currentPositionMs = player.currentPosition
+            )
+            _debugInfo.value = applyPlaybackStateDebugInfo(
+                current = _debugInfo.value,
+                playbackState = player.playbackState,
+                playWhenReady = playWhenReady,
+                isPlaying = player.isPlaying
+            )
+            appendDiagnosticEvent("playWhenReady=$playWhenReady reason=$reason")
+            Logger.d(
+                "VideoPlayerState",
+                "USER_DBG onPlayWhenReadyChanged: playWhenReady=$playWhenReady, reason=$reason, " +
+                    "state=${player.playbackState}, isPlaying=${player.isPlaying}, pos=${player.currentPosition}"
+            )
         }
     }
 
@@ -315,6 +475,10 @@ class VideoPlayerState(
                 current = _debugInfo.value,
                 format = format
             )
+            _debugInfo.value = applyVideoEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "video format ${resolvePlaybackCodecLabel(format.sampleMimeType)}"
+            )
         }
 
         override fun onAudioInputFormatChanged(
@@ -325,6 +489,10 @@ class VideoPlayerState(
             _debugInfo.value = applyAudioFormatDebugInfo(
                 current = _debugInfo.value,
                 format = format
+            )
+            _debugInfo.value = applyAudioEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "audio format ${resolvePlaybackCodecLabel(format.sampleMimeType)}"
             )
         }
 
@@ -339,6 +507,11 @@ class VideoPlayerState(
                 format = null,
                 decoderName = decoderName
             )
+            _debugInfo.value = applyVideoEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "video decoder initialized"
+            )
+            appendDiagnosticEvent("videoDecoder=$decoderName")
         }
 
         override fun onAudioDecoderInitialized(
@@ -352,6 +525,84 @@ class VideoPlayerState(
                 format = null,
                 decoderName = decoderName
             )
+            _debugInfo.value = applyAudioEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "audio decoder initialized"
+            )
+            appendDiagnosticEvent("audioDecoder=$decoderName")
+        }
+
+        override fun onRenderedFirstFrame(
+            eventTime: AnalyticsListener.EventTime,
+            output: Any,
+            renderTimeMs: Long
+        ) {
+            _debugInfo.value = applyRenderedFirstFrameDebugInfo(
+                current = _debugInfo.value
+            )
+            appendDiagnosticEvent("firstFrameRendered")
+        }
+
+        override fun onDroppedVideoFrames(
+            eventTime: AnalyticsListener.EventTime,
+            droppedFrames: Int,
+            elapsedMs: Long
+        ) {
+            _debugInfo.value = applyDroppedVideoFramesDebugInfo(
+                current = _debugInfo.value,
+                droppedFrameCount = droppedFrames
+            )
+            if (droppedFrames > 0) {
+                appendDiagnosticEvent("droppedFrames=$droppedFrames")
+            }
+        }
+
+        override fun onBandwidthEstimate(
+            eventTime: AnalyticsListener.EventTime,
+            totalLoadTimeMs: Int,
+            totalBytesLoaded: Long,
+            bitrateEstimate: Long
+        ) {
+            _debugInfo.value = applyBandwidthEstimateDebugInfo(
+                current = _debugInfo.value,
+                bitrateEstimate = bitrateEstimate
+            )
+        }
+
+        override fun onVideoCodecError(
+            eventTime: AnalyticsListener.EventTime,
+            videoCodecError: Exception
+        ) {
+            _debugInfo.value = applyVideoEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "video codec error"
+            )
+            appendDiagnosticEvent("videoCodecError=${videoCodecError.javaClass.simpleName}")
+            Logger.e("VideoPlayerState", "Video codec error", videoCodecError)
+        }
+
+        override fun onAudioCodecError(
+            eventTime: AnalyticsListener.EventTime,
+            audioCodecError: Exception
+        ) {
+            _debugInfo.value = applyAudioEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "audio codec error"
+            )
+            appendDiagnosticEvent("audioCodecError=${audioCodecError.javaClass.simpleName}")
+            Logger.e("VideoPlayerState", "Audio codec error", audioCodecError)
+        }
+
+        override fun onAudioSinkError(
+            eventTime: AnalyticsListener.EventTime,
+            audioSinkError: Exception
+        ) {
+            _debugInfo.value = applyAudioEventDebugInfo(
+                current = _debugInfo.value,
+                eventSummary = "audio sink error"
+            )
+            appendDiagnosticEvent("audioSinkError=${audioSinkError.javaClass.simpleName}")
+            Logger.e("VideoPlayerState", "Audio sink error", audioSinkError)
         }
     }
     
@@ -370,6 +621,12 @@ class VideoPlayerState(
             _isVerticalVideo.value = size.height > size.width
             _verticalVideoSource.value = VerticalVideoSource.PLAYER
         }
+        _debugInfo.value = applyPlaybackStateDebugInfo(
+            current = _debugInfo.value,
+            playbackState = player.playbackState,
+            playWhenReady = player.playWhenReady,
+            isPlaying = player.isPlaying
+        )
     }
     
     /**
@@ -415,6 +672,7 @@ class VideoPlayerState(
         _videoSize.value = Pair(0, 0)
         _apiDimension.value = null
         _debugInfo.value = PlaybackDebugInfo()
+        _diagnosticEvents.value = emptyList()
         _isVerticalVideo.value = false
         _verticalVideoSource.value = VerticalVideoSource.UNKNOWN
         // 不重置 _isPortraitFullscreen，保持竖屏全屏状态
@@ -423,6 +681,7 @@ class VideoPlayerState(
     fun release() {
         player.removeListener(playerListener)
         player.removeAnalyticsListener(analyticsListener)
+        PlaybackUserActionTracker.clear(player)
     }
 
     fun updateMediaMetadata(title: String, artist: String, coverUrl: String) {
@@ -492,7 +751,7 @@ fun rememberVideoPlayerState(
                 "Referer" to "https://www.bilibili.com",
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             )
-            val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.okHttpClient)
+            val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
                 .setDefaultRequestProperties(headers)
 
             val audioAttributes = AudioAttributes.Builder()
@@ -670,22 +929,26 @@ fun rememberVideoPlayerState(
                     val isPip = miniPlayerManager.shouldEnterPip()
                     val isBackgroundAudio = miniPlayerManager.shouldContinueBackgroundAudio()
                     val hasRecentUserLeaveHint = miniPlayerManager.hasRecentUserLeaveHint()
-                    val shouldContinuePlayback = com.android.purebilibili.feature.video.player
-                        .shouldContinuePlaybackDuringPause(
-                            isMiniMode = isMiniMode,
-                            isPip = isPip,
-                            isBackgroundAudio = isBackgroundAudio,
-                            wasPlaybackActive = wasPlaying
-                        )
+                    val pauseDecision = resolvePlaybackPauseDecision(
+                        isMiniMode = isMiniMode,
+                        isPip = isPip,
+                        isBackgroundAudio = isBackgroundAudio,
+                        wasPlaybackActive = wasPlaying,
+                        hasRecentUserLeaveHint = hasRecentUserLeaveHint
+                    )
                     
                     //  [修复] 记录后台音频状态，恢复时不要 seek 回旧位置
-                    wasBackgroundAudio = isBackgroundAudio && hasRecentUserLeaveHint
+                    wasBackgroundAudio = pauseDecision.shouldMarkBackgroundAudioSession
                     
-                    if (!shouldContinuePlayback) {
+                    if (pauseDecision.shouldPausePlayback) {
                         // 非小窗/PiP/后台模式下暂停
                         player.pause()
+                        holder.recordDiagnosticEvent("lifecyclePause -> pausePlayback")
                         com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_PAUSE: 暂停播放")
                     } else {
+                        holder.recordDiagnosticEvent(
+                            "lifecyclePause -> keepPlayback mini=$isMiniMode pip=$isPip bg=$isBackgroundAudio"
+                        )
                         com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "🎵 ON_PAUSE: 保持播放 (miniMode=$isMiniMode, pip=$isPip, bg=$isBackgroundAudio, leaveHint=$hasRecentUserLeaveHint)")
                     }
                     com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_PAUSE: pos=$savedPosition, wasPlaying=$wasPlaying, bgAudio=$wasBackgroundAudio")
@@ -693,39 +956,38 @@ fun rememberVideoPlayerState(
                 // 🔋 注意: ON_STOP/ON_START 的视频轨道禁用/恢复由 MiniPlayerManager 通过 BackgroundManager 统一处理
                 // 避免重复处理导致 savedTrackParams 被覆盖
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
-                    //  [修复] 恢复前台时，只在确实暂停了的情况下恢复播放
-                    //  如果是在 PiP 或后台音频模式下，播放器一直在运行，不需要干预
-                    val shouldResume = shouldResumeAfterLifecyclePause(
+                    val shouldEnsureAudibleOnForeground =
+                        !miniPlayerManager.isMiniMode && !miniPlayerManager.shouldEnterPip()
+                    val resumeDecision = resolvePlaybackResumeDecision(
                         wasPlaybackActive = wasPlaying,
                         isPlaying = player.isPlaying,
                         playWhenReady = player.playWhenReady,
-                        playbackState = player.playbackState
+                        playbackState = player.playbackState,
+                        currentVolume = player.volume,
+                        shouldEnsureAudibleOnForeground = shouldEnsureAudibleOnForeground,
+                        isLeavingByNavigation = miniPlayerManager.isLeavingByNavigation
                     )
-                    val shouldEnsureAudibleOnForeground =
-                        !miniPlayerManager.isMiniMode && !miniPlayerManager.shouldEnterPip()
 
-                    if (shouldRestorePlayerVolumeOnResume(
-                            shouldResume = shouldResume,
-                            currentVolume = player.volume,
-                            shouldEnsureAudible = shouldEnsureAudibleOnForeground
-                        )
-                    ) {
+                    if (resumeDecision.shouldRestoreVolume) {
                         player.volume = 1.0f
+                        holder.recordDiagnosticEvent("lifecycleResume -> restoreVolume")
                         com.android.purebilibili.core.util.Logger.d(
                             "VideoPlayerState",
                             "🔊 ON_RESUME: Restored player volume to avoid silent playback"
                         )
                     }
                     
-                    if (shouldResume) {
+                    if (resumeDecision.shouldResumePlayback) {
                         // 只有当完全暂停时才检查是否需要恢复
                         // 移除 seekTo(savedPosition)，因为 player.currentPosition 才是最新的（即使暂停了也还在该位置）
                         // 且 seekTo 会导致 PiP 返回时回退到进入 PiP 前的旧位置
                         if (shouldEnsureAudibleOnForeground) {
                              player.play()
+                             holder.recordDiagnosticEvent("lifecycleResume -> resumePlayback")
                              com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_RESUME: Resuming playback")
                         }
                     } else {
+                        holder.recordDiagnosticEvent("lifecycleResume -> skipResume")
                         com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_RESUME: Player already running or was not playing, skipping resume")
                     }
                     
@@ -759,6 +1021,9 @@ fun rememberVideoPlayerState(
                     "VideoPlayerState",
                     "❌ Player error: code=${error.errorCode}($errorCodeName), message=${error.message}, cause=$causeName",
                     error
+                )
+                holder.recordDiagnosticEvent(
+                    "playerError code=$errorCodeName cause=${causeName ?: "unknown"}"
                 )
 
                 val currentState = viewModel.uiState.value

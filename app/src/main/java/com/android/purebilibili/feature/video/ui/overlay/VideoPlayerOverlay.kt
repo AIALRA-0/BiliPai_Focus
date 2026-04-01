@@ -1,6 +1,7 @@
 // 文件路径: feature/video/VideoPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
+import android.content.ClipData
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -45,6 +46,7 @@ import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.ChapterListPanel
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
+import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.data.repository.VideoRepository
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
@@ -64,6 +66,7 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.core.util.WindowWidthSizeClass
+import com.android.purebilibili.core.util.Logger
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -78,7 +81,10 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
+import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.cast.DeviceListDialog
 import com.android.purebilibili.feature.cast.DlnaManager
 import com.android.purebilibili.feature.cast.LocalProxyServer
@@ -96,6 +102,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.compose.currentStateAsState
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
+import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
 import dev.chrisbanes.haze.HazeState
 
 internal fun shouldShowEpisodeEntryFromVideoData(
@@ -160,14 +167,16 @@ internal fun shouldShowCenterPlayButton(
     isQualitySwitching: Boolean,
     isFullscreen: Boolean,
     isBuffering: Boolean,
-    isScrubbing: Boolean
+    isScrubbing: Boolean,
+    isSeekTransitionPending: Boolean
 ): Boolean {
     return isVisible &&
         !isPlaying &&
         !isQualitySwitching &&
         isFullscreen &&
         !isBuffering &&
-        !isScrubbing
+        !isScrubbing &&
+        !isSeekTransitionPending
 }
 
 internal fun shouldShowBufferingIndicator(
@@ -206,6 +215,8 @@ internal fun resolveDisplayedOnlineCount(
     return if (showOnlineCount) onlineCount else ""
 }
 
+private const val CENTER_PLAY_BUTTON_SEEK_TRANSITION_GRACE_MS = 350L
+
 @Composable
 fun VideoPlayerOverlay(
     player: Player,
@@ -238,6 +249,9 @@ fun VideoPlayerOverlay(
     onLockToggle: () -> Unit = {},
     showStats: Boolean = false,
     debugInfo: PlaybackDebugInfo = PlaybackDebugInfo(),
+    diagnosticEvents: List<String> = emptyList(),
+    pendingUserAction: PendingPlaybackUserAction? = null,
+    playerDiagnosticLoggingEnabled: Boolean = true,
     realResolution: String = "",
     isQualitySwitching: Boolean = false,
     isBuffering: Boolean = false,  // 缓冲状态
@@ -309,6 +323,7 @@ fun VideoPlayerOverlay(
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     // 📖 [新增] 视频章节数据
     viewPoints: List<ViewPoint> = emptyList(),
+    sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     // 📱 [新增] 竖屏全屏模式
     isVerticalVideo: Boolean = false,
     onPortraitFullscreen: () -> Unit = {},
@@ -320,6 +335,7 @@ fun VideoPlayerOverlay(
     onSeekTo: ((Long) -> Unit)? = null,
     previewSeekPositionMs: Long? = null,
     previewSeekActive: Boolean = false,
+    playbackTransitionPositionMs: Long? = null,
     // [New] Codec & Audio Params
     currentCodec: String = "hev1",
     onCodecChange: (String) -> Unit = {},
@@ -358,6 +374,7 @@ fun VideoPlayerOverlay(
     onToggleFavorite: () -> Unit = {},
     // 复用 onRelatedVideoClick 或 onVideoClick
     onDrawerVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> },
+    onPlaybackTransitionSettled: (Long) -> Unit = {},
     // 分P
     pages: List<com.android.purebilibili.data.model.response.Page> = emptyList(),
     currentPageIndex: Int = 0,
@@ -379,6 +396,10 @@ fun VideoPlayerOverlay(
     //  使用传入的比例状态
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var isProgressScrubbing by remember { mutableStateOf(false) }
+    var pendingSeekPositionMs by remember { mutableStateOf<Long?>(null) }
+    var suppressCenterPlayButtonForSeekTransition by remember { mutableStateOf(false) }
+    var wasPlayingWhenProgressScrubbingStarted by remember { mutableStateOf(false) }
+    var lastSettledPlaybackTransitionPositionMs by remember { mutableStateOf<Long?>(null) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -395,6 +416,132 @@ fun VideoPlayerOverlay(
     }
     val debugRows = remember(effectiveDebugInfo) {
         resolvePlaybackDebugRows(effectiveDebugInfo)
+    }
+    var bufferingStartedAtMs by remember(player) { mutableLongStateOf(0L) }
+    var waitingFirstFrameStartedAtMs by remember(player, bvid, cid) { mutableLongStateOf(0L) }
+    var playbackIssueSignal by remember(player, bvid, cid) { mutableStateOf<PlaybackIssueSignal?>(null) }
+    var dismissedPlaybackIssueTypes by remember(player, bvid, cid) {
+        mutableStateOf(setOf<PlaybackIssueType>())
+    }
+    val exportDiagnosticReport: (PlaybackIssueSignal?) -> String = remember(
+        player,
+        title,
+        videoTitle,
+        bvid,
+        cid,
+        effectiveDebugInfo,
+        diagnosticEvents,
+        pendingUserAction,
+        playerDiagnosticLoggingEnabled
+    ) {
+        { issue ->
+            buildPlaybackDiagnosticReport(
+                title = videoTitle.ifBlank { title },
+                bvid = bvid,
+                cid = cid,
+                currentPositionMs = player.currentPosition,
+                bufferedPositionMs = player.bufferedPosition,
+                debugInfo = effectiveDebugInfo,
+                recentEvents = buildList {
+                    issue?.let { add("detectedIssue=${it.type}") }
+                    pendingUserAction?.let { action ->
+                        add(
+                            "pendingUserAction=${action.type} ageMs=${System.currentTimeMillis() - action.requestedAtMs}"
+                        )
+                    }
+                    addAll(diagnosticEvents)
+                }
+            )
+        }
+    }
+    LaunchedEffect(
+        playerDiagnosticLoggingEnabled,
+        player.playbackState,
+        player.playWhenReady,
+        effectiveDebugInfo.firstFrame
+    ) {
+        if (!playerDiagnosticLoggingEnabled) {
+            bufferingStartedAtMs = 0L
+            waitingFirstFrameStartedAtMs = 0L
+            playbackIssueSignal = null
+            return@LaunchedEffect
+        }
+        val now = System.currentTimeMillis()
+        bufferingStartedAtMs = when {
+            player.playbackState == Player.STATE_BUFFERING && player.playWhenReady ->
+                if (bufferingStartedAtMs == 0L) now else bufferingStartedAtMs
+            else -> 0L
+        }
+        waitingFirstFrameStartedAtMs = when {
+            player.playbackState == Player.STATE_READY &&
+                player.playWhenReady &&
+                effectiveDebugInfo.firstFrame.isBlank() ->
+                if (waitingFirstFrameStartedAtMs == 0L) now else waitingFirstFrameStartedAtMs
+            else -> 0L
+        }
+        val currentSignal = resolvePlaybackIssueSignal(
+            playbackState = player.playbackState,
+            playWhenReady = player.playWhenReady,
+            firstFrameRendered = effectiveDebugInfo.firstFrame.isNotBlank(),
+            bufferingDurationMs = if (bufferingStartedAtMs > 0L) now - bufferingStartedAtMs else 0L,
+            waitingFirstFrameDurationMs = if (waitingFirstFrameStartedAtMs > 0L) {
+                now - waitingFirstFrameStartedAtMs
+            } else {
+                0L
+            }
+        )
+        if (currentSignal == null) {
+            playbackIssueSignal = null
+        }
+    }
+    LaunchedEffect(
+        player,
+        playerDiagnosticLoggingEnabled,
+        effectiveDebugInfo.firstFrame,
+        bufferingStartedAtMs,
+        waitingFirstFrameStartedAtMs,
+        dismissedPlaybackIssueTypes,
+        pendingUserAction
+    ) {
+        if (!playerDiagnosticLoggingEnabled) {
+            playbackIssueSignal = null
+            return@LaunchedEffect
+        }
+        while (isActive) {
+            val now = System.currentTimeMillis()
+            val playbackSignal = resolvePlaybackIssueSignal(
+                playbackState = player.playbackState,
+                playWhenReady = player.playWhenReady,
+                firstFrameRendered = effectiveDebugInfo.firstFrame.isNotBlank(),
+                bufferingDurationMs = if (bufferingStartedAtMs > 0L) now - bufferingStartedAtMs else 0L,
+                waitingFirstFrameDurationMs = if (waitingFirstFrameStartedAtMs > 0L) {
+                    now - waitingFirstFrameStartedAtMs
+                } else {
+                    0L
+                }
+            )
+            val actionSignal = pendingUserAction?.let { action ->
+                resolvePlaybackActionNoResponseSignal(
+                    actionType = action.type,
+                    actionAgeMs = now - action.requestedAtMs,
+                    hasPlayerResponded = false
+                )
+            }
+            val signal = actionSignal ?: playbackSignal
+            if (signal != null && signal.type !in dismissedPlaybackIssueTypes) {
+                playbackIssueSignal = signal
+            }
+            if (!shouldMonitorPlaybackIssues(
+                    diagnosticsEnabled = playerDiagnosticLoggingEnabled,
+                    bufferingStartedAtMs = bufferingStartedAtMs,
+                    waitingFirstFrameStartedAtMs = waitingFirstFrameStartedAtMs,
+                    hasPendingUserAction = pendingUserAction != null
+                )
+            ) {
+                break
+            }
+            delay(1000)
+        }
     }
     val showFullscreenLockButton by SettingsManager
         .getShowFullscreenLockButton(context)
@@ -553,12 +700,40 @@ fun VideoPlayerOverlay(
             delay(delayMs)
         }
     }
-    val displayedProgressState = remember(progressState, previewSeekPositionMs, previewSeekActive) {
+    val activePlaybackTransitionPositionMs = pendingSeekPositionMs ?: playbackTransitionPositionMs
+    val displayedProgressState = remember(
+        progressState,
+        previewSeekPositionMs,
+        previewSeekActive,
+        activePlaybackTransitionPositionMs
+    ) {
         resolveDisplayedPlayerProgress(
             progress = progressState,
             previewPositionMs = previewSeekPositionMs,
-            previewActive = previewSeekActive
+            previewActive = previewSeekActive,
+            playbackTransitionPositionMs = activePlaybackTransitionPositionMs
         )
+    }
+
+    LaunchedEffect(progressState.current, pendingSeekPositionMs) {
+        if (!shouldHoldPlaybackTransitionPosition(progressState.current, pendingSeekPositionMs)) {
+            pendingSeekPositionMs = null
+        }
+    }
+
+    LaunchedEffect(playbackTransitionPositionMs) {
+        if (playbackTransitionPositionMs == null) {
+            lastSettledPlaybackTransitionPositionMs = null
+        }
+    }
+
+    LaunchedEffect(progressState.current, playbackTransitionPositionMs) {
+        val pendingPositionMs = playbackTransitionPositionMs ?: return@LaunchedEffect
+        if (pendingPositionMs == lastSettledPlaybackTransitionPositionMs) return@LaunchedEffect
+        if (!shouldHoldPlaybackTransitionPosition(progressState.current, pendingPositionMs)) {
+            lastSettledPlaybackTransitionPositionMs = pendingPositionMs
+            onPlaybackTransitionSettled(pendingPositionMs)
+        }
     }
     
     // 📖 计算当前章节（必须在 progressState 之后定义）
@@ -584,6 +759,23 @@ fun VideoPlayerOverlay(
         }
     }
 
+    LaunchedEffect(suppressCenterPlayButtonForSeekTransition) {
+        if (suppressCenterPlayButtonForSeekTransition) {
+            delay(CENTER_PLAY_BUTTON_SEEK_TRANSITION_GRACE_MS)
+            suppressCenterPlayButtonForSeekTransition = false
+        }
+    }
+
+    LaunchedEffect(isPlaying, isBuffering, isProgressScrubbing, suppressCenterPlayButtonForSeekTransition) {
+        if (
+            suppressCenterPlayButtonForSeekTransition &&
+            !isProgressScrubbing &&
+            (isPlaying || isBuffering)
+        ) {
+            suppressCenterPlayButtonForSeekTransition = false
+        }
+    }
+
     LaunchedEffect(showCastDialog) {
         if (shouldReleaseCastBindingAfterDialogVisibilityChange(previousShowCastDialog, showCastDialog)) {
             DlnaManager.unbindService(context)
@@ -594,15 +786,21 @@ fun VideoPlayerOverlay(
     fun togglePlayPause() {
         if (player.playbackState == Player.STATE_ENDED) {
             onSeekTo?.invoke(0L) ?: player.seekTo(0L)
-            player.play()
+            playPlayerFromUserAction(player)
             isPlaying = true
         } else if (isPlaying) {
-            player.pause()
+            togglePlayerPlaybackFromUserAction(player)
             isPlaying = false
         } else {
-            player.play()
+            playPlayerFromUserAction(player)
             isPlaying = true
         }
+    }
+
+    val commitSeek: (Long) -> Unit = { position ->
+        val safePosition = position.coerceAtLeast(0L)
+        pendingSeekPositionMs = safePosition
+        onSeekTo?.invoke(safePosition) ?: seekPlayerFromUserAction(player, safePosition)
     }
 
     Box(
@@ -740,9 +938,15 @@ fun VideoPlayerOverlay(
                     onPlayPauseClick = {
                         togglePlayPause()
                     },
-                    onSeek = { position -> onSeekTo?.invoke(position) ?: seekPlayerFromUserAction(player, position) },
+                    onSeek = commitSeek,
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
                     onScrubbingChanged = { scrubbing ->
+                        if (scrubbing) {
+                            wasPlayingWhenProgressScrubbingStarted = isPlaying
+                            suppressCenterPlayButtonForSeekTransition = false
+                        } else if (wasPlayingWhenProgressScrubbingStarted) {
+                            suppressCenterPlayButtonForSeekTransition = true
+                        }
                         isProgressScrubbing = scrubbing
                     },
                     onSpeedClick = { showSpeedMenu = true },
@@ -777,6 +981,7 @@ fun VideoPlayerOverlay(
                     videoshotData = videoshotData,
                     // 📖 [新增] 视频章节数据
                     viewPoints = viewPoints,
+                    sponsorMarkers = sponsorMarkers,
                     currentChapter = currentChapter,
                     onChapterClick = { showChapterList = true },
                     // 📱 [新增] 竖屏全屏模式
@@ -874,6 +1079,44 @@ fun VideoPlayerOverlay(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Player stats",
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontSize = overlayVisualPolicy.statsFontSp.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        if (playerDiagnosticLoggingEnabled) {
+                            Text(
+                                text = "Copy diag",
+                                color = BiliPink,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontSize = overlayVisualPolicy.statsFontSp.sp,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.clickable {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                        as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "BiliPai Player Diagnostics",
+                                            exportDiagnosticReport(null)
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "播放器诊断已复制",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     debugRows.forEach { row ->
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -900,6 +1143,58 @@ fun VideoPlayerOverlay(
             }
         }
 
+        if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let { signal ->
+            AlertDialog(
+                onDismissRequest = {
+                    dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                    playbackIssueSignal = null
+                },
+                title = {
+                    Text(signal.title)
+                },
+                text = {
+                    Text(signal.message)
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val savedPath = Logger.exportPlayerDiagnostic(
+                                context = context,
+                                content = exportDiagnosticReport(signal)
+                            )
+                            if (savedPath != null) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "已导出到: $savedPath",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "导出失败，请稍后重试",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                            playbackIssueSignal = null
+                        }
+                    ) {
+                        Text("导出日志")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                            playbackIssueSignal = null
+                        }
+                    ) {
+                        Text("关闭")
+                    }
+                }
+            )
+        }
+
         // --- 5. 中央播放/暂停大图标 (仅全屏模式显示) ---
         AnimatedVisibility(
             visible = shouldShowCenterPlayButton(
@@ -908,7 +1203,8 @@ fun VideoPlayerOverlay(
                 isQualitySwitching = isQualitySwitching,
                 isFullscreen = isFullscreen,
                 isBuffering = isBuffering,
-                isScrubbing = isProgressScrubbing
+                isScrubbing = isProgressScrubbing,
+                isSeekTransitionPending = suppressCenterPlayButtonForSeekTransition || activePlaybackTransitionPositionMs != null
             ),
             modifier = Modifier.align(Alignment.Center),
             enter = scaleIn(tween(250)) + fadeIn(tween(200)),
@@ -916,7 +1212,7 @@ fun VideoPlayerOverlay(
         ) {
             OverlayPlaybackButton(
                 isPlaying = false,
-                onClick = { player.play(); isPlaying = true },
+                onClick = { playPlayerFromUserAction(player); isPlaying = true },
                 outerSize = overlayVisualPolicy.centerPlayButtonSizeDp.dp,
                 innerSize = overlayVisualPolicy.centerPlayInnerButtonSizeDp.dp,
                 glyphSize = overlayVisualPolicy.centerPlayIconSizeDp.dp
@@ -1161,7 +1457,7 @@ fun VideoPlayerOverlay(
             ChapterListPanel(
                 viewPoints = viewPoints,
                 currentPositionMs = displayedProgressState.current,
-                onSeek = { position -> onSeekTo?.invoke(position) ?: seekPlayerFromUserAction(player, position) },
+                onSeek = commitSeek,
                 onDismiss = { showChapterList = false }
             )
         }
