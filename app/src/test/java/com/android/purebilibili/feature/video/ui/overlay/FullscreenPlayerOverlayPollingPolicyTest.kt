@@ -98,4 +98,26 @@ class FullscreenPlayerOverlayPollingPolicyTest {
             )
         )
     }
+
+    @Test
+    fun pausedPlayback_keepsFullscreenControlsVisible() {
+        assertFalse(
+            shouldAutoHideFullscreenControls(
+                showControls = true,
+                gestureMode = FullscreenGestureMode.None,
+                isPlaying = false
+            )
+        )
+    }
+
+    @Test
+    fun activePlayback_stillAutoHidesFullscreenControlsWithoutGesture() {
+        assertTrue(
+            shouldAutoHideFullscreenControls(
+                showControls = true,
+                gestureMode = FullscreenGestureMode.None,
+                isPlaying = true
+            )
+        )
+    }
 }

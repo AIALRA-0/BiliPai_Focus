@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import com.android.purebilibili.core.store.LiquidGlassMode
+import com.android.purebilibili.core.store.resolveLegacyLiquidGlassProgress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -9,15 +10,9 @@ import org.junit.Test
 class LiquidGlassTuningTest {
 
     @Test
-    fun `clear mode stays more transparent than frosted at same strength`() {
-        val clear = resolveLiquidGlassTuning(
-            mode = LiquidGlassMode.CLEAR,
-            strength = 0.5f
-        )
-        val frosted = resolveLiquidGlassTuning(
-            mode = LiquidGlassMode.FROSTED,
-            strength = 0.5f
-        )
+    fun `clear progress stays more transparent than frosted progress`() {
+        val clear = resolveLiquidGlassTuning(progress = 0f)
+        val frosted = resolveLiquidGlassTuning(progress = 1f)
 
         assertTrue(clear.backdropBlurRadius < frosted.backdropBlurRadius)
         assertTrue(clear.surfaceAlpha < frosted.surfaceAlpha)
@@ -25,33 +20,63 @@ class LiquidGlassTuningTest {
     }
 
     @Test
-    fun `strength is clamped into safe range`() {
-        val low = resolveLiquidGlassTuning(
-            mode = LiquidGlassMode.BALANCED,
-            strength = -1f
-        )
-        val high = resolveLiquidGlassTuning(
-            mode = LiquidGlassMode.BALANCED,
-            strength = 3f
-        )
+    fun `progress is clamped into safe range`() {
+        val low = resolveLiquidGlassTuning(progress = -1f)
+        val high = resolveLiquidGlassTuning(progress = 3f)
 
-        assertEquals(0f, low.strength, 0.0001f)
-        assertEquals(1f, high.strength, 0.0001f)
+        assertEquals(0f, low.progress, 0.0001f)
+        assertEquals(1f, high.progress, 0.0001f)
         assertTrue(high.backdropBlurRadius >= low.backdropBlurRadius)
     }
 
     @Test
-    fun `clear mode damps chromatic split and scroll coupling`() {
-        val clear = resolveLiquidGlassTuning(
+    fun `progress continuously shifts optical emphasis from lens to frost`() {
+        val clear = resolveLiquidGlassTuning(progress = 0f)
+        val middle = resolveLiquidGlassTuning(progress = 0.5f)
+        val frosted = resolveLiquidGlassTuning(progress = 1f)
+
+        assertTrue(clear.indicatorLensBoost > middle.indicatorLensBoost)
+        assertTrue(middle.indicatorLensBoost > frosted.indicatorLensBoost)
+        assertTrue(clear.chromaticAberrationAmount >= middle.chromaticAberrationAmount)
+        assertTrue(middle.chromaticAberrationAmount >= frosted.chromaticAberrationAmount)
+        assertTrue(clear.scrollCoupledRefractionAmount >= middle.scrollCoupledRefractionAmount)
+        assertTrue(middle.scrollCoupledRefractionAmount >= frosted.scrollCoupledRefractionAmount)
+        assertFalse(frosted.depthEffectEnabled)
+    }
+
+    @Test
+    fun `clear progress keeps shell blur low enough for transparent glass`() {
+        val clear = resolveLiquidGlassTuning(progress = 0f)
+
+        assertTrue(clear.backdropBlurRadius <= 6f)
+        assertTrue(clear.surfaceAlpha <= 0.16f)
+    }
+
+    @Test
+    fun `shell refraction height stays in a capsule-safe range`() {
+        val clear = resolveLiquidGlassTuning(progress = 0f)
+        val frosted = resolveLiquidGlassTuning(progress = 1f)
+
+        assertTrue(clear.refractionHeight <= 24f)
+        assertTrue(frosted.refractionHeight <= clear.refractionHeight)
+    }
+
+    @Test
+    fun `legacy mode and strength map into ordered continuous progress`() {
+        val clear = resolveLegacyLiquidGlassProgress(
             mode = LiquidGlassMode.CLEAR,
             strength = 0.42f
         )
-        val balanced = resolveLiquidGlassTuning(
+        val balanced = resolveLegacyLiquidGlassProgress(
             mode = LiquidGlassMode.BALANCED,
             strength = 0.52f
         )
+        val frosted = resolveLegacyLiquidGlassProgress(
+            mode = LiquidGlassMode.FROSTED,
+            strength = 0.62f
+        )
 
-        assertTrue(clear.indicatorChromaticBoost < balanced.indicatorChromaticBoost)
-        assertFalse(clear.scrollCoupledRefraction)
+        assertTrue(clear < balanced)
+        assertTrue(balanced < frosted)
     }
 }

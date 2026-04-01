@@ -179,10 +179,26 @@ class BottomBarIndicatorPolicyTest {
     fun `frosted idle indicator keeps stronger alpha floor for visibility`() {
         val alpha = resolveBottomBarIndicatorTintAlpha(
             shouldRefract = false,
-            liquidGlassMode = LiquidGlassMode.FROSTED,
+            liquidGlassProgress = 1f,
             configuredAlpha = 0.14f
         )
 
         assertTrue(alpha >= 0.32f)
+    }
+
+    @Test
+    fun `clear idle indicator stays lighter than frosted idle indicator`() {
+        val clear = resolveBottomBarIndicatorTintAlpha(
+            shouldRefract = false,
+            liquidGlassProgress = 0f,
+            configuredAlpha = 0.14f
+        )
+        val frosted = resolveBottomBarIndicatorTintAlpha(
+            shouldRefract = false,
+            liquidGlassProgress = 1f,
+            configuredAlpha = 0.14f
+        )
+
+        assertTrue(clear < frosted)
     }
 }

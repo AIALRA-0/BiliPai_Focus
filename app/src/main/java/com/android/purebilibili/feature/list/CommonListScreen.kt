@@ -843,8 +843,9 @@ fun CommonListScreen(
                             HistoryDeleteAnimationMode.SINGLE_DISSOLVE -> {
                                 targetKeys.firstOrNull()?.let(historyViewModel::startVideoDissolve)
                             }
-                            HistoryDeleteAnimationMode.BATCH_DISSOLVE -> {
-                                historyViewModel.startBatchVideoDissolve(targetKeys)
+                            HistoryDeleteAnimationMode.DIRECT_DELETE -> {
+                                // Batch selection may include off-screen items that never report animation completion.
+                                historyViewModel.deleteHistoryItems(targetKeys)
                             }
                         }
                         selectedHistoryKeys = emptySet()
@@ -1117,7 +1118,7 @@ private fun CommonListContent(
                             collapseAfterDissolve = shouldCollapseHistoryDeleteCard(historyDeleteAnimationMode),
                             publishGlobalDissolveState = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),
                             keepInvisibleAfterDissolve = shouldKeepPlaceholderHidden ||
-                                historyDeleteAnimationMode == HistoryDeleteAnimationMode.BATCH_DISSOLVE,
+                                historyDeleteAnimationMode == HistoryDeleteAnimationMode.DIRECT_DELETE,
                             modifier = Modifier.jiggleOnDissolve(
                                 cardId = historyKey,
                                 enabled = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),

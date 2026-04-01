@@ -924,7 +924,7 @@ fun rememberVideoPlayerState(
                     // 2. 系统 PiP 模式 - 用户按 Home 键返回桌面时继续播放
                     // 3. 后台音频模式 - 继续播放音频
                     val isMiniMode = miniPlayerManager.isMiniMode
-                    val isPip = miniPlayerManager.shouldEnterPip()
+                    val isPip = miniPlayerManager.shouldKeepPlaybackForPipTransition()
                     val isBackgroundAudio = miniPlayerManager.shouldContinueBackgroundAudio()
                     val hasRecentUserLeaveHint = miniPlayerManager.hasRecentUserLeaveHint()
                     val pauseDecision = resolvePlaybackPauseDecision(
@@ -955,7 +955,7 @@ fun rememberVideoPlayerState(
                 // 避免重复处理导致 savedTrackParams 被覆盖
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     val shouldEnsureAudibleOnForeground =
-                        !miniPlayerManager.isMiniMode && !miniPlayerManager.shouldEnterPip()
+                        !miniPlayerManager.isMiniMode && !miniPlayerManager.isSystemPipActive
                     val resumeDecision = resolvePlaybackResumeDecision(
                         wasPlaybackActive = wasPlaying,
                         isPlaying = player.isPlaying,

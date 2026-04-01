@@ -25,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -32,10 +33,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -61,7 +66,6 @@ import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.store.HomeHeaderBlurMode
-import com.android.purebilibili.feature.home.LocalHomeScrollOffset
 import com.android.purebilibili.feature.home.resolveHomeTopCategories
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.feature.home.rememberHomeGlassChromeColors
@@ -77,6 +81,14 @@ private const val HOME_HEADER_LIQUID_GLASS_ALPHA = 0.10f
 internal data class HomeTopChromeMotionPolicy(
     val isScrolling: Boolean,
     val isTransitionRunning: Boolean
+)
+
+internal data class HomeTopSearchRefractionLayerPolicy(
+    val captureContentLayer: Boolean,
+    val useExportedBackdrop: Boolean,
+    val overlayAlpha: Float,
+    val visibleContentAlpha: Float,
+    val exportTranslationMultiplier: Float
 )
 
 internal enum class HomeTopChromeRenderMode {
@@ -122,6 +134,31 @@ internal fun resolveHomeTopChromeRenderMode(
             else -> HomeTopChromeRenderMode.PLAIN
         }
     }
+}
+
+internal fun resolveHomeTopSearchRefractionLayerPolicy(
+    renderMode: HomeTopChromeRenderMode,
+    hasBackdrop: Boolean,
+    searchRevealFraction: Float,
+    isScrolling: Boolean,
+    isTransitionRunning: Boolean
+): HomeTopSearchRefractionLayerPolicy {
+    val shouldExportContentLayer = renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP &&
+        hasBackdrop &&
+        searchRevealFraction > 0.02f &&
+        (isScrolling || isTransitionRunning)
+    val overlayAlpha = if (shouldExportContentLayer) {
+        (if (isScrolling) 0.58f else 0.42f) * searchRevealFraction.coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    return HomeTopSearchRefractionLayerPolicy(
+        captureContentLayer = shouldExportContentLayer,
+        useExportedBackdrop = false,
+        overlayAlpha = overlayAlpha,
+        visibleContentAlpha = 1f,
+        exportTranslationMultiplier = 0f
+    )
 }
 
 internal fun resolveHomeTopChromeSurfaceTreatment(
@@ -783,7 +820,7 @@ internal fun Modifier.homeTopChromeSurface(
         style = AppChromeLiquidSurfaceStyle(
             blurSurfaceType = resolveHomeTopBlurSurfaceType(renderMode),
             preferFlatGlass = preferFlatGlass,
-            depthEffect = liquidGlassTuning?.mode != com.android.purebilibili.core.store.LiquidGlassMode.FROSTED,
+            depthEffect = liquidGlassTuning?.depthEffectEnabled != false,
             useTuningSurfaceAlpha = renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP ||
                 renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
         )
@@ -879,15 +916,11 @@ fun iOSHomeHeader(
     val allowHazeLiquidGlassFallback = shouldAllowDirectHazeLiquidGlassFallback(Build.VERSION.SDK_INT)
     val liquidStyle = homeSettings?.liquidGlassStyle ?: LiquidGlassStyle.CLASSIC
     val liquidGlassTuning = remember(
-        homeSettings?.liquidGlassMode,
-        homeSettings?.liquidGlassStrength,
+        homeSettings?.liquidGlassProgress,
         liquidStyle
     ) {
         if (homeSettings != null) {
-            resolveLiquidGlassTuning(
-                mode = homeSettings.liquidGlassMode,
-                strength = homeSettings.liquidGlassStrength
-            )
+            resolveLiquidGlassTuning(progress = homeSettings.liquidGlassProgress)
         } else {
             resolveLiquidGlassTuning(liquidStyle)
         }
@@ -1039,6 +1072,7 @@ fun iOSHomeHeader(
         uiPreset = uiPreset,
         useUnifiedPanel = useUnifiedTopPanel
     )
+    val searchContentBackdrop = rememberLayerBackdrop()
     val localTopChromeRenderMode = resolveHomeTopLocalChromeRenderMode(
         renderMode = topChromeRenderMode,
         uiPreset = uiPreset
@@ -1094,6 +1128,21 @@ fun iOSHomeHeader(
         (scrollLayout.searchBarHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
     } else {
         0f
+    }
+    val searchRefractionLayerPolicy = remember(
+        searchChromeRenderMode,
+        backdrop,
+        searchRevealFraction,
+        topChromeMotionPolicy.isScrolling,
+        topChromeMotionPolicy.isTransitionRunning
+    ) {
+        resolveHomeTopSearchRefractionLayerPolicy(
+            renderMode = searchChromeRenderMode,
+            hasBackdrop = backdrop != null,
+            searchRevealFraction = searchRevealFraction,
+            isScrolling = topChromeMotionPolicy.isScrolling,
+            isTransitionRunning = topChromeMotionPolicy.isTransitionRunning
+        )
     }
     val usesImmediateSearchReveal = remember(searchRevealDeadZonePx) {
         usesImmediateHomeTopSearchReveal(searchRevealDeadZonePx)
@@ -1417,11 +1466,57 @@ fun iOSHomeHeader(
                                     .height(resolveHomeTopSearchPillHeight(uiPreset)),
                                 contentAlignment = Alignment.Center
                             ) {
+                                val isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet
+                                var searchPillWidthPx by remember { mutableFloatStateOf(0f) }
+                                val searchIndicatorTintAlpha = resolveBottomBarIndicatorTintAlpha(
+                                    shouldRefract = true,
+                                    liquidGlassProgress = liquidGlassTuning.progress,
+                                    configuredAlpha = liquidGlassTuning.indicatorTintAlpha
+                                )
+                                val searchIndicatorColor = resolveBottomBarMovingIndicatorSurfaceColor(
+                                    isDarkTheme = !isLightMode
+                                ).copy(alpha = searchIndicatorTintAlpha)
+                                val searchPillContent: @Composable () -> Unit = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            searchIcon,
+                                            contentDescription = "搜索",
+                                            tint = if (isLightMode) {
+                                                topForegroundColor
+                                            } else {
+                                                topForegroundColor.copy(alpha = topActionIconAlpha)
+                                            },
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(resolveHomeTopSearchIconTextGap(uiPreset)))
+                                        Text(
+                                            text = "搜索视频、UP主...",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontSize = if (uiPreset == UiPreset.MD3) {
+                                                if (isTablet) 15.sp else 14.sp
+                                            } else {
+                                                if (isTablet) 16.sp else 15.sp
+                                            },
+                                            fontWeight = if (uiPreset == UiPreset.MD3) FontWeight.Normal else FontWeight.Normal,
+                                            color = if (uiPreset == UiPreset.MD3) {
+                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f)
+                                            } else if (isLightMode) {
+                                                topForegroundColor
+                                            } else {
+                                                topForegroundColor.copy(
+                                                    alpha = minOf(searchPillStyle.contentAlpha, topSearchContentAlpha)
+                                                )
+                                            },
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                                 Box(
                                     modifier = Modifier
                                         .widthIn(max = 640.dp)
                                         .fillMaxWidth()
                                         .height(resolveHomeTopSearchPillHeight(uiPreset))
+                                        .onSizeChanged { searchPillWidthPx = it.width.toFloat() }
                                         .clip(searchContainerShape)
                                         .homeTopChromeSurface(
                                             renderMode = searchChromeRenderMode,
@@ -1479,38 +1574,52 @@ fun iOSHomeHeader(
                                                 )
                                         )
                                     }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            searchIcon,
-                                            contentDescription = "搜索",
-                                            tint = if (isLightMode) {
-                                                topForegroundColor
-                                            } else {
-                                                topForegroundColor.copy(alpha = topActionIconAlpha)
-                                            },
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(resolveHomeTopSearchIconTextGap(uiPreset)))
-                                        val isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet
-                                        Text(
-                                            text = "搜索视频、UP主...",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontSize = if (uiPreset == UiPreset.MD3) {
-                                                if (isTablet) 15.sp else 14.sp
-                                            } else {
-                                                if (isTablet) 16.sp else 15.sp
-                                            },
-                                            fontWeight = if (uiPreset == UiPreset.MD3) FontWeight.Normal else FontWeight.Normal,
-                                            color = if (uiPreset == UiPreset.MD3) {
-                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f)
-                                            } else if (isLightMode) {
-                                                topForegroundColor
-                                            } else {
-                                                topForegroundColor.copy(
-                                                    alpha = minOf(searchPillStyle.contentAlpha, topSearchContentAlpha)
-                                                )
-                                            },
-                                            maxLines = 1
+                                    if (searchRefractionLayerPolicy.captureContentLayer) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clearAndSetSemantics {}
+                                                .alpha(0f)
+                                                .layerBackdrop(searchContentBackdrop),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.padding(
+                                                    horizontal = resolveHomeTopSearchContentHorizontalPadding(uiPreset)
+                                                ),
+                                                contentAlignment = Alignment.CenterStart
+                                            ) {
+                                                searchPillContent()
+                                            }
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier.alpha(searchRefractionLayerPolicy.visibleContentAlpha)
+                                    ) {
+                                        searchPillContent()
+                                    }
+                                    if (
+                                        searchRefractionLayerPolicy.overlayAlpha > 0f &&
+                                        searchPillWidthPx > 0f
+                                    ) {
+                                        SimpleLiquidIndicator(
+                                            position = 0f,
+                                            itemWidthPx = searchPillWidthPx,
+                                            isDragging = true,
+                                            velocityPxPerSecond = 0f,
+                                            isLiquidGlassEnabled = true,
+                                            liquidGlassStyle = liquidStyle,
+                                            liquidGlassTuning = liquidGlassTuning,
+                                            backdrop = searchContentBackdrop,
+                                            indicatorColor = searchIndicatorColor,
+                                            indicatorHeight = resolveHomeTopSearchPillHeight(uiPreset),
+                                            cornerRadius = resolveHomeTopSearchPillHeight(uiPreset) / 2,
+                                            widthRatio = 1f,
+                                            minWidth = with(density) { searchPillWidthPx.toDp() },
+                                            horizontalInset = 0.dp,
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .alpha(searchRefractionLayerPolicy.overlayAlpha)
                                         )
                                     }
                                 }

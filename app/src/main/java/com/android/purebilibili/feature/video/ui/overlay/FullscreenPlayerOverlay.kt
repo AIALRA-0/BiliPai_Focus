@@ -318,8 +318,14 @@ fun FullscreenPlayerOverlay(
     }
     
     // 自动隐藏控制按钮
-    LaunchedEffect(showControls, lastInteractionTime) {
-        if (showControls && gestureMode == FullscreenGestureMode.None) {
+    LaunchedEffect(showControls, lastInteractionTime, gestureMode, isPlaying) {
+        if (
+            shouldAutoHideFullscreenControls(
+                showControls = showControls,
+                gestureMode = gestureMode,
+                isPlaying = isPlaying
+            )
+        ) {
             delay(AUTO_HIDE_DELAY)
             if (System.currentTimeMillis() - lastInteractionTime >= AUTO_HIDE_DELAY) {
                 showControls = false

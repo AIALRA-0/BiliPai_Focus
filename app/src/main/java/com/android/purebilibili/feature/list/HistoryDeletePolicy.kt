@@ -5,7 +5,7 @@ import com.android.purebilibili.data.model.response.HistoryItem
 
 internal enum class HistoryDeleteAnimationMode {
     SINGLE_DISSOLVE,
-    BATCH_DISSOLVE
+    DIRECT_DELETE
 }
 
 internal data class HistoryDeleteSession(
@@ -59,7 +59,7 @@ internal fun resolveHistoryDeleteAnimationMode(itemCount: Int): HistoryDeleteAni
     return if (itemCount <= 1) {
         HistoryDeleteAnimationMode.SINGLE_DISSOLVE
     } else {
-        HistoryDeleteAnimationMode.BATCH_DISSOLVE
+        HistoryDeleteAnimationMode.DIRECT_DELETE
     }
 }
 

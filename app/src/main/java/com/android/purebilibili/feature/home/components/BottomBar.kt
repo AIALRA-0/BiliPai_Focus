@@ -402,15 +402,32 @@ internal fun resolveBottomBarChromeMaterialMode(
 
 internal fun resolveBottomBarIndicatorTintAlpha(
     shouldRefract: Boolean,
-    liquidGlassMode: LiquidGlassMode,
+    liquidGlassProgress: Float,
     configuredAlpha: Float
 ): Float {
     if (shouldRefract) return configuredAlpha
-    return when (liquidGlassMode) {
-        LiquidGlassMode.FROSTED -> configuredAlpha.coerceAtLeast(0.32f)
-        LiquidGlassMode.BALANCED -> configuredAlpha.coerceAtLeast(0.22f)
-        LiquidGlassMode.CLEAR -> configuredAlpha.coerceAtLeast(0.24f)
-    }
+    val minAlpha = lerp(
+        start = 0.24f,
+        stop = 0.32f,
+        fraction = liquidGlassProgress.coerceIn(0f, 1f)
+    )
+    return configuredAlpha.coerceAtLeast(minAlpha)
+}
+
+internal fun resolveBottomBarIndicatorTintAlpha(
+    shouldRefract: Boolean,
+    liquidGlassMode: LiquidGlassMode,
+    configuredAlpha: Float
+): Float {
+    return resolveBottomBarIndicatorTintAlpha(
+        shouldRefract = shouldRefract,
+        liquidGlassProgress = when (liquidGlassMode) {
+            LiquidGlassMode.CLEAR -> 0f
+            LiquidGlassMode.BALANCED -> 0.5f
+            LiquidGlassMode.FROSTED -> 1f
+        },
+        configuredAlpha = configuredAlpha
+    )
 }
 
 internal fun resolveBottomBarIndicatorPolicy(itemCount: Int): BottomBarIndicatorPolicy {
@@ -750,21 +767,15 @@ fun FrostedBottomBar(
     // 当底栏停靠时，强制禁用液态玻璃（Liquid Glass），仅使用标准磨砂（Frosted Glass）
     val showGlassEffect = homeSettings.isLiquidGlassEnabled && isFloating
     val liquidGlassTuning = remember(
-        homeSettings.liquidGlassMode,
-        homeSettings.liquidGlassStrength,
+        homeSettings.liquidGlassProgress,
         homeSettings.liquidGlassStyle
     ) {
-        resolveLiquidGlassTuning(
-            mode = homeSettings.liquidGlassMode,
-            strength = homeSettings.liquidGlassStrength
-        )
+        resolveLiquidGlassTuning(progress = homeSettings.liquidGlassProgress)
     }
-    val contentLuminance = remember(showGlassEffect, liquidGlassTuning.mode, isDarkTheme) {
-        if (showGlassEffect && liquidGlassTuning.mode == LiquidGlassMode.FROSTED) {
+    val contentLuminance = remember(showGlassEffect, liquidGlassTuning.progress, isDarkTheme) {
+        if (showGlassEffect && liquidGlassTuning.progress > 0.72f) {
             if (isDarkTheme) 0.18f else 0.82f
-        } else {
-            0f
-        }
+        } else 0f
     }
     val isGlassSupported = remember { shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT) }
     val allowHazeLiquidGlassFallback = remember {
@@ -778,7 +789,7 @@ fun FrostedBottomBar(
         surfaceColor = MaterialTheme.colorScheme.surface,
         blurEnabled = hazeState != null,
         blurIntensity = blurIntensity,
-        liquidGlassMode = liquidGlassTuning.mode,
+        liquidGlassProgress = liquidGlassTuning.progress,
         isGlassEffectEnabled = showGlassEffect
     )
     val bottomChromeRenderMode = remember(
@@ -919,7 +930,7 @@ fun FrostedBottomBar(
                         }
                         val indicatorTintAlpha = resolveBottomBarIndicatorTintAlpha(
                             shouldRefract = indicatorVisualPolicy.shouldRefract,
-                            liquidGlassMode = liquidGlassTuning.mode,
+                            liquidGlassProgress = liquidGlassTuning.progress,
                             configuredAlpha = liquidGlassTuning.indicatorTintAlpha
                         )
                         val refractionLayerPolicy = resolveBottomBarRefractionLayerPolicy(
@@ -1202,7 +1213,7 @@ internal fun resolveBottomBarContainerColor(
     surfaceColor: Color,
     blurEnabled: Boolean,
     blurIntensity: com.android.purebilibili.core.ui.blur.BlurIntensity,
-    liquidGlassMode: LiquidGlassMode,
+    liquidGlassProgress: Float,
     isGlassEffectEnabled: Boolean
 ): Color {
     val base = resolveBottomBarSurfaceColor(
@@ -1212,12 +1223,33 @@ internal fun resolveBottomBarContainerColor(
     )
     if (!isGlassEffectEnabled) return base
 
-    val minAlpha = when (liquidGlassMode) {
-        LiquidGlassMode.FROSTED -> 0.36f
-        LiquidGlassMode.BALANCED -> 0.22f
-        LiquidGlassMode.CLEAR -> 0.18f
-    }
-    return base.copy(alpha = base.alpha.coerceAtLeast(minAlpha))
+    val minAlpha = lerp(
+        start = 0.18f,
+        stop = 0.36f,
+        fraction = liquidGlassProgress.coerceIn(0f, 1f)
+    )
+    val liftedAlpha = base.alpha.coerceAtLeast(minAlpha) + (0.06f * liquidGlassProgress.coerceIn(0f, 1f))
+    return base.copy(alpha = liftedAlpha.coerceAtMost(1f))
+}
+
+internal fun resolveBottomBarContainerColor(
+    surfaceColor: Color,
+    blurEnabled: Boolean,
+    blurIntensity: com.android.purebilibili.core.ui.blur.BlurIntensity,
+    liquidGlassMode: LiquidGlassMode,
+    isGlassEffectEnabled: Boolean
+): Color {
+    return resolveBottomBarContainerColor(
+        surfaceColor = surfaceColor,
+        blurEnabled = blurEnabled,
+        blurIntensity = blurIntensity,
+        liquidGlassProgress = when (liquidGlassMode) {
+            LiquidGlassMode.CLEAR -> 0f
+            LiquidGlassMode.BALANCED -> 0.5f
+            LiquidGlassMode.FROSTED -> 1f
+        },
+        isGlassEffectEnabled = isGlassEffectEnabled
+    )
 }
 
 internal fun shouldUseHomeCombinedClickable(
@@ -1304,6 +1336,24 @@ internal fun resolveBottomBarItemColorBinding(
         BottomBarItemColorBinding(colorIndex = match, hasCustomAccent = true)
     } else {
         BottomBarItemColorBinding(colorIndex = 0, hasCustomAccent = false)
+    }
+}
+
+internal fun resolveBottomBarReadableContentColor(
+    isLightMode: Boolean,
+    liquidGlassProgress: Float,
+    contentLuminance: Float
+): Color {
+    if (isLightMode) {
+        return Color.Black
+    }
+    val shouldUseDarkForeground = liquidGlassProgress >= 0.62f && contentLuminance > 0.6f
+    return if (shouldUseDarkForeground) {
+        Color.Black.copy(alpha = 0.82f)
+    } else {
+        Color.White.copy(
+            alpha = if (liquidGlassProgress < 0.35f) 0.97f else 0.95f
+        )
     }
 }
 
@@ -1478,24 +1528,11 @@ private fun BottomBarItem(
     // This handles cases where app theme overrides system theme
     val isLightMode = MaterialTheme.colorScheme.surface.luminance() > 0.5f
 
-    val unselectedColor = if (isLightMode) {
-        // [Force] Light Mode: Always use Black for maximum readability
-        androidx.compose.ui.graphics.Color.Black
-    } else if (liquidGlassTuning.mode == com.android.purebilibili.core.store.LiquidGlassMode.FROSTED) {
-        // Luminance > 0.6 (Bright background) -> Black text
-        // Luminance < 0.6 (Dark background) -> White text
-        if (contentLuminance > 0.6f) androidx.compose.ui.graphics.Color.Black.copy(alpha=0.8f) 
-        else androidx.compose.ui.graphics.Color.White.copy(alpha=0.9f)
-    } else {
-        // Classic Logic (Dark Mode)
-        if (isTablet) {
-             // [平板优化] 悬浮底栏下方是复杂视频流，强制使用高可见度白色 + 投影
-             androidx.compose.ui.graphics.Color.White.copy(alpha = 0.95f)
-        } else {
-            // [Fix] Dark Mode: Increase opacity to 0.95 for better legibility against glass
-            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.95f)
-        }
-    }
+    val unselectedColor = resolveBottomBarReadableContentColor(
+        isLightMode = isLightMode,
+        liquidGlassProgress = liquidGlassTuning.progress,
+        contentLuminance = contentLuminance
+    )
     
     val selectedAccent = if (hasCustomAccent) {
         BottomBarColors.getColorByIndex(colorIndex)

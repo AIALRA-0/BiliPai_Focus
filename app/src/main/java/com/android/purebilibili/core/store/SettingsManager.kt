@@ -87,6 +87,63 @@ internal fun resolveDefaultLiquidGlassStrength(mode: LiquidGlassMode): Float = w
 
 internal fun normalizeLiquidGlassStrength(value: Float): Float = value.coerceIn(0f, 1f)
 
+internal fun normalizeLiquidGlassProgress(value: Float): Float = value.coerceIn(0f, 1f)
+
+internal fun resolveLegacyLiquidGlassProgress(
+    mode: LiquidGlassMode,
+    strength: Float
+): Float {
+    val normalizedStrength = normalizeLiquidGlassStrength(strength)
+    val (start, end) = when (mode) {
+        LiquidGlassMode.CLEAR -> 0f to 0.32f
+        LiquidGlassMode.BALANCED -> 0.34f to 0.66f
+        LiquidGlassMode.FROSTED -> 0.68f to 1f
+    }
+    return normalizeLiquidGlassProgress(start + (end - start) * normalizedStrength)
+}
+
+internal fun resolveLegacyLiquidGlassProgress(style: LiquidGlassStyle): Float {
+    val mode = resolveLegacyLiquidGlassMode(style)
+    return resolveLegacyLiquidGlassProgress(
+        mode = mode,
+        strength = resolveDefaultLiquidGlassStrength(mode)
+    )
+}
+
+internal fun resolveLiquidGlassModeFromProgress(progress: Float): LiquidGlassMode {
+    val normalizedProgress = normalizeLiquidGlassProgress(progress)
+    return when {
+        normalizedProgress < 0.34f -> LiquidGlassMode.CLEAR
+        normalizedProgress < 0.68f -> LiquidGlassMode.BALANCED
+        else -> LiquidGlassMode.FROSTED
+    }
+}
+
+internal fun resolveLiquidGlassStrengthFromProgress(progress: Float): Float {
+    val normalizedProgress = normalizeLiquidGlassProgress(progress)
+    val mode = resolveLiquidGlassModeFromProgress(normalizedProgress)
+    val (start, end) = when (mode) {
+        LiquidGlassMode.CLEAR -> 0f to 0.32f
+        LiquidGlassMode.BALANCED -> 0.34f to 0.66f
+        LiquidGlassMode.FROSTED -> 0.68f to 1f
+    }
+    return normalizeLiquidGlassStrength(
+        if (end <= start) {
+            0f
+        } else {
+            (normalizedProgress - start) / (end - start)
+        }
+    )
+}
+
+internal fun resolveLegacyLiquidGlassStyleFromProgress(progress: Float): LiquidGlassStyle {
+    return when (resolveLiquidGlassModeFromProgress(progress)) {
+        LiquidGlassMode.CLEAR -> LiquidGlassStyle.IOS26
+        LiquidGlassMode.BALANCED -> LiquidGlassStyle.CLASSIC
+        LiquidGlassMode.FROSTED -> LiquidGlassStyle.SIMP_MUSIC
+    }
+}
+
 enum class HomeHeaderBlurMode(val value: Int, val label: String) {
     FOLLOW_PRESET(0, "跟随预设"),
     ALWAYS_ON(1, "始终开启"),
@@ -213,6 +270,7 @@ data class HomeSettings(
     val liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
+    val liquidGlassProgress: Float = 0.5f,
     val isHeaderCollapseEnabled: Boolean = true, // [New] 首页顶部栏自动收缩开关
     val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-6=固定)
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
@@ -560,6 +618,7 @@ object SettingsManager {
     private val KEY_CRASH_TRACKING_CONSENT_SHOWN = booleanPreferencesKey("crash_tracking_consent_shown")
     private val KEY_LIQUID_GLASS_MODE = intPreferencesKey("liquid_glass_mode")
     private val KEY_LIQUID_GLASS_STRENGTH = floatPreferencesKey("liquid_glass_strength")
+    private val KEY_LIQUID_GLASS_PROGRESS = floatPreferencesKey("liquid_glass_progress")
     //  [新增] 底栏自定义 - 顺序和可见性
     private val KEY_BOTTOM_BAR_ORDER = stringPreferencesKey("bottom_bar_order")  // 逗号分隔的项目顺序
     private val KEY_BOTTOM_BAR_VISIBLE_TABS = stringPreferencesKey("bottom_bar_visible_tabs")  // 逗号分隔的可见项目
@@ -596,6 +655,12 @@ object SettingsManager {
         val liquidGlassStrength = normalizeLiquidGlassStrength(
             preferences[KEY_LIQUID_GLASS_STRENGTH] ?: resolveDefaultLiquidGlassStrength(liquidGlassMode)
         )
+        val liquidGlassProgress = normalizeLiquidGlassProgress(
+            preferences[KEY_LIQUID_GLASS_PROGRESS] ?: resolveLegacyLiquidGlassProgress(
+                mode = liquidGlassMode,
+                strength = liquidGlassStrength
+            )
+        )
         return HomeSettings(
             displayMode = preferences[KEY_DISPLAY_MODE] ?: 0,
             isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: true,
@@ -609,6 +674,7 @@ object SettingsManager {
             liquidGlassStyle = legacyStyle,
             liquidGlassMode = liquidGlassMode,
             liquidGlassStrength = liquidGlassStrength,
+            liquidGlassProgress = liquidGlassProgress,
             gridColumnCount = preferences[KEY_GRID_COLUMN_COUNT] ?: 0,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: true,
@@ -1571,7 +1637,11 @@ object SettingsManager {
         }
 
     suspend fun setLiquidGlassMode(context: Context, mode: LiquidGlassMode) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_LIQUID_GLASS_MODE] = mode.value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LIQUID_GLASS_MODE] = mode.value
+            val strength = preferences[KEY_LIQUID_GLASS_STRENGTH] ?: resolveDefaultLiquidGlassStrength(mode)
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = resolveLegacyLiquidGlassProgress(mode, strength)
+        }
     }
 
     fun getLiquidGlassStrength(context: Context): Flow<Float> = context.settingsDataStore.data
@@ -1590,7 +1660,54 @@ object SettingsManager {
 
     suspend fun setLiquidGlassStrength(context: Context, strength: Float) {
         context.settingsDataStore.edit { preferences ->
-            preferences[KEY_LIQUID_GLASS_STRENGTH] = normalizeLiquidGlassStrength(strength)
+            val normalizedStrength = normalizeLiquidGlassStrength(strength)
+            preferences[KEY_LIQUID_GLASS_STRENGTH] = normalizedStrength
+            val mode = preferences[KEY_LIQUID_GLASS_MODE]
+                ?.let(LiquidGlassMode::fromValue)
+                ?: resolveLegacyLiquidGlassMode(
+                    LiquidGlassStyle.fromValue(
+                        preferences[KEY_LIQUID_GLASS_STYLE] ?: LiquidGlassStyle.CLASSIC.value
+                    )
+                )
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = resolveLegacyLiquidGlassProgress(mode, normalizedStrength)
+        }
+    }
+
+    fun getLiquidGlassProgress(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeLiquidGlassProgress(
+                preferences[KEY_LIQUID_GLASS_PROGRESS]
+                    ?: resolveLegacyLiquidGlassProgress(
+                        mode = preferences[KEY_LIQUID_GLASS_MODE]
+                            ?.let(LiquidGlassMode::fromValue)
+                            ?: resolveLegacyLiquidGlassMode(
+                                LiquidGlassStyle.fromValue(
+                                    preferences[KEY_LIQUID_GLASS_STYLE] ?: LiquidGlassStyle.CLASSIC.value
+                                )
+                            ),
+                        strength = preferences[KEY_LIQUID_GLASS_STRENGTH]
+                            ?: resolveDefaultLiquidGlassStrength(
+                                preferences[KEY_LIQUID_GLASS_MODE]
+                                    ?.let(LiquidGlassMode::fromValue)
+                                    ?: resolveLegacyLiquidGlassMode(
+                                        LiquidGlassStyle.fromValue(
+                                            preferences[KEY_LIQUID_GLASS_STYLE]
+                                                ?: LiquidGlassStyle.CLASSIC.value
+                                        )
+                                    )
+                            )
+                    )
+            )
+        }
+
+    suspend fun setLiquidGlassProgress(context: Context, progress: Float) {
+        context.settingsDataStore.edit { preferences ->
+            val normalizedProgress = normalizeLiquidGlassProgress(progress)
+            val mode = resolveLiquidGlassModeFromProgress(normalizedProgress)
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = normalizedProgress
+            preferences[KEY_LIQUID_GLASS_MODE] = mode.value
+            preferences[KEY_LIQUID_GLASS_STRENGTH] = resolveLiquidGlassStrengthFromProgress(normalizedProgress)
+            preferences[KEY_LIQUID_GLASS_STYLE] = resolveLegacyLiquidGlassStyleFromProgress(normalizedProgress).value
         }
     }
     

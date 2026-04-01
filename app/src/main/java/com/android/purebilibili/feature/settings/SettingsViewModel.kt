@@ -9,6 +9,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
 import com.android.purebilibili.core.store.resolveDefaultLiquidGlassStrength
+import com.android.purebilibili.core.store.resolveLegacyLiquidGlassProgress
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassMode
 import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
@@ -70,6 +71,7 @@ data class SettingsUiState(
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle = com.android.purebilibili.core.store.LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
+    val liquidGlassProgress: Float = 0.5f,
     // [New] 平板导航模式
     val tabletUseSidebar: Boolean = false,
     val isHeaderCollapseEnabled: Boolean = true, // [New]
@@ -110,6 +112,7 @@ data class ExtraSettings(
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle, // [New]
     val liquidGlassMode: LiquidGlassMode, // [New]
     val liquidGlassStrength: Float, // [New]
+    val liquidGlassProgress: Float, // [New]
     val tabletUseSidebar: Boolean, // [New]
     val isHeaderCollapseEnabled: Boolean, // [New]
     val gridColumnCount: Int // [New]
@@ -157,6 +160,7 @@ private data class BaseSettings(
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle, // [New]
     val liquidGlassMode: LiquidGlassMode, // [New]
     val liquidGlassStrength: Float, // [New]
+    val liquidGlassProgress: Float, // [New]
     val tabletUseSidebar: Boolean, // [New]
     val isHeaderCollapseEnabled: Boolean, // [New]
     val gridColumnCount: Int // [New]
@@ -236,6 +240,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getLiquidGlassStyle(context).asAnyFlow(), // [New]
         SettingsManager.getLiquidGlassMode(context).asAnyFlow(), // [New]
         SettingsManager.getLiquidGlassStrength(context).asAnyFlow(), // [New]
+        SettingsManager.getLiquidGlassProgress(context).asAnyFlow(), // [New]
         SettingsManager.getTabletUseSidebar(context).asAnyFlow(), // [New]
         SettingsManager.getHeaderCollapseEnabled(context).asAnyFlow(), // [New]
         SettingsManager.getGridColumnCount(context).asAnyFlow() // [New]
@@ -253,9 +258,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val liquidGlassStyle = values[10] as com.android.purebilibili.core.store.LiquidGlassStyle
         val liquidGlassMode = values[11] as LiquidGlassMode
         val liquidGlassStrength = values[12] as Float
-        val tabletUseSidebar = values[13] as Boolean
-        val headerCollapse = values[14] as Boolean
-        val gridColumnCount = values[15] as Int
+        val liquidGlassProgress = values[13] as Float
+        val tabletUseSidebar = values[14] as Boolean
+        val headerCollapse = values[15] as Boolean
+        val gridColumnCount = values[16] as Int
         
         data class Ui2(
             val f: Boolean,
@@ -271,6 +277,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val lgs: com.android.purebilibili.core.store.LiquidGlassStyle,
             val lgm: LiquidGlassMode,
             val lgt: Float,
+            val lgp: Float,
             val tus: Boolean,
             val hc: Boolean,
             val gcc: Int
@@ -289,6 +296,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             liquidGlassStyle,
             liquidGlassMode,
             liquidGlassStrength,
+            liquidGlassProgress,
             tabletUseSidebar,
             headerCollapse,
             gridColumnCount
@@ -318,6 +326,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             liquidGlassStyle = ui2.lgs, // [New]
             liquidGlassMode = ui2.lgm, // [New]
             liquidGlassStrength = ui2.lgt, // [New]
+            liquidGlassProgress = ui2.lgp, // [New]
             tabletUseSidebar = ui2.tus, // [New]
             isHeaderCollapseEnabled = ui2.hc, // [New]
             gridColumnCount = ui2.gcc, // [New]
@@ -396,6 +405,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             liquidGlassStyle = extra.liquidGlassStyle, // [New]
             liquidGlassMode = extra.liquidGlassMode, // [New]
             liquidGlassStrength = extra.liquidGlassStrength, // [New]
+            liquidGlassProgress = extra.liquidGlassProgress, // [New]
             tabletUseSidebar = extra.tabletUseSidebar, // [New]
             isHeaderCollapseEnabled = extra.isHeaderCollapseEnabled, // [New]
             gridColumnCount = extra.gridColumnCount // [New]
@@ -443,6 +453,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             liquidGlassStyle = settings.liquidGlassStyle, // [New]
             liquidGlassMode = settings.liquidGlassMode, // [New]
             liquidGlassStrength = settings.liquidGlassStrength, // [New]
+            liquidGlassProgress = settings.liquidGlassProgress, // [New]
             tabletUseSidebar = settings.tabletUseSidebar, // [New]
             isHeaderCollapseEnabled = settings.isHeaderCollapseEnabled, // [New]
             gridColumnCount = settings.gridColumnCount, // [New]
@@ -689,8 +700,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             SettingsManager.setLiquidGlassStyle(context, style)
             val mode = resolveLegacyLiquidGlassMode(style)
+            val strength = resolveDefaultLiquidGlassStrength(mode)
             SettingsManager.setLiquidGlassMode(context, mode)
-            SettingsManager.setLiquidGlassStrength(context, resolveDefaultLiquidGlassStrength(mode))
+            SettingsManager.setLiquidGlassStrength(context, strength)
+            SettingsManager.setLiquidGlassProgress(
+                context,
+                resolveLegacyLiquidGlassProgress(mode = mode, strength = strength)
+            )
         }
     }
 
@@ -703,6 +719,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setLiquidGlassStrength(strength: Float) {
         viewModelScope.launch {
             SettingsManager.setLiquidGlassStrength(context, strength)
+        }
+    }
+
+    fun setLiquidGlassProgress(progress: Float) {
+        viewModelScope.launch {
+            SettingsManager.setLiquidGlassProgress(context, progress)
         }
     }
 

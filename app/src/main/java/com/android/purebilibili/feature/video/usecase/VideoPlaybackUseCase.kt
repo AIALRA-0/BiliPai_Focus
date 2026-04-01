@@ -98,16 +98,6 @@ internal fun shouldPreparePlayerBeforeExplicitPlay(
     return hasMediaItems && playbackState == Player.STATE_IDLE
 }
 
-internal fun shouldForceCompatibilitySeekOnUserResume(
-    playbackState: Int,
-    currentPositionMs: Long,
-    isPlaying: Boolean
-): Boolean {
-    return !isPlaying &&
-        playbackState == Player.STATE_READY &&
-        currentPositionMs > 0L
-}
-
 internal fun playPlayerFromUserAction(player: Player) {
     playPlayerForUserIntent(player, trackUserAction = true)
 }
@@ -130,18 +120,6 @@ private fun playPlayerForUserIntent(
     )
     if (shouldPreparePlayerBeforeExplicitPlay(player.playbackState, player.mediaItemCount > 0)) {
         player.prepare()
-    }
-    if (shouldForceCompatibilitySeekOnUserResume(
-            playbackState = player.playbackState,
-            currentPositionMs = player.currentPosition,
-            isPlaying = player.isPlaying
-        )
-    ) {
-        Logger.d(
-            "VideoPlaybackUseCase",
-            "USER_DBG playPlayerFromUserAction compatibility seek: pos=${player.currentPosition}"
-        )
-        player.seekTo(player.currentPosition)
     }
     player.play()
     Logger.d(
@@ -181,6 +159,15 @@ internal fun togglePlayerPlaybackFromUserAction(player: Player) {
         "USER_DBG togglePlayerPlaybackFromUserAction before: " +
             "state=${player.playbackState}, isPlaying=${player.isPlaying}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
     )
+    if (player.playbackState == Player.STATE_ENDED) {
+        Logger.d(
+            "VideoPlaybackUseCase",
+            "USER_DBG togglePlayerPlaybackFromUserAction restart from beginning"
+        )
+        player.seekTo(0L)
+        playPlayerFromUserAction(player)
+        return
+    }
     if (player.isPlaying) {
         PlaybackUserActionTracker.recordAction(
             player = player,

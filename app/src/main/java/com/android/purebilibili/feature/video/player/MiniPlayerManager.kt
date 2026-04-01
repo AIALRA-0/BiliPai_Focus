@@ -52,6 +52,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
+import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
 import com.android.purebilibili.feature.video.playback.session.resolveShouldContinuePlaybackDuringPause
@@ -92,15 +93,25 @@ internal fun shouldContinueBackgroundAudioByPolicy(
     mode: SettingsManager.MiniPlayerMode,
     isActive: Boolean,
     isLeavingByNavigation: Boolean,
-    stopPlaybackOnExit: Boolean
+    stopPlaybackOnExit: Boolean,
+    shouldKeepPlaybackForPipTransition: Boolean = false
 ): Boolean {
     if (!backgroundPlaybackEnabled) return false
     if (stopPlaybackOnExit) return false
+    if (!isActive) return false
+    if (isLeavingByNavigation) return false
     return when (mode) {
-        SettingsManager.MiniPlayerMode.OFF -> isActive && !isLeavingByNavigation
-        SettingsManager.MiniPlayerMode.IN_APP_ONLY -> false
-        SettingsManager.MiniPlayerMode.SYSTEM_PIP -> false
+        SettingsManager.MiniPlayerMode.OFF -> true
+        SettingsManager.MiniPlayerMode.IN_APP_ONLY -> true
+        SettingsManager.MiniPlayerMode.SYSTEM_PIP -> !shouldKeepPlaybackForPipTransition
     }
+}
+
+internal fun shouldKeepPlaybackForPipTransition(
+    isSystemPipActive: Boolean,
+    hasPendingPlaybackRoutePip: Boolean
+): Boolean {
+    return isSystemPipActive || hasPendingPlaybackRoutePip
 }
 
 internal fun resolveHandleAudioFocusByPolicy(audioFocusEnabled: Boolean): Boolean {
@@ -225,9 +236,10 @@ internal fun shouldRefreshNotificationOnPlaybackStateChange(
 internal fun shouldKeepPlaybackNotificationVisible(
     isActive: Boolean,
     title: String,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    appInBackground: Boolean
 ): Boolean {
-    return isActive && title.isNotBlank() && isPlaying
+    return isActive && title.isNotBlank() && (isPlaying || appInBackground)
 }
 
 internal fun shouldClearStalePlaybackNotificationOnAppResume(
@@ -674,6 +686,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
     var isPlaying by mutableStateOf(false)
         private set
 
+    var isSystemPipActive by mutableStateOf(false)
+        private set
+
+    private var pendingPlaybackRoutePip by mutableStateOf(false)
+
     var currentPosition by mutableLongStateOf(0L)
         private set
 
@@ -1037,7 +1054,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
             mode = mode,
             isActive = isActive,
             isLeavingByNavigation = isLeavingByNavigation,
-            stopPlaybackOnExit = stopPlaybackOnExit
+            stopPlaybackOnExit = stopPlaybackOnExit,
+            shouldKeepPlaybackForPipTransition = shouldKeepPlaybackForPipTransition()
         )
     }
 
@@ -1082,6 +1100,29 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     fun clearUserLeaveHint() {
         lastUserLeaveHintAtMs = 0L
+    }
+
+    fun updatePlaybackRoutePipRequest(shouldTriggerPip: Boolean) {
+        pendingPlaybackRoutePip = shouldTriggerPip
+    }
+
+    fun updateSystemPipActive(isActive: Boolean) {
+        isSystemPipActive = isActive
+        if (isActive) {
+            pendingPlaybackRoutePip = false
+        }
+    }
+
+    fun clearPlaybackRoutePipState() {
+        pendingPlaybackRoutePip = false
+        isSystemPipActive = false
+    }
+
+    fun shouldKeepPlaybackForPipTransition(): Boolean {
+        return shouldKeepPlaybackForPipTransition(
+            isSystemPipActive = isSystemPipActive,
+            hasPendingPlaybackRoutePip = pendingPlaybackRoutePip
+        )
     }
 
     fun hasRecentUserLeaveHint(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Boolean {
@@ -1959,7 +2000,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (!shouldKeepPlaybackNotificationVisible(
                 isActive = isActive,
                 title = title,
-                isPlaying = notificationIsPlaying
+                isPlaying = notificationIsPlaying,
+                appInBackground = BackgroundManager.isInBackground
             )
         ) {
             playbackServiceRequested = false

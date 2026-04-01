@@ -136,25 +136,15 @@ fun AnimationSettingsContent(
             predictiveBackAnimationEnabled = state.predictiveBackAnimationEnabled
         )
     }
-    var previewLiquidGlassMode by remember { mutableStateOf(state.liquidGlassMode) }
-    var previewLiquidGlassStrength by remember { mutableFloatStateOf(state.liquidGlassStrength) }
-    LaunchedEffect(state.liquidGlassMode) {
-        previewLiquidGlassMode = state.liquidGlassMode
+    var previewLiquidGlassProgress by remember { mutableFloatStateOf(state.liquidGlassProgress) }
+    LaunchedEffect(state.liquidGlassProgress) {
+        previewLiquidGlassProgress = state.liquidGlassProgress
     }
-    LaunchedEffect(state.liquidGlassStrength) {
-        previewLiquidGlassStrength = state.liquidGlassStrength
+    val liquidGlassPreviewState = remember(previewLiquidGlassProgress) {
+        resolveLiquidGlassPreviewUiState(progress = previewLiquidGlassProgress)
     }
-    val liquidGlassPreviewState = remember(previewLiquidGlassMode, previewLiquidGlassStrength) {
-        resolveLiquidGlassPreviewUiState(
-            mode = previewLiquidGlassMode,
-            strength = previewLiquidGlassStrength
-        )
-    }
-    val liquidGlassTuning = remember(previewLiquidGlassMode, previewLiquidGlassStrength) {
-        resolveLiquidGlassTuning(
-            mode = previewLiquidGlassMode,
-            strength = previewLiquidGlassStrength
-        )
+    val liquidGlassTuning = remember(previewLiquidGlassProgress) {
+        resolveLiquidGlassTuning(progress = previewLiquidGlassProgress)
     }
     val isLiquidGlassAvailable = remember(state.uiPreset) {
         state.uiPreset != UiPreset.MD3
@@ -279,47 +269,10 @@ fun AnimationSettingsContent(
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
-                                        "玻璃模式",
+                                        "通透到磨砂",
                                         style = MaterialTheme.typography.labelSmall, 
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        // Classic
-                                        LiquidGlassModeCard(
-                                            title = "通透玻璃",
-                                            subtitle = "更清晰",
-                                            isSelected = previewLiquidGlassMode == LiquidGlassMode.CLEAR,
-                                            onClick = {
-                                                previewLiquidGlassMode = LiquidGlassMode.CLEAR
-                                                viewModel.setLiquidGlassMode(LiquidGlassMode.CLEAR)
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        LiquidGlassModeCard(
-                                            title = "平衡",
-                                            subtitle = "默认推荐",
-                                            isSelected = previewLiquidGlassMode == LiquidGlassMode.BALANCED,
-                                            onClick = {
-                                                previewLiquidGlassMode = LiquidGlassMode.BALANCED
-                                                viewModel.setLiquidGlassMode(LiquidGlassMode.BALANCED)
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        LiquidGlassModeCard(
-                                            title = "柔和磨砂",
-                                            subtitle = "弱化背景",
-                                            isSelected = previewLiquidGlassMode == LiquidGlassMode.FROSTED,
-                                            onClick = {
-                                                previewLiquidGlassMode = LiquidGlassMode.FROSTED
-                                                viewModel.setLiquidGlassMode(LiquidGlassMode.FROSTED)
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
                                     Spacer(modifier = Modifier.height(14.dp))
                                     LiquidGlassLivePreview(
                                         previewState = liquidGlassPreviewState,
@@ -327,7 +280,7 @@ fun AnimationSettingsContent(
                                     )
                                     Spacer(modifier = Modifier.height(14.dp))
                                     Text(
-                                        text = "效果强度",
+                                        text = "玻璃进度",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -349,12 +302,28 @@ fun AnimationSettingsContent(
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "通透",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "磨砂",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                     Slider(
-                                        value = previewLiquidGlassStrength,
-                                        onValueChange = { previewLiquidGlassStrength = it },
+                                        value = previewLiquidGlassProgress,
+                                        onValueChange = { previewLiquidGlassProgress = it },
                                         valueRange = 0f..1f,
                                         onValueChangeFinished = {
-                                            viewModel.setLiquidGlassStrength(previewLiquidGlassStrength)
+                                            viewModel.setLiquidGlassProgress(previewLiquidGlassProgress)
                                         }
                                     )
                                     Text(
@@ -456,41 +425,6 @@ fun AnimationSettingsContent(
         }
     }
 
-
-@Composable
-private fun LiquidGlassModeCard(
-    title: String,
-    subtitle: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f)
-    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-    
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(color)
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = contentColor.copy(alpha = 0.8f)
-            )
-        }
-    }
-}
 
 @Composable
 private fun LiquidGlassLivePreview(

@@ -8,7 +8,6 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -49,17 +48,17 @@ internal fun resolveAppChromeLiquidBackdropSpec(
     isDarkTheme: Boolean,
     style: AppChromeLiquidSurfaceStyle
 ): AppChromeLiquidBackdropSpec {
-    val refractionAmount = if (tuning.scrollCoupledRefraction) {
+    val refractionAmount = if (tuning.scrollCoupledRefractionAmount > 0f) {
         tuning.refractionAmount + (
-            scrollOffset * style.refractionAmountScrollMultiplier
-        ).coerceIn(0f, style.refractionAmountScrollCap)
+            scrollOffset * style.refractionAmountScrollMultiplier * tuning.scrollCoupledRefractionAmount
+        ).coerceIn(0f, style.refractionAmountScrollCap * tuning.scrollCoupledRefractionAmount)
     } else {
         tuning.refractionAmount
     }
-    val surfaceAlpha = if (tuning.scrollCoupledRefraction) {
+    val surfaceAlpha = if (tuning.scrollCoupledRefractionAmount > 0f) {
         tuning.surfaceAlpha + (
-            scrollOffset * style.surfaceAlphaScrollMultiplier
-        ).coerceIn(0f, style.surfaceAlphaScrollCap)
+            scrollOffset * style.surfaceAlphaScrollMultiplier * tuning.scrollCoupledRefractionAmount
+        ).coerceIn(0f, style.surfaceAlphaScrollCap * tuning.scrollCoupledRefractionAmount)
     } else {
         tuning.surfaceAlpha
     }
@@ -110,11 +109,7 @@ internal fun Modifier.appChromeLiquidSurface(
         renderMode = renderMode,
         preferFlatGlass = style.preferFlatGlass
     )
-    val scrollOffset = if (resolvedTuning.scrollCoupledRefraction) {
-        scrollState.floatValue
-    } else {
-        0f
-    }
+    val scrollOffset = scrollState.floatValue * resolvedTuning.scrollCoupledRefractionAmount
     val backdropSpec = resolveAppChromeLiquidBackdropSpec(
         tuning = resolvedTuning,
         scrollOffset = scrollOffset,
@@ -128,7 +123,12 @@ internal fun Modifier.appChromeLiquidSurface(
                 this.drawBackdrop(
                     backdrop = backdrop,
                     shape = { lensShape ?: shape },
-                    effects = { blur(resolvedTuning.backdropBlurRadius) },
+                    effects = {
+                        blur(
+                            resolvedTuning.backdropBlurRadius *
+                                (0.08f + resolvedTuning.progress * 0.92f)
+                        )
+                    },
                     onDrawSurface = {
                         drawRect(resolveAppChromeSurfaceColor(surfaceColor, backdropSpec, style))
                         drawRect(Color.White.copy(alpha = backdropSpec.whiteOverlayAlpha))
@@ -139,14 +139,16 @@ internal fun Modifier.appChromeLiquidSurface(
                     backdrop = backdrop,
                     shape = { lensShape },
                     effects = {
-                        if (resolvedTuning.mode == LiquidGlassMode.FROSTED) {
-                            blur(resolvedTuning.backdropBlurRadius)
-                        } else {
+                        blur(
+                            resolvedTuning.backdropBlurRadius *
+                                (0.08f + resolvedTuning.progress * 0.92f)
+                        )
+                        if (backdropSpec.refractionAmount > 0.5f) {
                             lens(
                                 refractionHeight = resolvedTuning.refractionHeight,
                                 refractionAmount = backdropSpec.refractionAmount,
-                                depthEffect = style.depthEffect,
-                                chromaticAberration = resolvedTuning.chromaticAberrationEnabled
+                                depthEffect = style.depthEffect && resolvedTuning.depthEffectEnabled,
+                                chromaticAberration = resolvedTuning.chromaticAberrationAmount > 0.01f
                             )
                         }
                     },
@@ -159,7 +161,12 @@ internal fun Modifier.appChromeLiquidSurface(
                 this.drawBackdrop(
                     backdrop = backdrop,
                     shape = { shape },
-                    effects = { blur(resolvedTuning.backdropBlurRadius) },
+                    effects = {
+                        blur(
+                            resolvedTuning.backdropBlurRadius *
+                                (0.08f + resolvedTuning.progress * 0.92f)
+                        )
+                    },
                     onDrawSurface = {
                         drawRect(resolveAppChromeSurfaceColor(surfaceColor, backdropSpec, style))
                         drawRect(Color.White.copy(alpha = backdropSpec.whiteOverlayAlpha))

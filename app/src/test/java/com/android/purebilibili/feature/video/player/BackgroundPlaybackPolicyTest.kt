@@ -114,23 +114,43 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
-    fun nonDefaultModesDoNotContinueBackgroundAudio() {
-        assertFalse(
+    fun inAppMiniModeCanFallbackToBackgroundAudioWhenAppLeavesForeground() {
+        assertTrue(
             shouldContinueBackgroundAudioByPolicy(
                 backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.IN_APP_ONLY,
                 isActive = true,
                 isLeavingByNavigation = false,
-                stopPlaybackOnExit = false
+                stopPlaybackOnExit = false,
+                shouldKeepPlaybackForPipTransition = false
             )
         )
+    }
+
+    @Test
+    fun systemPipCanFallbackToBackgroundAudioWhenNoPipTransitionWillHappen() {
+        assertTrue(
+            shouldContinueBackgroundAudioByPolicy(
+                backgroundPlaybackEnabled = true,
+                mode = SettingsManager.MiniPlayerMode.SYSTEM_PIP,
+                isActive = true,
+                isLeavingByNavigation = false,
+                stopPlaybackOnExit = false,
+                shouldKeepPlaybackForPipTransition = false
+            )
+        )
+    }
+
+    @Test
+    fun systemPipDoesNotEnableBackgroundAudioDuringPipTransition() {
         assertFalse(
             shouldContinueBackgroundAudioByPolicy(
                 backgroundPlaybackEnabled = true,
                 mode = SettingsManager.MiniPlayerMode.SYSTEM_PIP,
                 isActive = true,
                 isLeavingByNavigation = false,
-                stopPlaybackOnExit = false
+                stopPlaybackOnExit = false,
+                shouldKeepPlaybackForPipTransition = true
             )
         )
     }
@@ -144,6 +164,28 @@ class BackgroundPlaybackPolicyTest {
                 isActive = true,
                 isLeavingByNavigation = false,
                 stopPlaybackOnExit = false
+            )
+        )
+    }
+
+    @Test
+    fun pipTransitionStateStaysTrueWhileRequestOrActualPipExists() {
+        assertTrue(
+            shouldKeepPlaybackForPipTransition(
+                isSystemPipActive = false,
+                hasPendingPlaybackRoutePip = true
+            )
+        )
+        assertTrue(
+            shouldKeepPlaybackForPipTransition(
+                isSystemPipActive = true,
+                hasPendingPlaybackRoutePip = false
+            )
+        )
+        assertFalse(
+            shouldKeepPlaybackForPipTransition(
+                isSystemPipActive = false,
+                hasPendingPlaybackRoutePip = false
             )
         )
     }
@@ -659,28 +701,32 @@ class BackgroundPlaybackPolicyTest {
             shouldKeepPlaybackNotificationVisible(
                 isActive = true,
                 title = "测试视频",
-                isPlaying = true
+                isPlaying = true,
+                appInBackground = false
             )
         )
         assertFalse(
             shouldKeepPlaybackNotificationVisible(
                 isActive = true,
                 title = "测试视频",
-                isPlaying = false
+                isPlaying = false,
+                appInBackground = false
             )
         )
         assertFalse(
             shouldKeepPlaybackNotificationVisible(
                 isActive = false,
                 title = "测试视频",
-                isPlaying = true
+                isPlaying = true,
+                appInBackground = false
             )
         )
         assertFalse(
             shouldKeepPlaybackNotificationVisible(
                 isActive = true,
                 title = "",
-                isPlaying = true
+                isPlaying = true,
+                appInBackground = false
             )
         )
     }
@@ -739,6 +785,30 @@ class BackgroundPlaybackPolicyTest {
             resolveEffectiveNotificationArtwork(
                 incomingArtwork = "new-artwork",
                 cachedArtwork = "cached-artwork"
+            )
+        )
+    }
+
+    @Test
+    fun pausedBackgroundSessionShouldKeepPlaybackNotificationVisible() {
+        assertTrue(
+            shouldKeepPlaybackNotificationVisible(
+                isActive = true,
+                title = "Background playback",
+                isPlaying = false,
+                appInBackground = true
+            )
+        )
+    }
+
+    @Test
+    fun pausedForegroundSessionShouldNotKeepPlaybackNotificationVisible() {
+        assertFalse(
+            shouldKeepPlaybackNotificationVisible(
+                isActive = true,
+                title = "Foreground playback",
+                isPlaying = false,
+                appInBackground = false
             )
         )
     }

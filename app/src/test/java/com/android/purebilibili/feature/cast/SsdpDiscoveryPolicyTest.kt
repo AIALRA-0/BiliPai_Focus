@@ -7,11 +7,13 @@ import org.junit.Test
 class SsdpDiscoveryPolicyTest {
 
     @Test
-    fun `search payloads include renderer and avtransport targets`() {
+    fun `search payloads keep precise targets and add compatibility fallbacks`() {
         val payloads = SsdpDiscovery.resolveSsdpSearchPayloads()
 
-        assertEquals(2, payloads.size)
         assertTrue(payloads.any { it.contains("ST: urn:schemas-upnp-org:device:MediaRenderer:1") })
         assertTrue(payloads.any { it.contains("ST: urn:schemas-upnp-org:service:AVTransport:1") })
+        assertTrue(payloads.any { it.contains("ST: upnp:rootdevice") })
+        assertTrue(payloads.any { it.contains("ST: ssdp:all") })
+        assertEquals(payloads.size, payloads.distinct().size)
     }
 }

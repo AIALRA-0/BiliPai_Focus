@@ -74,6 +74,45 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `search content export layer is enabled only while liquid glass backdrop is in motion`() {
+        val active = resolveHomeTopSearchRefractionLayerPolicy(
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            hasBackdrop = true,
+            searchRevealFraction = 0.82f,
+            isScrolling = true,
+            isTransitionRunning = false
+        )
+        val idle = resolveHomeTopSearchRefractionLayerPolicy(
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            hasBackdrop = true,
+            searchRevealFraction = 0.82f,
+            isScrolling = false,
+            isTransitionRunning = false
+        )
+        val blur = resolveHomeTopSearchRefractionLayerPolicy(
+            renderMode = HomeTopChromeRenderMode.BLUR,
+            hasBackdrop = true,
+            searchRevealFraction = 0.82f,
+            isScrolling = true,
+            isTransitionRunning = false
+        )
+
+        assertTrue(active.captureContentLayer)
+        assertFalse(active.useExportedBackdrop)
+        assertTrue(active.overlayAlpha > 0f)
+        assertEquals(1f, active.visibleContentAlpha, 0.0001f)
+        assertEquals(0f, active.exportTranslationMultiplier, 0.0001f)
+        assertFalse(idle.captureContentLayer)
+        assertFalse(idle.useExportedBackdrop)
+        assertEquals(0f, idle.overlayAlpha, 0.0001f)
+        assertEquals(1f, idle.visibleContentAlpha, 0.0001f)
+        assertEquals(0f, idle.exportTranslationMultiplier, 0.0001f)
+        assertFalse(blur.captureContentLayer)
+        assertFalse(blur.useExportedBackdrop)
+        assertEquals(0f, blur.overlayAlpha, 0.0001f)
+    }
+
+    @Test
     fun `compact controls keep structured glass treatment`() {
         assertEquals(
             HomeTopChromeSurfaceTreatment.STRUCTURED_GLASS,

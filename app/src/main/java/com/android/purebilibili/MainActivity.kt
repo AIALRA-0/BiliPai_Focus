@@ -1460,6 +1460,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         miniPlayerManager.clearUserLeaveHint()
+        miniPlayerManager.clearPlaybackRoutePipState()
         miniPlayerManager.clearPlaybackNotificationIfIdleOnResume()
         if (!hasCompletedInitialResume) {
             hasCompletedInitialResume = true
@@ -1494,6 +1495,7 @@ class MainActivity : AppCompatActivity() {
             shouldEnterPip = shouldEnterPip,
             isActuallyPlaying = isActuallyPlaying
         )
+        miniPlayerManager.updatePlaybackRoutePipRequest(shouldTriggerPip)
 
         val shouldForceStopPlayback = shouldForceStopPlaybackOnUserLeaveHint(
             isInVideoDetail = isPlaybackRouteActive,
@@ -1526,6 +1528,7 @@ class MainActivity : AppCompatActivity() {
                 enterPictureInPictureMode(pipParams.build())
                 Logger.d(TAG, " 成功进入 PiP 模式")
             } catch (e: Exception) {
+                miniPlayerManager.updatePlaybackRoutePipRequest(false)
                 com.android.purebilibili.core.util.Logger.e(TAG, " 进入 PiP 失败", e)
             }
         } else {
@@ -1537,6 +1540,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        miniPlayerManager.updateSystemPipActive(isInPictureInPictureMode)
         Logger.d(TAG, " PiP 模式变化: $isInPictureInPictureMode")
     }
     
