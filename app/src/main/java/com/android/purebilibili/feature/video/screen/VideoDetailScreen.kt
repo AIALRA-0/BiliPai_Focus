@@ -1163,6 +1163,7 @@ fun VideoDetailScreen(
     var pendingMainReloadBvidAfterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
     var portraitPendingSelectionBvid by rememberSaveable { mutableStateOf<String?>(null) }
     var currentBvidCid by rememberSaveable { mutableLongStateOf(0L) }
+    var playerHeightOffsetPx by remember { mutableFloatStateOf(0f) }
 
     // 初始化播放器状态
     val playerState = rememberVideoPlayerState(
@@ -1522,6 +1523,13 @@ fun VideoDetailScreen(
                     )
             ) {
                 return@LifecycleEventObserver
+            }
+            if (shouldResetInlineLayoutOnDeferredPortraitReturn(
+                    hasDeferredRestore = hasDeferredPortraitRestoreAfterExternalNavigation,
+                    isPortraitFullscreen = isPortraitFullscreen
+                )
+            ) {
+                playerHeightOffsetPx = 0f
             }
             applyPortraitExitRestore()
             pendingMainReloadBvidAfterPortrait = null
@@ -2054,7 +2062,6 @@ fun VideoDetailScreen(
                             videoHeight.toPx()
                         }
                     }
-                    var playerHeightOffsetPx by remember { mutableFloatStateOf(0f) }
                     TrackJankStateFlag(
                         stateName = "video_detail:player_swipe_collapse",
                         isActive = inlinePortraitScrollEnabled && abs(playerHeightOffsetPx) > 0.5f
@@ -2743,12 +2750,20 @@ fun VideoDetailScreen(
                                 isPortraitFullscreen = isPortraitFullscreen,
                                 isExternalNavigation = true
                             )
+                    if (shouldResetInlineLayoutForPortraitExternalNavigation(isPortraitFullscreen)) {
+                        playerHeightOffsetPx = 0f
+                    }
                     if (com.android.purebilibili.feature.video.ui.pager
                             .shouldExitPortraitForExternalNavigation(isPortraitFullscreen)
                     ) {
                         isPortraitFullscreen = false
                     }
                     onNavigateToSearch()
+                },
+                onPrepareExternalNavigation = {
+                    if (shouldResetInlineLayoutForPortraitExternalNavigation(isPortraitFullscreen)) {
+                        playerHeightOffsetPx = 0f
+                    }
                 },
                 onUserClick = { mid ->
                     val anchorBvid = portraitPendingSelectionBvid
@@ -2770,6 +2785,9 @@ fun VideoDetailScreen(
                                 isPortraitFullscreen = isPortraitFullscreen,
                                 isExternalNavigation = true
                             )
+                    if (shouldResetInlineLayoutForPortraitExternalNavigation(isPortraitFullscreen)) {
+                        playerHeightOffsetPx = 0f
+                    }
                     if (com.android.purebilibili.feature.video.ui.pager
                             .shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen)
                     ) {
@@ -3779,6 +3797,19 @@ internal fun resolveIsPlayerCollapsed(
 ): Boolean {
     if (!swipeHidePlayerEnabled) return false
     return playerHeightOffsetPx <= (-videoHeightPx + collapseTolerancePx)
+}
+
+internal fun shouldResetInlineLayoutForPortraitExternalNavigation(
+    isPortraitFullscreen: Boolean
+): Boolean {
+    return isPortraitFullscreen
+}
+
+internal fun shouldResetInlineLayoutOnDeferredPortraitReturn(
+    hasDeferredRestore: Boolean,
+    isPortraitFullscreen: Boolean
+): Boolean {
+    return hasDeferredRestore && !isPortraitFullscreen
 }
 
 internal fun shouldRotateToPortraitOnSplitBack(

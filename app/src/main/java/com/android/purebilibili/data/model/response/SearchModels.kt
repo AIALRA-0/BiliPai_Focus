@@ -336,14 +336,19 @@ data class SearchUpData(
 // --- 3.  UP主 搜索结果模型 ---
 @Serializable
 data class SearchUpItem(
+    @Serializable(with = FlexibleLongSerializer::class)
     val mid: Long = 0,
     val uname: String = "",
     val usign: String = "", // 个性签名
     val upic: String = "", // 头像
+    @Serializable(with = FlexibleIntSerializer::class)
     val fans: Int = 0, // 粉丝数
+    @Serializable(with = FlexibleIntSerializer::class)
     val videos: Int = 0, // 视频数
+    @Serializable(with = FlexibleIntSerializer::class)
     val level: Int = 0, // 等级
     val official_verify: SearchOfficialVerify? = null,
+    @Serializable(with = FlexibleIntSerializer::class)
     val is_senior_member: Int = 0 // 是否硬核会员
 ) {
     fun cleanupFields(): SearchUpItem {

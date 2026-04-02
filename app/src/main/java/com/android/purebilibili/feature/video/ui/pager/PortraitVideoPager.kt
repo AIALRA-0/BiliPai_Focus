@@ -170,6 +170,7 @@ fun PortraitVideoPager(
     onProgressUpdate: (String, Long, Long) -> Unit = { _, _, _ -> },
     onExitSnapshot: (String, Long, Long) -> Unit = { _, _, _ -> },
     onSearchClick: () -> Unit = {},
+    onPrepareExternalNavigation: () -> Unit = {},
     onUserClick: (Long) -> Unit,
     onRotateToLandscape: () -> Unit
 ) {
@@ -289,6 +290,13 @@ fun PortraitVideoPager(
         pageItems.size
     }
     var currentPageScale by remember { mutableFloatStateOf(1f) }
+    var externalNavigationResetToken by remember { mutableIntStateOf(0) }
+
+    fun prepareExternalNavigation() {
+        currentPageScale = 1f
+        externalNavigationResetToken += 1
+        onPrepareExternalNavigation()
+    }
 
     // [重构] 优先复用主播放器；仅在未传入 sharedPlayer 时才创建页内播放器
     val exoPlayer = sharedPlayer ?: remember(context) {
@@ -771,7 +779,12 @@ fun PortraitVideoPager(
             .background(Color.Black)
     ) { page ->
         val item = pageItems.getOrNull(page)
+        val handleSearchClick = {
+            prepareExternalNavigation()
+            onSearchClick()
+        }
         val handleUserClick: (Long) -> Unit = { mid ->
+            prepareExternalNavigation()
             pendingUserSpaceNavigation = true
             onUserClick(mid)
         }
@@ -799,7 +812,7 @@ fun PortraitVideoPager(
                 faceDetector = faceDetector,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 onExitSnapshot = onExitSnapshot,
-                onSearchClick = onSearchClick,
+                onSearchClick = handleSearchClick,
                 onUserClick = handleUserClick,
                 onRotateToLandscape = onRotateToLandscape,
                 onProgressUpdate = onProgressUpdate,
@@ -813,6 +826,7 @@ fun PortraitVideoPager(
                     isFirstPage = page == 0,
                     initialStartPositionMs = entryStartPositionMs
                 ),
+                externalNavigationResetToken = externalNavigationResetToken,
                 onCurrentPageScaleChange = { scale ->
                     if (page == pagerState.currentPage) {
                         currentPageScale = scale
@@ -866,6 +880,7 @@ private fun VideoPageItem(
     knownVideoAspectRatio: Float?,
     hasRenderedFirstFrame: Boolean,
     initialProgressPositionMs: Long,
+    externalNavigationResetToken: Int,
     onCurrentPageScaleChange: (Float) -> Unit,
     onRequestVideoChange: (String) -> Unit
 ) {
@@ -1070,6 +1085,12 @@ private fun VideoPageItem(
 
     LaunchedEffect(isCurrentPage, scale, onCurrentPageScaleChange) {
         onCurrentPageScaleChange(if (isCurrentPage) scale else 1f)
+    }
+
+    LaunchedEffect(externalNavigationResetToken) {
+        if (externalNavigationResetToken <= 0) return@LaunchedEffect
+        resetViewportTransform()
+        isOverlayVisible = true
     }
 
     LaunchedEffect(

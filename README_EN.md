@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-31 · Upstream base v7.3.0 · Current Focus release v7.3.0-focus.1</sub>
+  <sub>Last updated: 2026-04-02 · Upstream base v7.3.0 · Current Focus release v7.3.0-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.3.0--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.3.0--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.3.0-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.3.0-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.3.0-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.3.0-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.3.0-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.3.0-focus.1` |
+| Focus version | `7.3.0-focus.2` |
 | Upstream base | `7.3.0` |
-| Release tag | `v7.3.0-focus.1` |
-| Release notes | [docs/releases/focus-7.3.0-focus.1-en.md](docs/releases/focus-7.3.0-focus.1-en.md) |
-| Main refinements | Syncs the upstream `7.2.3/7.3.0` playback recovery, seek-session, SponsorBlock stabilization, and progress-marker work while keeping the Focus coexist package, Focus-only updates, and FOLLOW customizations intact |
-| Public APK | `BliPai-Focus-release-7.3.0-focus.1.apk` |
+| Release tag | `v7.3.0-focus.2` |
+| Release notes | [docs/releases/focus-7.3.0-focus.2-en.md](docs/releases/focus-7.3.0-focus.2-en.md) |
+| Main refinements | Fixes false-empty creator space video lists and the compressed layout that could remain after returning from portrait-video external navigation, while keeping the Focus coexist package, Focus-only updates, and FOLLOW customizations intact |
+| Public APK | `BliPai-Focus-release-7.3.0-focus.2.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.3.0-focus.1.md` | Chinese release notes for `v7.3.0-focus.1` |
-| Added | `docs/releases/focus-7.3.0-focus.1-en.md` | English release notes for `v7.3.0-focus.1` |
+| Added | `docs/releases/focus-7.3.0-focus.2.md` | Chinese release notes for `v7.3.0-focus.2` |
+| Added | `docs/releases/focus-7.3.0-focus.2-en.md` | English release notes for `v7.3.0-focus.2` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -579,11 +579,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.3.0 / v7.3.0-focus.1 · 2026-03-31)
+### Latest (v7.3.0 / v7.3.0-focus.2 · 2026-04-02)
 
-- ▶️ **Playback recovery is now on the upstream 7.3.0 path**: Focus now carries over the lifecycle coordinator, explicit user-action tracking, seek sessions, and richer debug diagnostics to reduce false resume, silent foreground returns, and progress bounce-back.
-- ⏭️ **SponsorBlock is fully tightened up**: the enable state is unified, segments are pre-filtered and cached, seek now rearms skipping correctly, the progress bar can show markers, and manual-skip UI is wired through.
-- 🧹 **Sync-scoped cleanup only**: two unused legacy SponsorBlock use-case wrappers are removed so the regular video path no longer keeps redundant historical layers around.
+- 👤 **Creator space empty-list fix**: entering some creator spaces from search no longer falls through to a false “No videos yet” state; flexible numeric parsing and suspicious-empty retries are both in place now.
+- 📱 **Portrait-return layout fix**: returning from portrait video after jumping to a creator page, search, or another screen now restores the layout before re-syncing playback, so the page no longer comes back squashed.
+- 🔁 **Clearer space error state**: creators with no uploads still show the real empty state, while transient load failures now surface as a retryable “failed to load videos” state instead of pretending the list is empty.
 - 🧩 **Focus customizations remain intact**: coexist package name, Focus-only update source, Home FOLLOW grouping/sorting/auto-sync, and the first-use Focus entry points all remain preserved on top of `7.3.0`.
 
 ---

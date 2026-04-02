@@ -1,5 +1,28 @@
 # Focus Changelog
 
+## v7.3.0 Focus / focus.2 (2026-04-02)
+
+### 版本信息
+- 基于上游 `BiliPai v7.3.0` 继续维护 Focus 发布线，当前推荐对外版本为 `7.3.0-focus.2`。
+- 为保证已发布 `v7.3.0-focus.1 / 158` 用户可直接升级，`versionCode` 继续递增到 `159`。
+- 这一版不切换上游基线，重点修复“部分 UP 空间页误显示暂无视频”和“竖屏视频外跳返回后详情页被压缩”的两个高优先级回归问题。
+
+### 空间页视频修复
+- 搜索结果里的 `UP` 条目现在会对 `mid / fans / videos / level / is_senior_member` 做柔性数值解析，兼容接口把数字写成字符串的返回。
+- 空间投稿视频列表的分页和卡片字段也改成柔性解析，避免某些用户空间因为字段类型飘忽导致整页视频结果被吃成空列表。
+- 首页次进入投稿视频时，如果命中“默认视频子页 + 用户信息已正常返回 + 首屏异常空结果”的可疑场景，会自动刷新一次 `WBI key` 并重试拉取，不再直接把异常当成真正的“暂无视频”。
+- 真正 0 视频的账号仍然会继续显示“暂无视频”；接口异常则改为明确提示“投稿视频加载失败”，并提供重试入口。
+
+### 竖屏外跳返回修复
+- 从竖屏视频跳到 `UP` 主页、搜索页或其他页面前，会先清空 inline 竖屏布局的折叠偏移与视口变换状态。
+- 返回视频详情时先复位布局，再恢复竖屏同步状态，避免旧的折叠偏移残留造成页面被压缩、黑边异常或首帧挤扁。
+- 这一条修复按“所有竖屏外跳返回”统一收口，不再只针对单一入口打补丁。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest`。
+- 已通过 `:app:testDebugUnitTest --tests "*SpaceLoadPolicyTest" --tests "*SpaceSearchSerializationPolicyTest" --tests "*VideoDetailPlayerCollapsePolicyTest" --tests "*PortraitMainPlayerSyncPolicyTest" --tests "*PortraitVideoPagerPolicyTest"`。
+- 已通过 `:app:assembleRelease`。
+
 ## v7.3.0 Focus / focus.1 (2026-03-31)
 
 ### 版本信息

@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-31 · 上游基线 v7.3.0 · 当前 Focus 发布 v7.3.0-focus.1</sub>
+  <sub>最后更新：2026-04-02 · 上游基线 v7.3.0 · 当前 Focus 发布 v7.3.0-focus.2</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.3.0--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.3.0--focus.2-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.3.0-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
@@ -37,7 +37,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.3.0-focus.1.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| 开始使用 | [官方 Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.3.0-focus.2.md) · [更新日志](CHANGELOG.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -61,18 +61,18 @@
 | 版本 | 适合谁 | 入口 |
 | --- | --- | --- |
 | 官方原版 | 想直接跟随上游默认体验与发布节奏 | [仓库](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.3.0-focus.1.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
+| Focus 定制版 | 想保留原生能力，同时获得更克制的默认入口、关注过滤和专注模式开关 | [仓库](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.3.0-focus.2.md) · [Focus 变更日志](FOCUS_CHANGLOG.md) |
 
 ### 当前 Focus 发布
 
 | 项目 | 内容 |
 | --- | --- |
-| Focus 版本 | `7.3.0-focus.1` |
+| Focus 版本 | `7.3.0-focus.2` |
 | 上游基线 | `7.3.0` |
-| 发布标签 | `v7.3.0-focus.1` |
-| Release Notes | [docs/releases/focus-7.3.0-focus.1.md](docs/releases/focus-7.3.0-focus.1.md) |
-| 主要收口 | 同步上游 `7.2.3/7.3.0` 的播放器恢复、seek 会话、SponsorBlock 稳定化与进度条标记能力，并保留 Focus 共存包名、Focus-only 更新源与 FOLLOW 定制链路 |
-| 对外 APK | `BliPai-Focus-release-7.3.0-focus.1.apk` |
+| 发布标签 | `v7.3.0-focus.2` |
+| Release Notes | [docs/releases/focus-7.3.0-focus.2.md](docs/releases/focus-7.3.0-focus.2.md) |
+| 主要收口 | 修复部分 UP 空间页误显示“暂无视频”和竖屏视频外跳返回后详情页被压缩的问题，并继续保留 Focus 共存包名、Focus-only 更新源与 FOLLOW 定制链路 |
+| 对外 APK | `BliPai-Focus-release-7.3.0-focus.2.apk` |
 
 ### 默认定制项
 
@@ -164,8 +164,8 @@
 | 类型 | 文件 | 作用 |
 | --- | --- | --- |
 | 新增 | `FOCUS_CHANGLOG.md` | Focus 独立变更日志与维护记录 |
-| 新增 | `docs/releases/focus-7.3.0-focus.1.md` | Focus `v7.3.0-focus.1` 中文发布说明 |
-| 新增 | `docs/releases/focus-7.3.0-focus.1-en.md` | Focus `v7.3.0-focus.1` 英文发布说明 |
+| 新增 | `docs/releases/focus-7.3.0-focus.2.md` | Focus `v7.3.0-focus.2` 中文发布说明 |
+| 新增 | `docs/releases/focus-7.3.0-focus.2-en.md` | Focus `v7.3.0-focus.2` 英文发布说明 |
 | 新增 | `docs/images/focus/*` | Focus 专属功能截图与展示资源 |
 | 修改 | `app/build.gradle.kts` | Focus 子版本号、应用名称、release 命名与签名出包 |
 | 修改 | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus 设置持久化、关注过滤与默认值 |
@@ -725,11 +725,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.3.0 / v7.3.0-focus.1 · 2026-03-31)
+### 最近更新 (v7.3.0 / v7.3.0-focus.2 · 2026-04-02)
 
-- ▶️ **播放器恢复链路同步到上游 7.3.0**：并入前后台恢复、用户主动操作跟踪、seek 会话与调试信息分层，减少误暂停、误恢复和 seek 回弹。
-- ⏭️ **SponsorBlock 稳定性与交互补全**：空降助手设置源统一、片段预过滤/缓存、seek 后重同步、进度条片段标记与手动跳过按钮都已跟进。
-- 🧹 **同步内冗余清理**：移除两份未引用的历史 SponsorBlock 用例层，避免普通视频链路继续保留重复旧逻辑包装。
+- 👤 **空间页视频空列表修复**：搜索结果进入部分 `UP` 空间后不再误显示“暂无视频”；数字字符串字段和首屏可疑空结果重试都已补上。
+- 📱 **竖屏外跳返回布局修复**：从竖屏视频跳去 `UP` 主页、搜索页或其他页面再返回时，会先复位布局再恢复同步，不再出现页面被压缩或挤扁的感觉。
+- 🔁 **空间投稿失败态更清晰**：真正没视频的账号继续显示“暂无视频”，接口异常则改成可重试的“投稿视频加载失败”。
 - 🧩 **Focus 定制继续保留**：共存包名、Focus-only 更新源、首页 FOLLOW 分组/排序/自动同步与首用声明入口继续保持在 `7.3.0` 基线之上。
 
 ### 历史版本

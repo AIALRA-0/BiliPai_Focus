@@ -259,6 +259,7 @@ fun SpaceScreen(
                         onLoadMore = { viewModel.loadMoreVideos() },
                         onCategoryClick = { viewModel.selectCategory(it) },
                         onSortOrderClick = { viewModel.selectSortOrder(it) },
+                        onRetryVideoLoad = { viewModel.retryCurrentVideoList() },
                         onLoadHome = { viewModel.loadSpaceHome() },
                         onLoadDynamic = { viewModel.loadSpaceDynamic(refresh = true) },
                         onLoadMoreDynamic = { viewModel.loadSpaceDynamic(refresh = false) },
@@ -457,6 +458,7 @@ private fun SpaceContent(
     onLoadMore: () -> Unit,
     onCategoryClick: (Int) -> Unit,  //  分类点击回调
     onSortOrderClick: (VideoSortOrder) -> Unit,  //  排序点击回调
+    onRetryVideoLoad: () -> Unit,
     onLoadHome: () -> Unit,  //  加载主页数据
     onLoadDynamic: () -> Unit,  //  加载动态数据
     onLoadMoreDynamic: () -> Unit,  //  加载更多动态
@@ -669,10 +671,29 @@ private fun SpaceContent(
                                         .padding(32.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = if (isVideoSearching) "未找到相关视频" else "暂无视频",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
+                                    if (state.videoLoadError != null && !isVideoSearching) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = state.videoLoadError,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            TextButton(onClick = onRetryVideoLoad) {
+                                                Text("重试")
+                                            }
+                                        }
+                                    } else {
+                                        Text(
+                                            text = if (isVideoSearching) {
+                                                "未找到相关视频"
+                                            } else if (state.hasConfirmedEmptyVideos) {
+                                                "暂无视频"
+                                            } else {
+                                                "视频列表加载中"
+                                            },
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        )
+                                    }
                                 }
                             }
                         }

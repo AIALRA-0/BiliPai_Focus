@@ -5,6 +5,7 @@ import com.android.purebilibili.data.model.response.SeasonArchiveItem
 import com.android.purebilibili.data.model.response.SeasonItem
 import com.android.purebilibili.data.model.response.SeriesArchiveItem
 import com.android.purebilibili.data.model.response.SeriesItem
+import com.android.purebilibili.data.model.response.SpaceVideoData
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.data.model.response.VideoSortOrder
 
@@ -108,6 +109,18 @@ internal fun normalizeSpaceVideoPage(
     videos: List<SpaceVideoItem>
 ): List<SpaceVideoItem> {
     return if (order == VideoSortOrder.OLDEST_PUBDATE) videos.asReversed() else videos
+}
+
+internal fun shouldRetrySuspiciousInitialSpaceVideoResult(
+    order: VideoSortOrder,
+    tid: Int,
+    keyword: String,
+    firstPageResult: SpaceVideoData?
+): Boolean {
+    if (order != VideoSortOrder.PUBDATE) return false
+    if (tid != 0) return false
+    if (keyword.isNotBlank()) return false
+    return firstPageResult == null || firstPageResult.list.vlist.isEmpty()
 }
 
 private fun resolveSpaceVideoLastPage(totalCount: Int, pageSize: Int): Int {

@@ -82,4 +82,40 @@ class VideoDetailPlayerCollapsePolicyTest {
             )
         )
     }
+
+    @Test
+    fun `inline layout resets for portrait external navigation only when portrait fullscreen is active`() {
+        assertTrue(
+            shouldResetInlineLayoutForPortraitExternalNavigation(
+                isPortraitFullscreen = true
+            )
+        )
+        assertFalse(
+            shouldResetInlineLayoutForPortraitExternalNavigation(
+                isPortraitFullscreen = false
+            )
+        )
+    }
+
+    @Test
+    fun `inline layout resets on deferred portrait return only after portrait fullscreen exits`() {
+        assertTrue(
+            shouldResetInlineLayoutOnDeferredPortraitReturn(
+                hasDeferredRestore = true,
+                isPortraitFullscreen = false
+            )
+        )
+        assertFalse(
+            shouldResetInlineLayoutOnDeferredPortraitReturn(
+                hasDeferredRestore = false,
+                isPortraitFullscreen = false
+            )
+        )
+        assertFalse(
+            shouldResetInlineLayoutOnDeferredPortraitReturn(
+                hasDeferredRestore = true,
+                isPortraitFullscreen = true
+            )
+        )
+    }
 }

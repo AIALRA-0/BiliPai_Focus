@@ -89,23 +89,31 @@ data class SpaceVideoList(
 
 @Serializable
 data class SpacePage(
+    @Serializable(with = FlexibleIntSerializer::class)
     val pn: Int = 1,  // 当前页
+    @Serializable(with = FlexibleIntSerializer::class)
     val ps: Int = 30, // 每页数量
+    @Serializable(with = FlexibleIntSerializer::class)
     val count: Int = 0 // 总视频数
 )
 
 @Serializable
 data class SpaceVideoItem(
+    @Serializable(with = FlexibleLongSerializer::class)
     val aid: Long = 0,
     val bvid: String = "",
     val title: String = "",
     val pic: String = "",
     val description: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
     val play: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class)
     val comment: Int = 0,
     val length: String = "",  // "10:24" 格式
+    @Serializable(with = FlexibleLongSerializer::class)
     val created: Long = 0,    // 发布时间戳
     val author: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
     val typeid: Int = 0,      //  分区 ID
     val typename: String = "" //  分区名称
 )

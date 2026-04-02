@@ -9,7 +9,10 @@ import com.android.purebilibili.data.model.response.SeriesItem
 import com.android.purebilibili.data.model.response.SeriesMeta
 import com.android.purebilibili.data.model.response.SpaceTopArcData
 import com.android.purebilibili.data.model.response.SpaceUserInfo
+import com.android.purebilibili.data.model.response.SpaceVideoData
 import com.android.purebilibili.data.model.response.SpaceVideoItem
+import com.android.purebilibili.data.model.response.SpaceVideoList
+import com.android.purebilibili.data.model.response.SpacePage
 import com.android.purebilibili.data.model.response.VideoSortOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -96,6 +99,57 @@ class SpaceLoadPolicyTest {
                 order = VideoSortOrder.PUBDATE,
                 videos = videos
             ).map { it.bvid }
+        )
+    }
+
+    @Test
+    fun `suspicious initial video result retries for default empty space load`() {
+        assertTrue(
+            shouldRetrySuspiciousInitialSpaceVideoResult(
+                order = VideoSortOrder.PUBDATE,
+                tid = 0,
+                keyword = "",
+                firstPageResult = SpaceVideoData(
+                    list = SpaceVideoList(vlist = emptyList()),
+                    page = SpacePage(count = 0)
+                )
+            )
+        )
+        assertTrue(
+            shouldRetrySuspiciousInitialSpaceVideoResult(
+                order = VideoSortOrder.PUBDATE,
+                tid = 0,
+                keyword = "",
+                firstPageResult = null
+            )
+        )
+    }
+
+    @Test
+    fun `suspicious initial video result skips retry for filtered or non default space loads`() {
+        assertFalse(
+            shouldRetrySuspiciousInitialSpaceVideoResult(
+                order = VideoSortOrder.OLDEST_PUBDATE,
+                tid = 0,
+                keyword = "",
+                firstPageResult = SpaceVideoData()
+            )
+        )
+        assertFalse(
+            shouldRetrySuspiciousInitialSpaceVideoResult(
+                order = VideoSortOrder.PUBDATE,
+                tid = 17,
+                keyword = "",
+                firstPageResult = SpaceVideoData()
+            )
+        )
+        assertFalse(
+            shouldRetrySuspiciousInitialSpaceVideoResult(
+                order = VideoSortOrder.PUBDATE,
+                tid = 0,
+                keyword = "测试",
+                firstPageResult = SpaceVideoData()
+            )
         )
     }
 
