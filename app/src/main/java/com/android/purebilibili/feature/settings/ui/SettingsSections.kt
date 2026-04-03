@@ -707,8 +707,8 @@ fun AboutSection(
     val infoIcon = rememberAppInfoIcon()
     val sparklesIcon = rememberAppSparklesIcon()
     val verificationIcon = rememberAppWarningIcon()
-    val buildSourceIcon = rememberAppCollectionIcon()
-    val buildFingerprintIcon = rememberAppCollectionIcon()
+    val buildSourceIcon = CupertinoIcons.Default.Tag
+    val buildFingerprintIcon = rememberAppLockIcon()
 
     val safeThreshold = versionClickThreshold.coerceAtLeast(1)
     val normalizedClickCount = versionClickCount.coerceAtLeast(0)
@@ -841,7 +841,7 @@ fun AboutSection(
                     subtitle = buildSourceSubtitle
                 )
             },
-            iconTint = iOSTeal,
+            iconTint = iOSOrange,
             enableCopy = true
         )
         SettingsDivider(startIndent = 66.dp)
@@ -858,7 +858,7 @@ fun AboutSection(
                     subtitle = buildFingerprintSubtitle
                 )
             },
-            iconTint = iOSBlue,
+            iconTint = iOSPurple,
             enableCopy = true
         )
         SettingsDivider(startIndent = 66.dp)
