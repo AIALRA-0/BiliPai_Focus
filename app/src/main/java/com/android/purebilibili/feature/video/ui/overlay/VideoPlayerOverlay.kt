@@ -37,6 +37,7 @@ import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
@@ -161,6 +162,14 @@ internal fun shouldPollInlineVideoOverlayProgress(
     return playerExists && hostLifecycleStarted
 }
 
+internal fun resolveOverlayPlaybackButtonPlayingState(
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int
+): Boolean {
+    return isPlaying || (playWhenReady && playbackState == Player.STATE_BUFFERING)
+}
+
 internal fun shouldShowCenterPlayButton(
     isVisible: Boolean,
     isPlaying: Boolean,
@@ -186,6 +195,35 @@ internal fun shouldShowBufferingIndicator(
     isScrubbing: Boolean
 ): Boolean {
     return isBuffering && !isQualitySwitching && (!isVisible || isScrubbing)
+}
+
+internal enum class FullscreenLockButtonIcon {
+    LOCKED,
+    UNLOCKED
+}
+
+internal data class FullscreenLockButtonVisualState(
+    val icon: FullscreenLockButtonIcon,
+    val contentDescription: String,
+    val highlighted: Boolean
+)
+
+internal fun resolveFullscreenLockButtonVisualState(
+    isScreenLocked: Boolean
+): FullscreenLockButtonVisualState {
+    return if (isScreenLocked) {
+        FullscreenLockButtonVisualState(
+            icon = FullscreenLockButtonIcon.LOCKED,
+            contentDescription = "已锁定",
+            highlighted = true
+        )
+    } else {
+        FullscreenLockButtonVisualState(
+            icon = FullscreenLockButtonIcon.UNLOCKED,
+            contentDescription = "未锁定",
+            highlighted = false
+        )
+    }
 }
 
 internal fun resolvePageSelectorSheetOuterBottomPaddingDp(
@@ -227,6 +265,7 @@ fun VideoPlayerOverlay(
     currentQualityLabel: String,
     qualityLabels: List<String>,
     qualityIds: List<Int> = emptyList(),
+    switchableQualityIds: List<Int> = emptyList(),
     isLoggedIn: Boolean = false,
     onQualitySelected: (Int) -> Unit,
 
@@ -238,7 +277,7 @@ fun VideoPlayerOverlay(
     cid: Long = 0L,
     videoOwnerName: String = "",
     videoOwnerFace: String = "",
-    videoDuration: Int = 0,
+    videoDuration: Long = 0L,
     videoTitle: String = "",
     currentAid: Long = 0L,
     currentQuality: Int = 80,
@@ -262,8 +301,16 @@ fun VideoPlayerOverlay(
     onDanmakuInputClick: () -> Unit = {},
     danmakuOpacity: Float = 0.85f,
     danmakuFontScale: Float = 1.0f,
+    danmakuFontWeight: Int = 5,
     danmakuSpeed: Float = 1.0f,
     danmakuDisplayArea: Float = 0.5f,
+    danmakuStrokeWidth: Float = 1.5f,
+    danmakuLineHeight: Float = 1.6f,
+    danmakuScrollDurationSeconds: Float = 7.0f,
+    danmakuStaticDurationSeconds: Float = 4.0f,
+    danmakuScrollFixedVelocity: Boolean = false,
+    danmakuStaticToScroll: Boolean = false,
+    danmakuMassiveMode: Boolean = false,
     danmakuMergeDuplicates: Boolean = true,
     danmakuAllowScroll: Boolean = true,
     danmakuAllowTop: Boolean = true,
@@ -273,10 +320,20 @@ fun VideoPlayerOverlay(
     danmakuBlockRulesRaw: String = "",
     danmakuSmartOcclusion: Boolean = true,
     danmakuFullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
+    showDanmakuSyncSection: Boolean = false,
+    danmakuSyncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
+    onDanmakuFontWeightChange: (Int) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
     onDanmakuDisplayAreaChange: (Float) -> Unit = {},
+    onDanmakuStrokeWidthChange: (Float) -> Unit = {},
+    onDanmakuLineHeightChange: (Float) -> Unit = {},
+    onDanmakuScrollDurationSecondsChange: (Float) -> Unit = {},
+    onDanmakuStaticDurationSecondsChange: (Float) -> Unit = {},
+    onDanmakuScrollFixedVelocityChange: (Boolean) -> Unit = {},
+    onDanmakuStaticToScrollChange: (Boolean) -> Unit = {},
+    onDanmakuMassiveModeChange: (Boolean) -> Unit = {},
     onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {},
     onDanmakuAllowScrollChange: (Boolean) -> Unit = {},
     onDanmakuAllowTopChange: (Boolean) -> Unit = {},
@@ -286,6 +343,7 @@ fun VideoPlayerOverlay(
     onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     onDanmakuFullscreenPanelWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
+    onDanmakuSyncNowClick: () -> Unit = {},
     subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
@@ -331,6 +389,9 @@ fun VideoPlayerOverlay(
     onPipClick: () -> Unit = {},
     //  [新增] 拖动进度条开始回调（用于清除弹幕）
     onSeekStart: () -> Unit = {},
+    onSeekDragStart: (Long) -> Unit = {},
+    onSeekDragUpdate: (Long) -> Unit = {},
+    onSeekDragCancel: () -> Unit = {},
     //  [新增] 外部可接管 seek 行为（用于同步弹幕等）
     onSeekTo: ((Long) -> Unit)? = null,
     previewSeekPositionMs: Long? = null,
@@ -394,15 +455,25 @@ fun VideoPlayerOverlay(
     var showPageSelectorSheet by remember { mutableStateOf(false) }
     var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
     //  使用传入的比例状态
-    var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    var isPlaying by remember {
+        mutableStateOf(
+            resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState
+            )
+        )
+    }
     var isProgressScrubbing by remember { mutableStateOf(false) }
-    var pendingSeekPositionMs by remember { mutableStateOf<Long?>(null) }
     var suppressCenterPlayButtonForSeekTransition by remember { mutableStateOf(false) }
     var wasPlayingWhenProgressScrubbingStarted by remember { mutableStateOf(false) }
     var lastSettledPlaybackTransitionPositionMs by remember { mutableStateOf<Long?>(null) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val fullscreenLockButtonState = remember(isScreenLocked) {
+        resolveFullscreenLockButtonVisualState(isScreenLocked = isScreenLocked)
+    }
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
@@ -677,48 +748,75 @@ fun VideoPlayerOverlay(
                 hostLifecycleStarted = hostLifecycleStarted
             )
         ) {
-            val duration = if (player.duration < 0) 0L else player.duration
+            val duration = resolveSeekableDurationMs(
+                playbackDurationMs = player.duration,
+                fallbackDurationMs = videoDuration
+            )
             value = PlayerProgress(
                 current = player.currentPosition,
                 duration = duration,
                 buffered = player.bufferedPosition
             )
-            isPlaying = player.isPlaying
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState
+            )
             return@produceState
         }
         while (isActive) {
             //  [修复] 始终更新进度，不仅在播放时
             // 这样横竖屏切换后也能显示正确的进度
-            val duration = if (player.duration < 0) 0L else player.duration
+            val duration = resolveSeekableDurationMs(
+                playbackDurationMs = player.duration,
+                fallbackDurationMs = videoDuration
+            )
             value = PlayerProgress(
                 current = player.currentPosition,
                 duration = duration,
                 buffered = player.bufferedPosition
             )
-            isPlaying = player.isPlaying
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState
+            )
             val delayMs = if (isVisible && player.isPlaying) 200L else 500L
             delay(delayMs)
         }
     }
-    val activePlaybackTransitionPositionMs = pendingSeekPositionMs ?: playbackTransitionPositionMs
     val displayedProgressState = remember(
         progressState,
         previewSeekPositionMs,
         previewSeekActive,
-        activePlaybackTransitionPositionMs
+        playbackTransitionPositionMs
     ) {
         resolveDisplayedPlayerProgress(
             progress = progressState,
             previewPositionMs = previewSeekPositionMs,
             previewActive = previewSeekActive,
-            playbackTransitionPositionMs = activePlaybackTransitionPositionMs
+            playbackTransitionPositionMs = playbackTransitionPositionMs
         )
     }
-
-    LaunchedEffect(progressState.current, pendingSeekPositionMs) {
-        if (!shouldHoldPlaybackTransitionPosition(progressState.current, pendingSeekPositionMs)) {
-            pendingSeekPositionMs = null
-        }
+    val centerLoadingUiState = remember(
+        isBuffering,
+        isQualitySwitching,
+        suppressCenterPlayButtonForSeekTransition,
+        playbackTransitionPositionMs,
+        debugInfo.bandwidthEstimate
+    ) {
+        resolveCenterLoadingUiState(
+            isBuffering = isBuffering,
+            isQualitySwitching = isQualitySwitching,
+            isSeekTransitionPending = suppressCenterPlayButtonForSeekTransition || playbackTransitionPositionMs != null,
+            bandwidthEstimate = debugInfo.bandwidthEstimate
+        )
+    }
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val centerLoadingVisualState = remember(themePrimary) {
+        resolveCenterLoadingVisualState(
+            themePrimary = themePrimary
+        )
     }
 
     LaunchedEffect(playbackTransitionPositionMs) {
@@ -799,7 +897,6 @@ fun VideoPlayerOverlay(
 
     val commitSeek: (Long) -> Unit = { position ->
         val safePosition = position.coerceAtLeast(0L)
-        pendingSeekPositionMs = safePosition
         onSeekTo?.invoke(safePosition) ?: seekPlayerFromUserAction(player, safePosition)
     }
 
@@ -940,6 +1037,9 @@ fun VideoPlayerOverlay(
                     },
                     onSeek = commitSeek,
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
+                    onSeekDragStart = onSeekDragStart,
+                    onSeekDragUpdate = onSeekDragUpdate,
+                    onSeekDragCancel = onSeekDragCancel,
                     onScrubbingChanged = { scrubbing ->
                         if (scrubbing) {
                             wasPlayingWhenProgressScrubbingStarted = isPlaying
@@ -949,6 +1049,8 @@ fun VideoPlayerOverlay(
                         }
                         isProgressScrubbing = scrubbing
                     },
+                    seekPositionMs = displayedProgressState.current,
+                    isSeekScrubbing = isProgressScrubbing,
                     onSpeedClick = { showSpeedMenu = true },
                     onRatioClick = { showRatioMenu = true },
                     onNextEpisodeClick = {
@@ -1021,9 +1123,16 @@ fun VideoPlayerOverlay(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            if (isScreenLocked) CupertinoIcons.Default.LockOpen else CupertinoIcons.Default.Lock,
-                            contentDescription = if (isScreenLocked) "解锁" else "锁定",
-                            tint = if (isScreenLocked) MaterialTheme.colorScheme.primary else Color.White,
+                            when (fullscreenLockButtonState.icon) {
+                                FullscreenLockButtonIcon.LOCKED -> CupertinoIcons.Default.Lock
+                                FullscreenLockButtonIcon.UNLOCKED -> CupertinoIcons.Default.LockOpen
+                            },
+                            contentDescription = fullscreenLockButtonState.contentDescription,
+                            tint = if (fullscreenLockButtonState.highlighted) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.White
+                            },
                             modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
                         )
                     }
@@ -1204,7 +1313,7 @@ fun VideoPlayerOverlay(
                 isFullscreen = isFullscreen,
                 isBuffering = isBuffering,
                 isScrubbing = isProgressScrubbing,
-                isSeekTransitionPending = suppressCenterPlayButtonForSeekTransition || activePlaybackTransitionPositionMs != null
+                isSeekTransitionPending = suppressCenterPlayButtonForSeekTransition || playbackTransitionPositionMs != null
             ),
             modifier = Modifier.align(Alignment.Center),
             enter = scaleIn(tween(250)) + fadeIn(tween(200)),
@@ -1226,17 +1335,61 @@ fun VideoPlayerOverlay(
                 isQualitySwitching = isQualitySwitching,
                 isVisible = isVisible,
                 isScrubbing = isProgressScrubbing
-            ),
+            ) && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
         ) {
-            CupertinoActivityIndicator()
+            CupertinoActivityIndicator(
+                color = centerLoadingVisualState.indicatorColor
+            )
+        }
+
+        AnimatedVisibility(
+            visible = centerLoadingUiState != null,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200))
+        ) {
+            val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
+            Surface(
+                color = Color.Black.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(overlayVisualPolicy.qualitySwitchCornerRadiusDp.dp),
+                modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(
+                        horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
+                        vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
+                    )
+                ) {
+                    CupertinoActivityIndicator(
+                        color = centerLoadingVisualState.indicatorColor
+                    )
+                    Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
+                    Text(
+                        text = loadingState.primaryText,
+                        color = centerLoadingVisualState.primaryTextColor,
+                        fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    loadingState.secondaryText?.let { secondaryText ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = secondaryText,
+                            color = centerLoadingVisualState.secondaryTextColor,
+                            fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
         }
 
         // --- 5.5  清晰度切换中 Loading 指示器 ---
         AnimatedVisibility(
-            visible = isQualitySwitching,
+            visible = isQualitySwitching && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
@@ -1254,11 +1407,13 @@ fun VideoPlayerOverlay(
                     )
                 ) {
                     //  iOS 风格加载器
-                    CupertinoActivityIndicator()
+                    CupertinoActivityIndicator(
+                        color = centerLoadingVisualState.indicatorColor
+                    )
                     Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
                     Text(
                         text = "正在切换清晰度...",
-                        color = Color.White,
+                        color = centerLoadingVisualState.primaryTextColor,
                         fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -1271,6 +1426,7 @@ fun VideoPlayerOverlay(
             QualitySelectionMenu(
                 qualities = qualityLabels,
                 qualityIds = qualityIds,
+                switchableQualityIds = switchableQualityIds,
                 currentQuality = currentQualityLabel,
                 isLoggedIn = isLoggedIn,
                 isVip = isVip,
@@ -1331,8 +1487,17 @@ fun VideoPlayerOverlay(
                 ),
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
+                showAdvancedSection = true,
+                fontWeight = danmakuFontWeight,
                 speed = danmakuSpeed,
                 displayArea = danmakuDisplayArea,
+                strokeWidth = danmakuStrokeWidth,
+                lineHeight = danmakuLineHeight,
+                scrollDurationSeconds = danmakuScrollDurationSeconds,
+                staticDurationSeconds = danmakuStaticDurationSeconds,
+                scrollFixedVelocity = danmakuScrollFixedVelocity,
+                staticDanmakuToScroll = danmakuStaticToScroll,
+                massiveMode = danmakuMassiveMode,
                 mergeDuplicates = danmakuMergeDuplicates,
                 allowScroll = danmakuAllowScroll,
                 allowTop = danmakuAllowTop,
@@ -1343,12 +1508,22 @@ fun VideoPlayerOverlay(
                 blockRulesRaw = danmakuBlockRulesRaw,
                 smartOcclusion = danmakuSmartOcclusion,
                 fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
+                showSyncSection = showDanmakuSyncSection,
+                syncUiState = danmakuSyncUiState,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
+                onFontWeightChange = onDanmakuFontWeightChange,
                 onSpeedChange = onDanmakuSpeedChange,
                 onDisplayAreaChange = onDanmakuDisplayAreaChange,
+                onStrokeWidthChange = onDanmakuStrokeWidthChange,
+                onLineHeightChange = onDanmakuLineHeightChange,
+                onScrollDurationSecondsChange = onDanmakuScrollDurationSecondsChange,
+                onStaticDurationSecondsChange = onDanmakuStaticDurationSecondsChange,
+                onScrollFixedVelocityChange = onDanmakuScrollFixedVelocityChange,
+                onStaticDanmakuToScrollChange = onDanmakuStaticToScrollChange,
+                onMassiveModeChange = onDanmakuMassiveModeChange,
                 onMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
                 onAllowScrollChange = onDanmakuAllowScrollChange,
                 onAllowTopChange = onDanmakuAllowTopChange,
@@ -1358,6 +1533,7 @@ fun VideoPlayerOverlay(
                 onBlockRulesRawChange = onDanmakuBlockRulesRawChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
+                onSyncNowClick = onDanmakuSyncNowClick,
                 onSmartOcclusionDownloadClick = onDanmakuSmartOcclusionDownloadClick,
                 onDismiss = { showDanmakuSettings = false }
             )
@@ -1372,6 +1548,9 @@ fun VideoPlayerOverlay(
                 currentQualityLabel = currentQualityLabel,
                 qualityLabels = qualityLabels,
                 qualityIds = qualityIds,
+                switchableQualityIds = switchableQualityIds,
+                isLoggedIn = isLoggedIn,
+                isVip = isVip,
                 onQualitySelected = { index ->
                     val id = qualityIds.getOrNull(index) ?: 0
                     onQualityChange(id, 0L)  // 位置由上层处理

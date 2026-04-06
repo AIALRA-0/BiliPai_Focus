@@ -40,12 +40,21 @@ class MainActivityAppCompatContractTest {
     @Test
     fun mainActivity_shouldUseCachedAppLanguageAsComposeInitialValue() {
         val mainActivitySource = loadMainActivitySource()
+        val themeSource = loadThemeSource()
 
         assertTrue(
             Regex(
                 """SettingsManager\.getAppLanguage\(context\)\.collectAsState\(\s*initial = SettingsManager\.getAppLanguageSync\(context\)\s*\)"""
             ).containsMatchIn(mainActivitySource),
             "MainActivity should bootstrap appLanguage from cached settings to avoid locale flip-flop during recreation"
+        )
+        assertTrue(
+            themeSource.contains("ThemeController("),
+            "Theme root should build a miuix ThemeController"
+        )
+        assertTrue(
+            mainActivitySource.contains("getUiPreset(context)"),
+            "MainActivity should keep reading UiPreset when iOS and Android Native presets are available again"
         )
     }
 
@@ -66,6 +75,16 @@ class MainActivityAppCompatContractTest {
         )
         val sourceFile = candidates.firstOrNull { it.exists() }
             ?: error("Cannot locate MainActivity.kt from ${File(".").absolutePath}")
+        return sourceFile.readText()
+    }
+
+    private fun loadThemeSource(): String {
+        val candidates = listOf(
+            File("app/src/main/java/com/android/purebilibili/core/theme/Theme.kt"),
+            File("src/main/java/com/android/purebilibili/core/theme/Theme.kt")
+        )
+        val sourceFile = candidates.firstOrNull { it.exists() }
+            ?: error("Cannot locate Theme.kt from ${File(".").absolutePath}")
         return sourceFile.readText()
     }
 }

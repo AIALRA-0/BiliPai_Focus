@@ -1,9 +1,9 @@
 package com.android.purebilibili.feature.settings
 
-import com.android.purebilibili.core.store.LiquidGlassMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class AnimationSettingsPolicyTest {
@@ -42,30 +42,23 @@ class AnimationSettingsPolicyTest {
     }
 
     @Test
-    fun liquidGlassPreviewUiState_usesSemanticCopy() {
-        val clear = resolveLiquidGlassPreviewUiState(
-            mode = LiquidGlassMode.CLEAR,
-            strength = 0.42f
-        )
-        val frosted = resolveLiquidGlassPreviewUiState(
-            mode = LiquidGlassMode.FROSTED,
-            strength = 0.62f
-        )
+    fun liquidGlassPreviewUiState_usesContinuousCopy() {
+        val clear = resolveLiquidGlassPreviewUiState(progress = 0.1f)
+        val frosted = resolveLiquidGlassPreviewUiState(progress = 0.9f)
 
-        assertEquals("通透玻璃", clear.modeLabel)
+        assertEquals("通透", clear.modeLabel)
         assertTrue(clear.subtitle.contains("清晰"))
-        assertEquals("柔和磨砂", frosted.modeLabel)
+        assertEquals("磨砂", frosted.modeLabel)
         assertTrue(frosted.subtitle.contains("柔和"))
+        assertNotEquals("平衡", clear.modeLabel)
+        assertNotEquals("平衡", frosted.modeLabel)
     }
 
     @Test
-    fun liquidGlassPreviewUiState_clampsAndFormatsStrength() {
-        val state = resolveLiquidGlassPreviewUiState(
-            mode = LiquidGlassMode.BALANCED,
-            strength = 1.4f
-        )
+    fun liquidGlassPreviewUiState_clampsAndFormatsProgress() {
+        val state = resolveLiquidGlassPreviewUiState(progress = 1.4f)
 
-        assertEquals(1f, state.normalizedStrength)
+        assertEquals(1f, state.normalizedProgress)
         assertEquals("100%", state.strengthLabel)
     }
 }

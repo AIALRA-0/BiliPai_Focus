@@ -169,6 +169,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
@@ -179,6 +180,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
@@ -193,6 +195,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = false,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
@@ -203,6 +206,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = false,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
@@ -217,6 +221,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
@@ -232,11 +237,68 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.HORIZONTAL,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false,
                 manualFullscreenRequested = false
+            )
+        )
+    }
+
+    @Test
+    fun effectivePhoneAutoRotate_requiresAppAndSystemAndNoManualPortraitHold() {
+        assertTrue(
+            resolveEffectivePhoneAutoRotateEnabled(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                manualPortraitHoldActive = false
+            )
+        )
+        assertFalse(
+            resolveEffectivePhoneAutoRotateEnabled(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = false,
+                manualPortraitHoldActive = false
+            )
+        )
+        assertFalse(
+            resolveEffectivePhoneAutoRotateEnabled(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                manualPortraitHoldActive = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_systemRotationLock_preventsAutomaticLandscape() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = false,
+                fullscreenMode = FullscreenMode.AUTO,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_manualPortraitHold_forcesPortraitUntilReleased() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true,
+                manualPortraitHoldActive = true
             )
         )
     }
@@ -274,11 +336,46 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun manualPortraitHoldReleasePolicy_waitsForPortraitStableAngle() {
+        assertFalse(
+            shouldReleasePhoneManualPortraitHold(orientationDegrees = 90)
+        )
+        assertTrue(
+            shouldReleasePhoneManualPortraitHold(orientationDegrees = 8)
+        )
+    }
+
+    @Test
+    fun phoneOrientationObserverPolicy_keepsListeningWhileManualPortraitHoldIsActive() {
+        assertTrue(
+            shouldObservePhoneAutoRotate(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                manualPortraitHoldActive = true
+            )
+        )
+        assertFalse(
+            shouldObservePhoneAutoRotate(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = false,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                manualPortraitHoldActive = true
+            )
+        )
+    }
+
+    @Test
     fun phoneOrientationPolicy_fullscreenModeNone_keepsCurrentOrientation() {
         assertEquals(
             null,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.NONE,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = false,

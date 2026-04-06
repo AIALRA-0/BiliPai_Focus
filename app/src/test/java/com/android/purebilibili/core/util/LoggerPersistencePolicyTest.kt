@@ -32,7 +32,7 @@ class LoggerPersistencePolicyTest {
     }
 
     @Test
-    fun runtimeLogPersistenceAlwaysKeepsWarningsAndErrors() {
+    fun runtimeLogDiskPersistenceRequiresExplicitOptIn() {
         assertFalse(
             shouldPersistRuntimeLogEntry(
                 level = "D",
@@ -41,17 +41,11 @@ class LoggerPersistencePolicyTest {
         )
         assertFalse(
             shouldPersistRuntimeLogEntry(
-                level = "I",
-                verboseRuntimeLogPersistenceEnabled = false
-            )
-        )
-        assertTrue(
-            shouldPersistRuntimeLogEntry(
                 level = "W",
                 verboseRuntimeLogPersistenceEnabled = false
             )
         )
-        assertTrue(
+        assertFalse(
             shouldPersistRuntimeLogEntry(
                 level = "E",
                 verboseRuntimeLogPersistenceEnabled = false
@@ -61,6 +55,34 @@ class LoggerPersistencePolicyTest {
             shouldPersistRuntimeLogEntry(
                 level = "D",
                 verboseRuntimeLogPersistenceEnabled = true
+            )
+        )
+        assertTrue(
+            shouldPersistRuntimeLogEntry(
+                level = "E",
+                verboseRuntimeLogPersistenceEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun runtimeLogCaptureKeepsWarningsAndErrorsInMemory() {
+        assertFalse(
+            shouldCaptureRuntimeLogEntry(
+                level = "D",
+                verboseRuntimeLogsEnabled = false
+            )
+        )
+        assertTrue(
+            shouldCaptureRuntimeLogEntry(
+                level = "W",
+                verboseRuntimeLogsEnabled = false
+            )
+        )
+        assertTrue(
+            shouldCaptureRuntimeLogEntry(
+                level = "D",
+                verboseRuntimeLogsEnabled = true
             )
         )
     }

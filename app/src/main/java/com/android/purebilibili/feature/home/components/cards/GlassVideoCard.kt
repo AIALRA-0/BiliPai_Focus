@@ -55,6 +55,7 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
+import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
 
 /**
  *  玻璃拟态卡片 - Vision Pro 风格 (性能优化版)
@@ -99,13 +100,13 @@ fun GlassVideoCard(
         glassEnabled = true,
         blurEnabled = true,
         emphasized = false,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val emphasizedCoverPillColors = rememberHomeGlassPillColors(
         glassEnabled = true,
         blurEnabled = true,
         emphasized = true,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val inlinePillColors = rememberHomeGlassPillColors(
         glassEnabled = true,

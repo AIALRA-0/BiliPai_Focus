@@ -73,9 +73,10 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isHeaderCollapseEnabled)
         assertFalse(result.isBottomBarBlurEnabled)
         assertFalse(result.isLiquidGlassEnabled)
-        assertEquals(LiquidGlassStyle.IOS26, result.liquidGlassStyle)
-        assertEquals(LiquidGlassMode.CLEAR, result.liquidGlassMode)
-        assertEquals(0.42f, result.liquidGlassStrength)
+        assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
+        assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
+        assertEquals(0.52f, result.liquidGlassStrength)
+        assertEquals(0.5f, result.liquidGlassProgress)
         assertEquals(4, result.gridColumnCount)
         assertTrue(result.cardAnimationEnabled)
         assertFalse(result.cardTransitionEnabled)
@@ -117,7 +118,7 @@ class HomeSettingsMappingPolicyTest {
     }
 
     @Test
-    fun explicitLiquidGlassModeAndStrength_overrideLegacyStyle() {
+    fun legacyLiquidGlassTuning_isCollapsedToSingleSharedMaterialRecipe() {
         val prefs = mutablePreferencesOf(
             intPreferencesKey("liquid_glass_style") to LiquidGlassStyle.SIMP_MUSIC.value,
             intPreferencesKey("liquid_glass_mode") to LiquidGlassMode.BALANCED.value,
@@ -126,9 +127,10 @@ class HomeSettingsMappingPolicyTest {
 
         val result = mapHomeSettingsFromPreferences(prefs)
 
-        assertEquals(LiquidGlassStyle.SIMP_MUSIC, result.liquidGlassStyle)
+        assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
-        assertEquals(0.31f, result.liquidGlassStrength)
+        assertEquals(0.52f, result.liquidGlassStrength)
+        assertEquals(0.5f, result.liquidGlassProgress)
     }
 
     @Test

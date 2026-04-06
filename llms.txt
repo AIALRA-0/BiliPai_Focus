@@ -1,12 +1,21 @@
 # BiliPai Repository - LLM Entry / BiliPai 仓库 - LLM 入口
 
-Verified entrypoint index for this repository.
-本仓库的已核实入口索引。
+Canonical AI / LLM entry index for this repository.
+本仓库面向 AI / LLM 的主入口索引。
 
-## Verified Entry Files / 已核实入口文件
+Maintained periodically, but still subject to freshness limits; reference only.
+会定期维护，但仍存在时效性限制，仅供参考。
+
+Current sync target / 当前同步目标：`2026-04-06 · v7.5.0`
+
+## Preferred Entry Files / 优先入口文件
 
 | File | Verified Role |
 | --- | --- |
+| `llms.txt` | canonical AI / LLM entry / 主 AI / LLM 入口 |
+| `AI.txt` | compatibility alias / AI 兼容入口 |
+| `llm.txt` | compatibility alias / LLM 兼容入口 |
+| `docs/wiki/AI.md` | repository path map / 仓库路径导航 |
 | `README.md` | Chinese overview / 中文总览 |
 | `README_EN.md` | English overview / 英文总览 |
 | `CHANGELOG.md` | release history / 版本记录 |
@@ -14,7 +23,6 @@ Verified entrypoint index for this repository.
 | `docs/wiki/ARCHITECTURE.md` | architecture / 架构说明 |
 | `docs/wiki/QA.md` | QA checklist / QA 清单 |
 | `docs/wiki/RELEASE_WORKFLOW.md` | release workflow / 发布流程 |
-| `docs/wiki/AI.md` | AI source map / AI 事实导航 |
 | `docs/PLUGIN_DEVELOPMENT.md` | JSON plugin guide / JSON 插件指南 |
 | `docs/NATIVE_PLUGIN_DEVELOPMENT.md` | native plugin guide / 原生插件指南 |
 | `plugins/samples/` | sample plugins / 示例插件 |
@@ -31,6 +39,8 @@ Verified entrypoint index for this repository.
 | QA or regression / QA 与回归 | `docs/wiki/QA.md` |
 | release workflow / 发布流程 | `docs/wiki/RELEASE_WORKFLOW.md` |
 | AI repository map / AI 仓库导航 | `docs/wiki/AI.md` |
+| compatibility AI entry / 兼容 AI 入口 | `AI.txt` |
+| compatibility LLM entry / 兼容 LLM 入口 | `llm.txt` |
 | JSON plugins / JSON 插件 | `docs/PLUGIN_DEVELOPMENT.md` |
 | native plugins / 原生插件 | `docs/NATIVE_PLUGIN_DEVELOPMENT.md` |
 
@@ -43,28 +53,34 @@ When sources disagree, use this order.
 1. 源码与构建文件
 2. `CHANGELOG.md`
 2. `CHANGELOG.md`
-3. Files under `docs/wiki/`
-3. `docs/wiki/` 下的文档
-4. `README.md` and `README_EN.md`
-4. `README.md` 与 `README_EN.md`
-5. Files under `docs/plans/`
-5. `docs/plans/` 下的文件
+3. `llms.txt` and `docs/wiki/AI.md`
+3. `llms.txt` 与 `docs/wiki/AI.md`
+4. `AI.txt` and `llm.txt`
+4. `AI.txt` 与 `llm.txt`
+5. `README.md` and `README_EN.md`
+5. `README.md` 与 `README_EN.md`
+6. Files under `docs/plans/`
+6. `docs/plans/` 下的文件
 
 ## Freshness Notes / 时效注记
 
-- `README.md` and `README_EN.md` both reference 2026-03-07 / v6.9.2 in their header text.
-- `README.md` 与 `README_EN.md` 的页头均标注为 2026-03-07 / v6.9.2。
-- `docs/wiki/ARCHITECTURE.md`, `docs/wiki/QA.md`, and `docs/wiki/RELEASE_WORKFLOW.md` are now dated 2026-03-07 and describe the current main-branch structure/process view.
-- `docs/wiki/ARCHITECTURE.md`、`docs/wiki/QA.md`、`docs/wiki/RELEASE_WORKFLOW.md` 现已更新为 2026-03-07，并按当前 main 分支结构 / 流程校对。
-- `CHANGELOG.md`, `README.md`, and `README_EN.md` now align with `versionName = "6.9.2"` in `app/build.gradle.kts`.
-- `CHANGELOG.md`、`README.md` 与 `README_EN.md` 现已与 `app/build.gradle.kts` 中的 `versionName = "6.9.2"` 对齐。
-- Treat wiki pages as current structure/process guides; treat release-specific answers as `CHANGELOG.md` + code verification.
-- Wiki 可作为当前结构 / 流程入口；涉及具体版本发布行为时，应以 `CHANGELOG.md` + 代码核验为准。
+- `app/build.gradle.kts` currently declares `versionName = "7.5.0-focus.1"` and `versionCode = 160`.
+- `app/build.gradle.kts` 当前声明 `versionName = "7.5.0-focus.1"`、`versionCode = 160`。
+- `CHANGELOG.md` latest release entry is `v7.5.0 (2026-04-06)`.
+- `CHANGELOG.md` 最新发布段落为 `v7.5.0 (2026-04-06)`。
+- `README.md` and `README_EN.md` header text now point to `2026-04-06 / v7.5.0-focus.1`.
+- `README.md` 与 `README_EN.md` 页头现已对齐为 `2026-04-06 / v7.5.0-focus.1`。
+- `docs/wiki/README.md` and `docs/wiki/AI.md` have been refreshed for the current repository structure on `2026-04-06`.
+- `docs/wiki/README.md` 与 `docs/wiki/AI.md` 已于 `2026-04-06` 按当前仓库结构刷新。
+- These files are maintained periodically, but fast-moving main-branch work can still outpace them.
+- 这些文件会定期维护，但主线快速迭代时仍可能出现文档滞后。
 
 ## Verification Rules / 核验规则
 
 - For current behavior, verify with code and `CHANGELOG.md`.
 - 当前行为以代码和 `CHANGELOG.md` 共同核验。
+- Treat `llms.txt` as the canonical AI / LLM entry; use `AI.txt` and `llm.txt` as compatibility aliases.
+- 将 `llms.txt` 视为主 AI / LLM 入口，`AI.txt` 与 `llm.txt` 作为兼容别名。
 - `docs/plans/*.md` require code confirmation before use as evidence.
 - `docs/plans/*.md` 用作证据前必须经过代码确认。
 - If a listed path no longer exists, use the current repository tree.
@@ -73,5 +89,6 @@ When sources disagree, use this order.
 ## Non-Goals / 非目标
 
 - Not a feature summary / 不是功能总结
+- Not a release guarantee / 不是发布保证
 - Not an API reference / 不是 API 手册
 - Not a replacement for source inspection / 不替代源码核查

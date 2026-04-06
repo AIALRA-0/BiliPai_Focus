@@ -41,6 +41,40 @@ private val SeparatorColor = Color(0xFF38383A)
 private val DestructiveColor = Color(0xFFFF453A) // System Red
 private val PrimaryColor = Color(0xFF0A84FF) // System Blue
 
+internal enum class DanmakuBlockActionTarget {
+    KEYWORD,
+    USER
+}
+
+private enum class DanmakuContextMenuPage {
+    MAIN,
+    REPORT,
+    RECALL_CONFIRM
+}
+
+internal fun resolveDanmakuRecallConfirmationPreview(
+    text: String,
+    maxLength: Int = 15
+): String {
+    val normalized = text.trim().replace(Regex("\\s+"), " ")
+    if (normalized.length <= maxLength) return normalized
+    return normalized.take(maxLength) + "..."
+}
+
+internal fun resolveDanmakuBlockActionFeedbackMessage(
+    target: DanmakuBlockActionTarget,
+    changed: Boolean
+): String {
+    return when (target) {
+        DanmakuBlockActionTarget.KEYWORD -> {
+            if (changed) "已加入屏蔽词，可在屏蔽管理里编辑" else "该屏蔽词已存在"
+        }
+        DanmakuBlockActionTarget.USER -> {
+            if (changed) "已屏蔽该发送者，可在屏蔽管理里编辑" else "该发送者已在屏蔽列表中"
+        }
+    }
+}
+
 @Composable
 fun DanmakuContextMenu(
     text: String,
@@ -53,10 +87,13 @@ fun DanmakuContextMenu(
     hasLiked: Boolean = false,
     voteLoading: Boolean = false,
     canVote: Boolean = false,
+    onBlockKeyword: () -> Unit = {},
+    canBlockKeyword: Boolean = true,
+    canBlockUser: Boolean = true,
     onBlockUser: () -> Unit = {}
 ) {
     val clipboardManager = LocalClipboardManager.current
-    var showReportMenu by remember { mutableStateOf(false) }
+    var currentPage by remember { mutableStateOf(DanmakuContextMenuPage.MAIN) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -73,22 +110,29 @@ fun DanmakuContextMenu(
             contentAlignment = Alignment.Center
         ) {
             AnimatedContent(
-                targetState = showReportMenu,
+                targetState = currentPage,
                 transitionSpec = {
                     (fadeIn() + slideInVertically { it / 2 }).togetherWith(fadeOut() + slideOutVertically { it / 2 })
                 },
                 label = "MenuTransition"
-            ) { isReport ->
-                if (isReport) {
-                    ReportReasonMenu(
+            ) { page ->
+                when (page) {
+                    DanmakuContextMenuPage.REPORT -> ReportReasonMenu(
                         onSelectReason = { reason ->
                             onReport(reason)
                             onDismiss()
                         },
-                        onBack = { showReportMenu = false }
+                        onBack = { currentPage = DanmakuContextMenuPage.MAIN }
                     )
-                } else {
-                    MainMenu(
+                    DanmakuContextMenuPage.RECALL_CONFIRM -> RecallConfirmMenu(
+                        previewText = resolveDanmakuRecallConfirmationPreview(text),
+                        onBack = { currentPage = DanmakuContextMenuPage.MAIN },
+                        onConfirm = {
+                            onRecall()
+                            onDismiss()
+                        }
+                    )
+                    DanmakuContextMenuPage.MAIN -> MainMenu(
                         text = text,
                         voteCount = voteCount,
                         hasLiked = hasLiked,
@@ -100,14 +144,19 @@ fun DanmakuContextMenu(
                             onDismiss()
                         },
                         onRecall = {
-                            onRecall()
-                            onDismiss()
+                            currentPage = DanmakuContextMenuPage.RECALL_CONFIRM
                         },
-                        onReportClick = { showReportMenu = true },
+                        onReportClick = { currentPage = DanmakuContextMenuPage.REPORT },
                         onCopy = {
                             clipboardManager.setText(AnnotatedString(text))
                             onDismiss()
                         },
+                        onBlockKeyword = {
+                            onBlockKeyword()
+                            onDismiss()
+                        },
+                        canBlockKeyword = canBlockKeyword,
+                        canBlockUser = canBlockUser,
                         onBlockUser = {
                             onBlockUser()
                             onDismiss()
@@ -116,6 +165,85 @@ fun DanmakuContextMenu(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RecallConfirmMenu(
+    previewText: String,
+    onBack: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(280.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MenuBackground),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = PrimaryColor,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(24.dp)
+                    .clickable(onClick = onBack)
+            )
+            Text(
+                text = "确认撤回",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+
+        MenuSeparator()
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "撤回后不可恢复",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "确认撤回这条弹幕？",
+                color = Color.White.copy(alpha = 0.82f),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = previewText,
+                color = Color.White.copy(alpha = 0.62f),
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        MenuSeparator()
+
+        MenuItem(
+            label = "撤回弹幕",
+            icon = Icons.AutoMirrored.Filled.Reply,
+            color = DestructiveColor,
+            onClick = onConfirm
+        )
     }
 }
 
@@ -131,6 +259,9 @@ private fun MainMenu(
     onRecall: () -> Unit,
     onReportClick: () -> Unit,
     onCopy: () -> Unit,
+    onBlockKeyword: () -> Unit,
+    canBlockKeyword: Boolean,
+    canBlockUser: Boolean,
     onBlockUser: () -> Unit
 ) {
     Column(
@@ -191,6 +322,15 @@ private fun MainMenu(
 
         MenuSeparator()
 
+        MenuItem(
+            label = "加入屏蔽词",
+            icon = Icons.Filled.Block,
+            enabled = canBlockKeyword,
+            onClick = onBlockKeyword
+        )
+
+        MenuSeparator()
+
         if (canRecall) {
             // 仅自己的弹幕才允许撤回
             MenuItem(
@@ -204,6 +344,7 @@ private fun MainMenu(
         MenuItem(
             label = "屏蔽发送者",
             icon = Icons.Filled.Block,
+            enabled = canBlockUser,
             onClick = onBlockUser
         )
 

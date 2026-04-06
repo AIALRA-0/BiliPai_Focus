@@ -106,10 +106,6 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         startDeleteSession(setOf(renderKey))
     }
 
-    fun startBatchVideoDissolve(renderKeys: Set<String>) {
-        startDeleteSession(renderKeys)
-    }
-
     private fun startDeleteSession(renderKeys: Set<String>) {
         val session = createHistoryDeleteSession(renderKeys) ?: return
         _deleteSession.value = session

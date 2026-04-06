@@ -76,6 +76,8 @@ import com.android.purebilibili.feature.settings.downloadAppUpdateApk
 import com.android.purebilibili.feature.settings.failAppUpdateDownload
 import com.android.purebilibili.feature.settings.installDownloadedAppUpdate
 import com.android.purebilibili.feature.settings.resolveAppUpdateDialogTextColors
+import com.android.purebilibili.feature.settings.resolveBuildSourceSubtitle
+import com.android.purebilibili.feature.settings.resolveBuildSourceValue
 import com.android.purebilibili.feature.settings.resolveUpdateReleaseNotesText
 import com.android.purebilibili.feature.settings.selectPreferredAppUpdateAsset
 import com.android.purebilibili.feature.settings.shouldRunAppEntryAutoCheck
@@ -296,8 +298,19 @@ internal fun shouldForceStopPlaybackOnUserLeaveHint(
     stopPlaybackOnExit: Boolean,
     shouldTriggerPip: Boolean
 ): Boolean {
-    return isInVideoDetail && stopPlaybackOnExit && !shouldTriggerPip
+    // `onUserLeaveHint()` also fires when the user temporarily switches apps.
+    // "Stop playback when leaving the playback page" should only apply to
+    // explicit in-app navigation, which is handled by dedicated navigation hooks.
+    return false
 }
+
+internal fun shouldRestorePlaybackRouteStateOnResume(
+    isPlaybackRouteActive: Boolean
+): Boolean = isPlaybackRouteActive
+
+internal fun shouldRestoreMutedPlaybackPlayerVolumeOnResume(
+    playerVolume: Float
+): Boolean = playerVolume <= 0f
 
 internal fun isPlaybackRouteActive(
     isInVideoDetail: Boolean,
@@ -971,6 +984,7 @@ class MainActivity : AppCompatActivity() {
             // 6. 传入参数
             PureBiliBiliTheme(
                 uiPreset = uiPreset,
+                themeMode = themeMode,
                 darkTheme = useDarkTheme,
                 dynamicColor = effectiveDynamicColor,
                 amoledDarkTheme = useAmoledDarkTheme,
@@ -1273,6 +1287,22 @@ class MainActivity : AppCompatActivity() {
                         val preferredAsset = remember(info.assets) {
                             selectPreferredAppUpdateAsset(info.assets)
                         }
+                        val releaseCommit = remember(info.buildMetadata?.gitCommitSha) {
+                            resolveBuildSourceValue(info.buildMetadata?.gitCommitSha, fallback = "未知")
+                        }
+                        val releaseWorkflowSubtitle = remember(info.buildMetadata?.workflowRunId, info.buildMetadata?.releaseTag) {
+                            resolveBuildSourceSubtitle(
+                                workflowRunId = info.buildMetadata?.workflowRunId,
+                                releaseTag = info.buildMetadata?.releaseTag
+                            )
+                        }
+                        val releaseVerificationEvidence = remember(info.verificationMetadata?.attestationUrl) {
+                            if (info.verificationMetadata?.attestationUrl?.isNotBlank() == true) {
+                                "GitHub Attestation"
+                            } else {
+                                "未提供"
+                            }
+                        }
                         val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                         val dialogTextColors = remember(isDialogDarkTheme) {
                             resolveAppUpdateDialogTextColors(
@@ -1303,6 +1333,27 @@ class MainActivity : AppCompatActivity() {
                                             color = dialogTextColors.currentVersionColor
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Release 锁定：${if (info.releaseIsImmutable) "Immutable" else "可变"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = dialogTextColors.currentVersionColor
+                                    )
+                                    Text(
+                                        text = "源码提交：$releaseCommit",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = dialogTextColors.currentVersionColor
+                                    )
+                                    Text(
+                                        text = "构建来源：$releaseWorkflowSubtitle",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = dialogTextColors.currentVersionColor
+                                    )
+                                    Text(
+                                        text = "Provenance：$releaseVerificationEvidence",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = dialogTextColors.currentVersionColor
+                                    )
                                     if (startupUpdateDownloadState.status != AppUpdateDownloadStatus.IDLE) {
                                         Spacer(modifier = Modifier.height(6.dp))
                                         Text(
@@ -1460,7 +1511,23 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         miniPlayerManager.clearUserLeaveHint()
+        miniPlayerManager.clearPlaybackRoutePipState()
         miniPlayerManager.clearPlaybackNotificationIfIdleOnResume()
+        if (
+            shouldRestorePlaybackRouteStateOnResume(
+                isPlaybackRouteActive = isPlaybackRouteActive(
+                    isInVideoDetail = isInVideoDetail,
+                    isInAudioMode = isInAudioModeRoute
+                )
+            )
+        ) {
+            miniPlayerManager.resetNavigationFlag()
+            miniPlayerManager.player?.let { player ->
+                if (shouldRestoreMutedPlaybackPlayerVolumeOnResume(player.volume)) {
+                    player.volume = 1.0f
+                }
+            }
+        }
         if (!hasCompletedInitialResume) {
             hasCompletedInitialResume = true
         }
@@ -1494,17 +1561,8 @@ class MainActivity : AppCompatActivity() {
             shouldEnterPip = shouldEnterPip,
             isActuallyPlaying = isActuallyPlaying
         )
+        miniPlayerManager.updatePlaybackRoutePipRequest(shouldTriggerPip)
 
-        val shouldForceStopPlayback = shouldForceStopPlaybackOnUserLeaveHint(
-            isInVideoDetail = isPlaybackRouteActive,
-            stopPlaybackOnExit = stopPlaybackOnExit,
-            shouldTriggerPip = shouldTriggerPip
-        )
-        if (shouldForceStopPlayback) {
-            Logger.d(TAG, "🛑 stopPlaybackOnExit=true, leaving by Home, force stop playback immediately")
-            miniPlayerManager.markLeavingByNavigation()
-        }
-        
         Logger.d(
             TAG,
             " miniPlayerMode=$currentMode, audioModeAutoPipEnabled=$audioModeAutoPipEnabled, shouldEnterPip=$shouldEnterPip, isPlaying=$isActuallyPlaying, shouldTriggerPip=$shouldTriggerPip, API=${Build.VERSION.SDK_INT}"
@@ -1526,6 +1584,7 @@ class MainActivity : AppCompatActivity() {
                 enterPictureInPictureMode(pipParams.build())
                 Logger.d(TAG, " 成功进入 PiP 模式")
             } catch (e: Exception) {
+                miniPlayerManager.updatePlaybackRoutePipRequest(false)
                 com.android.purebilibili.core.util.Logger.e(TAG, " 进入 PiP 失败", e)
             }
         } else {
@@ -1537,6 +1596,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        miniPlayerManager.updateSystemPipActive(isInPictureInPictureMode)
         Logger.d(TAG, " PiP 模式变化: $isInPictureInPictureMode")
     }
     

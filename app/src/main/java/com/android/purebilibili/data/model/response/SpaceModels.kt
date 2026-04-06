@@ -68,6 +68,102 @@ data class SpaceLiveRoom(
     val roomId: Long = 0
 )
 
+// /x/v2/space 聚合空间首屏响应
+@Serializable
+data class SpaceAggregateResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SpaceAggregateData? = null
+)
+
+@Serializable
+data class SpaceAggregateData(
+    @SerialName("default_tab")
+    val defaultTab: String = "",
+    val card: SpaceAggregateCard? = null,
+    val images: SpaceAggregateImages? = null,
+    val live: SpaceLiveRoom? = null,
+    val archive: SpaceAggregateArchive? = null,
+    val article: SpaceAggregateArticleSection? = null,
+    val audios: SpaceAggregateAudioSection? = null
+)
+
+@Serializable
+data class SpaceAggregateCard(
+    val mid: String = "",
+    val name: String = "",
+    val face: String = "",
+    val sign: String = "",
+    val sex: String = "",
+    val attention: Int = 0,
+    val fans: Int = 0,
+    @SerialName("official_verify")
+    val officialVerify: SpaceOfficial = SpaceOfficial(),
+    val vip: SpaceVip = SpaceVip(),
+    @SerialName("level_info")
+    val levelInfo: SpaceAggregateLevelInfo = SpaceAggregateLevelInfo(),
+    val likes: SpaceAggregateLikes = SpaceAggregateLikes(),
+    val relation: SpaceAggregateRelation = SpaceAggregateRelation()
+)
+
+@Serializable
+data class SpaceAggregateLevelInfo(
+    @SerialName("current_level")
+    val currentLevel: Int = 0
+)
+
+@Serializable
+data class SpaceAggregateLikes(
+    @SerialName("like_num")
+    val likeNum: Long = 0
+)
+
+@Serializable
+data class SpaceAggregateRelation(
+    val status: Int = 0,
+    @SerialName("is_follow")
+    val isFollow: Int = 0
+)
+
+@Serializable
+data class SpaceAggregateImages(
+    val imgUrl: String = "",
+    @SerialName("night_imgurl")
+    val nightImgUrl: String = ""
+)
+
+@Serializable
+data class SpaceAggregateArchive(
+    val count: Int = 0,
+    val item: List<SpaceAggregateArchiveItem> = emptyList()
+)
+
+@Serializable
+data class SpaceAggregateArchiveItem(
+    val aid: Long = 0,
+    val bvid: String = "",
+    val title: String = "",
+    val cover: String = "",
+    val author: String = "",
+    val length: String = "",
+    val play: Int = 0,
+    val reply: Int = 0,
+    val ctime: Long = 0,
+    val tname: String = ""
+)
+
+@Serializable
+data class SpaceAggregateArticleSection(
+    val count: Int = 0,
+    val item: List<SpaceArticleItem> = emptyList()
+)
+
+@Serializable
+data class SpaceAggregateAudioSection(
+    val count: Int = 0,
+    val item: List<SpaceAudioItem> = emptyList()
+)
+
 // /x/space/wbi/arc/search UP主投稿视频列表
 @Serializable
 data class SpaceVideoResponse(

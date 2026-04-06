@@ -11,14 +11,30 @@ class PortraitRotateActionPolicyTest {
     fun portraitRotateAction_forcesLandscapeWhenPhoneUsesOrientationDrivenFullscreen() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
-            resolvePortraitRotateTargetOrientation(isOrientationDrivenFullscreen = true)
+            resolvePortraitRotateTargetOrientation(
+                isOrientationDrivenFullscreen = true,
+                manualPortraitHoldActive = false
+            )
         )
     }
 
     @Test
     fun portraitRotateAction_returnsNullWhenOrientationIsNotDriver() {
         assertNull(
-            resolvePortraitRotateTargetOrientation(isOrientationDrivenFullscreen = false)
+            resolvePortraitRotateTargetOrientation(
+                isOrientationDrivenFullscreen = false,
+                manualPortraitHoldActive = false
+            )
+        )
+    }
+
+    @Test
+    fun portraitRotateAction_returnsNullDuringManualPortraitHold() {
+        assertNull(
+            resolvePortraitRotateTargetOrientation(
+                isOrientationDrivenFullscreen = true,
+                manualPortraitHoldActive = true
+            )
         )
     }
 }

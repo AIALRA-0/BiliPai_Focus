@@ -37,10 +37,16 @@ fun UpBadgeName(
     badgeHorizontalPadding: Dp = 6.dp,
     badgeVerticalPadding: Dp = 1.dp,
     spacing: Dp = 6.dp,
+    reserveTrailingSlot: Boolean = false,
+    trailingSlotMinWidth: Dp = 40.dp,
     maxLines: Int = 1,
     overflow: TextOverflow = TextOverflow.Ellipsis
 ) {
     val shouldShowMeta = !metaText.isNullOrBlank()
+    val shouldRenderTrailingSlot = shouldRenderUpBadgeTrailingSlot(
+        hasTrailingContent = badgeTrailingContent != null,
+        reserveTrailingSlot = reserveTrailingSlot
+    )
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
             modifier = modifier,
@@ -91,9 +97,14 @@ fun UpBadgeName(
                 }
             }
 
-            badgeTrailingContent?.let {
+            if (shouldRenderTrailingSlot) {
                 Spacer(modifier = Modifier.width(spacing))
-                it()
+                Box(
+                    modifier = Modifier.widthIn(min = trailingSlotMinWidth),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    badgeTrailingContent?.invoke()
+                }
             }
         }
     }

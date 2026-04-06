@@ -28,7 +28,7 @@ internal fun shouldRecreateRecoverableHazeState(
 internal fun shouldAllowHomeChromeLiquidGlass(
     sdkInt: Int
 ): Boolean {
-    return sdkInt >= 34
+    return sdkInt >= Build.VERSION_CODES.TIRAMISU
 }
 
 internal fun shouldAllowDirectHazeLiquidGlassFallback(

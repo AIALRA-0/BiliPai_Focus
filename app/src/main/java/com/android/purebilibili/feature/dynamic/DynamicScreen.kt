@@ -2,10 +2,13 @@
 package com.android.purebilibili.feature.dynamic
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import kotlinx.coroutines.flow.distinctUntilChanged // [Fix] Missing import
 import androidx.compose.animation.slideOutHorizontally
@@ -45,6 +48,7 @@ import com.android.purebilibili.core.ui.BiliGradientButton
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.feature.dynamic.resolveDynamicFeedMaxWidth
@@ -74,6 +78,7 @@ import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 
 val LocalDynamicScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
 
@@ -129,6 +134,7 @@ fun DynamicScreen(
     
     //  [Haze] 模糊状态
     val hazeState = rememberRecoverableHazeState()
+    val scope = rememberCoroutineScope()
     
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
@@ -141,6 +147,14 @@ fun DynamicScreen(
     // GIF 图片加载器
     val context = LocalContext.current
     val gifImageLoader = context.imageLoader
+    val shouldShowBackToTop by remember(listState) {
+        derivedStateOf {
+            shouldShowDynamicBackToTop(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
     
     val visibleTimelineItems = remember(
         state.items,
@@ -291,21 +305,28 @@ fun DynamicScreen(
     // [Feature] BottomBar Scroll Hiding for Dynamic Screen
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
 
+    suspend fun scrollDynamicFeedToTop(refreshWhenAlreadyAtTop: Boolean) {
+        val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 50
+        if (isAtTop) {
+            if (refreshWhenAlreadyAtTop) {
+                viewModel.refresh()
+            }
+            return
+        }
+
+        val currentIndex = listState.firstVisibleItemIndex
+        val plan = resolveScrollToTopPlan(currentIndex)
+        plan.preJumpIndex?.let { preJump ->
+            if (currentIndex > preJump) {
+                listState.scrollToItem(preJump)
+            }
+        }
+        listState.animateScrollToItem(plan.animateTargetIndex)
+    }
+
     LaunchedEffect(dynamicScrollChannel) {
         dynamicScrollChannel?.receiveAsFlow()?.collect {
-            val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 50
-            if (isAtTop) {
-                viewModel.refresh()
-            } else {
-                val currentIndex = listState.firstVisibleItemIndex
-                val plan = resolveScrollToTopPlan(currentIndex)
-                plan.preJumpIndex?.let { preJump ->
-                    if (currentIndex > preJump) {
-                        listState.scrollToItem(preJump)
-                    }
-                }
-                listState.animateScrollToItem(plan.animateTargetIndex)
-            }
+            scrollDynamicFeedToTop(refreshWhenAlreadyAtTop = true)
         }
     }
     
@@ -353,38 +374,39 @@ fun DynamicScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent // 透明背景以显示渐变
     ) { padding ->
-        // 背景层 - 自适应 MaterialTheme
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-             // 移除光晕 Canvas，保持纯净背景
-        }
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 背景层 - 自适应 MaterialTheme
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                 // 移除光晕 Canvas，保持纯净背景
+            }
 
-        //  [新增] 模式切换动画
-        AnimatedContent(
-            targetState = displayMode,
-            transitionSpec = {
-                //  根据切换方向使用不同动画
-                val slideDirection = if (targetState == DynamicDisplayMode.HORIZONTAL) {
-                    // 从侧边栏切换到横向：向左滑出+淡出，向左滑入+淡入
-                    (slideInHorizontally { -it / 4 } + fadeIn(animationSpec = tween(300))) togetherWith
-                    (slideOutHorizontally { it / 4 } + fadeOut(animationSpec = tween(200)))
-                } else {
-                    // 从横向切换到侧边栏：向右滑出+淡出，向右滑入+淡入
-                    (slideInHorizontally { it / 4 } + fadeIn(animationSpec = tween(300))) togetherWith
-                    (slideOutHorizontally { -it / 4 } + fadeOut(animationSpec = tween(200)))
-                }
-                slideDirection.using(SizeTransform(clip = false))
-            },
-            label = "displayModeTransition"
-        ) { targetMode ->
-            //  根据布局模式选择不同布局
-            when (targetMode) {
-                DynamicDisplayMode.SIDEBAR -> {
-                    // 侧边栏模式
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding)
-                    ) {
+            //  [新增] 模式切换动画
+            AnimatedContent(
+                targetState = displayMode,
+                transitionSpec = {
+                    //  根据切换方向使用不同动画
+                    val slideDirection = if (targetState == DynamicDisplayMode.HORIZONTAL) {
+                        // 从侧边栏切换到横向：向左滑出+淡出，向左滑入+淡入
+                        (slideInHorizontally { -it / 4 } + fadeIn(animationSpec = tween(300))) togetherWith
+                        (slideOutHorizontally { it / 4 } + fadeOut(animationSpec = tween(200)))
+                    } else {
+                        // 从横向切换到侧边栏：向右滑出+淡出，向右滑入+淡入
+                        (slideInHorizontally { it / 4 } + fadeIn(animationSpec = tween(300))) togetherWith
+                        (slideOutHorizontally { -it / 4 } + fadeOut(animationSpec = tween(200)))
+                    }
+                    slideDirection.using(SizeTransform(clip = false))
+                },
+                label = "displayModeTransition"
+            ) { targetMode ->
+                //  根据布局模式选择不同布局
+                when (targetMode) {
+                    DynamicDisplayMode.SIDEBAR -> {
+                        // 侧边栏模式
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(padding)
+                        ) {
                         // 左侧边栏
                         DynamicSidebar(
                             users = followedUsers,
@@ -600,6 +622,31 @@ fun DynamicScreen(
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = shouldShowBackToTop,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = dynamicListBottomPadding + 12.dp),
+                enter = fadeIn(animationSpec = tween(180)) + scaleIn(initialScale = 0.92f),
+                exit = fadeOut(animationSpec = tween(140)) + scaleOut(targetScale = 0.92f)
+            ) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            scrollDynamicFeedToTop(refreshWhenAlreadyAtTop = false)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        imageVector = rememberAppChevronUpIcon(),
+                        contentDescription = "回到顶部"
+                    )
                 }
             }
         }

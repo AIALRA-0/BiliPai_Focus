@@ -863,6 +863,7 @@ fun rememberVideoPlayerState(
 
     DisposableEffect(player) {
         onDispose {
+            viewModel.flushPlaybackHeartbeatSnapshot(reason = "dispose")
             //  [新增] 保存播放进度到 ViewModel 缓存
             viewModel.saveCurrentPosition()
             
@@ -903,6 +904,7 @@ fun rememberVideoPlayerState(
     var wasPlaying by remember { mutableStateOf(false) }
     //  [修复] 记录是否从后台音频模式恢复（后台音频时不应 seek 回旧位置）
     var wasBackgroundAudio by remember { mutableStateOf(false) }
+    var hasTransientResumeIntent by remember { mutableStateOf(false) }
     
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, player) {
@@ -910,6 +912,7 @@ fun rememberVideoPlayerState(
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.flushPlaybackHeartbeatSnapshot(reason = "pause")
                     //  [修复] 保存进度到 ViewModel 缓存（用于跨导航恢复）
                     viewModel.saveCurrentPosition()
                     
@@ -926,7 +929,7 @@ fun rememberVideoPlayerState(
                     // 2. 系统 PiP 模式 - 用户按 Home 键返回桌面时继续播放
                     // 3. 后台音频模式 - 继续播放音频
                     val isMiniMode = miniPlayerManager.isMiniMode
-                    val isPip = miniPlayerManager.shouldEnterPip()
+                    val isPip = miniPlayerManager.shouldKeepPlaybackForPipTransition()
                     val isBackgroundAudio = miniPlayerManager.shouldContinueBackgroundAudio()
                     val hasRecentUserLeaveHint = miniPlayerManager.hasRecentUserLeaveHint()
                     val pauseDecision = resolvePlaybackPauseDecision(
@@ -939,6 +942,7 @@ fun rememberVideoPlayerState(
                     
                     //  [修复] 记录后台音频状态，恢复时不要 seek 回旧位置
                     wasBackgroundAudio = pauseDecision.shouldMarkBackgroundAudioSession
+                    hasTransientResumeIntent = pauseDecision.shouldPersistTransientResumeIntent
                     
                     if (pauseDecision.shouldPausePlayback) {
                         // 非小窗/PiP/后台模式下暂停
@@ -957,9 +961,10 @@ fun rememberVideoPlayerState(
                 // 避免重复处理导致 savedTrackParams 被覆盖
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     val shouldEnsureAudibleOnForeground =
-                        !miniPlayerManager.isMiniMode && !miniPlayerManager.shouldEnterPip()
+                        !miniPlayerManager.isMiniMode && !miniPlayerManager.isSystemPipActive
                     val resumeDecision = resolvePlaybackResumeDecision(
                         wasPlaybackActive = wasPlaying,
+                        hasTransientResumeIntent = hasTransientResumeIntent,
                         isPlaying = player.isPlaying,
                         playWhenReady = player.playWhenReady,
                         playbackState = player.playbackState,
@@ -993,6 +998,7 @@ fun rememberVideoPlayerState(
                     
                     // 重置标志
                     wasBackgroundAudio = false
+                    hasTransientResumeIntent = false
                 }
                 else -> {}
             }

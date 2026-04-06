@@ -30,9 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
-import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.store.BottomProgressBehavior
 import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
@@ -106,11 +106,8 @@ fun PlaybackSettingsContent(
             widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
-    val effectiveMotionTier = remember(deviceUiProfile.motionTier, state.cardAnimationEnabled) {
-        resolveEffectiveMotionTier(
-            baseTier = deviceUiProfile.motionTier,
-            animationEnabled = state.cardAnimationEnabled
-        )
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier) {
+        resolveSettingsEntranceMotionTier(deviceUiProfile.motionTier)
     }
 
     LaunchedEffect(Unit) {
@@ -139,7 +136,8 @@ fun PlaybackSettingsContent(
     val audioModeAutoPipEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAudioModeAutoPipEnabled(context).collectAsState(initial = false)
     val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getPlayerDiagnosticLoggingEnabled(context).collectAsState(initial = true)
+        .getPlayerDiagnosticLoggingEnabled(context)
+        .collectAsState(initial = DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED)
     val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getDefaultPlaybackSpeed(context).collectAsState(initial = 1.0f)
     val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager

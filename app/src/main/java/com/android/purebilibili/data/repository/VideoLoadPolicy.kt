@@ -10,6 +10,11 @@ internal enum class PlayUrlSource {
     GUEST
 }
 
+internal enum class PlayUrlRequestKind {
+    INITIAL,
+    EXPLICIT
+}
+
 internal data class VideoInfoLookupInput(
     val bvid: String,
     val aid: Long
@@ -162,10 +167,9 @@ internal fun shouldTryAppApiForTargetQuality(
     hasSessionCookie: Boolean = true,
     directedTrafficMode: Boolean = false
 ): Boolean {
-    if (directedTrafficMode && targetQn > 0) return true
-    if (!hasSessionCookie && targetQn >= 80) return true
-    // 标准策略：1080P 及以上优先尝试 APP API，降低 WEB 链路偶发回落到 720P 的概率。
-    return targetQn >= 80
+    // PiliPlus parity: playback stays on the Web/WBI playurl path instead of
+    // prioritizing the APP access_token endpoint for 1080P and premium tiers.
+    return false
 }
 
 internal fun shouldEnableDirectedTrafficMode(
@@ -190,18 +194,74 @@ internal fun buildDirectedTrafficWbiOverrides(
     )
 }
 
+internal fun buildPlayUrlWbiBaseParams(
+    bvid: String,
+    cid: Long,
+    qn: Int,
+    audioLang: String? = null,
+    tryLook: Boolean = false
+): MutableMap<String, String> {
+    val params = linkedMapOf(
+        "bvid" to bvid,
+        "cid" to cid.toString(),
+        "qn" to qn.toString(),
+        "fnval" to "4048",
+        "fnver" to "0",
+        "fourk" to "1",
+        "voice_balance" to "1",
+        "gaia_source" to "pre-load",
+        "isGaiaAvoided" to "true",
+        "web_location" to "1315873"
+    )
+    if (tryLook) {
+        params["try_look"] = "1"
+    }
+    if (!audioLang.isNullOrEmpty()) {
+        params["cur_language"] = audioLang
+    }
+    return params
+}
+
+internal fun shouldRequestPlayUrlTryLook(
+    isLoggedIn: Boolean,
+    auto1080pEnabled: Boolean
+): Boolean {
+    return !isLoggedIn && auto1080pEnabled
+}
+
+internal fun buildLoggedInPlaybackFallbackOrder(): List<PlayUrlSource> {
+    return listOf(
+        PlayUrlSource.DASH,
+        PlayUrlSource.APP,
+        PlayUrlSource.LEGACY,
+        PlayUrlSource.GUEST
+    )
+}
+
+internal fun buildGuestPlaybackFallbackOrder(): List<PlayUrlSource> {
+    return listOf(
+        PlayUrlSource.DASH,
+        PlayUrlSource.LEGACY
+    )
+}
+
 internal fun shouldAcceptAppApiResultForTargetQuality(
+    requestKind: PlayUrlRequestKind,
     targetQn: Int,
     returnedQuality: Int,
     dashVideoIds: List<Int>
 ): Boolean {
-    // 720P 及以下保持原策略，优先保障起播成功。
+    if (requestKind == PlayUrlRequestKind.INITIAL) {
+        // Startup should keep any playable payload to avoid a hard failure page
+        // when the service temporarily downgrades or omits the requested track.
+        return returnedQuality > 0 || dashVideoIds.isNotEmpty()
+    }
+
+    // Explicit quality selection must respect the requested target for both VIP
+    // and non-VIP users; otherwise the UI reports a successful switch while the
+    // backend silently returns a lower tier.
     if (targetQn < 80) return true
-
-    // DASH 轨道中存在目标清晰度，说明结果可满足切换目标。
     if (dashVideoIds.distinct().contains(targetQn)) return true
-
-    // 非 DASH 场景下，返回清晰度本身满足目标也视为可接受；否则继续走后续回退链路。
     return returnedQuality >= targetQn && returnedQuality > 0
 }
 

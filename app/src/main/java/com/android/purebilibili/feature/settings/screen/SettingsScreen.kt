@@ -41,7 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
+import com.android.purebilibili.core.util.CacheClearTarget
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
+import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.AnalyticsHelper
@@ -94,8 +97,10 @@ fun SettingsScreen(
     // State Collection
     val state by viewModel.state.collectAsState()
     val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context).collectAsState(initial = false)
-    val crashTrackingEnabled by SettingsManager.getCrashTrackingEnabled(context).collectAsState(initial = true)
-    val analyticsEnabled by SettingsManager.getAnalyticsEnabled(context).collectAsState(initial = true)
+    val crashTrackingEnabled by SettingsManager.getCrashTrackingEnabled(context)
+        .collectAsState(initial = DEFAULT_CRASH_TRACKING_ENABLED)
+    val analyticsEnabled by SettingsManager.getAnalyticsEnabled(context)
+        .collectAsState(initial = DEFAULT_ANALYTICS_ENABLED)
     val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsState(initial = true)
     val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsState(initial = null)
     val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsState(initial = null)
@@ -113,6 +118,19 @@ fun SettingsScreen(
     var showCacheDialog by remember { mutableStateOf(false) }
     var showCacheAnimation by remember { mutableStateOf(false) }
     var cacheProgress by remember { mutableStateOf<CacheClearProgress?>(null) }
+    val cacheClearOptions = remember { resolveCacheClearOptions() }
+    var selectedCacheClearTargets by remember {
+        mutableStateOf(resolveDefaultCacheClearTargets())
+    }
+    var pendingCacheClearTargets by remember {
+        mutableStateOf(resolveDefaultCacheClearTargets())
+    }
+    val selectedCacheSizeSummary = remember(state.cacheBreakdown, selectedCacheClearTargets) {
+        resolveSelectedCacheSizeSummary(
+            breakdown = state.cacheBreakdown,
+            selectedTargets = selectedCacheClearTargets
+        )
+    }
     var versionClickCount by remember { mutableIntStateOf(0) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var showPathDialog by remember { mutableStateOf(false) }
@@ -124,10 +142,72 @@ fun SettingsScreen(
     var updateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
     var changelogCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
     var updateDownloadState by remember { mutableStateOf(AppUpdateDownloadState()) }
+    var currentReleaseEvidence by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
+    var installedApkSha256 by remember { mutableStateOf<String?>(null) }
     
     // [新增] 黑名单页面状态
     var showBlockedList by remember { mutableStateOf(false) }
     var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
+    val installedBuildProvenance = remember { readInstalledAppBuildProvenance() }
+    val buildVerificationState = remember(currentReleaseEvidence, installedApkSha256) {
+        resolveAppBuildVerificationState(
+            currentVersion = com.android.purebilibili.BuildConfig.VERSION_NAME,
+            localBuildCommitSha = installedBuildProvenance.commitSha,
+            localWorkflowRunId = installedBuildProvenance.workflowRunId,
+            localWorkflowRunUrl = installedBuildProvenance.workflowRunUrl,
+            localReleaseTag = installedBuildProvenance.releaseTag,
+            localApkSha256 = installedApkSha256,
+            remoteRelease = currentReleaseEvidence
+        )
+    }
+    val buildVerificationLabel = remember(buildVerificationState.status) {
+        resolveAppBuildVerificationLabel(buildVerificationState.status)
+    }
+    val buildSourceFallback = remember(buildVerificationState.releaseTag, buildVerificationState.workflowRunId) {
+        if (
+            !buildVerificationState.releaseTag.isNullOrBlank() ||
+            !buildVerificationState.workflowRunId.isNullOrBlank()
+        ) {
+            "GitHub Release"
+        } else {
+            "本地构建"
+        }
+    }
+    val buildSourceValue = remember(
+        buildVerificationState.sourceCommitSha,
+        installedBuildProvenance.commitSha,
+        buildSourceFallback
+    ) {
+        resolveBuildSourceValue(
+            buildVerificationState.sourceCommitSha ?: installedBuildProvenance.commitSha,
+            fallback = buildSourceFallback
+        )
+    }
+    val buildSourceSubtitle = remember(buildVerificationState.workflowRunId, buildVerificationState.releaseTag) {
+        resolveBuildSourceSubtitle(
+            workflowRunId = buildVerificationState.workflowRunId ?: installedBuildProvenance.workflowRunId,
+            releaseTag = buildVerificationState.releaseTag ?: installedBuildProvenance.releaseTag
+        )
+    }
+    val buildFingerprintValue = remember(installedApkSha256) {
+        resolveBuildFingerprintValue(installedApkSha256)
+    }
+    val buildFingerprintCopyValue = remember(installedApkSha256) {
+        installedApkSha256 ?: "未读取"
+    }
+    val buildFingerprintSubtitle = remember(
+        buildVerificationState.localApkSha256,
+        buildVerificationState.remoteApkSha256,
+        buildVerificationState.releaseIsImmutable,
+        buildVerificationState.hasAttestation
+    ) {
+        resolveBuildFingerprintSubtitle(
+            localApkSha256 = buildVerificationState.localApkSha256,
+            remoteApkSha256 = buildVerificationState.remoteApkSha256,
+            releaseIsImmutable = buildVerificationState.releaseIsImmutable,
+            hasAttestation = buildVerificationState.hasAttestation
+        )
+    }
 
     // Haze State for this screen
     val activeHazeState = mainHazeState ?: rememberRecoverableHazeState()
@@ -152,7 +232,10 @@ fun SettingsScreen(
     }
 
     // Callbacks
-    val onClearCacheAction = { showCacheDialog = true }
+    val onClearCacheAction = {
+        selectedCacheClearTargets = resolveDefaultCacheClearTargets()
+        showCacheDialog = true
+    }
     val onDownloadPathAction = { showPathDialog = true }
     
     // Logic Callbacks
@@ -206,6 +289,28 @@ fun SettingsScreen(
     val onTwitterClick: () -> Unit = { uriHandler.openUri("https://x.com/YangY_0x00") }
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
     val onFocusGithubClick: () -> Unit = { uriHandler.openUri(FOCUS_GITHUB_URL) }
+    val onVerificationClick: () -> Unit = {
+        uriHandler.openUri(
+            currentReleaseEvidence?.verificationMetadata?.attestationUrl
+                ?: currentReleaseEvidence?.releaseUrl
+                ?: OFFICIAL_GITHUB_URL
+        )
+    }
+    val onBuildSourceClick: () -> Unit = {
+        uriHandler.openUri(
+            buildVerificationState.workflowRunUrl
+                ?: installedBuildProvenance.workflowRunUrl
+                    .takeIf { it.isNotBlank() }
+                ?: OFFICIAL_GITHUB_URL
+        )
+    }
+    val onBuildFingerprintClick: () -> Unit = {
+        uriHandler.openUri(
+            currentReleaseEvidence?.verificationMetadata?.attestationUrl
+                ?: currentReleaseEvidence?.releaseUrl
+                ?: OFFICIAL_GITHUB_URL
+        )
+    }
     val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
     suspend fun runUpdateCheck(
@@ -280,7 +385,7 @@ fun SettingsScreen(
                 )
                 kotlinx.coroutines.delay(150)
             }
-            val clearResult = viewModel.clearCache()
+            val clearResult = viewModel.clearCache(pendingCacheClearTargets)
             if (shouldMarkCacheClearAnimationComplete(clearResult.isSuccess)) {
                 cacheProgress = CacheClearProgress(
                     current = totalSize,
@@ -303,22 +408,48 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.refreshCacheSize()
         AnalyticsHelper.logScreenView("SettingsScreen")
+        installedApkSha256 = calculateInstalledApkSha256(context)
+        currentReleaseEvidence = AppUpdateChecker
+            .check(com.android.purebilibili.BuildConfig.VERSION_NAME)
+            .getOrNull()
     }
 
     //  Transparent Navigation Bar
     val view = androidx.compose.ui.platform.LocalView.current
     DisposableEffect(Unit) {
         val window = (context as? android.app.Activity)?.window
+        @Suppress("DEPRECATION")
         val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
         if (window != null) window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        onDispose { if (window != null) window.navigationBarColor = originalNavBarColor }
+        onDispose {
+            @Suppress("DEPRECATION")
+            if (window != null) window.navigationBarColor = originalNavBarColor
+        }
     }
 
     // Dialogs
     if (showCacheDialog) {
         CacheClearConfirmDialog(
-            cacheSize = state.cacheSize,
-            onConfirm = { showCacheDialog = false; showCacheAnimation = true },
+            selectedCacheSizeSummary = selectedCacheSizeSummary,
+            options = cacheClearOptions,
+            selectedTargets = selectedCacheClearTargets,
+            onTargetToggle = { target, checked ->
+                selectedCacheClearTargets = if (checked) {
+                    selectedCacheClearTargets + target
+                } else {
+                    selectedCacheClearTargets - target
+                }
+            },
+            onConfirm = {
+                if (selectedCacheClearTargets.isEmpty()) {
+                    Toast.makeText(context, "请至少选择一项要清理的缓存", Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingCacheClearTargets = selectedCacheClearTargets
+                    showCacheDialog = false
+                    showCacheAnimation = true
+                }
+            },
             onDismiss = { showCacheDialog = false }
         )
     }
@@ -400,6 +531,22 @@ fun SettingsScreen(
         val preferredAsset = remember(info.assets) {
             selectPreferredAppUpdateAsset(info.assets)
         }
+        val releaseCommit = remember(info.buildMetadata?.gitCommitSha) {
+            resolveBuildSourceValue(info.buildMetadata?.gitCommitSha, fallback = "未知")
+        }
+        val releaseWorkflowSubtitle = remember(info.buildMetadata?.workflowRunId, info.buildMetadata?.releaseTag) {
+            resolveBuildSourceSubtitle(
+                workflowRunId = info.buildMetadata?.workflowRunId,
+                releaseTag = info.buildMetadata?.releaseTag
+            )
+        }
+        val releaseVerificationEvidence = remember(info.verificationMetadata?.attestationUrl) {
+            if (info.verificationMetadata?.attestationUrl?.isNotBlank() == true) {
+                "GitHub Attestation"
+            } else {
+                "未提供"
+            }
+        }
         val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
         val dialogTextColors = remember(isDialogDarkTheme) {
             resolveAppUpdateDialogTextColors(
@@ -430,6 +577,27 @@ fun SettingsScreen(
                             color = dialogTextColors.currentVersionColor
                         )
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Release 锁定：${if (info.releaseIsImmutable) "Immutable" else "可变"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Text(
+                        text = "源码提交：$releaseCommit",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Text(
+                        text = "构建来源：$releaseWorkflowSubtitle",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Text(
+                        text = "Provenance：$releaseVerificationEvidence",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
                     if (updateDownloadState.status != AppUpdateDownloadStatus.IDLE) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
@@ -525,6 +693,22 @@ fun SettingsScreen(
         val resolvedReleaseNotes = remember(info.releaseNotes) {
             resolveUpdateReleaseNotesText(info.releaseNotes)
         }
+        val releaseCommit = remember(info.buildMetadata?.gitCommitSha) {
+            resolveBuildSourceValue(info.buildMetadata?.gitCommitSha, fallback = "未知")
+        }
+        val releaseWorkflowSubtitle = remember(info.buildMetadata?.workflowRunId, info.buildMetadata?.releaseTag) {
+            resolveBuildSourceSubtitle(
+                workflowRunId = info.buildMetadata?.workflowRunId,
+                releaseTag = info.buildMetadata?.releaseTag
+            )
+        }
+        val releaseVerificationEvidence = remember(info.verificationMetadata?.attestationUrl) {
+            if (info.verificationMetadata?.attestationUrl?.isNotBlank() == true) {
+                "GitHub Attestation"
+            } else {
+                "未提供"
+            }
+        }
         val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
         val dialogTextColors = remember(isDialogDarkTheme) {
             resolveAppUpdateDialogTextColors(
@@ -545,6 +729,27 @@ fun SettingsScreen(
                     Text(
                         text = "当前版本 v${info.currentVersion}",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Release 锁定：${if (info.releaseIsImmutable) "Immutable" else "可变"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Text(
+                        text = "源码提交：$releaseCommit",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Text(
+                        text = "构建来源：$releaseWorkflowSubtitle",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = dialogTextColors.currentVersionColor
+                    )
+                    Text(
+                        text = "Provenance：$releaseVerificationEvidence",
+                        style = MaterialTheme.typography.bodySmall,
                         color = dialogTextColors.currentVersionColor
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -649,6 +854,9 @@ fun SettingsScreen(
                     onLicenseClick = onOpenSourceLicensesClick,
                     onDisclaimerClick = onDisclaimerClick,
                     onGithubClick = onGithubClick,
+                    onVerificationClick = onVerificationClick,
+                    onBuildSourceClick = onBuildSourceClick,
+                    onBuildFingerprintClick = onBuildFingerprintClick,
                     onCheckUpdateClick = onCheckUpdateAction,
                     onViewReleaseNotesClick = onViewReleaseNotesAction,
                     onVersionClick = onVersionClickAction,
@@ -678,6 +886,13 @@ fun SettingsScreen(
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
                     autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                    verificationLabel = buildVerificationLabel,
+                    verificationSubtitle = buildVerificationState.summary,
+                    buildSourceValue = buildSourceValue,
+                    buildSourceSubtitle = buildSourceSubtitle,
+                    buildFingerprintValue = buildFingerprintValue,
+                    buildFingerprintCopyValue = buildFingerprintCopyValue,
+                    buildFingerprintSubtitle = buildFingerprintSubtitle,
                     onDonateClick = { showDonateDialog = true },
                     onOpenLinksClick = onOpenLinksAction,
                     onBlockedListClick = onBlockedListClickAction, // Pass to tablet layout
@@ -722,6 +937,9 @@ fun SettingsScreen(
                     onLicenseClick = onOpenSourceLicensesClick,
                     onDisclaimerClick = onDisclaimerClick,
                     onGithubClick = onGithubClick,
+                    onVerificationClick = onVerificationClick,
+                    onBuildSourceClick = onBuildSourceClick,
+                    onBuildFingerprintClick = onBuildFingerprintClick,
                     onCheckUpdateClick = onCheckUpdateAction,
                     onViewReleaseNotesClick = onViewReleaseNotesAction,
                     onVersionClick = onVersionClickAction,
@@ -751,6 +969,13 @@ fun SettingsScreen(
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
                     autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                    verificationLabel = buildVerificationLabel,
+                    verificationSubtitle = buildVerificationState.summary,
+                    buildSourceValue = buildSourceValue,
+                    buildSourceSubtitle = buildSourceSubtitle,
+                    buildFingerprintValue = buildFingerprintValue,
+                    buildFingerprintCopyValue = buildFingerprintCopyValue,
+                    buildFingerprintSubtitle = buildFingerprintSubtitle,
                     cardAnimationEnabled = state.cardAnimationEnabled,
                     isBottomBarFloating = state.isBottomBarFloating,
                     bottomBarLabelMode = state.bottomBarLabelMode,
@@ -859,6 +1084,9 @@ private fun MobileSettingsLayout(
     onLicenseClick: () -> Unit,
     onDisclaimerClick: () -> Unit,
     onGithubClick: () -> Unit,
+    onVerificationClick: () -> Unit,
+    onBuildSourceClick: () -> Unit,
+    onBuildFingerprintClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
     onViewReleaseNotesClick: () -> Unit,
     onVersionClick: () -> Unit,
@@ -898,6 +1126,13 @@ private fun MobileSettingsLayout(
     updateStatusText: String,
     isCheckingUpdate: Boolean,
     autoCheckUpdateEnabled: Boolean,
+    verificationLabel: String,
+    verificationSubtitle: String,
+    buildSourceValue: String,
+    buildSourceSubtitle: String,
+    buildFingerprintValue: String,
+    buildFingerprintCopyValue: String,
+    buildFingerprintSubtitle: String,
     cardAnimationEnabled: Boolean,
     isBottomBarFloating: Boolean,
     bottomBarLabelMode: Int,
@@ -915,11 +1150,8 @@ private fun MobileSettingsLayout(
             widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
-    val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {
-        resolveEffectiveMotionTier(
-            baseTier = deviceUiProfile.motionTier,
-            animationEnabled = cardAnimationEnabled
-        )
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier) {
+        resolveSettingsEntranceMotionTier(deviceUiProfile.motionTier)
     }
     val sectionOrder = remember { resolveMobileSettingsRootSectionOrder() }
     val bottomBarVisible = LocalBottomBarVisible.current
@@ -1056,6 +1288,9 @@ private fun MobileSettingsLayout(
                                         onDisclaimerClick = onDisclaimerClick,
                                         onLicenseClick = onLicenseClick,
                                         onGithubClick = onGithubClick,
+                                        onVerificationClick = onVerificationClick,
+                                        onBuildSourceClick = onBuildSourceClick,
+                                        onBuildFingerprintClick = onBuildFingerprintClick,
                                         onCheckUpdateClick = onCheckUpdateClick,
                                         onViewReleaseNotesClick = onViewReleaseNotesClick,
                                         autoCheckUpdateEnabled = autoCheckUpdateEnabled,
@@ -1065,6 +1300,13 @@ private fun MobileSettingsLayout(
                                         onEasterEggChange = onEasterEggChange,
                                         updateStatusText = updateStatusText,
                                         isCheckingUpdate = isCheckingUpdate,
+                                        verificationLabel = verificationLabel,
+                                        verificationSubtitle = verificationSubtitle,
+                                        buildSourceValue = buildSourceValue,
+                                        buildSourceSubtitle = buildSourceSubtitle,
+                                        buildFingerprintValue = buildFingerprintValue,
+                                        buildFingerprintCopyValue = buildFingerprintCopyValue,
+                                        buildFingerprintSubtitle = buildFingerprintSubtitle,
                                         versionClickCount = versionClickCount,
                                         versionClickThreshold = versionClickThreshold
                                     )

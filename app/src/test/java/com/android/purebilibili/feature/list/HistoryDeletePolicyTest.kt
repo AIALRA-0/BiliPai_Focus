@@ -100,21 +100,21 @@ class HistoryDeletePolicyTest {
     }
 
     @Test
-    fun `batch delete should keep dissolve animation but switch to batch mode`() {
+    fun `batch delete should skip dissolve animation and delete directly`() {
         assertEquals(
-            HistoryDeleteAnimationMode.BATCH_DISSOLVE,
+            HistoryDeleteAnimationMode.DIRECT_DELETE,
             resolveHistoryDeleteAnimationMode(itemCount = 2)
         )
         assertEquals(
-            HistoryDeleteAnimationMode.BATCH_DISSOLVE,
+            HistoryDeleteAnimationMode.DIRECT_DELETE,
             resolveHistoryDeleteAnimationMode(itemCount = 30)
         )
     }
 
     @Test
-    fun `batch dissolve should disable jiggle and collapse`() {
-        assertEquals(false, shouldJiggleHistoryDeleteCards(HistoryDeleteAnimationMode.BATCH_DISSOLVE))
-        assertEquals(false, shouldCollapseHistoryDeleteCard(HistoryDeleteAnimationMode.BATCH_DISSOLVE))
+    fun `direct batch delete should disable jiggle and collapse`() {
+        assertEquals(false, shouldJiggleHistoryDeleteCards(HistoryDeleteAnimationMode.DIRECT_DELETE))
+        assertEquals(false, shouldCollapseHistoryDeleteCard(HistoryDeleteAnimationMode.DIRECT_DELETE))
     }
 
     @Test
@@ -142,14 +142,14 @@ class HistoryDeletePolicyTest {
     }
 
     @Test
-    fun `create delete session normalizes keys and chooses batch mode`() {
+    fun `create delete session normalizes keys and chooses direct delete mode`() {
         val session = createHistoryDeleteSession(setOf(" a ", "b", ""))
 
         assertEquals(
             HistoryDeleteSession(
                 targetKeys = setOf("a", "b"),
                 completedKeys = emptySet(),
-                animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+                animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
             ),
             session
         )
@@ -160,7 +160,7 @@ class HistoryDeletePolicyTest {
         val session = HistoryDeleteSession(
             targetKeys = setOf("a", "b"),
             completedKeys = emptySet(),
-            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+            animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
         )
 
         val afterFirst = reduceHistoryDeleteSessionOnAnimationComplete(session, "a")
@@ -177,7 +177,7 @@ class HistoryDeletePolicyTest {
         val session = HistoryDeleteSession(
             targetKeys = setOf("a", "b", "c"),
             completedKeys = setOf("b"),
-            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+            animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
         )
 
         assertEquals(setOf("a", "c"), resolveActiveHistoryDeleteKeys(session))
@@ -188,7 +188,7 @@ class HistoryDeletePolicyTest {
         val session = HistoryDeleteSession(
             targetKeys = setOf("a", "b"),
             completedKeys = setOf("a"),
-            animationMode = HistoryDeleteAnimationMode.BATCH_DISSOLVE
+            animationMode = HistoryDeleteAnimationMode.DIRECT_DELETE
         )
 
         assertEquals(true, shouldKeepHistoryDeletePlaceholderHidden(session, "a"))

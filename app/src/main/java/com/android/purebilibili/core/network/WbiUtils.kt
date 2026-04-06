@@ -37,13 +37,26 @@ object WbiUtils {
             .joinToString("") { "%02x".format(it) }
     }
 
+    private fun MutableMap<String, String>.appendRiskFingerprintParams() {
+        this["dm_img_list"] = "[]"
+        this["dm_img_str"] = "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ"
+        this["dm_cover_img_str"] = "QU5HTEUgKE5WSURJQSwgTlZJRElBIEdlRm9yY2UgR1RYIDEwNjAgNkdCIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEp"
+        this["dm_img_inter"] = """{"ds":[],"wh":[0,0,0],"of":[0,0,0]}"""
+    }
+
     /**
-     * 核心修改：返回的 Map 中，Value 保持原始状态（未编码），让 Retrofit 去编码。
+     * 返回的 Map 中，Value 保持原始状态（未编码），让 Retrofit 去编码。
      * 签名计算时使用编码后的值。
-     * 
-     *  2024 更新：添加 dm_img 系列参数以通过 Bilibili 风控
+     *
+     * WBI 的额外风控指纹参数不再默认注入，避免污染像 playurl 这类
+     * 对参数更敏感的接口；需要时由调用方显式开启。
      */
-    fun sign(params: Map<String, String>, imgKey: String, subKey: String): Map<String, String> {
+    fun sign(
+        params: Map<String, String>,
+        imgKey: String,
+        subKey: String,
+        includeRiskFingerprint: Boolean = false
+    ): Map<String, String> {
         val mixinKey = getMixinKey(imgKey + subKey)
         val currTime = System.currentTimeMillis() / 1000
 
@@ -53,13 +66,9 @@ object WbiUtils {
             rawParams[key] = filterIllegalChars(value)
         }
         rawParams["wts"] = currTime.toString()
-        
-        //  [关键] 添加 dm_img 系列参数以通过风控
-        // 这些是 Bilibili 2024 年新增的风控参数，代表设备指纹信息
-        rawParams["dm_img_list"] = "[]"
-        rawParams["dm_img_str"] = "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ"  // Base64 of "WebGL 1.0 (OpenGL ES 2.0 Chromium)"
-        rawParams["dm_cover_img_str"] = "QU5HTEUgKE5WSURJQSwgTlZJRElBIEdlRm9yY2UgR1RYIDEwNjAgNkdCIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEp"  // Base64 of GPU info
-        rawParams["dm_img_inter"] = """{"ds":[],"wh":[0,0,0],"of":[0,0,0]}"""
+        if (includeRiskFingerprint) {
+            rawParams.appendRiskFingerprintParams()
+        }
 
         // 2. 排序 Key
         val sortedKeys = rawParams.keys.sorted()

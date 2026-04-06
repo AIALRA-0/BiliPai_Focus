@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.theme.iOSBlue
 import kotlin.math.*
 import kotlin.random.Random
@@ -618,8 +620,11 @@ fun CenterCleaningIcon(
  *  缓存清理确认对话框
  */
 @Composable
-fun CacheClearConfirmDialog(
-    cacheSize: String,
+internal fun CacheClearConfirmDialog(
+    selectedCacheSizeSummary: String,
+    options: List<CacheClearOptionUiModel>,
+    selectedTargets: Set<CacheClearTarget>,
+    onTargetToggle: (CacheClearTarget, Boolean) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -635,22 +640,65 @@ fun CacheClearConfirmDialog(
         text = { 
             Column {
                 Text(
-                    resolveCacheClearConfirmationMessage(),
+                    resolveCacheClearConfirmationMessage(selectedTargets),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "当前缓存：$cacheSize", 
-                    color = CacheAnimationColors.primaryBlue, 
+                    selectedCacheSizeSummary,
+                    color = MaterialTheme.colorScheme.primary, 
                     fontWeight = FontWeight.Medium
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+                options.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                onTargetToggle(option.target, option.target !in selectedTargets)
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Checkbox(
+                            checked = option.target in selectedTargets,
+                            onCheckedChange = { checked ->
+                                onTargetToggle(option.target, checked)
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                option.title,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                option.description,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             com.android.purebilibili.core.ui.IOSDialogAction(
                 onClick = onConfirm
             ) { 
-                Text("确认清除", color = com.android.purebilibili.core.theme.iOSRed) 
+                Text(
+                    "确认清除",
+                    color = if (selectedTargets.isEmpty()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        com.android.purebilibili.core.theme.iOSRed
+                    }
+                ) 
             }
         },
         dismissButton = { 

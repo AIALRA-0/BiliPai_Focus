@@ -2,31 +2,59 @@ package com.android.purebilibili.core.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.feature.settings.AppThemeMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 class ThemeDynamicColorPolicyTest {
 
     @Test
-    fun `amoled mode keeps dynamic color enabled when user turns monet on`() {
-        assertTrue(
-            resolveEffectiveDynamicColorEnabled(
-                dynamicColorEnabled = true,
-                amoledDarkTheme = true,
-                uiPreset = UiPreset.MD3
+    fun `dynamic color follows miuix monet modes for each app theme mode`() {
+        assertEquals(
+            ColorSchemeMode.MonetSystem,
+            resolveMiuixColorSchemeMode(
+                themeMode = AppThemeMode.FOLLOW_SYSTEM,
+                dynamicColorEnabled = true
+            )
+        )
+        assertEquals(
+            ColorSchemeMode.MonetLight,
+            resolveMiuixColorSchemeMode(
+                themeMode = AppThemeMode.LIGHT,
+                dynamicColorEnabled = true
+            )
+        )
+        assertEquals(
+            ColorSchemeMode.MonetDark,
+            resolveMiuixColorSchemeMode(
+                themeMode = AppThemeMode.DARK,
+                dynamicColorEnabled = true
             )
         )
     }
 
     @Test
-    fun `ios preset should also allow monet when user enables dynamic color`() {
+    fun `static color modes map to plain miuix color scheme modes`() {
         assertEquals(
-            true,
-            resolveEffectiveDynamicColorEnabled(
-                dynamicColorEnabled = true,
-                amoledDarkTheme = false,
-                uiPreset = UiPreset.IOS
+            ColorSchemeMode.System,
+            resolveMiuixColorSchemeMode(
+                themeMode = AppThemeMode.FOLLOW_SYSTEM,
+                dynamicColorEnabled = false
+            )
+        )
+        assertEquals(
+            ColorSchemeMode.Light,
+            resolveMiuixColorSchemeMode(
+                themeMode = AppThemeMode.LIGHT,
+                dynamicColorEnabled = false
+            )
+        )
+        assertEquals(
+            ColorSchemeMode.Dark,
+            resolveMiuixColorSchemeMode(
+                themeMode = AppThemeMode.DARK,
+                dynamicColorEnabled = false
             )
         )
     }

@@ -7,8 +7,73 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+internal data class BangumiPlayUrlPayload(
+    val code: Int,
+    val message: String,
+    val videoInfo: BangumiVideoInfo?
+)
+
+internal fun buildBangumiPlayUrlParams(
+    epId: Long,
+    cid: Long,
+    qn: Int,
+    bvid: String? = null,
+    seasonId: Long? = null,
+    tryLook: Boolean = true
+): Map<String, String> {
+    val params = linkedMapOf(
+        "ep_id" to epId.toString(),
+        "cid" to cid.toString(),
+        "qn" to qn.toString(),
+        "fnval" to "4048",
+        "fnver" to "0",
+        "fourk" to "1",
+        "voice_balance" to "1",
+        "gaia_source" to "pre-load",
+        "isGaiaAvoided" to "true",
+        "web_location" to "1315873"
+    )
+    if (seasonId != null && seasonId > 0L) {
+        params["season_id"] = seasonId.toString()
+    }
+    if (tryLook) {
+        params["try_look"] = "1"
+    }
+    if (!bvid.isNullOrBlank()) {
+        params["bvid"] = bvid
+    }
+    return params
+}
+
+internal fun decodeBangumiPlayUrlPayload(
+    rawJson: String,
+    json: Json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
+): BangumiPlayUrlPayload {
+    val root = json.parseToJsonElement(rawJson).jsonObject
+    val code = root["code"]?.jsonPrimitive?.intOrNull ?: -1
+    val message = root["message"]?.jsonPrimitive?.contentOrNull.orEmpty()
+    val resultObject = root["result"]?.jsonObject
+    val videoInfoElement = resultObject?.get("video_info") ?: root["result"]
+    val videoInfo = videoInfoElement?.let {
+        json.decodeFromString<BangumiVideoInfo>(it.toString())
+    }
+    return BangumiPlayUrlPayload(
+        code = code,
+        message = message,
+        videoInfo = videoInfo
+    )
+}
 
 /**
  * 番剧/影视 Repository
@@ -169,17 +234,33 @@ object BangumiRepository {
      */
     suspend fun getBangumiPlayUrl(
         epId: Long,
-        qn: Int = 80
+        qn: Int = 80,
+        cid: Long = 0L,
+        bvid: String? = null,
+        seasonId: Long? = null
     ): Result<BangumiVideoInfo> = withContext(Dispatchers.IO) {
         try {
-            android.util.Log.d("BangumiRepo", "📡 getBangumiPlayUrl: epId=$epId, qn=$qn")
-            val response = api.getBangumiPlayUrl(epId = epId, qn = qn)
-            android.util.Log.d("BangumiRepo", "📡 getBangumiPlayUrl response: code=${response.code}, msg=${response.message}, hasResult=${response.result != null}")
+            android.util.Log.d("BangumiRepo", "📡 getBangumiPlayUrl: epId=$epId, cid=$cid, seasonId=$seasonId, qn=$qn")
+            val response = decodeBangumiPlayUrlPayload(
+                rawJson = api.getBangumiPlayUrl(
+                    buildBangumiPlayUrlParams(
+                        epId = epId,
+                        cid = cid,
+                        qn = qn,
+                        bvid = bvid,
+                        seasonId = seasonId
+                    )
+                ).string()
+            )
+            android.util.Log.d(
+                "BangumiRepo",
+                "📡 getBangumiPlayUrl response: code=${response.code}, msg=${response.message}, hasResult=${response.videoInfo != null}"
+            )
             
-            if (response.code == 0 && response.result != null) {
-                val result = response.result
+            if (response.code == 0 && response.videoInfo != null) {
+                val result = response.videoInfo
                 android.util.Log.d("BangumiRepo", "📹 PlayUrl: quality=${result.quality}, hasDash=${result.dash != null}, hasDurl=${!result.durl.isNullOrEmpty()}")
-                Result.success(response.result)
+                Result.success(result)
             } else {
                 val errorMsg = when (response.code) {
                     -10403 -> "需要大会员才能观看"

@@ -84,6 +84,8 @@ data class FormatInfo(
 @Serializable
 data class CodecInfo(
     @SerialName("codec_name") val codecName: String = "",
+    @SerialName("current_qn") val currentQn: Int = 0,
+    @SerialName("accept_qn") val acceptQn: List<Int>? = null,
     @SerialName("base_url") val baseUrl: String = "",
     val url_info: List<UrlInfo>? = null
 )

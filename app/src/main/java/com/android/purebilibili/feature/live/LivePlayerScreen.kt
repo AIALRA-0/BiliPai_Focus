@@ -55,6 +55,9 @@ import com.android.purebilibili.feature.live.components.LivePlayerControls
 import com.android.purebilibili.feature.video.player.shouldContinuePlaybackDuringPause
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 import com.android.purebilibili.feature.video.state.shouldResumeAfterLifecyclePause
+import com.android.purebilibili.feature.video.ui.overlay.shouldRebindFullscreenSurfaceOnResume
+import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
+import com.android.purebilibili.feature.video.ui.section.shouldKickPlaybackAfterSurfaceRecovery
 import com.android.purebilibili.feature.video.ui.overlay.LiveDanmakuOverlay
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -102,6 +105,7 @@ fun LivePlayerScreen(
     var isChatVisible by remember { mutableStateOf(true) } // 控制侧边栏显示
     var isPipRequested by remember { mutableStateOf(false) }
     var wasPlaybackActiveBeforePause by remember { mutableStateOf(false) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val showLivePipButton = remember { shouldShowLivePipButton(android.os.Build.VERSION.SDK_INT) }
     
     // Haze blur 状态 (用于侧边栏实时模糊)
@@ -208,9 +212,21 @@ fun LivePlayerScreen(
                     errorMessage = error.message ?: "unknown",
                     exception = error
                 )
-                if (error.cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
-                    val cause = error.cause as androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
-                    if (cause.responseCode == 403) viewModel.tryNextUrl()
+                val shouldFallback = when {
+                    error.cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException -> {
+                        val cause = error.cause as androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
+                        cause.responseCode in setOf(403, 404, 412, 500, 502, 503, 504)
+                    }
+                    error.errorCode in setOf(
+                        androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                        androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                        androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+                        androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+                    ) -> true
+                    else -> false
+                }
+                if (shouldFallback) {
+                    viewModel.tryNextUrl()
                 }
             }
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -320,8 +336,28 @@ fun LivePlayerScreen(
                         playbackState = exoPlayer.playbackState
                     )
                     Logger.d(TAG, "ON_RESUME live policy: shouldResume=$shouldResumePlayback")
+                    val view = playerViewRef
+                    if (shouldRebindFullscreenSurfaceOnResume(
+                            hasPlayerView = view != null,
+                            hasPlayer = true
+                        )
+                    ) {
+                        rebindPlayerSurfaceIfNeeded(
+                            playerView = view!!,
+                            player = exoPlayer
+                        )
+                        Logger.d(TAG, "🎬 ON_RESUME live surface rebind applied")
+                    }
                     if (shouldResumePlayback) {
                         exoPlayer.play()
+                    } else if (shouldKickPlaybackAfterSurfaceRecovery(
+                            playWhenReady = exoPlayer.playWhenReady,
+                            isPlaying = exoPlayer.isPlaying,
+                            playbackState = exoPlayer.playbackState
+                        )
+                    ) {
+                        exoPlayer.play()
+                        Logger.d(TAG, "▶️ ON_RESUME live playback kicked after surface recovery")
                     }
                     CrashReporter.markLivePlaybackStage("lifecycle_resume")
                 }
@@ -333,6 +369,7 @@ fun LivePlayerScreen(
         
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            playerViewRef = null
             // 📺 [修改] 仅当 MiniPlayerManager 未持有该播放器时才释放
             if (!miniPlayerManager.isPlayerManaged(exoPlayer)) {
                 exoPlayer.release()
@@ -385,6 +422,10 @@ fun LivePlayerScreen(
                         useController = false
                         layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     }
+                },
+                update = { playerView ->
+                    playerView.player = exoPlayer
+                    playerViewRef = playerView
                 },
                 modifier = Modifier.fillMaxSize()
             )

@@ -227,7 +227,12 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      */
     private suspend fun fetchPlayUrl(detail: BangumiDetail, episode: BangumiEpisode, episodeIndex: Int) {
         com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🎬 fetchPlayUrl: epId=${episode.id}, cid=${episode.cid}")
-        val playUrlResult = BangumiRepository.getBangumiPlayUrl(episode.id)
+        val playUrlResult = BangumiRepository.getBangumiPlayUrl(
+            epId = episode.id,
+            cid = episode.cid,
+            bvid = episode.bvid,
+            seasonId = detail.seasonId
+        )
         
         playUrlResult.onSuccess { playData ->
             com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "📡 PlayUrl success: quality=${playData.quality}, hasDash=${playData.dash != null}, hasDurl=${!playData.durl.isNullOrEmpty()}")
@@ -413,7 +418,13 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
         val currentPos = getPlayerCurrentPosition()
         
         viewModelScope.launch {
-            val playUrlResult = BangumiRepository.getBangumiPlayUrl(currentState.currentEpisode.id, qualityId)
+            val playUrlResult = BangumiRepository.getBangumiPlayUrl(
+                epId = currentState.currentEpisode.id,
+                qn = qualityId,
+                cid = currentState.currentEpisode.cid,
+                bvid = currentState.currentEpisode.bvid,
+                seasonId = currentState.seasonDetail.seasonId
+            )
             
             playUrlResult.onSuccess { playData ->
                 val videoUrl: String?

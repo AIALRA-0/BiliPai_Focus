@@ -15,3 +15,13 @@ internal fun resolveFullscreenPlayerPollingIntervalMs(
     if (showControls || isSeekingGesture) return 100L
     return if (isPlaying) 400L else 800L
 }
+
+internal fun shouldAutoHideFullscreenControls(
+    showControls: Boolean,
+    gestureMode: FullscreenGestureMode,
+    isPlaying: Boolean
+): Boolean {
+    return showControls &&
+        gestureMode == FullscreenGestureMode.None &&
+        isPlaying
+}

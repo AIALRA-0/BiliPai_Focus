@@ -51,6 +51,20 @@ class DanmakuPlaybackSyncPolicyTest {
             shouldSuppressFollowupDanmakuHardResync(
                 positionMs = 48_200L,
                 explicitSeekPositionMs = 48_000L,
+                explicitSeekStartedPlayback = true,
+                nowElapsedRealtimeMs = 8_800L,
+                explicitSeekElapsedRealtimeMs = 8_000L
+            )
+        )
+    }
+
+    @Test
+    fun `follow-up hard resync should not be suppressed when explicit seek resync left danmaku paused`() {
+        assertFalse(
+            shouldSuppressFollowupDanmakuHardResync(
+                positionMs = 48_200L,
+                explicitSeekPositionMs = 48_000L,
+                explicitSeekStartedPlayback = false,
                 nowElapsedRealtimeMs = 8_800L,
                 explicitSeekElapsedRealtimeMs = 8_000L
             )
@@ -63,6 +77,7 @@ class DanmakuPlaybackSyncPolicyTest {
             shouldSuppressFollowupDanmakuHardResync(
                 positionMs = 48_050L,
                 explicitSeekPositionMs = 48_000L,
+                explicitSeekStartedPlayback = true,
                 nowElapsedRealtimeMs = 12_000L,
                 explicitSeekElapsedRealtimeMs = 8_000L
             )
@@ -75,6 +90,7 @@ class DanmakuPlaybackSyncPolicyTest {
             shouldSuppressFollowupDanmakuHardResync(
                 positionMs = 54_000L,
                 explicitSeekPositionMs = 48_000L,
+                explicitSeekStartedPlayback = true,
                 nowElapsedRealtimeMs = 8_500L,
                 explicitSeekElapsedRealtimeMs = 8_000L
             )

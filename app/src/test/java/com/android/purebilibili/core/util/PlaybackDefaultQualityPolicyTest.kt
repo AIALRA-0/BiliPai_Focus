@@ -6,6 +6,45 @@ import org.junit.Test
 class PlaybackDefaultQualityPolicyTest {
 
     @Test
+    fun `auto highest should refresh vip status before resolving default quality when cache is stale`() {
+        assertEquals(
+            true,
+            shouldRefreshVipStatusBeforeResolvingDefaultQuality(
+                storedQuality = 64,
+                autoHighestEnabled = true,
+                isLoggedIn = true,
+                cachedIsVip = false
+            )
+        )
+    }
+
+    @Test
+    fun `premium stored quality should refresh vip status before resolving default quality when cache is stale`() {
+        assertEquals(
+            true,
+            shouldRefreshVipStatusBeforeResolvingDefaultQuality(
+                storedQuality = 116,
+                autoHighestEnabled = false,
+                isLoggedIn = true,
+                cachedIsVip = false
+            )
+        )
+    }
+
+    @Test
+    fun `standard quality should not refresh vip status before resolving default quality`() {
+        assertEquals(
+            false,
+            shouldRefreshVipStatusBeforeResolvingDefaultQuality(
+                storedQuality = 80,
+                autoHighestEnabled = false,
+                isLoggedIn = true,
+                cachedIsVip = false
+            )
+        )
+    }
+
+    @Test
     fun `auto highest preference should bypass network specific default quality normalization`() {
         listOf(
             Triple(false, false, "guest"),

@@ -41,6 +41,24 @@ class DanmakuKeywordFilterPolicyTest {
     }
 
     @Test
+    fun matchesDanmakuBlockRule_supportsUserHashRules() {
+        assertTrue(
+            matchesDanmakuBlockRule(
+                content = "普通弹幕",
+                rule = "uid:abc123",
+                userHash = "abc123"
+            )
+        )
+        assertTrue(
+            matchesDanmakuBlockRule(
+                content = "普通弹幕",
+                rule = "hash:xyz",
+                userHash = "XYZ"
+            )
+        )
+    }
+
+    @Test
     fun matchesDanmakuBlockRule_invalidRegexFallsBackToFalse() {
         assertFalse(matchesDanmakuBlockRule(content = "abc", rule = "regex:[a-"))
         assertFalse(matchesDanmakuBlockRule(content = "abc", rule = "/[a-/"))
@@ -64,5 +82,56 @@ class DanmakuKeywordFilterPolicyTest {
         )
 
         assertFalse(blocked)
+    }
+
+    @Test
+    fun partitionDanmakuBlockRules_groupsRulesForManagerTabs() {
+        val grouped = partitionDanmakuBlockRules(
+            listOf("剧透", "regex:第\\d+集", "uid:abc123", "hash:XYZ", "哈哈")
+        )
+
+        assertEquals(listOf("剧透", "哈哈"), grouped.keywordRules)
+        assertEquals(listOf("regex:第\\d+集"), grouped.regexRules)
+        assertEquals(listOf("uid:abc123", "hash:XYZ"), grouped.userHashRules)
+    }
+
+    @Test
+    fun mergeDanmakuBlockRuleSections_normalizesAndDeduplicatesRules() {
+        val merged = mergeDanmakuBlockRuleSections(
+            keywordRules = listOf("剧透", "  哈哈 "),
+            regexRules = listOf("regex:第\\d+集", "regex:第\\d+集"),
+            userHashRules = listOf("abc123", "uid:xyz")
+        )
+
+        assertEquals(
+            listOf("剧透", "哈哈", "regex:第\\d+集", "uid:abc123", "uid:xyz"),
+            merged
+        )
+    }
+
+    @Test
+    fun appendDanmakuKeywordBlockRule_appendsUniqueKeywordToRawRules() {
+        val updated = appendDanmakuKeywordBlockRule(
+            rawRules = "剧透\nregex:第\\d+集",
+            keyword = "哈哈"
+        )
+
+        assertEquals(
+            "剧透\nregex:第\\d+集\n哈哈",
+            updated
+        )
+    }
+
+    @Test
+    fun appendDanmakuUserHashBlockRule_normalizesPrefixAndDeduplicates() {
+        val updated = appendDanmakuUserHashBlockRule(
+            rawRules = "剧透\nuid:abc123",
+            userHash = "hash:abc123"
+        )
+
+        assertEquals(
+            "剧透\nuid:abc123",
+            updated
+        )
     }
 }

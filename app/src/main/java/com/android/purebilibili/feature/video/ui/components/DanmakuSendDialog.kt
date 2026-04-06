@@ -46,6 +46,12 @@ internal data class DanmakuSendDialogLayoutPolicy(
     val bottomLiftDp: Int
 )
 
+internal data class DanmakuSendSelectionState(
+    val color: Int,
+    val mode: Int,
+    val fontSize: Int
+)
+
 internal fun resolveDanmakuSendDialogLayoutPolicy(): DanmakuSendDialogLayoutPolicy {
     return DanmakuSendDialogLayoutPolicy(
         fillMaxWidthFraction = 1f,
@@ -61,6 +67,24 @@ internal fun resolveDanmakuDialogBottomLiftDp(
     return if (imeBottomPx > 0) 0 else defaultBottomLiftDp
 }
 
+internal fun resolveDanmakuSendSelectionState(
+    initialColor: Int,
+    initialMode: Int,
+    initialFontSize: Int,
+    colorOptions: List<Int>,
+    modeOptions: List<Int>,
+    fontSizeOptions: List<Int>
+): DanmakuSendSelectionState {
+    val fallbackColor = 16777215.takeIf { it in colorOptions } ?: colorOptions.firstOrNull() ?: 16777215
+    val fallbackMode = 1.takeIf { it in modeOptions } ?: modeOptions.firstOrNull() ?: 1
+    val fallbackFontSize = 25.takeIf { it in fontSizeOptions } ?: fontSizeOptions.firstOrNull() ?: 25
+    return DanmakuSendSelectionState(
+        color = initialColor.takeIf { it in colorOptions } ?: fallbackColor,
+        mode = initialMode.takeIf { it in modeOptions } ?: fallbackMode,
+        fontSize = initialFontSize.takeIf { it in fontSizeOptions } ?: fallbackFontSize
+    )
+}
+
 /**
  * 弹幕发送对话框
  *
@@ -72,6 +96,10 @@ fun DanmakuSendDialog(
     onDismiss: () -> Unit,
     onSend: (message: String, color: Int, mode: Int, fontSize: Int) -> Unit,
     isSending: Boolean = false,
+    initialColor: Int = 16777215,
+    initialMode: Int = 1,
+    initialFontSize: Int = 25,
+    onSelectionChange: (color: Int, mode: Int, fontSize: Int) -> Unit = { _, _, _ -> },
     topReservedSpace: Dp = 0.dp,
     modifier: Modifier = Modifier
 ) {
@@ -115,24 +143,37 @@ fun DanmakuSendDialog(
 
     // 状态
     var text by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableIntStateOf(16777215) }
-    var selectedMode by remember { mutableIntStateOf(1) }
-    var selectedFontSize by remember { mutableIntStateOf(25) }
+    var selectedColor by remember { mutableIntStateOf(initialColor) }
+    var selectedMode by remember { mutableIntStateOf(initialMode) }
+    var selectedFontSize by remember { mutableIntStateOf(initialFontSize) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     // 重置状态
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, initialColor, initialMode, initialFontSize) {
         if (visible) {
+            val selection = resolveDanmakuSendSelectionState(
+                initialColor = initialColor,
+                initialMode = initialMode,
+                initialFontSize = initialFontSize,
+                colorOptions = colorOptions.map { it.first },
+                modeOptions = modeOptions.map { it.first },
+                fontSizeOptions = fontSizeOptions.map { it.first }
+            )
             text = ""
-            selectedColor = 16777215
-            selectedMode = 1
-            selectedFontSize = 25
+            selectedColor = selection.color
+            selectedMode = selection.mode
+            selectedFontSize = selection.fontSize
             delay(100)
             focusRequester.requestFocus()
             keyboardController?.show()
         }
+    }
+
+    LaunchedEffect(selectedColor, selectedMode, selectedFontSize, visible) {
+        if (!visible) return@LaunchedEffect
+        onSelectionChange(selectedColor, selectedMode, selectedFontSize)
     }
 
     AnimatedVisibility(

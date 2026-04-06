@@ -86,6 +86,24 @@ internal fun resolveDanmakuActionForPlaybackSpeedChange(
     return if (abs(previousSpeed - newSpeed) > 0.01f) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
 }
 
+internal fun resolveDanmakuActionForForegroundRecovery(
+    playWhenReady: Boolean,
+    isPlayerPlaying: Boolean,
+    playbackState: Int,
+    danmakuEnabled: Boolean,
+    hasData: Boolean
+): DanmakuSyncAction {
+    if (!danmakuEnabled || !hasData) return DanmakuSyncAction.None
+    if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+        return DanmakuSyncAction.PauseOnly
+    }
+    return if (playWhenReady || isPlayerPlaying) {
+        DanmakuSyncAction.HardResync
+    } else {
+        DanmakuSyncAction.None
+    }
+}
+
 internal fun resolveDanmakuGuardAction(
     videoSpeed: Float,
     tickCount: Int,
@@ -116,12 +134,14 @@ internal inline fun executeExplicitDanmakuResync(
 internal fun shouldSuppressFollowupDanmakuHardResync(
     positionMs: Long,
     explicitSeekPositionMs: Long?,
+    explicitSeekStartedPlayback: Boolean = true,
     nowElapsedRealtimeMs: Long,
     explicitSeekElapsedRealtimeMs: Long?,
     positionToleranceMs: Long = EXPLICIT_SEEK_RESYNC_TOLERANCE_MS,
     suppressionWindowMs: Long = EXPLICIT_SEEK_RESYNC_WINDOW_MS
 ): Boolean {
     val seekPosition = explicitSeekPositionMs ?: return false
+    if (!explicitSeekStartedPlayback) return false
     val seekElapsedRealtimeMs = explicitSeekElapsedRealtimeMs ?: return false
     if (nowElapsedRealtimeMs < seekElapsedRealtimeMs) return false
     if (nowElapsedRealtimeMs - seekElapsedRealtimeMs > suppressionWindowMs) return false

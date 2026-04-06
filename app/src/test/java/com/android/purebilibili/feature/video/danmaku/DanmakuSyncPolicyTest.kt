@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.video.danmaku
 import androidx.media3.common.Player
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DanmakuSyncPolicyTest {
 
@@ -69,6 +71,48 @@ class DanmakuSyncPolicyTest {
     }
 
     @Test
+    fun foregroundRecovery_resyncsActivePlaybackSession() {
+        assertEquals(
+            DanmakuSyncAction.HardResync,
+            resolveDanmakuActionForForegroundRecovery(
+                playWhenReady = true,
+                isPlayerPlaying = false,
+                playbackState = Player.STATE_READY,
+                danmakuEnabled = true,
+                hasData = true
+            )
+        )
+    }
+
+    @Test
+    fun foregroundRecovery_staysIdleForPausedSession() {
+        assertEquals(
+            DanmakuSyncAction.None,
+            resolveDanmakuActionForForegroundRecovery(
+                playWhenReady = false,
+                isPlayerPlaying = false,
+                playbackState = Player.STATE_READY,
+                danmakuEnabled = true,
+                hasData = true
+            )
+        )
+    }
+
+    @Test
+    fun foregroundRecovery_pausesEndedPlayback() {
+        assertEquals(
+            DanmakuSyncAction.PauseOnly,
+            resolveDanmakuActionForForegroundRecovery(
+                playWhenReady = false,
+                isPlayerPlaying = false,
+                playbackState = Player.STATE_ENDED,
+                danmakuEnabled = true,
+                hasData = true
+            )
+        )
+    }
+
+    @Test
     fun driftGuard_staysIdleOnNormalTickButCorrectsPeriodicHealthChecks() {
         assertEquals(
             DanmakuSyncAction.None,
@@ -89,6 +133,30 @@ class DanmakuSyncPolicyTest {
                 danmakuEnabled = true,
                 isPlaying = true,
                 hasData = true
+            )
+        )
+    }
+
+    @Test
+    fun explicitSeekSuppression_blocksImmediateFollowupResyncNearTargetPosition() {
+        assertTrue(
+            shouldSuppressFollowupDanmakuHardResync(
+                positionMs = 10_220L,
+                explicitSeekPositionMs = 10_000L,
+                nowElapsedRealtimeMs = 5_900L,
+                explicitSeekElapsedRealtimeMs = 5_000L
+            )
+        )
+    }
+
+    @Test
+    fun explicitSeekSuppression_expiresAfterSuppressionWindow() {
+        assertFalse(
+            shouldSuppressFollowupDanmakuHardResync(
+                positionMs = 10_220L,
+                explicitSeekPositionMs = 10_000L,
+                nowElapsedRealtimeMs = 6_600L,
+                explicitSeekElapsedRealtimeMs = 5_000L
             )
         )
     }

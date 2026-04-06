@@ -73,8 +73,8 @@ class VisualEffectTogglePolicyTest {
     }
 
     @Test
-    fun `md3 preset always forces liquid glass off`() {
-        assertFalse(
+    fun `android native preset preserves liquid glass when enabled`() {
+        assertTrue(
             resolveEffectiveLiquidGlassEnabled(
                 requestedEnabled = true,
                 uiPreset = UiPreset.MD3
@@ -89,7 +89,7 @@ class VisualEffectTogglePolicyTest {
     }
 
     @Test
-    fun `ios preset preserves the stored liquid glass preference`() {
+    fun `ios preset also preserves the stored liquid glass preference`() {
         assertEquals(
             true,
             resolveEffectiveLiquidGlassEnabled(

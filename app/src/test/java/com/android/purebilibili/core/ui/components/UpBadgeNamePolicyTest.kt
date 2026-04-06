@@ -1,7 +1,9 @@
 package com.android.purebilibili.core.ui.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UpBadgeNamePolicyTest {
@@ -29,6 +31,28 @@ class UpBadgeNamePolicyTest {
         assertEquals(
             "视频 9",
             resolveUpStatsText(followerCount = null, videoCount = 9)
+        )
+    }
+
+    @Test
+    fun `up badge trailing slot stays reserved when requested`() {
+        assertTrue(
+            shouldRenderUpBadgeTrailingSlot(
+                hasTrailingContent = false,
+                reserveTrailingSlot = true
+            )
+        )
+        assertTrue(
+            shouldRenderUpBadgeTrailingSlot(
+                hasTrailingContent = true,
+                reserveTrailingSlot = false
+            )
+        )
+        assertFalse(
+            shouldRenderUpBadgeTrailingSlot(
+                hasTrailingContent = false,
+                reserveTrailingSlot = false
+            )
         )
     }
 }

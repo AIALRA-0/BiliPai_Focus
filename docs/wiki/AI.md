@@ -3,10 +3,16 @@
 Verified path map for repository reading.
 面向仓库阅读的已核实路径映射。
 
+Maintained periodically, but still subject to freshness limits; reference only.
+会定期维护，但仍存在时效性限制，仅供参考。
+
 ## Repository Paths / 仓库路径
 
 | Path | Verified Note |
 | --- | --- |
+| `../../AI.txt` | AI compatibility entry / AI 兼容入口 |
+| `../../llm.txt` | LLM compatibility entry / LLM 兼容入口 |
+| `../../llms.txt` | canonical AI / LLM entry / 主 AI / LLM 入口 |
 | `app/` | Android app module / Android 应用模块 |
 | `baselineprofile/` | baseline profile module / Baseline Profile 模块 |
 | `docs/wiki/` | wiki documents / Wiki 文档 |
@@ -40,6 +46,9 @@ Verified path map for repository reading.
 
 | Task | File |
 | --- | --- |
+| AI / LLM entry / AI / LLM 入口 | [`../../llms.txt`](../../llms.txt) |
+| AI compatibility alias / AI 兼容入口 | [`../../AI.txt`](../../AI.txt) |
+| LLM compatibility alias / LLM 兼容入口 | [`../../llm.txt`](../../llm.txt) |
 | project overview / 项目总览 | [`../../README.md`](../../README.md) / [`../../README_EN.md`](../../README_EN.md) |
 | release changes / 版本变更 | [`../../CHANGELOG.md`](../../CHANGELOG.md) |
 | architecture / 架构 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
@@ -66,12 +75,16 @@ Verified path map for repository reading.
 
 ## Document Freshness / 文档时效
 
-- `README.md` and `README_EN.md` header text: 2026-03-07 / v6.9.2
-- `README.md` 与 `README_EN.md` 页头：2026-03-07 / v6.9.2
-- `ARCHITECTURE.md`, `QA.md`, `RELEASE_WORKFLOW.md` header text: 2026-03-07
-- `ARCHITECTURE.md`、`QA.md`、`RELEASE_WORKFLOW.md` 页头：2026-03-07
-- `CHANGELOG.md`, `README.md`, and `README_EN.md` align with `versionName = "6.9.2"` in `app/build.gradle.kts`
-- `CHANGELOG.md`、`README.md` 与 `README_EN.md` 已与 `app/build.gradle.kts` 中的 `versionName = "6.9.2"` 对齐
+- `app/build.gradle.kts` currently declares `versionName = "7.5.0-focus.1"` and `versionCode = 160`
+- `app/build.gradle.kts` 当前声明 `versionName = "7.5.0-focus.1"`、`versionCode = 160`
+- `README.md` and `README_EN.md` header text: 2026-04-06 / v7.5.0-focus.1
+- `README.md` 与 `README_EN.md` 页头：2026-04-06 / v7.5.0
+- `docs/wiki/README.md` and `docs/wiki/AI.md` refreshed: 2026-04-06
+- `docs/wiki/README.md` 与 `docs/wiki/AI.md` 最近刷新：2026-04-06
+- `CHANGELOG.md`, `README.md`, and `README_EN.md` align with `versionName = "7.5.0"` in `app/build.gradle.kts`
+- `CHANGELOG.md`、`README.md` 与 `README_EN.md` 已与 `app/build.gradle.kts` 中的 `versionName = "7.5.0"` 对齐
+- `AI.txt` and `llm.txt` are compatibility aliases that mirror the current AI entry guidance
+- `AI.txt` 与 `llm.txt` 是当前 AI 入口说明的兼容别名
 - Use code and `CHANGELOG.md` to verify release-specific answers.
 - 涉及具体版本发布答案时，使用代码与 `CHANGELOG.md` 共同核验。
 

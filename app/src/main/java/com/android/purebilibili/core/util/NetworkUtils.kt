@@ -114,6 +114,16 @@ internal fun resolvePlaybackDefaultQualityId(
     )
 }
 
+internal fun shouldRefreshVipStatusBeforeResolvingDefaultQuality(
+    storedQuality: Int,
+    autoHighestEnabled: Boolean,
+    isLoggedIn: Boolean,
+    cachedIsVip: Boolean
+): Boolean {
+    if (!isLoggedIn || cachedIsVip) return false
+    return autoHighestEnabled || storedQuality > 80
+}
+
 internal fun resolvePlayableDefaultQualityId(
     storedQuality: Int,
     isLoggedIn: Boolean,

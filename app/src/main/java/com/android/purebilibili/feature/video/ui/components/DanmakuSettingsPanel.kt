@@ -3,7 +3,13 @@ package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.store.DanmakuSettingsScope
+import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
+import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
+import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
+import com.android.purebilibili.feature.video.danmaku.mergeDanmakuBlockRuleSections
+import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
+import com.android.purebilibili.feature.video.danmaku.partitionDanmakuBlockRules
 import com.android.purebilibili.feature.video.danmaku.resolveFaceOcclusionModuleUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,6 +54,45 @@ private const val FULLSCREEN_DANMAKU_PANEL_WIDTH_FRACTION = 0.25f
 private const val FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP = 220
 private const val WIDE_INLINE_DANMAKU_PANEL_MAX_WIDTH_DP = 640
 private const val WIDE_INLINE_DANMAKU_PANEL_SCREEN_WIDTH_DP = 840
+
+internal fun resolveDanmakuSyncStatusBadgeText(syncUiState: DanmakuCloudSyncUiState): String {
+    return when (syncUiState.status) {
+        DanmakuCloudSyncStatus.IDLE -> "未同步"
+        DanmakuCloudSyncStatus.PENDING -> "待同步"
+        DanmakuCloudSyncStatus.SYNCING -> "同步中"
+        DanmakuCloudSyncStatus.SUCCESS -> "已同步"
+        DanmakuCloudSyncStatus.FAILURE -> "同步失败"
+    }
+}
+
+internal fun shouldShowDanmakuSyncRetry(status: DanmakuCloudSyncStatus): Boolean {
+    return status == DanmakuCloudSyncStatus.FAILURE
+}
+
+internal fun resolveDanmakuBlockManagerSections(blockRulesRaw: String): DanmakuBlockRuleSections {
+    return partitionDanmakuBlockRules(parseDanmakuBlockRules(blockRulesRaw))
+}
+
+internal fun persistDanmakuBlockManagerSections(sections: DanmakuBlockRuleSections): String {
+    return mergeDanmakuBlockRuleSections(
+        keywordRules = sections.keywordRules,
+        regexRules = sections.regexRules,
+        userHashRules = sections.userHashRules
+    ).joinToString(separator = "\n")
+}
+
+internal fun resolveDanmakuBlockRuleCount(sections: DanmakuBlockRuleSections): Int {
+    return sections.keywordRules.size + sections.regexRules.size + sections.userHashRules.size
+}
+
+internal fun resolveDanmakuBlockRuleBadgeText(count: Int): String {
+    if (count <= 0) return "0"
+    return if (count > 99) "99+" else count.toString()
+}
+
+internal fun resolveDanmakuBlockManagerTabLabel(label: String, count: Int): String {
+    return if (count > 0) "$label $count" else label
+}
 
 enum class DanmakuSettingsPanelPresentation {
     CenteredDialog,
@@ -141,8 +186,17 @@ fun DanmakuSettingsPanel(
     settingsScope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT,
     opacity: Float,
     fontScale: Float,
+    showAdvancedSection: Boolean = false,
+    fontWeight: Int = 5,
     speed: Float,
     displayArea: Float = 0.5f,
+    strokeWidth: Float = 1.5f,
+    lineHeight: Float = 1.6f,
+    scrollDurationSeconds: Float = 7.0f,
+    staticDurationSeconds: Float = 4.0f,
+    scrollFixedVelocity: Boolean = false,
+    staticDanmakuToScroll: Boolean = false,
+    massiveMode: Boolean = false,
     mergeDuplicates: Boolean = true,
     allowScroll: Boolean = true,
     allowTop: Boolean = true,
@@ -151,15 +205,25 @@ fun DanmakuSettingsPanel(
     allowSpecial: Boolean = true,
     showBlockRuleEditor: Boolean = false,
     showSmartOcclusionSection: Boolean = true,
+    showSyncSection: Boolean = false,
     blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
     fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
+    syncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
     smartOcclusionDownloadProgress: Int? = null,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
+    onFontWeightChange: (Int) -> Unit = {},
     onSpeedChange: (Float) -> Unit,
     onDisplayAreaChange: (Float) -> Unit = {},
+    onStrokeWidthChange: (Float) -> Unit = {},
+    onLineHeightChange: (Float) -> Unit = {},
+    onScrollDurationSecondsChange: (Float) -> Unit = {},
+    onStaticDurationSecondsChange: (Float) -> Unit = {},
+    onScrollFixedVelocityChange: (Boolean) -> Unit = {},
+    onStaticDanmakuToScrollChange: (Boolean) -> Unit = {},
+    onMassiveModeChange: (Boolean) -> Unit = {},
     onMergeDuplicatesChange: (Boolean) -> Unit = {},
     onAllowScrollChange: (Boolean) -> Unit = {},
     onAllowTopChange: (Boolean) -> Unit = {},
@@ -169,9 +233,17 @@ fun DanmakuSettingsPanel(
     onBlockRulesRawChange: (String) -> Unit = {},
     onSmartOcclusionChange: (Boolean) -> Unit = {},
     onFullscreenWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
+    onSyncNowClick: () -> Unit = {},
     onSmartOcclusionDownloadClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
+    var showBlockManager by remember { mutableStateOf(false) }
+    val blockManagerSections = remember(blockRulesRaw) {
+        resolveDanmakuBlockManagerSections(blockRulesRaw)
+    }
+    val totalBlockRuleCount = remember(blockManagerSections) {
+        resolveDanmakuBlockRuleCount(blockManagerSections)
+    }
     val configuration = LocalConfiguration.current
     val viewConfiguration = LocalViewConfiguration.current
     val layoutPolicy = remember(
@@ -328,6 +400,83 @@ fun DanmakuSettingsPanel(
                     
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    if (showSyncSection) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = CardBackground,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "账号同步",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = syncUiState.message
+                                            ?: when (syncUiState.status) {
+                                                DanmakuCloudSyncStatus.SUCCESS -> "当前基础弹幕设置已同步到账号"
+                                                DanmakuCloudSyncStatus.SYNCING -> "正在同步当前弹幕设置"
+                                                DanmakuCloudSyncStatus.PENDING -> "检测到设置变更，等待同步"
+                                                DanmakuCloudSyncStatus.FAILURE -> "最近一次同步失败，可立即重试"
+                                                DanmakuCloudSyncStatus.IDLE -> "当前设备本地设置尚未触发同步"
+                                            },
+                                        color = Color.White.copy(0.6f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Text(
+                                            text = resolveDanmakuSyncStatusBadgeText(syncUiState),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = onSyncNowClick,
+                                        enabled = syncUiState.status != DanmakuCloudSyncStatus.SYNCING,
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(
+                                            text = if (shouldShowDanmakuSyncRetry(syncUiState.status)) {
+                                                "重试同步"
+                                            } else {
+                                                "立即同步"
+                                            },
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
                     // Settings Card
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -367,6 +516,85 @@ fun DanmakuSettingsPanel(
                                 },
                                 onValueChange = onSpeedChange
                             )
+                        }
+                    }
+
+                    if (showAdvancedSection) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = CardBackground,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                Text(
+                                    text = "高级渲染",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "更细的弹幕渲染控制",
+                                    color = Color.White.copy(0.5f),
+                                    fontSize = 11.sp
+                                )
+                                DanmakuSliderItem(
+                                    label = "字体粗细",
+                                    value = fontWeight.toFloat(),
+                                    valueRange = 1f..9f,
+                                    steps = 7,
+                                    displayValue = { "${it.roundToInt()}" },
+                                    onValueChange = { onFontWeightChange(it.roundToInt()) }
+                                )
+                                DanmakuSliderItem(
+                                    label = "描边粗细",
+                                    value = strokeWidth,
+                                    valueRange = 0f..4f,
+                                    displayValue = { String.format("%.1f", it) },
+                                    onValueChange = onStrokeWidthChange
+                                )
+                                DanmakuSliderItem(
+                                    label = "行高",
+                                    value = lineHeight,
+                                    valueRange = 0.8f..2.2f,
+                                    displayValue = { String.format("%.1f", it) },
+                                    onValueChange = onLineHeightChange
+                                )
+                                DanmakuSliderItem(
+                                    label = "滚动时长",
+                                    value = scrollDurationSeconds,
+                                    valueRange = 2f..15f,
+                                    displayValue = { "${it.roundToInt()}s" },
+                                    onValueChange = onScrollDurationSecondsChange
+                                )
+                                DanmakuSliderItem(
+                                    label = "静态停留",
+                                    value = staticDurationSeconds,
+                                    valueRange = 2f..15f,
+                                    displayValue = { "${it.roundToInt()}s" },
+                                    onValueChange = onStaticDurationSecondsChange
+                                )
+                                DanmakuFilterSwitchRow(
+                                    label = "固定滚动速度",
+                                    checked = scrollFixedVelocity,
+                                    onCheckedChange = onScrollFixedVelocityChange
+                                )
+                                DanmakuFilterSwitchRow(
+                                    label = "固定弹幕转滚动",
+                                    checked = staticDanmakuToScroll,
+                                    onCheckedChange = onStaticDanmakuToScrollChange
+                                )
+                                DanmakuFilterSwitchRow(
+                                    label = "海量弹幕模式",
+                                    checked = massiveMode,
+                                    onCheckedChange = onMassiveModeChange,
+                                    showDivider = false
+                                )
+                            }
                         }
                     }
                 
@@ -579,9 +807,45 @@ fun DanmakuSettingsPanel(
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium
                                 )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = { showBlockManager = true },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "屏蔽管理",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        if (totalBlockRuleCount > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(999.dp))
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = resolveDanmakuBlockRuleBadgeText(totalBlockRuleCount),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "每行一个，支持普通关键词与正则：regex:xxx / re:xxx / /xxx/",
+                                    text = if (totalBlockRuleCount > 0) {
+                                        "已维护 $totalBlockRuleCount 条规则，修改后立即生效"
+                                    } else {
+                                        "每行一个，支持关键词、正则与 UID(hash)：regex:xxx / re:xxx / /xxx/ / uid:xxx"
+                                    },
                                     color = Color.White.copy(0.5f),
                                     fontSize = 11.sp
                                 )
@@ -629,6 +893,234 @@ fun DanmakuSettingsPanel(
         }
     } else {
         overlayContent()
+    }
+
+    if (showBlockManager) {
+        DanmakuBlockManagerDialog(
+            rawRules = blockRulesRaw,
+            onRulesSave = { onBlockRulesRawChange(it) },
+            onDismiss = { showBlockManager = false }
+        )
+    }
+}
+
+@Composable
+private fun DanmakuBlockManagerDialog(
+    rawRules: String,
+    onRulesSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initialSections = remember(rawRules) {
+        resolveDanmakuBlockManagerSections(rawRules)
+    }
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var keywordRules by remember(rawRules) { mutableStateOf(initialSections.keywordRules) }
+    var regexRules by remember(rawRules) { mutableStateOf(initialSections.regexRules) }
+    var userHashRules by remember(rawRules) { mutableStateOf(initialSections.userHashRules) }
+    var inputValue by remember(selectedTabIndex) { mutableStateOf("") }
+
+    fun updateCurrentRules(transform: (List<String>) -> List<String>) {
+        when (selectedTabIndex) {
+            0 -> keywordRules = transform(keywordRules)
+            1 -> regexRules = transform(regexRules)
+            else -> userHashRules = transform(userHashRules)
+        }
+    }
+
+    val currentRules = when (selectedTabIndex) {
+        0 -> keywordRules
+        1 -> regexRules
+        else -> userHashRules
+    }
+    val tabCounts = remember(keywordRules, regexRules, userHashRules) {
+        listOf(keywordRules.size, regexRules.size, userHashRules.size)
+    }
+    val currentHint = when (selectedTabIndex) {
+        0 -> "例如：剧透"
+        1 -> "例如：regex:第\\d+集"
+        else -> "例如：uid:abc123 或 abc123"
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            color = PanelBackground,
+            shape = RoundedCornerShape(20.dp),
+            tonalElevation = 16.dp,
+            shadowElevation = 24.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "屏蔽管理",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "分类维护关键词、正则和 UID(hash) 规则",
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 11.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(Color.White.copy(0.1f), CircleShape)
+                    ) {
+                        Icon(
+                            CupertinoIcons.Default.Xmark,
+                            contentDescription = "关闭",
+                            tint = Color.White.copy(0.8f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("关键词", "正则", "UID(hash)").forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            label = {
+                                Text(
+                                    resolveDanmakuBlockManagerTabLabel(label, tabCounts[index]),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = inputValue,
+                    onValueChange = { inputValue = it },
+                    placeholder = {
+                        Text(
+                            text = currentHint,
+                            color = Color.White.copy(alpha = 0.35f),
+                            fontSize = 12.sp
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        focusedContainerColor = Color.White.copy(alpha = 0.02f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.02f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        onClick = {
+                            val candidate = inputValue.trim()
+                            if (candidate.isEmpty()) return@Button
+                            updateCurrentRules { (it + candidate).distinct() }
+                            inputValue = ""
+                        },
+                        enabled = inputValue.isNotBlank()
+                    ) {
+                        Text("添加")
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = CardBackground,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (currentRules.isEmpty()) {
+                            Text(
+                                text = "当前分类还没有规则",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 12.sp
+                            )
+                        } else {
+                            currentRules.forEachIndexed { index, rule ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = rule,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            updateCurrentRules { rules ->
+                                                rules.filterIndexed { currentIndex, _ ->
+                                                    currentIndex != index
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Text("删除")
+                                    }
+                                }
+                                if (index != currentRules.lastIndex) {
+                                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            onRulesSave(
+                                persistDanmakuBlockManagerSections(
+                                    DanmakuBlockRuleSections(
+                                        keywordRules = keywordRules,
+                                        regexRules = regexRules,
+                                        userHashRules = userHashRules
+                                    )
+                                )
+                            )
+                            onDismiss()
+                        }
+                    ) {
+                        Text("保存")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -772,6 +1264,7 @@ private fun DanmakuSliderItem(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
     displayValue: (Float) -> String,
     onValueChange: (Float) -> Unit
 ) {
@@ -812,6 +1305,7 @@ private fun DanmakuSliderItem(
                 onValueChange(newValue)
             },
             valueRange = valueRange,
+            steps = steps,
             colors = SliderDefaults.colors(
                 thumbColor = Color.White,
                 activeTrackColor = MaterialTheme.colorScheme.primary,

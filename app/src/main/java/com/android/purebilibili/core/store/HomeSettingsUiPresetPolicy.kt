@@ -6,7 +6,7 @@ internal fun resolveEffectiveLiquidGlassEnabled(
     requestedEnabled: Boolean,
     uiPreset: UiPreset
 ): Boolean {
-    return requestedEnabled && uiPreset != UiPreset.MD3
+    return requestedEnabled
 }
 
 internal fun resolveEffectiveHomeSettings(

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.data.model.response.UgcEpisode
@@ -27,6 +28,7 @@ import com.android.purebilibili.data.model.response.UgcSeason
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.XmarkCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.Play
+import kotlinx.coroutines.launch
 
 /**
  *  视频合集底部弹窗
@@ -41,9 +43,25 @@ fun CollectionSheet(
     onDismiss: () -> Unit,
     onEpisodeClick: (UgcEpisode) -> Unit
 ) {
-    val allEpisodes = ugcSeason.sections.flatMap { it.episodes }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val allEpisodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
+    val isSubscribed by SettingsManager
+        .isCollectionSubscribed(context, ugcSeason.id)
+        .collectAsState(initial = false)
+    val sortMode by SettingsManager
+        .getCollectionSortMode(context, ugcSeason.id)
+        .collectAsState(initial = CollectionSortMode.ASCENDING)
+    val sortedEpisodes = remember(allEpisodes, sortMode, currentBvid, currentCid) {
+        sortCollectionEpisodes(
+            episodes = allEpisodes,
+            sortMode = sortMode,
+            currentBvid = currentBvid,
+            currentCid = currentCid
+        )
+    }
     val currentIndex = resolveCurrentUgcEpisodeIndex(
-        episodes = allEpisodes,
+        episodes = sortedEpisodes,
         currentBvid = currentBvid,
         currentCid = currentCid
     )
@@ -81,7 +99,23 @@ fun CollectionSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            SettingsManager.toggleCollectionSubscription(context, ugcSeason.id)
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (isSubscribed) "已订阅" else "订阅",
+                        color = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
                 IconButton(onClick = onDismiss) {
                     Icon(
                         CupertinoIcons.Default.XmarkCircle,
@@ -91,6 +125,35 @@ fun CollectionSheet(
                 }
             }
             
+            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            val sortModes = remember { CollectionSortMode.entries.toList() }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "排序",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                iOSSegmentedControl(
+                    items = sortModes.map(::resolveCollectionSortLabel),
+                    selectedIndex = sortModes.indexOf(sortMode).coerceAtLeast(0),
+                    onScaleChange = { index ->
+                        sortModes.getOrNull(index)?.let { nextMode ->
+                            scope.launch {
+                                SettingsManager.setCollectionSortMode(context, ugcSeason.id, nextMode)
+                            }
+                        }
+                    }
+                )
+            }
+
             Divider(color = MaterialTheme.colorScheme.outlineVariant)
             
             //  视频列表
@@ -113,7 +176,7 @@ fun CollectionSheet(
                     .heightIn(max = 400.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                itemsIndexed(allEpisodes) { index, episode ->
+                itemsIndexed(sortedEpisodes) { index, episode ->
                     val isCurrentEpisode = isCurrentUgcEpisode(
                         currentBvid = currentBvid,
                         currentCid = currentCid,
@@ -144,7 +207,6 @@ fun CollectionSheet(
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             // 封面图
-                            val context = LocalContext.current
                             episode.arc?.pic?.let { pic ->
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)

@@ -42,6 +42,8 @@ import io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 // ═══════════════════════════════════════════════════
 //  Common iOS List Components (Reused across Settings, Profile, etc.)
@@ -229,13 +231,21 @@ fun IOSSectionTitle(title: String) {
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     Text(
         text = if (uiPreset == UiPreset.MD3) title else title.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = if (uiPreset == UiPreset.MD3) {
+            MaterialTheme.typography.titleSmall
+        } else {
+            MaterialTheme.typography.labelMedium
+        },
+        color = if (uiPreset == UiPreset.MD3) {
+            MiuixTheme.colorScheme.onSurfaceVariantSummary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
         letterSpacing = if (uiPreset == UiPreset.MD3) 0.sp else 0.5.sp,
         modifier = Modifier.padding(
-            start = visualSpec.sectionStartPaddingDp.dp,
-            top = 24.dp,
-            bottom = 8.dp
+            start = if (uiPreset == UiPreset.MD3) 20.dp else visualSpec.sectionStartPaddingDp.dp,
+            top = if (uiPreset == UiPreset.MD3) 28.dp else 24.dp,
+            bottom = if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
         )
     )
 }
@@ -258,12 +268,23 @@ fun IOSGroup(
     
     Surface(
         modifier = modifier
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = if (uiPreset == UiPreset.MD3) 12.dp else 16.dp)
             .clip(appliedShape),
-        color = containerColor,
+        color = if (uiPreset == UiPreset.MD3) {
+            MiuixTheme.colorScheme.surfaceContainer
+        } else {
+            containerColor
+        },
         shadowElevation = if (uiPreset == UiPreset.MD3) 0.dp else 0.dp,
-        tonalElevation = visualSpec.groupTonalElevationDp.dp,
-        border = border
+        tonalElevation = if (uiPreset == UiPreset.MD3) 0.dp else visualSpec.groupTonalElevationDp.dp,
+        border = if (uiPreset == UiPreset.MD3) {
+            androidx.compose.foundation.BorderStroke(
+                0.8.dp,
+                MiuixTheme.colorScheme.dividerLine.copy(alpha = 0.45f)
+            )
+        } else {
+            border
+        }
     ) {
         Column(content = content)
     }
@@ -286,7 +307,42 @@ fun IOSSwitchItem(
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
-    
+    if (uiPreset == UiPreset.MD3) {
+        BasicComponent(
+            title = title,
+            summary = subtitle,
+            enabled = enabled,
+            onClick = { onCheckedChange(!checked) },
+            insideMargin = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            startAction = {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(effectiveIconTint.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = effectiveIconTint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            },
+            endActions = {
+                AppAdaptiveSwitch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    enabled = enabled
+                )
+            }
+        )
+        return
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -334,6 +390,7 @@ fun IOSClickableItem(
     title: String,
     subtitle: String? = null,
     value: String? = null,
+    copyValue: String? = null,
     onClick: (() -> Unit)? = null,
     iconTint: Color = MaterialTheme.colorScheme.primary,
     textColor: Color = MaterialTheme.colorScheme.onSurface,
@@ -349,7 +406,82 @@ fun IOSClickableItem(
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
-    
+    if (uiPreset == UiPreset.MD3) {
+        BasicComponent(
+            title = title,
+            summary = subtitle,
+            onClick = onClick,
+            insideMargin = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            startAction = {
+                when {
+                    icon != null -> {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(effectiveIconTint.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = effectiveIconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    iconPainter != null -> {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (effectiveIconTint == Color.Unspecified) {
+                                        Color.Transparent
+                                    } else {
+                                        effectiveIconTint.copy(alpha = 0.16f)
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = iconPainter,
+                                contentDescription = null,
+                                tint = effectiveIconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            endActions = {
+                if (!value.isNullOrBlank()) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = if (enableCopy) {
+                            Modifier.copyOnLongPress(copyValue ?: value, title)
+                        } else {
+                            Modifier
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                if (onClick != null && showChevron) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        )
+        return
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -451,7 +583,11 @@ fun IOSClickableItem(
                         color = valueColor,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = if (enableCopy) Modifier.copyOnLongPress(value, title) else Modifier
+                        modifier = if (enableCopy) {
+                            Modifier.copyOnLongPress(copyValue ?: value, title)
+                        } else {
+                            Modifier
+                        }
                     )
                 }
                 if (onClick != null && showChevron) {

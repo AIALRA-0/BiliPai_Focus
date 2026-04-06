@@ -2,6 +2,11 @@ name: Build
 
 on:
   push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
   workflow_dispatch:
     inputs:
       build_type:
@@ -15,7 +20,7 @@ on:
           - both
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -31,6 +36,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BUILD_TYPE="${{ github.event.inputs.build_type }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            BUILD_TYPE="release"
           else
             BUILD_TYPE="both"
           fi
@@ -60,40 +67,34 @@ jobs:
             echo "FCM secret not configured, continuing without google-services.json"
           fi
 
-      - name: Run unit tests
-        run: ./gradlew --no-parallel --max-workers=2 :app:testDebugUnitTest
-
-      - name: Run lint
-        run: ./gradlew --no-parallel --max-workers=2 :app:lintDebug
-
-      - name: Assemble Debug APK
-        if: steps.build_type.outputs.value != 'release'
-        run: ./gradlew --no-parallel --max-workers=2 :app:assembleDebug
-
-      - name: Assemble Release APK
-        if: steps.build_type.outputs.value != 'debug'
-        run: ./gradlew --no-parallel --max-workers=2 :app:assembleRelease
-
-      - name: Summarize assembled variants
+      - name: Run Tests and Build
         shell: bash
+        env:
+          BILI_BUILD_COMMIT_SHA: ${{ github.sha }}
+          BILI_BUILD_GIT_REF: ${{ github.ref }}
+          BILI_BUILD_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          BILI_BUILD_WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BILI_BUILD_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
         run: |
-          case "${{ steps.build_type.outputs.value }}" in
-            debug)
-              echo "Assembled debug APK only"
-              ;;
-            release)
-              echo "Assembled release APK only"
-              ;;
-            both)
-              echo "Assembled debug and release APKs"
-              ;;
-            *)
-              echo "Unknown build type: ${{ steps.build_type.outputs.value }}"
-              exit 1
-              ;;
-          esac
+          COMMON_ARGS=(
+            "-Pbili.build.commitSha=${BILI_BUILD_COMMIT_SHA}"
+            "-Pbili.build.gitRef=${BILI_BUILD_GIT_REF}"
+            "-Pbili.build.workflowRunId=${BILI_BUILD_WORKFLOW_RUN_ID}"
+            "-Pbili.build.workflowRunUrl=${BILI_BUILD_WORKFLOW_RUN_URL}"
+            "-Pbili.build.releaseTag=${BILI_BUILD_RELEASE_TAG}"
+          )
 
-      - name: Collect APK artifacts
+          ./gradlew --no-parallel --max-workers=2 "${COMMON_ARGS[@]}" :app:testDebugUnitTest
+
+          if [ "${{ steps.build_type.outputs.value }}" != "release" ]; then
+            ./gradlew --no-parallel --max-workers=2 "${COMMON_ARGS[@]}" :app:assembleDebug
+          fi
+
+          if [ "${{ steps.build_type.outputs.value }}" != "debug" ]; then
+            ./gradlew --no-parallel --max-workers=2 "${COMMON_ARGS[@]}" :app:assembleRelease
+          fi
+
+      - name: Collect APK Artifacts
         id: apks
         shell: bash
         run: |
@@ -112,7 +113,29 @@ jobs:
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BiliPai-${{ steps.build_type.outputs.value }}
+          name: BiliPai-Focus-${{ steps.build_type.outputs.value }}
           path: ${{ steps.apks.outputs.files }}
           retention-days: 7
           if-no-files-found: error
+
+      - name: Publish GitHub Release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          RELEASE_APK=$(find "${{ github.workspace }}/app/build/outputs/apk/release" -name "*.apk" -type f | sort | head -n 1)
+          if [ -z "${RELEASE_APK}" ]; then
+            echo "Release APK not found"
+            exit 1
+          fi
+
+          gh release view "${RELEASE_TAG}" --json isDraft >/dev/null 2>&1 || \
+            gh release create "${RELEASE_TAG}" \
+              --draft \
+              --title "${RELEASE_TAG}" \
+              --generate-notes
+
+          gh release upload "${RELEASE_TAG}" "${RELEASE_APK}" --clobber
+          gh release edit "${RELEASE_TAG}" --draft=false

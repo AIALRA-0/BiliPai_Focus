@@ -38,6 +38,13 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.math.abs
 
+internal fun resolveDanmakuClickUserHash(rawUserHash: String): String = rawUserHash.trim()
+
+internal fun resolveDanmakuClickIsSelf(userHash: String, currentMid: Long): Boolean {
+    if (currentMid <= 0L) return false
+    return userHash.toLongOrNull() == currentMid
+}
+
 /**
  * 弹幕管理器（单例模式）
  * 
@@ -106,7 +113,7 @@ class DanmakuManager private constructor(
     // 弹幕状态
     private var isPlaying = false
     private var isLoading = false
-    private var danmakuClickListener: ((String, Long, Long, Boolean) -> Unit)? = null
+    private var danmakuClickListener: ((String, Long, String, Boolean) -> Unit)? = null
     
     // 缓存解析后的弹幕数据（横竖屏切换时复用）
     private var cachedDanmakuList: List<DanmakuData>? = null
@@ -119,6 +126,7 @@ class DanmakuManager private constructor(
     private var cachedCid: Long = 0L
     private var lastExplicitSeekPositionMs: Long? = null
     private var lastExplicitSeekElapsedRealtimeMs: Long? = null
+    private var lastExplicitSeekStartedPlayback: Boolean? = null
     
     //  [新增] 记录原始弹幕滚动时间（用于倍速同步）
     private var originalMoveTime: Long = 8000L  // 默认 8 秒
@@ -158,6 +166,13 @@ class DanmakuManager private constructor(
             config.fontScale = value
             applyConfigToController("fontScale")
         }
+
+    var fontWeight: Int
+        get() = config.fontWeight
+        set(value) {
+            config.fontWeight = value
+            applyConfigToController("fontWeight")
+        }
     
     var speedFactor: Float
         get() = config.speedFactor
@@ -165,12 +180,61 @@ class DanmakuManager private constructor(
             config.speedFactor = value
             applyConfigToController("speedFactor")
         }
+
+    var scrollDurationSeconds: Float
+        get() = config.scrollDurationSeconds
+        set(value) {
+            config.scrollDurationSeconds = value
+            applyConfigToController("scrollDuration")
+        }
     
     var displayArea: Float
         get() = config.displayAreaRatio
         set(value) {
             config.displayAreaRatio = value
             applyConfigToController("displayArea")
+        }
+
+    var strokeWidth: Float
+        get() = config.strokeWidth
+        set(value) {
+            config.strokeWidth = value
+            applyConfigToController("strokeWidth")
+        }
+
+    var lineHeight: Float
+        get() = config.lineHeight
+        set(value) {
+            config.lineHeight = value
+            applyConfigToController("lineHeight")
+        }
+
+    var staticDurationSeconds: Float
+        get() = config.staticDurationSeconds
+        set(value) {
+            config.staticDurationSeconds = value
+            applyConfigToController("staticDuration")
+        }
+
+    var scrollFixedVelocity: Boolean
+        get() = config.scrollFixedVelocity
+        set(value) {
+            config.scrollFixedVelocity = value
+            applyConfigToController("scrollFixedVelocity")
+        }
+
+    var staticDanmakuToScroll: Boolean
+        get() = config.staticDanmakuToScroll
+        set(value) {
+            config.staticDanmakuToScroll = value
+            applyConfigToController("staticDanmakuToScroll")
+        }
+
+    var massiveMode: Boolean
+        get() = config.massiveMode
+        set(value) {
+            config.massiveMode = value
+            applyConfigToController("massiveMode")
         }
 
     var allowScrollDanmaku: Boolean
@@ -264,8 +328,9 @@ class DanmakuManager private constructor(
             applyDanmakuPluginPipeline(sourceStandard, sourceAdvanced)
         val (filteredStandardList, filteredAdvancedList) =
             applyDanmakuTypeFilters(pluginFilteredStandardList, pluginFilteredAdvancedList)
+        val projectedStandardList = projectStandardDanmakuForRender(filteredStandardList)
 
-        if (filteredStandardList.isEmpty() && filteredAdvancedList.isEmpty()) {
+        if (projectedStandardList.isEmpty() && filteredAdvancedList.isEmpty()) {
             cachedDanmakuList = emptyList()
             rawDanmakuList = emptyList()
             _advancedDanmakuFlow.value = emptyList()
@@ -273,10 +338,10 @@ class DanmakuManager private constructor(
             return false
         }
 
-        rawDanmakuList = filteredStandardList
+        rawDanmakuList = projectedStandardList
 
         if (config.mergeDuplicates) {
-            val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(filteredStandardList)
+            val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(projectedStandardList)
             cachedDanmakuList = mergedStandard
             val settings = currentTypeFilterSettings()
             val visibleMergedAdvanced = mergedAdvanced.filter { merged ->
@@ -298,6 +363,26 @@ class DanmakuManager private constructor(
             " Danmaku cache rebuilt ($reason): standard=${cachedDanmakuList?.size ?: 0}, advanced=${_advancedDanmakuFlow.value.size}"
         )
         return true
+    }
+
+    private fun projectStandardDanmakuForRender(
+        standardDanmakuList: List<DanmakuData>
+    ): List<DanmakuData> {
+        if (standardDanmakuList.isEmpty()) return standardDanmakuList
+        return standardDanmakuList.map { data ->
+            val textData = data as? TextData ?: return@map data
+            val projectedLayerType = resolveDanmakuRenderLayerType(
+                type = mapLayerTypeToDanmakuType(textData.layerType),
+                staticDanmakuToScroll = config.staticDanmakuToScroll
+            )
+            if (projectedLayerType == textData.layerType) {
+                data
+            } else {
+                textData.copyForPluginPipeline().also { copied ->
+                    copied.layerType = projectedLayerType
+                }
+            }
+        }
     }
 
     private fun applyCachedDanmakuToController(reason: String) {
@@ -345,20 +430,23 @@ class DanmakuManager private constructor(
         Log.w(TAG, " Resynced danmaku timeline ($reason) at ${positionMs}ms, play=$shouldPlay")
     }
 
-    private fun markExplicitSeekResync(positionMs: Long) {
+    private fun markExplicitSeekResync(positionMs: Long, startedPlayback: Boolean) {
         lastExplicitSeekPositionMs = positionMs
         lastExplicitSeekElapsedRealtimeMs = SystemClock.elapsedRealtime()
+        lastExplicitSeekStartedPlayback = startedPlayback
     }
 
     private fun clearExplicitSeekResyncMarker() {
         lastExplicitSeekPositionMs = null
         lastExplicitSeekElapsedRealtimeMs = null
+        lastExplicitSeekStartedPlayback = null
     }
 
     private fun shouldSuppressFollowupHardResync(positionMs: Long): Boolean {
         return shouldSuppressFollowupDanmakuHardResync(
             positionMs = positionMs,
             explicitSeekPositionMs = lastExplicitSeekPositionMs,
+            explicitSeekStartedPlayback = lastExplicitSeekStartedPlayback ?: true,
             nowElapsedRealtimeMs = SystemClock.elapsedRealtime(),
             explicitSeekElapsedRealtimeMs = lastExplicitSeekElapsedRealtimeMs
         )
@@ -491,6 +579,7 @@ class DanmakuManager private constructor(
         var blockedByKeywordStandardCount = 0
         val filteredStandard = standardDanmakuList.filter { data ->
             val textData = data as? TextData ?: return@filter true
+            val weighted = textData as? WeightedTextData
             val danmakuType = mapLayerTypeToDanmakuType(textData.layerType)
             val color = textData.textColor ?: 0x00FFFFFF
             val typeVisible = shouldDisplayStandardDanmaku(
@@ -505,7 +594,8 @@ class DanmakuManager private constructor(
             val content = textData.text.orEmpty()
             val blockedByKeyword = shouldBlockDanmakuByMatchers(
                 content = content,
-                matchers = blockedRuleMatchers
+                matchers = blockedRuleMatchers,
+                userHash = weighted?.userHash.orEmpty()
             )
             if (blockedByKeyword) {
                 blockedByKeywordStandardCount++
@@ -656,10 +746,11 @@ class DanmakuManager private constructor(
         else -> 1
     }
 
-    private fun mapDanmakuTypeToLayerType(type: Int): Int = when (type) {
-        4 -> LAYER_TYPE_BOTTOM_CENTER
-        5 -> LAYER_TYPE_TOP_CENTER
-        else -> LAYER_TYPE_SCROLL
+    private fun mapDanmakuTypeToLayerType(type: Int): Int {
+        return resolveDanmakuRenderLayerType(
+            type = type,
+            staticDanmakuToScroll = config.staticDanmakuToScroll
+        )
     }
 
     private fun parseAdvancedDanmakuId(rawId: String): Long {
@@ -675,8 +766,16 @@ class DanmakuManager private constructor(
     fun updateSettings(
         opacity: Float = this.opacity,
         fontScale: Float = this.fontScale,
+        fontWeight: Int = this.fontWeight,
         speed: Float = this.speedFactor,
+        scrollDurationSeconds: Float = this.scrollDurationSeconds,
         displayArea: Float = this.displayArea,
+        strokeWidth: Float = this.strokeWidth,
+        lineHeight: Float = this.lineHeight,
+        staticDurationSeconds: Float = this.staticDurationSeconds,
+        scrollFixedVelocity: Boolean = this.scrollFixedVelocity,
+        staticDanmakuToScroll: Boolean = this.staticDanmakuToScroll,
+        massiveMode: Boolean = this.massiveMode,
         mergeDuplicates: Boolean = config.mergeDuplicates,
         allowScroll: Boolean = config.allowScroll,
         allowTop: Boolean = config.allowTop,
@@ -699,8 +798,16 @@ class DanmakuManager private constructor(
         
         config.opacity = opacity
         config.fontScale = fontScale
+        config.fontWeight = fontWeight
         config.speedFactor = speed
+        config.scrollDurationSeconds = scrollDurationSeconds
         config.displayAreaRatio = displayArea
+        config.strokeWidth = strokeWidth
+        config.lineHeight = lineHeight
+        config.staticDurationSeconds = staticDurationSeconds
+        config.scrollFixedVelocity = scrollFixedVelocity
+        config.staticDanmakuToScroll = staticDanmakuToScroll
+        config.massiveMode = massiveMode
         config.mergeDuplicates = mergeDuplicates
         config.allowScroll = allowScroll
         config.allowTop = allowTop
@@ -745,8 +852,9 @@ class DanmakuManager private constructor(
      */
     private fun applyConfigToController(reason: String) {
         controller?.let { ctrl ->
+            val viewWidth = danmakuView?.width ?: 0
             val viewHeight = danmakuView?.height ?: 0
-            config.applyTo(ctrl.config, viewHeight)
+            config.applyTo(ctrl.config, viewWidth, viewHeight)
 
             // 记录设置后的基准滚动时间，供倍速同步使用
             originalMoveTime = ctrl.config.scroll.moveTime
@@ -758,9 +866,9 @@ class DanmakuManager private constructor(
 
             //  [关键修复] fontScale/displayArea/viewHeight 改变时，需要重新设置弹幕数据
             // 因为引擎的 config.text.size 只对新弹幕生效，已显示的弹幕不会更新
-            if (reason == "fontScale" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed" || reason == "filter_changed" || reason == "smart_occlusion_toggle") {
+            if (reason == "fontScale" || reason == "fontWeight" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed" || reason == "filter_changed" || reason == "smart_occlusion_toggle" || reason == "strokeWidth" || reason == "lineHeight" || reason == "staticDuration" || reason == "scrollDuration" || reason == "scrollFixedVelocity" || reason == "staticDanmakuToScroll" || reason == "massiveMode") {
                 // 如果是合并状态改变，需要重新计算 cachedList
-                if (reason == "merge_changed" || reason == "filter_changed") {
+                if (reason == "merge_changed" || reason == "filter_changed" || reason == "staticDanmakuToScroll") {
                     rebuildDanmakuCacheFromSource(reason)
                 }
             
@@ -781,7 +889,10 @@ class DanmakuManager private constructor(
             Log.w(
                 TAG,
                 " Config applied ($reason): opacity=${config.opacity}, fontScale=${config.fontScale}, " +
-                    "speed=${config.speedFactor}, area=${config.displayAreaRatio}, " +
+                    "fontWeight=${config.fontWeight}, speed=${config.speedFactor}, scrollSeconds=${config.scrollDurationSeconds}, " +
+                    "area=${config.displayAreaRatio}, strokeWidth=${config.strokeWidth}, lineHeight=${config.lineHeight}, " +
+                    "staticSeconds=${config.staticDurationSeconds}, fixedVelocity=${config.scrollFixedVelocity}, " +
+                    "massiveMode=${config.massiveMode}, staticToScroll=${config.staticDanmakuToScroll}, " +
                     "smartOcclusion=${config.smartOcclusionEnabled}, band=${config.safeBandTopRatio}-${config.safeBandBottomRatio}, " +
                     "allowScroll=${config.allowScroll}, allowTop=${config.allowTop}, allowBottom=${config.allowBottom}, " +
                     "allowColorful=${config.allowColorful}, allowSpecial=${config.allowSpecial}, " +
@@ -1403,18 +1514,50 @@ class DanmakuManager private constructor(
      */
     fun seekTo(positionMs: Long) {
         Log.w(TAG, "⏭️ seekTo($positionMs) - refreshing danmaku")
-        markExplicitSeekResync(positionMs)
+        val shouldPlay = player?.isPlaying == true
+        markExplicitSeekResync(positionMs, startedPlayback = shouldPlay)
         cachedDanmakuList?.let { list ->
             resyncDanmakuTimeline(
                 list = list,
                 positionMs = positionMs,
-                shouldPlay = player?.isPlaying == true,
+                shouldPlay = shouldPlay,
                 reason = "manual_seek"
             )
             Log.w(TAG, "⏭️ Danmaku restarted at ${positionMs}ms")
         } ?: run {
             controller?.clear()
             Log.w(TAG, "⏭️ No cached danmaku, just cleared")
+        }
+    }
+
+    fun recoverAfterForeground(positionMs: Long, playWhenReady: Boolean, playbackState: Int) {
+        when (
+            resolveDanmakuActionForForegroundRecovery(
+                playWhenReady = playWhenReady,
+                isPlayerPlaying = player?.isPlaying == true,
+                playbackState = playbackState,
+                danmakuEnabled = config.isEnabled,
+                hasData = cachedDanmakuList != null
+            )
+        ) {
+            DanmakuSyncAction.HardResync -> {
+                cachedDanmakuList?.let { list ->
+                    resyncDanmakuTimeline(
+                        list = list,
+                        positionMs = positionMs,
+                        shouldPlay = playWhenReady || player?.isPlaying == true,
+                        reason = "foreground_recovery"
+                    )
+                    Log.w(TAG, "🌅 Danmaku foreground recovery resynced at ${positionMs}ms")
+                }
+            }
+            DanmakuSyncAction.PauseOnly -> {
+                controller?.pause()
+                isPlaying = false
+                stopDriftSync()
+                Log.w(TAG, "🌅 Danmaku foreground recovery kept paused at end state")
+            }
+            DanmakuSyncAction.None -> Unit
         }
     }
     
@@ -1485,11 +1628,10 @@ class DanmakuManager private constructor(
             }
             
             // 设置弹幕类型 - 使用库的常量
-            layerType = when (mode) {
-                4 -> com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_BOTTOM_CENTER  // 底部
-                5 -> com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER     // 顶部
-                else -> com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL      // 滚动 (默认)
-            }
+            layerType = resolveDanmakuRenderLayerType(
+                type = mode,
+                staticDanmakuToScroll = config.staticDanmakuToScroll
+            )
         }
         
         // 添加到缓存列表并排序
@@ -1562,9 +1704,9 @@ class DanmakuManager private constructor(
     /**
      * 设置弹幕点击监听器
      *
-     * @param listener 回调函数，参数为 (text, dmid, uid, isSelf)
+     * @param listener 回调函数，参数为 (text, dmid, userHash, isSelf)
      */
-    fun setOnDanmakuClickListener(listener: (String, Long, Long, Boolean) -> Unit) {
+    fun setOnDanmakuClickListener(listener: (String, Long, String, Boolean) -> Unit) {
         danmakuClickListener = listener
         applyDanmakuClickListener()
     }
@@ -1583,10 +1725,10 @@ class DanmakuManager private constructor(
                         val weighted = textData as? WeightedTextData
                         val text = textData?.text.orEmpty()
                         val dmid = weighted?.danmakuId ?: 0L
-                        val uid = weighted?.userHash?.toLongOrNull() ?: 0L
+                        val userHash = resolveDanmakuClickUserHash(weighted?.userHash.orEmpty())
                         val currentMid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
-                        val isSelf = uid != 0L && uid == currentMid
-                        callback(text, dmid, uid, isSelf)
+                        val isSelf = resolveDanmakuClickIsSelf(userHash = userHash, currentMid = currentMid)
+                        callback(text, dmid, userHash, isSelf)
                     }
                 }
                 Log.d(TAG, "setOnDanmakuClickListener set (DanmakuRenderEngine)")
@@ -1644,4 +1786,18 @@ fun rememberDanmakuManager(): DanmakuManager {
     }
     
     return manager
+}
+
+internal fun resolveDanmakuRenderLayerType(
+    type: Int,
+    staticDanmakuToScroll: Boolean
+): Int {
+    if (staticDanmakuToScroll && (type == 4 || type == 5)) {
+        return LAYER_TYPE_SCROLL
+    }
+    return when (type) {
+        4 -> LAYER_TYPE_BOTTOM_CENTER
+        5 -> LAYER_TYPE_TOP_CENTER
+        else -> LAYER_TYPE_SCROLL
+    }
 }

@@ -27,6 +27,8 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+internal const val BANGUMI_PLAY_URL_PATH = "pgc/player/web/v2/playurl"
+
 /**
  * Bilibili 主 API 接口
  * 
@@ -906,6 +908,18 @@ interface DynamicApi {
 
 //  [新增] UP主空间 API
 interface SpaceApi {
+    @GET("https://app.bilibili.com/x/v2/space")
+    suspend fun getSpaceAggregate(
+        @Query("vmid") mid: Long,
+        @Query("build") build: Int = 8430300,
+        @Query("version") version: String = "8.43.0",
+        @Query("c_locale") cLocale: String = "zh_CN",
+        @Query("channel") channel: String = "master",
+        @Query("mobi_app") mobiApp: String = "android",
+        @Query("platform") platform: String = "android",
+        @Query("s_locale") sLocale: String = "zh_CN"
+    ): com.android.purebilibili.data.model.response.SpaceAggregateResponse
+
     // 获取用户详细信息 (需要 WBI 签名)
     @GET("x/space/wbi/acc/info")
     suspend fun getSpaceInfo(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceInfoResponse
@@ -1033,15 +1047,11 @@ interface BangumiApi {
         @Query("ep_id") epId: Long? = null
     ): ResponseBody
     
-    // 番剧播放地址 - 使用标准接口
-    @GET("pgc/player/web/playurl")
+    // 番剧播放地址 - PiliPlus parity path
+    @GET(BANGUMI_PLAY_URL_PATH)
     suspend fun getBangumiPlayUrl(
-        @Query("ep_id") epId: Long,
-        @Query("qn") qn: Int = 80,
-        @Query("fnval") fnval: Int = 4048,
-        @Query("fnver") fnver: Int = 0,
-        @Query("fourk") fourk: Int = 1
-    ): com.android.purebilibili.data.model.response.BangumiPlayUrlResponse
+        @QueryMap params: Map<String, String>
+    ): ResponseBody
     
     // 追番/追剧
     @retrofit2.http.FormUrlEncoded

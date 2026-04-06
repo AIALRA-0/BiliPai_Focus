@@ -34,11 +34,23 @@ class DampedDragAnimationState(
     /** 当前动画值（浮点索引，用于平滑过渡） */
     private val animatable = Animatable(initialIndex.toFloat())
     
+    /** 按压进度动画 (0f = 释放, 1f = 按下) — 参考 LiquidBottomTabs */
+    private val pressProgressAnimation = Animatable(0f, 0.001f)
+    
+    /** 累计拖拽偏移量 (px) — 用于面板偏移效果 */
+    private val offsetAnimation = Animatable(0f)
+    
     /** 当前动画位置 */
     val value: Float get() = animatable.value
     
     /** 当前速度（用于形变效果） */
     val velocity: Float get() = animatable.velocity
+    
+    /** 按压进度 (0f..1f) */
+    val pressProgress: Float get() = pressProgressAnimation.value
+    
+    /** 累计拖拽偏移量 (px) */
+    val dragOffset: Float get() = offsetAnimation.value
     
     /** 是否正在拖拽 */
     var isDragging by mutableStateOf(false)
@@ -60,7 +72,13 @@ class DampedDragAnimationState(
      * @param itemWidthPx 单个项目宽度（像素）
      */
     fun onDrag(dragAmountPx: Float, itemWidthPx: Float) {
-        if (!isDragging) isDragging = true
+        if (!isDragging) {
+            isDragging = true
+            // 按压缩放 — 参考 LiquidBottomTabs press()
+            scope.launch {
+                pressProgressAnimation.animateTo(1f, spring(1f, 1000f, 0.001f))
+            }
+        }
         
         // [优化] 橡皮筋阻尼物理：
         val currentValue = animatable.value
@@ -77,6 +95,10 @@ class DampedDragAnimationState(
         
         scope.launch {
             animatable.snapTo(newValue)
+        }
+        // 累计偏移量 — 用于面板偏移
+        scope.launch {
+            offsetAnimation.snapTo(offsetAnimation.value + dragAmountPx)
         }
     }
     
@@ -126,26 +148,24 @@ class DampedDragAnimationState(
         
         targetIndex = nextIndex.coerceIn(0, itemCount - 1)
         
-        // 如果虽然有速度，但没有跨过阈值且距离目标太远，可能需要额外逻辑 (Optional)
-        // 目前 roundToInt 已经处理了 >0.5 的情况，加上速度投射处理了 <0.5 但快速的情况
-        
         scope.launch {
             animatable.animateTo(
                 targetValue = targetIndex.toFloat(),
                 animationSpec = spring(
-                    dampingRatio = 0.7f,   // [调整] 增加阻尼减少回弹
-                    stiffness = 500f       // [调整] 增加刚度提升响应速度
+                    dampingRatio = 0.7f,
+                    stiffness = 500f
                 ),
-                initialVelocity = velocityItems // 传递同向速度
-                // Animatable velocity 是 float/unit. input 是 px/s. 
-                // 我们操作的是 unit. 所以 velocity 应该是 items/s.
-                // 注意方向：PointerInput 中 dragAmount 方向与 scroll 相反?
-                // 通常 pointer delta > 0 是向右。Item index 增加。
-                // 所以 velocityX > 0 -> index 增加。
-                // animatable 在 index 空间。
-                // 传入 initialVelocity 可能会导致过冲，暂时不传，让 spring 自己处理
+                initialVelocity = velocityItems
             )
             onIndexChanged(targetIndex)
+        }
+        // 释放按压缩放 — 参考 LiquidBottomTabs release()
+        scope.launch {
+            pressProgressAnimation.animateTo(0f, spring(1f, 1000f, 0.001f))
+        }
+        // 偏移量归零 — 弹性回弹
+        scope.launch {
+            offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
         }
     }
     

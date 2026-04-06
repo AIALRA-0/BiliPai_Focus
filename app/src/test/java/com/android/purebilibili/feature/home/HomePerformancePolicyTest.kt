@@ -86,7 +86,7 @@ class HomePerformancePolicyTest {
     }
 
     @Test
-    fun md3Preset_forcesLiquidGlassOffEvenWhenStoredSettingIsOn() {
+    fun md3Preset_preservesLiquidGlassWhenStoredSettingIsOn() {
         val config = resolveHomePerformanceConfig(
             uiPreset = UiPreset.MD3,
             headerBlurEnabled = true,
@@ -99,6 +99,6 @@ class HomePerformancePolicyTest {
             normalPreloadAheadCount = 5
         )
 
-        assertFalse(config.liquidGlassEnabled)
+        assertTrue(config.liquidGlassEnabled)
     }
 }

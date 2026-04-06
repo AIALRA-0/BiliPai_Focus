@@ -39,6 +39,23 @@ data class CenterPlaybackButtonStyle(
     val iconTint: Color
 )
 
+internal enum class CenterLoadingReason {
+    QUALITY_SWITCH,
+    SEEK_BUFFERING
+}
+
+internal data class CenterLoadingUiState(
+    val reason: CenterLoadingReason,
+    val primaryText: String,
+    val secondaryText: String? = null
+)
+
+internal data class CenterLoadingVisualState(
+    val indicatorColor: Color,
+    val primaryTextColor: Color,
+    val secondaryTextColor: Color
+)
+
 data class ProgressBarMarkerUiState(
     val segmentId: String,
     val category: String,
@@ -241,6 +258,42 @@ internal fun resolveCenterPlaybackButtonStyle(
             iconTint = Color.White
         )
     }
+}
+
+internal fun resolveCenterLoadingUiState(
+    isBuffering: Boolean,
+    isQualitySwitching: Boolean,
+    isSeekTransitionPending: Boolean,
+    bandwidthEstimate: String
+): CenterLoadingUiState? {
+    val bandwidthLabel = bandwidthEstimate.trim().ifBlank { null }
+    return when {
+        isBuffering && isQualitySwitching -> {
+            CenterLoadingUiState(
+                reason = CenterLoadingReason.QUALITY_SWITCH,
+                primaryText = bandwidthLabel ?: "正在切换清晰度...",
+                secondaryText = bandwidthLabel?.let { "正在切换清晰度..." }
+            )
+        }
+        isBuffering && isSeekTransitionPending -> {
+            CenterLoadingUiState(
+                reason = CenterLoadingReason.SEEK_BUFFERING,
+                primaryText = bandwidthLabel ?: "正在缓冲...",
+                secondaryText = "正在定位新进度..."
+            )
+        }
+        else -> null
+    }
+}
+
+internal fun resolveCenterLoadingVisualState(
+    themePrimary: Color
+): CenterLoadingVisualState {
+    return CenterLoadingVisualState(
+        indicatorColor = themePrimary,
+        primaryTextColor = themePrimary,
+        secondaryTextColor = Color.White.copy(alpha = 0.76f)
+    )
 }
 
 internal fun resolveSponsorProgressBarMarkers(

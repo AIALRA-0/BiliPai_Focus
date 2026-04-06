@@ -6,7 +6,8 @@ import com.android.purebilibili.feature.video.state.shouldResumeAfterLifecyclePa
 internal data class PlaybackPauseDecision(
     val shouldContinuePlayback: Boolean,
     val shouldPausePlayback: Boolean,
-    val shouldMarkBackgroundAudioSession: Boolean
+    val shouldMarkBackgroundAudioSession: Boolean,
+    val shouldPersistTransientResumeIntent: Boolean
 )
 
 internal data class PlaybackResumeDecision(
@@ -21,7 +22,7 @@ internal fun resolveShouldContinuePlaybackDuringPause(
     wasPlaybackActive: Boolean
 ): Boolean {
     if (isMiniMode || isPip) return true
-    return isBackgroundAudio && wasPlaybackActive
+    return isBackgroundAudio
 }
 
 internal fun resolvePlaybackPauseDecision(
@@ -40,12 +41,14 @@ internal fun resolvePlaybackPauseDecision(
     return PlaybackPauseDecision(
         shouldContinuePlayback = shouldContinuePlayback,
         shouldPausePlayback = !shouldContinuePlayback,
-        shouldMarkBackgroundAudioSession = isBackgroundAudio && hasRecentUserLeaveHint
+        shouldMarkBackgroundAudioSession = isBackgroundAudio && hasRecentUserLeaveHint,
+        shouldPersistTransientResumeIntent = wasPlaybackActive && !shouldContinuePlayback
     )
 }
 
 internal fun resolvePlaybackResumeDecision(
     wasPlaybackActive: Boolean,
+    hasTransientResumeIntent: Boolean,
     isPlaying: Boolean,
     playWhenReady: Boolean,
     playbackState: Int,
@@ -60,12 +63,13 @@ internal fun resolvePlaybackResumeDecision(
         )
     }
 
-    val shouldResumePlayback = shouldResumeAfterLifecyclePause(
-        wasPlaybackActive = wasPlaybackActive,
-        isPlaying = isPlaying,
-        playWhenReady = playWhenReady,
-        playbackState = playbackState
-    )
+    val shouldResumePlayback = hasTransientResumeIntent ||
+        shouldResumeAfterLifecyclePause(
+            wasPlaybackActive = wasPlaybackActive,
+            isPlaying = isPlaying,
+            playWhenReady = playWhenReady,
+            playbackState = playbackState
+        )
     return PlaybackResumeDecision(
         shouldResumePlayback = shouldResumePlayback,
         shouldRestoreVolume = shouldRestorePlayerVolumeOnResume(

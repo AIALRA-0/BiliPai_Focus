@@ -2,12 +2,16 @@ package com.android.purebilibili.feature.home.components
 
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
+import com.android.purebilibili.core.store.normalizeLiquidGlassProgress
 import com.android.purebilibili.core.store.normalizeLiquidGlassStrength
 import com.android.purebilibili.core.store.resolveDefaultLiquidGlassStrength
+import com.android.purebilibili.core.store.resolveLiquidGlassStrengthFromProgress
+import com.android.purebilibili.core.store.resolveLegacyLiquidGlassProgress
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassMode
 
 data class LiquidGlassTuning(
     val mode: LiquidGlassMode,
+    val progress: Float,
     val strength: Float,
     val backdropBlurRadius: Float,
     val surfaceAlpha: Float,
@@ -20,76 +24,66 @@ data class LiquidGlassTuning(
     val indicatorEdgeWarpBoost: Float,
     val indicatorChromaticBoost: Float,
     val chromaticAberrationEnabled: Boolean,
+    val chromaticAberrationAmount: Float,
     val scrollCoupledRefraction: Boolean,
-    val useNeutralIndicatorTint: Boolean
+    val scrollCoupledRefractionAmount: Float,
+    val useNeutralIndicatorTint: Boolean,
+    val neutralIndicatorTintAmount: Float,
+    val depthEffectEnabled: Boolean,
+    val depthEffectAmount: Float
 )
+
+internal fun resolveLiquidGlassTuning(progress: Float): LiquidGlassTuning {
+    val normalizedProgress = normalizeLiquidGlassProgress(progress)
+    val mode = when {
+        normalizedProgress < 0.34f -> LiquidGlassMode.CLEAR
+        normalizedProgress < 0.68f -> LiquidGlassMode.BALANCED
+        else -> LiquidGlassMode.FROSTED
+    }
+    val frostWeight = normalizedProgress
+    val chromaticAmount = (1f - normalizedProgress).coerceIn(0f, 1f) * 0.18f
+    val scrollCouplingAmount = (1f - normalizedProgress * 1.15f).coerceIn(0f, 1f)
+    val neutralTintAmount = (1f - normalizedProgress * 2.2f).coerceIn(0f, 1f)
+    val depthEffectAmount = (1f - normalizedProgress * 1.2f).coerceIn(0f, 1f)
+    return LiquidGlassTuning(
+        mode = mode,
+        progress = normalizedProgress,
+        strength = resolveLiquidGlassStrengthFromProgress(normalizedProgress),
+        backdropBlurRadius = lerp(3f, 30f, normalizedProgress),
+        surfaceAlpha = lerp(0.12f, 0.42f, normalizedProgress),
+        whiteOverlayAlpha = lerp(0.012f, 0.11f, normalizedProgress),
+        refractIntensity = lerp(0.5f, 0.14f, normalizedProgress),
+        refractionAmount = lerp(26f, 8f, normalizedProgress),
+        refractionHeight = lerp(22f, 8f, normalizedProgress),
+        indicatorTintAlpha = lerp(0.12f, 0.24f, normalizedProgress),
+        indicatorLensBoost = lerp(1.72f, 1.04f, frostWeight),
+        indicatorEdgeWarpBoost = lerp(1.78f, 1.08f, frostWeight),
+        indicatorChromaticBoost = lerp(1.36f, 0.82f, frostWeight),
+        chromaticAberrationEnabled = chromaticAmount > 0.01f,
+        chromaticAberrationAmount = chromaticAmount,
+        scrollCoupledRefraction = scrollCouplingAmount > 0.01f,
+        scrollCoupledRefractionAmount = scrollCouplingAmount,
+        useNeutralIndicatorTint = neutralTintAmount > 0.5f,
+        neutralIndicatorTintAmount = neutralTintAmount,
+        depthEffectEnabled = depthEffectAmount > 0.08f,
+        depthEffectAmount = depthEffectAmount
+    )
+}
 
 internal fun resolveLiquidGlassTuning(
     mode: LiquidGlassMode,
     strength: Float
 ): LiquidGlassTuning {
-    val normalizedStrength = normalizeLiquidGlassStrength(strength)
-    return when (mode) {
-        LiquidGlassMode.CLEAR -> LiquidGlassTuning(
+    return resolveLiquidGlassTuning(
+        progress = resolveLegacyLiquidGlassProgress(
             mode = mode,
-            strength = normalizedStrength,
-            backdropBlurRadius = lerp(14f, 20f, normalizedStrength),
-            surfaceAlpha = lerp(0.18f, 0.28f, normalizedStrength),
-            whiteOverlayAlpha = lerp(0.03f, 0.06f, normalizedStrength),
-            refractIntensity = lerp(0.18f, 0.32f, normalizedStrength),
-            refractionAmount = lerp(28f, 42f, normalizedStrength),
-            refractionHeight = lerp(124f, 150f, normalizedStrength),
-            indicatorTintAlpha = lerp(0.20f, 0.30f, normalizedStrength),
-            indicatorLensBoost = lerp(1.18f, 1.42f, normalizedStrength),
-            indicatorEdgeWarpBoost = lerp(1.16f, 1.38f, normalizedStrength),
-            indicatorChromaticBoost = lerp(0.88f, 1.04f, normalizedStrength),
-            chromaticAberrationEnabled = false,
-            scrollCoupledRefraction = false,
-            useNeutralIndicatorTint = true
+            strength = normalizeLiquidGlassStrength(strength)
         )
-        LiquidGlassMode.BALANCED -> LiquidGlassTuning(
-            mode = mode,
-            strength = normalizedStrength,
-            backdropBlurRadius = lerp(18f, 26f, normalizedStrength),
-            surfaceAlpha = lerp(0.22f, 0.34f, normalizedStrength),
-            whiteOverlayAlpha = lerp(0.04f, 0.08f, normalizedStrength),
-            refractIntensity = lerp(0.34f, 0.52f, normalizedStrength),
-            refractionAmount = lerp(40f, 60f, normalizedStrength),
-            refractionHeight = lerp(142f, 178f, normalizedStrength),
-            indicatorTintAlpha = lerp(0.12f, 0.18f, normalizedStrength),
-            indicatorLensBoost = lerp(1.42f, 1.72f, normalizedStrength),
-            indicatorEdgeWarpBoost = lerp(1.40f, 1.78f, normalizedStrength),
-            indicatorChromaticBoost = lerp(1.08f, 1.42f, normalizedStrength),
-            chromaticAberrationEnabled = true,
-            scrollCoupledRefraction = true,
-            useNeutralIndicatorTint = false
-        )
-        LiquidGlassMode.FROSTED -> LiquidGlassTuning(
-            mode = mode,
-            strength = normalizedStrength,
-            backdropBlurRadius = lerp(24f, 34f, normalizedStrength),
-            surfaceAlpha = lerp(0.30f, 0.42f, normalizedStrength),
-            whiteOverlayAlpha = lerp(0.07f, 0.12f, normalizedStrength),
-            refractIntensity = lerp(0.12f, 0.20f, normalizedStrength),
-            refractionAmount = lerp(14f, 24f, normalizedStrength),
-            refractionHeight = lerp(96f, 128f, normalizedStrength),
-            indicatorTintAlpha = lerp(0.14f, 0.22f, normalizedStrength),
-            indicatorLensBoost = lerp(1.00f, 1.16f, normalizedStrength),
-            indicatorEdgeWarpBoost = lerp(0.98f, 1.14f, normalizedStrength),
-            indicatorChromaticBoost = 0.82f,
-            chromaticAberrationEnabled = false,
-            scrollCoupledRefraction = false,
-            useNeutralIndicatorTint = false
-        )
-    }
+    )
 }
 
 internal fun resolveLiquidGlassTuning(style: LiquidGlassStyle): LiquidGlassTuning {
-    val mode = resolveLegacyLiquidGlassMode(style)
-    return resolveLiquidGlassTuning(
-        mode = mode,
-        strength = resolveDefaultLiquidGlassStrength(mode)
-    )
+    return resolveLiquidGlassTuning(progress = resolveLegacyLiquidGlassProgress(style))
 }
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float {

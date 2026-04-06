@@ -95,6 +95,9 @@ sealed class LivePlayerState {
  * 直播播放器 ViewModel - 增强版
  */
 class LivePlayerViewModel : ViewModel() {
+    companion object {
+        private const val MAX_PLAYBACK_RELOAD_ATTEMPTS = 1
+    }
     
     private val _uiState = MutableStateFlow<LivePlayerState>(LivePlayerState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -108,6 +111,11 @@ class LivePlayerViewModel : ViewModel() {
     
     private var currentRoomId: Long = 0
     private var currentUid: Long = 0
+    private var currentRequestedQuality: Int = 10000
+    private var resolvedPlayback: ResolvedLivePlayback? = null
+    private var activeCandidateIndex: Int = 0
+    private var activeUrlIndex: Int = 0
+    private var remainingReloadAttempts: Int = MAX_PLAYBACK_RELOAD_ATTEMPTS
     
     /**
      * 加载直播流和直播间详情
@@ -116,12 +124,31 @@ class LivePlayerViewModel : ViewModel() {
      * 加载直播流和直播间详情
      */
     fun loadLiveStream(roomId: Long, qn: Int = 10000) {
+        loadLiveStreamInternal(
+            roomId = roomId,
+            qn = qn,
+            showLoading = true,
+            reconnectDanmaku = true,
+            refreshEmoticons = true
+        )
+    }
+
+    private fun loadLiveStreamInternal(
+        roomId: Long,
+        qn: Int,
+        showLoading: Boolean,
+        reconnectDanmaku: Boolean,
+        refreshEmoticons: Boolean
+    ) {
         currentRoomId = roomId
+        currentRequestedQuality = qn
         CrashReporter.markLivePlaybackStage("load_stream_request")
         
         viewModelScope.launch {
-            _uiState.value = LivePlayerState.Loading
-            CrashReporter.markLivePlaybackStage("load_stream_loading")
+            if (showLoading) {
+                _uiState.value = LivePlayerState.Loading
+                CrashReporter.markLivePlaybackStage("load_stream_loading")
+            }
             
             // 并行加载直播流和直播间详情
             val playUrlDeferred = async { LiveRepository.getLivePlayUrlWithQuality(roomId, qn) }
@@ -231,30 +258,13 @@ class LivePlayerViewModel : ViewModel() {
             }
             
             playUrlResult.onSuccess { data ->
-                // ... (Keep existing Play URL logic) ...
-                
-                //  [修复] 收集所有可用的 CDN URL
-                val allUrls = data.durl?.mapNotNull { it.url } ?: emptyList()
-                
-                //  [关键修复] 优先使用第二个 CDN（索引1）
-                val preferredIndex = if (allUrls.size > 1) 1 else 0
-                val url = allUrls.getOrNull(preferredIndex) ?: extractPlayUrl(data)
-                
-                if (url != null) {
-                    val qualityList = data.quality_description?.takeIf { it.isNotEmpty() }
-                        ?: data.playurl_info?.playurl?.gQnDesc
-                        ?: emptyList()
-                    
-                    _uiState.value = LivePlayerState.Success(
-                        playUrl = url,
-                        allPlayUrls = allUrls,
-                        currentUrlIndex = preferredIndex,
-                        currentQuality = qn,
-                        qualityList = qualityList,
-                        roomInfo = roomInfo,     // 填入解析好的数据
-                        anchorInfo = anchorInfo, // 填入解析好的数据
+                if (publishResolvedPlayback(
+                        data = data,
+                        requestedQn = qn,
+                        roomInfo = roomInfo,
+                        anchorInfo = anchorInfo,
                         isFollowing = isFollowing
-                    )
+                    )) {
                     CrashReporter.markLivePlaybackStage("stream_url_ready")
                 } else {
                     _uiState.value = LivePlayerState.Error("无法获取直播流地址")
@@ -276,14 +286,16 @@ class LivePlayerViewModel : ViewModel() {
                 )
             }
 
-            // 启动弹幕连接
-            startLiveDanmaku(roomId)
+            if (reconnectDanmaku) {
+                startLiveDanmaku(roomId)
+            }
             
-            // [新增] 加载弹幕表情
-            launch(Dispatchers.IO) {
-                val emojiResult = LiveRepository.getEmoticons(roomId)
-                emojiResult.onSuccess { map ->
-                    com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(map)
+            if (refreshEmoticons) {
+                launch(Dispatchers.IO) {
+                    val emojiResult = LiveRepository.getEmoticons(roomId)
+                    emojiResult.onSuccess { map ->
+                        com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(map)
+                    }
                 }
             }
         }
@@ -349,31 +361,26 @@ class LivePlayerViewModel : ViewModel() {
     fun changeQuality(qn: Int) {
         val currentState = _uiState.value as? LivePlayerState.Success ?: return
         android.util.Log.d("LivePlayer", "🔴 changeQuality called: qn=$qn")
+        currentRequestedQuality = qn
         
         viewModelScope.launch {
             val result = LiveRepository.getLivePlayUrlWithQuality(currentRoomId, qn)
             
             result.onSuccess { data ->
-                android.util.Log.d("LivePlayer", "🔴 changeQuality success, durl count: ${data.durl?.size}")
-                
-                //  [修复] 收集所有 URL 并优先使用备用 CDN
-                val allUrls = data.durl?.mapNotNull { it.url } ?: emptyList()
-                val preferredIndex = if (allUrls.size > 1) 1 else 0
-                val url = allUrls.getOrNull(preferredIndex) ?: extractPlayUrl(data)
-                
-                android.util.Log.d("LivePlayer", "🔴 changeQuality selected URL: ${url?.take(80)}")
-                
-                if (url != null) {
-                    val newQualityList = data.quality_description?.takeIf { it.isNotEmpty() }
-                        ?: data.playurl_info?.playurl?.gQnDesc
-                        ?: currentState.qualityList
-                    
+                if (publishResolvedPlayback(
+                        data = data,
+                        requestedQn = qn,
+                        roomInfo = currentState.roomInfo,
+                        anchorInfo = currentState.anchorInfo,
+                        isFollowing = currentState.isFollowing
+                    )) {
+                    val publishedState = _uiState.value as? LivePlayerState.Success
                     _uiState.value = currentState.copy(
-                        playUrl = url,
-                        allPlayUrls = allUrls,
-                        currentUrlIndex = preferredIndex,
-                        currentQuality = qn,  //  [修复] 使用用户请求的 qn 值
-                        qualityList = newQualityList
+                        playUrl = publishedState?.playUrl ?: currentState.playUrl,
+                        allPlayUrls = publishedState?.allPlayUrls ?: currentState.allPlayUrls,
+                        currentUrlIndex = publishedState?.currentUrlIndex ?: currentState.currentUrlIndex,
+                        currentQuality = publishedState?.currentQuality ?: currentState.currentQuality,
+                        qualityList = publishedState?.qualityList ?: currentState.qualityList
                     )
                     CrashReporter.markLivePlaybackStage("quality_changed_$qn")
                 } else {
@@ -412,20 +419,58 @@ class LivePlayerViewModel : ViewModel() {
      */
     fun tryNextUrl() {
         val currentState = _uiState.value as? LivePlayerState.Success ?: return
-        
+
+        resolvedPlayback?.let { playback ->
+            when (val next = advanceLivePlayback(playback, activeCandidateIndex, activeUrlIndex)) {
+                is LiveAdvanceResult.NextSource -> {
+                    activeCandidateIndex = next.candidateIndex
+                    activeUrlIndex = next.urlIndex
+                    val nextCandidate = playback.candidates[next.candidateIndex]
+                    android.util.Log.d("LivePlayer", " Trying next live source (candidate=${next.candidateIndex}, url=${next.urlIndex}): ${next.playUrl.take(80)}...")
+                    CrashReporter.markLivePlaybackStage("switch_source_${next.candidateIndex}_${next.urlIndex}")
+                    _uiState.value = currentState.copy(
+                        playUrl = next.playUrl,
+                        allPlayUrls = nextCandidate.urls,
+                        currentUrlIndex = next.urlIndex
+                    )
+                }
+                is LiveAdvanceResult.ReloadCurrentQuality -> {
+                    if (remainingReloadAttempts > 0) {
+                        remainingReloadAttempts -= 1
+                        CrashReporter.markLivePlaybackStage("reload_live_playback_${next.qualityQn}")
+                        loadLiveStreamInternal(
+                            roomId = currentRoomId,
+                            qn = next.qualityQn,
+                            showLoading = false,
+                            reconnectDanmaku = false,
+                            refreshEmoticons = false
+                        )
+                    } else {
+                        android.util.Log.e("LivePlayer", " No more live reload attempts remaining")
+                        _uiState.value = LivePlayerState.Error("直播流恢复失败，请稍后重试")
+                        CrashReporter.reportLiveError(
+                            roomId = currentRoomId,
+                            errorType = "live_reload_exhausted",
+                            errorMessage = "quality=$currentRequestedQuality reload attempts exhausted"
+                        )
+                    }
+                }
+            }
+            return
+        }
+
         val nextIndex = currentState.currentUrlIndex + 1
         if (nextIndex < currentState.allPlayUrls.size) {
             val nextUrl = currentState.allPlayUrls[nextIndex]
             android.util.Log.d("LivePlayer", " Trying next CDN URL (index=$nextIndex): ${nextUrl.take(80)}...")
             CrashReporter.markLivePlaybackStage("switch_cdn_$nextIndex")
-            
+
             _uiState.value = currentState.copy(
                 playUrl = nextUrl,
                 currentUrlIndex = nextIndex
             )
         } else {
             android.util.Log.e("LivePlayer", " No more CDN URLs to try (tried all ${currentState.allPlayUrls.size})")
-            // 所有 URL 都失败了，显示错误
             _uiState.value = LivePlayerState.Error("所有 CDN 均无法连接，请稍后重试")
             CrashReporter.reportLiveError(
                 roomId = currentRoomId,
@@ -433,6 +478,59 @@ class LivePlayerViewModel : ViewModel() {
                 errorMessage = "all ${currentState.allPlayUrls.size} urls failed"
             )
         }
+    }
+
+    private fun publishResolvedPlayback(
+        data: com.android.purebilibili.data.model.response.LivePlayUrlData,
+        requestedQn: Int,
+        roomInfo: RoomInfo,
+        anchorInfo: AnchorInfo,
+        isFollowing: Boolean
+    ): Boolean {
+        val danmakuEnabled = (_uiState.value as? LivePlayerState.Success)?.isDanmakuEnabled ?: true
+        val resolved = resolveLivePlayback(data, requestedQn)
+        val primaryUrl = resolved?.primaryUrl
+        if (resolved != null && primaryUrl != null) {
+            resolvedPlayback = resolved
+            activeCandidateIndex = 0
+            activeUrlIndex = 0
+            remainingReloadAttempts = MAX_PLAYBACK_RELOAD_ATTEMPTS
+            _uiState.value = LivePlayerState.Success(
+                playUrl = primaryUrl,
+                allPlayUrls = resolved.candidates.first().urls,
+                currentUrlIndex = 0,
+                currentQuality = resolved.currentQuality,
+                qualityList = resolved.qualityList,
+                roomInfo = roomInfo,
+                anchorInfo = anchorInfo,
+                isFollowing = isFollowing,
+                isDanmakuEnabled = danmakuEnabled
+            )
+            return true
+        }
+
+        resolvedPlayback = null
+        activeCandidateIndex = 0
+        activeUrlIndex = 0
+        remainingReloadAttempts = MAX_PLAYBACK_RELOAD_ATTEMPTS
+
+        val allUrls = data.durl?.mapNotNull { it.url } ?: emptyList()
+        val url = allUrls.firstOrNull() ?: extractPlayUrl(data) ?: return false
+        val qualityList = data.quality_description?.takeIf { it.isNotEmpty() }
+            ?: data.playurl_info?.playurl?.gQnDesc
+            ?: emptyList()
+        _uiState.value = LivePlayerState.Success(
+            playUrl = url,
+            allPlayUrls = allUrls.ifEmpty { listOf(url) },
+            currentUrlIndex = 0,
+            currentQuality = data.current_quality.takeIf { it > 0 } ?: requestedQn,
+            qualityList = qualityList,
+            roomInfo = roomInfo,
+            anchorInfo = anchorInfo,
+            isFollowing = isFollowing,
+            isDanmakuEnabled = danmakuEnabled
+        )
+        return true
     }
     
     /**
@@ -486,7 +584,7 @@ class LivePlayerViewModel : ViewModel() {
      * 重试
      */
     fun retry() {
-        loadLiveStream(currentRoomId)
+        loadLiveStream(currentRoomId, currentRequestedQuality)
     }
     
     /**

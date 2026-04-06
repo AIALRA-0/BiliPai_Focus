@@ -4,9 +4,9 @@ package com.android.purebilibili.core.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -14,11 +14,18 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.android.purebilibili.feature.settings.AppThemeMode
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
 // --- 扩展颜色定义 ---
 private val LightSurfaceVariant = Color(0xFFF1F2F3)
@@ -65,6 +72,193 @@ internal fun resolveEffectiveDynamicColorEnabled(
     amoledDarkTheme: Boolean,
     uiPreset: UiPreset
 ): Boolean = dynamicColorEnabled
+
+internal fun resolveMiuixColorSchemeMode(
+    themeMode: AppThemeMode,
+    dynamicColorEnabled: Boolean
+): ColorSchemeMode {
+    return when (themeMode) {
+        AppThemeMode.FOLLOW_SYSTEM -> {
+            if (dynamicColorEnabled) ColorSchemeMode.MonetSystem else ColorSchemeMode.System
+        }
+
+        AppThemeMode.LIGHT -> {
+            if (dynamicColorEnabled) ColorSchemeMode.MonetLight else ColorSchemeMode.Light
+        }
+
+        AppThemeMode.DARK -> {
+            if (dynamicColorEnabled) ColorSchemeMode.MonetDark else ColorSchemeMode.Dark
+        }
+    }
+}
+
+internal data class MiuixMaterialBridge(
+    val primary: Color,
+    val onPrimary: Color,
+    val primaryContainer: Color,
+    val onPrimaryContainer: Color,
+    val secondary: Color,
+    val onSecondary: Color,
+    val secondaryContainer: Color,
+    val onSecondaryContainer: Color,
+    val tertiary: Color,
+    val onTertiary: Color,
+    val tertiaryContainer: Color,
+    val onTertiaryContainer: Color,
+    val error: Color,
+    val onError: Color,
+    val background: Color,
+    val onBackground: Color,
+    val surface: Color,
+    val onSurface: Color,
+    val surfaceVariant: Color,
+    val onSurfaceVariant: Color,
+    val surfaceContainer: Color,
+    val surfaceContainerHigh: Color,
+    val outline: Color,
+    val outlineVariant: Color
+)
+
+internal fun createMiuixMaterialBridge(colorScheme: ColorScheme): MiuixMaterialBridge {
+    return MiuixMaterialBridge(
+        primary = colorScheme.primary,
+        onPrimary = colorScheme.onPrimary,
+        primaryContainer = colorScheme.primaryContainer,
+        onPrimaryContainer = colorScheme.onPrimaryContainer,
+        secondary = colorScheme.secondary,
+        onSecondary = colorScheme.onSecondary,
+        secondaryContainer = colorScheme.secondaryContainer,
+        onSecondaryContainer = colorScheme.onSecondaryContainer,
+        tertiary = colorScheme.tertiary,
+        onTertiary = colorScheme.onTertiary,
+        tertiaryContainer = colorScheme.tertiaryContainer,
+        onTertiaryContainer = colorScheme.onTertiaryContainer,
+        error = colorScheme.error,
+        onError = colorScheme.onError,
+        background = colorScheme.background,
+        onBackground = colorScheme.onBackground,
+        surface = colorScheme.surface,
+        onSurface = colorScheme.onSurface,
+        surfaceVariant = colorScheme.surfaceVariant,
+        onSurfaceVariant = colorScheme.onSurfaceVariant,
+        surfaceContainer = colorScheme.surfaceContainer,
+        surfaceContainerHigh = colorScheme.surfaceContainerHigh,
+        outline = colorScheme.outline,
+        outlineVariant = colorScheme.outlineVariant
+    )
+}
+
+internal fun resolveMaterialColorSchemeFromMiuixBridge(
+    bridge: MiuixMaterialBridge,
+    amoledDarkTheme: Boolean
+): ColorScheme {
+    val baseScheme = if (bridge.background.luminance() < 0.5f) {
+        darkColorScheme(
+            primary = bridge.primary,
+            onPrimary = bridge.onPrimary,
+            primaryContainer = bridge.primaryContainer,
+            onPrimaryContainer = bridge.onPrimaryContainer,
+            secondary = bridge.secondary,
+            onSecondary = bridge.onSecondary,
+            secondaryContainer = bridge.secondaryContainer,
+            onSecondaryContainer = bridge.onSecondaryContainer,
+            tertiary = bridge.tertiary,
+            onTertiary = bridge.onTertiary,
+            tertiaryContainer = bridge.tertiaryContainer,
+            onTertiaryContainer = bridge.onTertiaryContainer,
+            error = bridge.error,
+            onError = bridge.onError,
+            background = bridge.background,
+            onBackground = bridge.onBackground,
+            surface = bridge.surface,
+            onSurface = bridge.onSurface,
+            surfaceVariant = bridge.surfaceVariant,
+            onSurfaceVariant = bridge.onSurfaceVariant,
+            surfaceContainer = bridge.surfaceContainer,
+            surfaceContainerHigh = bridge.surfaceContainerHigh,
+            outline = bridge.outline,
+            outlineVariant = bridge.outlineVariant
+        )
+    } else {
+        lightColorScheme(
+            primary = bridge.primary,
+            onPrimary = bridge.onPrimary,
+            primaryContainer = bridge.primaryContainer,
+            onPrimaryContainer = bridge.onPrimaryContainer,
+            secondary = bridge.secondary,
+            onSecondary = bridge.onSecondary,
+            secondaryContainer = bridge.secondaryContainer,
+            onSecondaryContainer = bridge.onSecondaryContainer,
+            tertiary = bridge.tertiary,
+            onTertiary = bridge.onTertiary,
+            tertiaryContainer = bridge.tertiaryContainer,
+            onTertiaryContainer = bridge.onTertiaryContainer,
+            error = bridge.error,
+            onError = bridge.onError,
+            background = bridge.background,
+            onBackground = bridge.onBackground,
+            surface = bridge.surface,
+            onSurface = bridge.onSurface,
+            surfaceVariant = bridge.surfaceVariant,
+            onSurfaceVariant = bridge.onSurfaceVariant,
+            surfaceContainer = bridge.surfaceContainer,
+            surfaceContainerHigh = bridge.surfaceContainerHigh,
+            outline = bridge.outline,
+            outlineVariant = bridge.outlineVariant
+        )
+    }
+    return if (amoledDarkTheme) {
+        applyAmoledSurfaceOverrides(baseScheme)
+    } else {
+        baseScheme
+    }
+}
+
+internal fun resolveMiuixColorsFromMaterialBridge(
+    bridge: MiuixMaterialBridge,
+    darkTheme: Boolean
+): top.yukonga.miuix.kmp.theme.Colors {
+    val base = if (darkTheme) miuixDarkColorScheme() else miuixLightColorScheme()
+    return base.copy(
+        primary = bridge.primary,
+        onPrimary = bridge.onPrimary,
+        primaryVariant = bridge.primaryContainer,
+        onPrimaryVariant = bridge.onPrimaryContainer,
+        primaryContainer = bridge.primaryContainer,
+        onPrimaryContainer = bridge.onPrimaryContainer,
+        secondary = bridge.secondary,
+        onSecondary = bridge.onSecondary,
+        secondaryVariant = bridge.surfaceContainerHigh,
+        onSecondaryVariant = bridge.onSurfaceVariant,
+        secondaryContainer = bridge.secondaryContainer,
+        onSecondaryContainer = bridge.onSecondaryContainer,
+        secondaryContainerVariant = bridge.surfaceContainer,
+        onSecondaryContainerVariant = bridge.onSurfaceVariant,
+        tertiaryContainer = bridge.tertiaryContainer,
+        onTertiaryContainer = bridge.onTertiaryContainer,
+        tertiaryContainerVariant = bridge.tertiaryContainer,
+        error = bridge.error,
+        onError = bridge.onError,
+        background = bridge.background,
+        onBackground = bridge.onBackground,
+        onBackgroundVariant = bridge.onSurfaceVariant,
+        surface = bridge.surface,
+        onSurface = bridge.onSurface,
+        surfaceVariant = bridge.surfaceVariant,
+        onSurfaceSecondary = bridge.onSurfaceVariant,
+        onSurfaceVariantSummary = bridge.onSurfaceVariant,
+        onSurfaceVariantActions = bridge.onSurfaceVariant,
+        surfaceContainer = bridge.surfaceContainer,
+        onSurfaceContainer = bridge.onSurface,
+        onSurfaceContainerVariant = bridge.onSurfaceVariant,
+        surfaceContainerHigh = bridge.surfaceContainerHigh,
+        onSurfaceContainerHigh = bridge.onSurface,
+        surfaceContainerHighest = bridge.surfaceContainerHigh,
+        onSurfaceContainerHighest = bridge.onSurface,
+        outline = bridge.outline,
+        dividerLine = bridge.outlineVariant
+    )
+}
 
 internal fun applyAmoledSurfaceOverrides(
     baseScheme: ColorScheme
@@ -138,6 +332,7 @@ private fun createMd3LightColorScheme(primaryColor: Color) = lightColorScheme(
 @Composable
 fun PureBiliBiliTheme(
     uiPreset: UiPreset = UiPreset.IOS,
+    themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     amoledDarkTheme: Boolean = false,
@@ -148,10 +343,11 @@ fun PureBiliBiliTheme(
     //  🚀 [修复] 强制监听配置变化 (如更换壁纸触发的资源刷新)
     // 即使 Activity 不重建，Configuration 也会变化，触发重组从而获取最新的 dynamicColorScheme
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val context = LocalContext.current
     
     //  获取自定义主题色 (默认 iOS 蓝)
     val customPrimaryColor = ThemeColors.getOrElse(themeColorIndex) { iOSSystemBlue }
-    
+
     val renderingProfile = resolveUiRenderingProfile(uiPreset)
     val isDynamicColorActive = resolveEffectiveDynamicColorEnabled(
         dynamicColorEnabled = dynamicColor,
@@ -163,38 +359,58 @@ fun PureBiliBiliTheme(
     } else {
         iOSShapes
     }
-    
-    val colorScheme = when {
-        // 如果开启了动态取色 且 系统版本 >= Android 12 (S)
-        isDynamicColorActive -> {
-            val context = LocalContext.current
-            if (darkTheme) {
-                val dynamicDark = dynamicDarkColorScheme(context)
-                if (amoledDarkTheme) {
-                    applyAmoledSurfaceOverrides(dynamicDark)
-                } else {
-                    dynamicDark
-                }
-            } else {
-                enforceDynamicLightTextContrast(dynamicLightColorScheme(context))
-            }
+    val lightMaterialScheme = enforceDynamicLightTextContrast(
+        if (renderingProfile.useMaterialChrome) {
+            createMd3LightColorScheme(customPrimaryColor)
+        } else {
+            createLightColorScheme(customPrimaryColor)
         }
-        darkTheme && amoledDarkTheme -> createAmoledDarkColorScheme(customPrimaryColor)
-        darkTheme -> {
-            if (renderingProfile.useMaterialChrome) {
-                createMd3DarkColorScheme(customPrimaryColor)
-            } else {
-                createDarkColorScheme(customPrimaryColor)
-            }
+    )
+    val darkMaterialScheme = if (amoledDarkTheme) {
+        createAmoledDarkColorScheme(customPrimaryColor)
+    } else if (renderingProfile.useMaterialChrome) {
+        createMd3DarkColorScheme(customPrimaryColor)
+    } else {
+        createDarkColorScheme(customPrimaryColor)
+    }
+
+    val staticMaterialScheme = if (darkTheme) darkMaterialScheme else lightMaterialScheme
+    val miuixLightColors = remember(lightMaterialScheme) {
+        resolveMiuixColorsFromMaterialBridge(
+            bridge = createMiuixMaterialBridge(lightMaterialScheme),
+            darkTheme = false
+        )
+    }
+    val miuixDarkColors = remember(darkMaterialScheme) {
+        resolveMiuixColorsFromMaterialBridge(
+            bridge = createMiuixMaterialBridge(darkMaterialScheme),
+            darkTheme = true
+        )
+    }
+    val controller = remember(
+        themeMode,
+        dynamicColor,
+        darkTheme
+    ) {
+        ThemeController(
+            colorSchemeMode = resolveMiuixColorSchemeMode(
+                themeMode = themeMode,
+                dynamicColorEnabled = dynamicColor
+            ),
+            lightColors = miuixLightColors,
+            darkColors = miuixDarkColors,
+            isDark = darkTheme
+        )
+    }
+    val materialColorScheme = if (isDynamicColorActive) {
+        if (darkTheme) {
+            val dynamicDark = dynamicDarkColorScheme(context)
+            if (amoledDarkTheme) applyAmoledSurfaceOverrides(dynamicDark) else dynamicDark
+        } else {
+            enforceDynamicLightTextContrast(dynamicLightColorScheme(context))
         }
-        else -> {
-            val lightScheme = if (renderingProfile.useMaterialChrome) {
-                createMd3LightColorScheme(customPrimaryColor)
-            } else {
-                createLightColorScheme(customPrimaryColor)
-            }
-            enforceDynamicLightTextContrast(lightScheme)
-        }
+    } else {
+        staticMaterialScheme
     }
 
     //  [新增] 动态设置状态栏图标颜色
@@ -214,11 +430,15 @@ fun PureBiliBiliTheme(
         LocalDynamicColorActive provides isDynamicColorActive,
         LocalCornerRadiusScale provides if (renderingProfile.useMaterialChrome) 0.9f else 1f
     ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = BiliTypography.scaled(fontSizePreset.multiplier),
-            shapes = shapes,
-            content = content
-        )
+        MiuixTheme(
+            controller = controller
+        ) {
+            MaterialTheme(
+                colorScheme = materialColorScheme,
+                typography = BiliTypography.scaled(fontSizePreset.multiplier),
+                shapes = shapes,
+                content = content
+            )
+        }
     }
 }

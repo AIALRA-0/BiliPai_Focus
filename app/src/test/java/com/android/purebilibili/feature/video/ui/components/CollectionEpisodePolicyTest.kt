@@ -3,59 +3,67 @@ package com.android.purebilibili.feature.video.ui.components
 import com.android.purebilibili.data.model.response.UgcEpisode
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class CollectionEpisodePolicyTest {
 
-    @Test
-    fun `resolveCurrentUgcEpisodeIndex prefers exact cid match when bvid repeats`() {
-        val episodes = listOf(
-            UgcEpisode(bvid = "BV1TEST", cid = 11L, title = "P1"),
-            UgcEpisode(bvid = "BV1TEST", cid = 22L, title = "P2"),
-            UgcEpisode(bvid = "BV1TEST", cid = 33L, title = "P3")
-        )
+    private val episodes = listOf(
+        UgcEpisode(id = 1L, bvid = "BV1", cid = 11L, title = "2007"),
+        UgcEpisode(id = 2L, bvid = "BV2", cid = 22L, title = "2008"),
+        UgcEpisode(id = 3L, bvid = "BV3", cid = 33L, title = "2009")
+    )
 
-        val index = resolveCurrentUgcEpisodeIndex(
+    @Test
+    fun `ascending sort keeps original order`() {
+        val result = sortCollectionEpisodes(
             episodes = episodes,
-            currentBvid = "BV1TEST",
+            sortMode = CollectionSortMode.ASCENDING,
+            currentBvid = "BV2",
             currentCid = 22L
         )
 
-        assertEquals(1, index)
+        assertEquals(listOf("BV1", "BV2", "BV3"), result.map { it.bvid })
     }
 
     @Test
-    fun `resolveCurrentUgcEpisodeIndex falls back to bvid match when current cid missing`() {
-        val episodes = listOf(
-            UgcEpisode(bvid = "BV1TEST", cid = 11L, title = "P1"),
-            UgcEpisode(bvid = "BV1TEST", cid = 22L, title = "P2")
+    fun `descending sort reverses original order`() {
+        val result = sortCollectionEpisodes(
+            episodes = episodes,
+            sortMode = CollectionSortMode.DESCENDING,
+            currentBvid = "BV2",
+            currentCid = 22L
         )
 
-        val index = resolveCurrentUgcEpisodeIndex(
+        assertEquals(listOf("BV3", "BV2", "BV1"), result.map { it.bvid })
+    }
+
+    @Test
+    fun `recent sort moves current episode to front and keeps others stable`() {
+        val result = sortCollectionEpisodes(
             episodes = episodes,
-            currentBvid = "BV1TEST",
+            sortMode = CollectionSortMode.RECENT,
+            currentBvid = "BV2",
+            currentCid = 22L
+        )
+
+        assertEquals(listOf("BV2", "BV1", "BV3"), result.map { it.bvid })
+    }
+
+    @Test
+    fun `recent sort falls back to original order when current episode is missing`() {
+        val result = sortCollectionEpisodes(
+            episodes = episodes,
+            sortMode = CollectionSortMode.RECENT,
+            currentBvid = "BV404",
             currentCid = 0L
         )
 
-        assertEquals(0, index)
+        assertEquals(listOf("BV1", "BV2", "BV3"), result.map { it.bvid })
     }
 
     @Test
-    fun `isCurrentUgcEpisode requires cid match when current cid is known`() {
-        assertFalse(
-            isCurrentUgcEpisode(
-                currentBvid = "BV1TEST",
-                currentCid = 22L,
-                episode = UgcEpisode(bvid = "BV1TEST", cid = 11L)
-            )
-        )
-        assertTrue(
-            isCurrentUgcEpisode(
-                currentBvid = "BV1TEST",
-                currentCid = 22L,
-                episode = UgcEpisode(bvid = "BV1TEST", cid = 22L)
-            )
-        )
+    fun `resolve collection sort label returns compact copy`() {
+        assertEquals("正序", resolveCollectionSortLabel(CollectionSortMode.ASCENDING))
+        assertEquals("倒序", resolveCollectionSortLabel(CollectionSortMode.DESCENDING))
+        assertEquals("最近", resolveCollectionSortLabel(CollectionSortMode.RECENT))
     }
 }

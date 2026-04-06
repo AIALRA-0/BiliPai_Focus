@@ -16,12 +16,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.model.response.UgcSeason
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronForward
 import io.github.alexzhirkevich.cupertino.icons.outlined.Folder
 import io.github.alexzhirkevich.cupertino.icons.outlined.SquareAndArrowUp
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 /**
  *  视频合集展示行
@@ -35,6 +37,15 @@ fun CollectionRow(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val isSubscribed by SettingsManager
+        .isCollectionSubscribed(context, ugcSeason.id)
+        .collectAsState(initial = false)
+    val sortMode by SettingsManager
+        .getCollectionSortMode(context, ugcSeason.id)
+        .collectAsState(initial = CollectionSortMode.ASCENDING)
+
     // 计算当前视频在合集中的位置
     val allEpisodes = ugcSeason.sections.flatMap { it.episodes }
     val currentIndex = resolveCurrentUgcEpisodeIndex(
@@ -94,35 +105,49 @@ fun CollectionRow(
                         fontWeight = FontWeight.Medium
                     )
                 }
-            }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            //  进度显示 (当前/总集数)
-            if (currentPosition > 0 && totalCount > 0) {
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 进度条图标
+                    if (currentPosition > 0 && totalCount > 0) {
+                        Text(
+                            text = "$currentPosition/$totalCount",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
                     Text(
-                        text = "▸",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 10.sp
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "$currentPosition/$totalCount",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
+                        text = resolveCollectionSortLabel(sortMode),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.88f)
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.width(6.dp))
-            
+
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        SettingsManager.toggleCollectionSubscription(context, ugcSeason.id)
+                    }
+                },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (isSubscribed) "已订阅" else "订阅",
+                    color = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             //  分享按钮
-            val context = LocalContext.current
             IconButton(
                 onClick = {
                     val shareUrl = "https://space.bilibili.com/${ugcSeason.mid}/lists/${ugcSeason.id}?type=season"

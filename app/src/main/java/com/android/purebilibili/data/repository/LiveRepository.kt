@@ -132,7 +132,7 @@ object LiveRepository {
             val realRoomId = resolveRealRoomId(roomId)
             com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fetching live URL with quality for roomId=$roomId(real=$realRoomId), qn=$qn")
             
-            // 使用旧版 API 获取画质列表（xlive API 不返回 quality_description）
+            // 使用旧版 API 补充可读画质描述，但不再把 legacy durl 当作主播放来源
             val legacyResp = try {
                 api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
             } catch (e: Exception) {
@@ -140,20 +140,13 @@ object LiveRepository {
                 null
             }
             
-            // 从旧版 API 获取画质列表和播放地址
             val qualityList = legacyResp?.data?.quality_description ?: emptyList()
             val currentQuality = legacyResp?.data?.current_quality ?: 0
-            val playUrl = legacyResp?.data?.durl?.firstOrNull()?.url
+            val legacyHasUrl = legacyResp?.data?.durl?.firstOrNull()?.url != null
+            com.android.purebilibili.core.util.Logger.d("LiveRepo", " Legacy API: qualityList=${qualityList.map { it.desc }}, current=$currentQuality, hasUrl=$legacyHasUrl")
             
-            com.android.purebilibili.core.util.Logger.d("LiveRepo", " Legacy API: qualityList=${qualityList.map { it.desc }}, current=$currentQuality, hasUrl=${playUrl != null}")
-            
-            // 如果旧版 API 成功获取到播放地址，直接使用
-            if (playUrl != null && legacyResp?.data != null) {
-                return@withContext Result.success(legacyResp.data)
-            }
-            
-            // 回退到新版 xlive API 获取播放地址，但保留画质列表
-            com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fallback to xlive API for stream URL...")
+            // 新版 xlive API 作为主播放来源
+            com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Using xlive API as primary stream source...")
             val resp = api.getLivePlayUrl(roomId = realRoomId, quality = qn)
             
             if (resp.code == 0 && resp.data != null) {
@@ -164,6 +157,9 @@ object LiveRepository {
                 )
                 com.android.purebilibili.core.util.Logger.d("LiveRepo", " Merged data: qualityList=${mergedData.quality_description?.map { it.desc }}")
                 Result.success(mergedData)
+            } else if (legacyResp?.code == 0 && legacyResp.data != null) {
+                com.android.purebilibili.core.util.Logger.w("LiveRepo", "🔴 xlive API unavailable, falling back to legacy durl response")
+                Result.success(legacyResp.data)
             } else {
                 Result.failure(Exception("获取直播流失败: ${resp.message}"))
             }

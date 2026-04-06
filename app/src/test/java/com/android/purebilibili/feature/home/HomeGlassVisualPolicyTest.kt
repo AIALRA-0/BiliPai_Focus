@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -62,6 +64,14 @@ class HomeGlassVisualPolicyTest {
 
         assertTrue(emphasized.highlightAlpha > normal.highlightAlpha)
         assertEquals(0.20f, emphasized.highlightAlpha)
+    }
+
+    @Test
+    fun coverOverlayPillsStayDarkToProtectThumbnailContrast() {
+        val baseColor = resolveHomeGlassCoverPillBaseColor()
+
+        assertEquals(Color.Black, baseColor)
+        assertTrue(baseColor.luminance() < 0.01f)
     }
 
     @Test

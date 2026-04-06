@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,7 @@ import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 @Composable
@@ -58,17 +60,25 @@ internal fun <T> IOSSlidingSegmentedSetting(
         Text(
             text = title,
             style = if (uiPreset == UiPreset.MD3) {
-                MaterialTheme.typography.titleSmall
+                MaterialTheme.typography.titleMedium
             } else {
                 MaterialTheme.typography.bodyLarge
             },
-            color = MaterialTheme.colorScheme.onSurface
+            color = if (uiPreset == UiPreset.MD3) {
+                MiuixTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
         )
         if (!subtitle.isNullOrBlank()) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (uiPreset == UiPreset.MD3) {
+                    MiuixTheme.colorScheme.onSurfaceVariantSummary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
         IOSSlidingSegmentedControl(
@@ -117,25 +127,44 @@ private fun <T> Md3SegmentedControl(
     enabled: Boolean = true,
     onSelectionChange: (T) -> Unit
 ) {
-    SingleChoiceSegmentedButtonRow(
-        modifier = modifier.fillMaxWidth()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MiuixTheme.colorScheme.surfaceContainerHigh)
+            .padding(4.dp)
     ) {
-        options.forEachIndexed { index, option ->
-            SegmentedButton(
-                selected = option.value == selectedValue,
-                onClick = { onSelectionChange(option.value) },
-                enabled = enabled,
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    count = options.size
-                ),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = option.label,
-                    maxLines = 1,
-                    style = MaterialTheme.typography.labelLarge
-                )
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            options.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = option.value == selectedValue,
+                    onClick = { onSelectionChange(option.value) },
+                    enabled = enabled,
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = options.size
+                    ),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContainerColor = MiuixTheme.colorScheme.secondaryContainer,
+                        activeContentColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                        inactiveContainerColor = Color.Transparent,
+                        inactiveContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        disabledActiveContainerColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
+                        disabledActiveContentColor = MiuixTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f),
+                        disabledInactiveContainerColor = Color.Transparent,
+                        disabledInactiveContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = option.label,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

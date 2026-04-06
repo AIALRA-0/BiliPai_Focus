@@ -19,5 +19,6 @@ class UiPresetSettingsPolicyTest {
     @Test
     fun persistedMd3Value_restoresMd3Preset() {
         assertEquals(UiPreset.MD3, resolveUiPresetPreferenceValue(UiPreset.MD3.value))
+        assertEquals(UiPreset.IOS, resolveUiPresetPreferenceValue(UiPreset.IOS.value))
     }
 }

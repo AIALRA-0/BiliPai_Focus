@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.space
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
@@ -665,33 +666,42 @@ private fun SpaceContent(
 
                         if (state.videos.isEmpty() && !state.isLoadingMore) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (state.videoLoadError != null && !isVideoSearching) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(
-                                                text = state.videoLoadError,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            TextButton(onClick = onRetryVideoLoad) {
-                                                Text("重试")
+                                when {
+                                    isVideoSearching -> {
+                                        SpaceSectionEmptyState(
+                                            title = "没有结果",
+                                            subtitle = "换个关键词试试"
+                                        )
+                                    }
+                                    !state.videoLoadError.isNullOrBlank() -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(32.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(
+                                                    text = state.videoLoadError,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                                )
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                TextButton(onClick = onRetryVideoLoad) {
+                                                    Text("重试")
+                                                }
                                             }
                                         }
-                                    } else {
-                                        Text(
-                                            text = if (isVideoSearching) {
-                                                "未找到相关视频"
-                                            } else if (state.hasConfirmedEmptyVideos) {
-                                                "暂无视频"
-                                            } else {
-                                                "视频列表加载中"
-                                            },
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    }
+                                    state.hasConfirmedEmptyVideos || state.totalVideos == 0 -> {
+                                        SpaceSectionEmptyState(
+                                            title = "暂无视频",
+                                            subtitle = "这个分区暂时还没有可展示的投稿"
+                                        )
+                                    }
+                                    else -> {
+                                        SpaceSectionEmptyState(
+                                            title = "加载中",
+                                            subtitle = "正在补充投稿列表"
                                         )
                                     }
                                 }
@@ -732,10 +742,11 @@ private fun SpaceContent(
                                 }
                             }
                         } else if (state.audios.isEmpty() && !state.isLoadingAudios) {
-                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                    Text("暂无音频", color = Color.Gray)
-                                }
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SpaceSectionEmptyState(
+                                    title = "暂无音频",
+                                    subtitle = "这个空间还没有公开的音频内容"
+                                )
                             }
                         }
                     }
@@ -758,10 +769,11 @@ private fun SpaceContent(
                                 }
                             }
                         } else if (state.articles.isEmpty() && !state.isLoadingArticles) {
-                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                    Text("暂无专栏", color = Color.Gray)
-                                }
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                SpaceSectionEmptyState(
+                                    title = "暂无专栏",
+                                    subtitle = "这个空间还没有公开的图文内容"
+                                )
                             }
                         }
                     }
@@ -863,17 +875,10 @@ private fun SpaceContent(
                     state.collectedFavoriteFolders.isEmpty()
                 ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "该用户暂无合集、系列或收藏夹内容",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
+                        SpaceSectionEmptyState(
+                            title = "暂无合集",
+                            subtitle = "该用户还没有公开的系列、合集或收藏夹"
+                        )
                     }
                 }
             }
@@ -958,17 +963,10 @@ private fun SpaceContent(
                     state.articles.isEmpty()
                 ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "暂无主页内容",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
+                        SpaceSectionEmptyState(
+                            title = "主页空空的",
+                            subtitle = "暂时没有置顶、公告或可展示的投稿"
+                        )
                     }
                 }
             }
@@ -994,31 +992,17 @@ private fun SpaceContent(
                 // 动态列表
                 if (isDynamicSearching && state.dynamics.isNotEmpty() && spaceDynamicItems.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "未找到相关动态",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
+                        SpaceSectionEmptyState(
+                            title = "没有结果",
+                            subtitle = "换个关键词再搜搜这个 UP 的动态"
+                        )
                     }
                 } else if (dynamicPresentationState == SpaceDynamicPresentationState.EMPTY) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "暂无动态",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
+                        SpaceSectionEmptyState(
+                            title = "暂无动态",
+                            subtitle = "这个空间暂时没有可展示的动态内容"
+                        )
                     }
                 } else if (dynamicPresentationState == SpaceDynamicPresentationState.ERROR) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1095,248 +1079,253 @@ private fun SpaceHeader(
 ) {
     val topPhotoUrl = normalizeSpaceTopPhotoUrl(userInfo.topPhoto)
     val hasTopPhoto = topPhotoUrl.isNotEmpty()
+    val sectionColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+    val statsColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.16f)
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
+    val liveRoom = userInfo.liveRoom
+    val isFollowed = userInfo.isFollowed
+    val metaItems = listOfNotNull(
+        "UID ${userInfo.mid}",
+        userInfo.ipLocation?.takeIf { it.isNotBlank() }
+    )
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
     ) {
-        //  头图 Banner - 更紧凑的高度
-        if (hasTopPhoto) {
-            val topPhotoPreviewEnabled = shouldEnableSpaceTopPhotoPreview(topPhotoUrl)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)  //  减少高度
-                    .then(
-                        if (topPhotoPreviewEnabled) {
-                            Modifier.clickable { onTopPhotoClick() }
-                        } else {
-                            Modifier
-                        }
-                    )
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.buildSizedImageUrl(topPhotoUrl, width = 1080, height = 320))
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                // 渐变遮罩
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (hasTopPhoto) {
+                val topPhotoPreviewEnabled = shouldEnableSpaceTopPhotoPreview(topPhotoUrl)
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .height(168.dp)
+                        .then(
+                            if (topPhotoPreviewEnabled) {
+                                Modifier.clickable { onTopPhotoClick() }
+                            } else {
+                                Modifier
+                            }
+                        )
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(FormatUtils.buildSizedImageUrl(topPhotoUrl, width = 1440, height = 520))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.12f),
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                                    )
+                                )
+                            )
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(132.dp)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f),
+                                    MaterialTheme.colorScheme.surface
                                 )
                             )
                         )
                 )
             }
-        }
-        
-        //  头像和基本信息区域
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .offset(y = if (hasTopPhoto) (-20).dp else 4.dp),  //  减少 offset
-            verticalAlignment = Alignment.Bottom
-        ) {
-            // 头像（带边框）
-            Box {
-                val avatarModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            rememberSharedContentState(key = "up_avatar_${userInfo.mid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            clipInOverlayDuringTransition = OverlayClip(CircleShape)
-                        )
-                    }
-                } else Modifier
-
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.buildSizedImageUrl(userInfo.face, width = 240, height = 240))
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .then(avatarModifier)
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(3.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
-                
-                //  直播状态标识（如果正在直播）
-                if (userInfo.liveRoom?.liveStatus == 1) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(20.dp)
-                            .background(com.android.purebilibili.core.theme.iOSRed, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "播",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-            
-            Spacer(Modifier.width(12.dp))
-            
-            // 用户名和信息
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(bottom = 4.dp)
+                    .fillMaxWidth()
+                    .background(sectionColor)
+                    .padding(horizontal = 16.dp, vertical = 18.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = userInfo.name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    
-                    Spacer(Modifier.width(6.dp))
-                    
-                    //  等级徽章
-                    Surface(
-                        color = when {
-                            userInfo.level >= 6 -> Color(0xFFFF6699)  // 粉色高等级
-                            userInfo.level >= 4 -> Color(0xFF00AEEC)  // 蓝色中等级
-                            else -> Color(0xFF9E9E9E)  // 灰色低等级
-                        },
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            text = "LV${userInfo.level}",
-                            fontSize = 10.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Box {
+                        val avatarModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedBounds(
+                                    rememberSharedContentState(key = "up_avatar_${userInfo.mid}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                                )
+                            }
+                        } else Modifier
+
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.buildSizedImageUrl(userInfo.face, width = 320, height = 320))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .then(avatarModifier)
+                                .size(84.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.16f))
                         )
+
+                        if (liveRoom?.liveStatus == 1) {
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomEnd),
+                                shape = RoundedCornerShape(6.dp),
+                                color = com.android.purebilibili.core.theme.iOSRed
+                            ) {
+                                Text(
+                                    text = "LIVE",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
                     }
-                    
-                    //  性别图标
-                    if (userInfo.sex == "男") {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "♂",
-                            color = Color(0xFF00AEEC),  // 蓝色
-                            fontSize = 16.sp,
-                            lineHeight = 16.sp
-                        )
-                    } else if (userInfo.sex == "女") {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "♀",
-                            color = Color(0xFFFF6699),  // 粉色
-                            fontSize = 16.sp,
-                            lineHeight = 16.sp
-                        )
-                    }
-                    
-                    // VIP 标签
-                    if (userInfo.vip.status == 1 && userInfo.vip.label.text.isNotEmpty()) {
-                        Spacer(Modifier.width(6.dp))
-                        Surface(
-                            color = Color(0xFFFF6699),
-                            shape = RoundedCornerShape(4.dp)
+
+                    Spacer(Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = userInfo.vip.label.text,
-                                fontSize = 9.sp,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                softWrap = false
+                                text = userInfo.name,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
+
+                            Button(
+                                onClick = onFollowClick,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isFollowed) {
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                                    contentColor = if (isFollowed) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    }
+                                ),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .widthIn(min = 84.dp)
+                                    .height(38.dp)
+                            ) {
+                                Text(
+                                    text = if (isFollowed) "已关注" else "关注",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SpaceMetaTag(text = "LV${userInfo.level}", emphasized = true)
+                            if (userInfo.vip.status == 1 && userInfo.vip.label.text.isNotEmpty()) {
+                                SpaceMetaTag(text = userInfo.vip.label.text)
+                            }
+                            if (userInfo.sex == "男" || userInfo.sex == "女") {
+                                SpaceMetaTag(text = userInfo.sex)
+                            }
                         }
                     }
                 }
-            }
 
-            
-            // [新增] 关注按钮
-            Spacer(Modifier.width(12.dp))
-            val isFollowed = userInfo.isFollowed
-            Button(
-                onClick = onFollowClick,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isFollowed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isFollowed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                ),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier
-                    .height(32.dp)
-                    .padding(bottom = 8.dp) // 对齐底部
-            ) {
-                Text(
-                    text = if (isFollowed) "已关注" else "关注",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                val officialText = userInfo.official.title.ifBlank { userInfo.official.desc }
+                if (officialText.isNotBlank()) {
+                    Spacer(Modifier.height(14.dp))
+                    SpaceMetaTag(text = officialText, emphasized = true)
+                }
+
+                if (metaItems.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        metaItems.forEach { item ->
+                            SpaceMetaTag(text = item)
+                        }
+                    }
+                }
+
+                if (userInfo.sign.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = userInfo.sign,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                HorizontalDivider(color = dividerColor)
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(statsColor)
+                        .padding(horizontal = 4.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatItem(
+                        label = "关注",
+                        value = relationStat?.following ?: 0,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        label = "粉丝",
+                        value = relationStat?.follower ?: 0,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        label = "获赞",
+                        value = (upStat?.likes ?: 0).toInt(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        label = "播放",
+                        value = (upStat?.archive?.view ?: 0).toInt(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
-        
-        // 签名
-        if (userInfo.sign.isNotEmpty()) {
-            Text(
-                text = userInfo.sign,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = if (hasTopPhoto) 0.dp else 8.dp)
-            )
-        }
-        
-        Spacer(Modifier.height(12.dp))
-        
-        // 数据统计
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            // 关注
-            StatItem(label = "关注", value = relationStat?.following ?: 0)
-            // 粉丝
-            StatItem(label = "粉丝", value = relationStat?.follower ?: 0)
-            // 获赞
-            StatItem(label = "获赞", value = (upStat?.likes ?: 0).toInt())
-            // 播放
-            StatItem(label = "播放", value = (upStat?.archive?.view ?: 0).toInt())
-        }
-        
-        Spacer(Modifier.height(12.dp))
-        
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-        )
     }
 }
 
@@ -1348,31 +1337,37 @@ private fun SpaceInlineActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clip(RoundedCornerShape(10.dp)),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.16f))
     ) {
-        Box(
-            modifier = Modifier.size(20.dp),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(start = 10.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = tint
+            Box(
+                modifier = Modifier.size(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = tint
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = tint
             )
         }
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = text,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = tint
-        )
     }
 }
 
@@ -1430,19 +1425,27 @@ private fun SpaceFavoriteFolderRow(
 }
 
 @Composable
-private fun StatItem(label: String, value: Int) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatItem(
+    label: String,
+    value: Int,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
             text = FormatUtils.formatStat(value.toLong()),
-            fontSize = 15.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = label,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
         )
     }
 }
@@ -1818,25 +1821,31 @@ private fun SpaceVideoSortDropdown(
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        Row(
+        Surface(
             modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
                 .clickable { expanded = true }
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .clip(RoundedCornerShape(10.dp)),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
         ) {
-            Text(
-                text = currentOrder.displayName,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Icon(
-                CupertinoIcons.Default.ChevronDown,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = currentOrder.displayName,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    CupertinoIcons.Default.ChevronDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         DropdownMenu(
@@ -1944,26 +1953,29 @@ private fun SpaceTabRow(
         TabItem(3, "合集和系列", collectionIcon, if (collectionsCount > 0) collectionsCount.toString() else null)
     )
     
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            tabs.forEach { tab ->
-                SpaceTab(
-                    tab = tab,
-                    isSelected = selectedTab == tab.index,
-                    onClick = { onTabSelected(tab.index) }
-                )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        color = Color.Transparent
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                tabs.forEach { tab ->
+                    SpaceTab(
+                        tab = tab,
+                        isSelected = selectedTab == tab.index,
+                        onClick = { onTabSelected(tab.index) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
+            Spacer(Modifier.height(6.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f))
         }
-        
-        // 下划线指示器
-        HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-        )
     }
 }
 
@@ -1978,12 +1990,18 @@ private data class TabItem(
 private fun SpaceTab(
     tab: TabItem,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val tint = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+    }
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 6.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(
@@ -1994,48 +2012,84 @@ private fun SpaceTab(
                 imageVector = tab.icon,
                 contentDescription = tab.title,
                 modifier = Modifier.size(18.dp),
-                tint = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                tint = tint
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = tab.title,
                 fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = tint
             )
             
-            // 数量徽章
             if (tab.badge != null) {
-                Spacer(Modifier.width(2.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     text = tab.badge,
-                    fontSize = 11.sp,
-                    color = if (isSelected) 
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) 
-                    else 
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    fontSize = 10.sp,
+                    color = tint,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
         
-        // 选中指示条
-        if (isSelected) {
-            Spacer(Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .width(24.dp)
-                    .height(2.dp)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(1.dp))
-            )
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .width(if (isSelected) 28.dp else 18.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+        )
+    }
+}
+
+@Composable
+private fun SpaceMetaTag(
+    text: String,
+    emphasized: Boolean = false
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (emphasized) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
         } else {
-            Spacer(Modifier.height(6.dp))
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
         }
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+    }
+}
+
+@Composable
+private fun SpaceSectionEmptyState(
+    title: String,
+    subtitle: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.34f)
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = subtitle,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+        )
     }
 }
 
@@ -2948,42 +3002,35 @@ private fun SpaceUploadsHeader(
     audioCount: Int,
     onTabSelected: (SpaceSubTab) -> Unit
 ) {
-    androidx.compose.foundation.lazy.LazyRow(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
-            UploadsHeaderTab(
-                title = "视频",
-                count = videoCount,
-                isSelected = selectedTab == SpaceSubTab.VIDEO,
-                onClick = { onTabSelected(SpaceSubTab.VIDEO) }
-            )
-        }
-        item {
-            UploadsHeaderTab(
-                title = "图文",
-                count = articleCount,
-                isSelected = selectedTab == SpaceSubTab.ARTICLE,
-                onClick = { onTabSelected(SpaceSubTab.ARTICLE) }
-            )
-        }
-        item {
-            UploadsHeaderTab(
-                title = "音频",
-                count = audioCount,
-                isSelected = selectedTab == SpaceSubTab.AUDIO,
-                onClick = { onTabSelected(SpaceSubTab.AUDIO) }
-            )
-        }
+        UploadsHeaderTab(
+            title = "视频",
+            count = videoCount,
+            isSelected = selectedTab == SpaceSubTab.VIDEO,
+            onClick = { onTabSelected(SpaceSubTab.VIDEO) }
+        )
+        UploadsHeaderTab(
+            title = "图文",
+            count = articleCount,
+            isSelected = selectedTab == SpaceSubTab.ARTICLE,
+            onClick = { onTabSelected(SpaceSubTab.ARTICLE) }
+        )
+        UploadsHeaderTab(
+            title = "音频",
+            count = audioCount,
+            isSelected = selectedTab == SpaceSubTab.AUDIO,
+            onClick = { onTabSelected(SpaceSubTab.AUDIO) }
+        )
     }
 }
 
 @Composable
-private fun UploadsHeaderTab(
+private fun RowScope.UploadsHeaderTab(
     title: String,
     count: Int,
     isSelected: Boolean,
@@ -2992,34 +3039,42 @@ private fun UploadsHeaderTab(
     val chipColors = resolveSpaceSelectionChipColors(
         isSelected = isSelected,
         colorScheme = MaterialTheme.colorScheme,
-        unselectedAlpha = 0.7f
+        unselectedAlpha = 0.32f
     )
     
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
+            .weight(1f)
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() },
         color = chipColors.backgroundColor,
-        shape = RoundedCornerShape(18.dp)
+        shape = RoundedCornerShape(10.dp),
+        border = if (isSelected) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.24f))
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f))
+        }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
                 text = title,
-                fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 14.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = chipColors.textColor
             )
             if (count > 0) {
                 Spacer(Modifier.width(5.dp))
                 Text(
                     text = count.toString(),
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) chipColors.textColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary
+                    color = if (isSelected) chipColors.textColor.copy(alpha = 0.88f) else MaterialTheme.colorScheme.primary
                 )
             }
         }

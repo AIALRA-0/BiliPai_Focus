@@ -15,6 +15,23 @@ plugins {
     // id("com.google.firebase.crashlytics")
 }
 
+abstract class PrepareKspGeneratedDirsTask : org.gradle.api.DefaultTask() {
+    @get:org.gradle.api.tasks.OutputDirectories
+    abstract val outputDirs: org.gradle.api.file.ConfigurableFileCollection
+
+    @org.gradle.api.tasks.TaskAction
+    fun prepare() {
+        outputDirs.files.forEach { it.mkdirs() }
+    }
+}
+
+fun String.toBuildConfigStringLiteral(): String {
+    val escaped = this
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    return "\"$escaped\""
+}
+
 val debugVerboseLogsEnabled = providers.gradleProperty("bili.debug.verboseLogs")
     .map(String::toBoolean)
     .orElse(false)
@@ -40,6 +57,21 @@ val releaseSigningProperties = Properties().apply {
 val hasFocusReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { key ->
     !releaseSigningProperties.getProperty(key).isNullOrBlank()
 }
+val buildCommitSha = providers.gradleProperty("bili.build.commitSha")
+    .orElse("local")
+    .get()
+val buildGitRef = providers.gradleProperty("bili.build.gitRef")
+    .orElse("")
+    .get()
+val buildWorkflowRunId = providers.gradleProperty("bili.build.workflowRunId")
+    .orElse("")
+    .get()
+val buildWorkflowRunUrl = providers.gradleProperty("bili.build.workflowRunUrl")
+    .orElse("")
+    .get()
+val buildReleaseTag = providers.gradleProperty("bili.build.releaseTag")
+    .orElse("")
+    .get()
 
 android {
     namespace = "com.android.purebilibili"
@@ -57,8 +89,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：官方主版本 + Focus 子版本
         // 更新日志：CHANGELOG.md
-        versionCode = 159
-        versionName = "7.3.0-focus.2"
+        versionCode = 160
+        versionName = "7.5.0-focus.1"
         resValue("string", "app_name", "BliPai Focus")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -73,6 +105,11 @@ android {
         }
 
         manifestPlaceholders["castServiceProcess"] = castServiceProcess
+        buildConfigField("String", "BUILD_COMMIT_SHA", buildCommitSha.toBuildConfigStringLiteral())
+        buildConfigField("String", "BUILD_GIT_REF", buildGitRef.toBuildConfigStringLiteral())
+        buildConfigField("String", "BUILD_WORKFLOW_RUN_ID", buildWorkflowRunId.toBuildConfigStringLiteral())
+        buildConfigField("String", "BUILD_WORKFLOW_RUN_URL", buildWorkflowRunUrl.toBuildConfigStringLiteral())
+        buildConfigField("String", "BUILD_RELEASE_TAG", buildReleaseTag.toBuildConfigStringLiteral())
     }
 
     signingConfigs {
@@ -208,6 +245,34 @@ kotlin {
     }
 }
 
+ksp {
+    arg("room.incremental", "true")
+    arg("room.generateKotlin", "true")
+}
+
+val prepareKspGeneratedVariants = listOf(
+    "debug",
+    "debugUnitTest",
+    "release",
+    "releaseUnitTest",
+    "dev",
+    "devUnitTest"
+)
+
+val prepareKspGeneratedDirs by tasks.registering(PrepareKspGeneratedDirsTask::class) {
+    outputDirs.from(
+        prepareKspGeneratedVariants.map { variantName ->
+            layout.buildDirectory.dir("generated/ksp/$variantName")
+        }
+    )
+}
+
+tasks.matching { task ->
+    task.name.startsWith("ksp") && task.name.endsWith("Kotlin")
+}.configureEach {
+    dependsOn(prepareKspGeneratedDirs)
+}
+
 // 🔥 Compose 编译器性能指标 (仅在需要分析时启用，会拖慢编译速度)
 // composeCompiler {
 //     reportsDestination = layout.buildDirectory.dir("compose_reports")
@@ -215,6 +280,8 @@ kotlin {
 // }
 
 dependencies {
+    val miuixVersion = "0.8.6"
+
     implementation(project(":settings-core"))
     implementation(project(":network-core"))
 
@@ -228,6 +295,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material3:material3-window-size-class:1.3.1") // [新增] 窗口大小类
+    implementation("top.yukonga.miuix.kmp:miuix-android:$miuixVersion")
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
 

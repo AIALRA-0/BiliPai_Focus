@@ -35,6 +35,7 @@ import androidx.compose.ui.window.DialogProperties
 fun QualitySelectionMenu(
     qualities: List<String>,
     qualityIds: List<Int> = emptyList(),
+    switchableQualityIds: List<Int> = emptyList(),
     currentQuality: String,
     isLoggedIn: Boolean = false,
     isVip: Boolean = false,
@@ -58,6 +59,10 @@ fun QualitySelectionMenu(
             qualityId >= 80 -> isLoggedIn  // 1080P 需要登录
             else -> true  // 720P 及以下无限制
         }
+    }
+
+    fun hasSwitchableTrack(qualityId: Int): Boolean {
+        return qualityId in switchableQualityIds
     }
 
     val menuContent: @Composable () -> Unit = {
@@ -102,23 +107,23 @@ fun QualitySelectionMenu(
                         val isSelected = quality == currentQuality
                         val qualityId = qualityIds.getOrNull(index) ?: 0
                         val tag = getQualityTag(qualityId)
-                        val isAvailable = isQualityAvailable(qualityId)
+                        val hasPermission = isQualityAvailable(qualityId)
+                        val isSwitchable = hasSwitchableTrack(qualityId)
+                        val isEnabled = hasPermission && isSwitchable
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                //  [修改] 不可用画质仍可点击，由 ViewModel 处理权限提示
-                                .clickable { onQualitySelected(index) }
+                                .clickable(enabled = isEnabled && !isSelected) { onQualitySelected(index) }
                                 .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = quality,
-                                //  [修改] 不可用画质显示为灰色
                                 color = when {
                                     isSelected -> MaterialTheme.colorScheme.primary
-                                    !isAvailable -> Color.White.copy(0.4f)
+                                    !isEnabled -> Color.White.copy(0.4f)
                                     else -> Color.White.copy(0.9f)
                                 },
                                 fontSize = 14.sp,

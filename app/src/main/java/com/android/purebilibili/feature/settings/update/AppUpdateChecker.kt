@@ -16,12 +16,58 @@ data class AppUpdateAsset(
     val name: String,
     val downloadUrl: String,
     val sizeBytes: Long,
-    val contentType: String
+    val contentType: String,
+    val digest: String = ""
 ) {
     val isApk: Boolean
         get() = name.endsWith(".apk", ignoreCase = true) ||
             contentType.equals("application/vnd.android.package-archive", ignoreCase = true)
+
+    val isBuildMetadata: Boolean
+        get() = name.equals("build-metadata.json", ignoreCase = true) ||
+            name.endsWith("-build-metadata.json", ignoreCase = true)
+
+    val isChecksumsFile: Boolean
+        get() = name.equals("checksums.txt", ignoreCase = true) ||
+            name.endsWith("-checksums.txt", ignoreCase = true)
+
+    val isVerificationMetadata: Boolean
+        get() = name.equals("verification-metadata.json", ignoreCase = true) ||
+            name.endsWith("-verification-metadata.json", ignoreCase = true)
+
+    val sha256Digest: String?
+        get() = digest
+            .takeIf { it.startsWith("sha256:", ignoreCase = true) }
+            ?.substringAfter(':')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
 }
+
+data class AppReleaseBuildArtifact(
+    val name: String,
+    val sha256: String,
+    val sizeBytes: Long
+)
+
+data class AppReleaseBuildMetadata(
+    val schemaVersion: Int = 1,
+    val appId: String = "",
+    val versionName: String = "",
+    val versionCode: Int = 0,
+    val gitCommitSha: String = "",
+    val gitRef: String = "",
+    val workflowRunId: String = "",
+    val workflowRunUrl: String = "",
+    val releaseTag: String = "",
+    val generatedAt: String? = null,
+    val artifacts: List<AppReleaseBuildArtifact> = emptyList()
+)
+
+data class AppReleaseVerificationMetadata(
+    val attestationUrl: String = "",
+    val bundleFileName: String = "",
+    val predicateType: String = ""
+)
 
 data class AppUpdateCheckResult(
     val isUpdateAvailable: Boolean,
@@ -31,7 +77,10 @@ data class AppUpdateCheckResult(
     val releaseNotes: String,
     val publishedAt: String?,
     val assets: List<AppUpdateAsset>,
-    val message: String
+    val message: String,
+    val releaseIsImmutable: Boolean = false,
+    val buildMetadata: AppReleaseBuildMetadata? = null,
+    val verificationMetadata: AppReleaseVerificationMetadata? = null
 )
 
 internal data class AppUpdateReleaseCandidate(
@@ -40,7 +89,9 @@ internal data class AppUpdateReleaseCandidate(
     val releaseNotes: String,
     val publishedAt: String?,
     val assets: List<AppUpdateAsset>,
-    val isPrerelease: Boolean
+    val isPrerelease: Boolean,
+    val isImmutable: Boolean = false,
+    val buildMetadata: AppReleaseBuildMetadata? = null
 )
 
 object AppUpdateChecker {
@@ -76,6 +127,20 @@ object AppUpdateChecker {
             val releaseNotes = release.releaseNotes
             val publishedAt = release.publishedAt
             val assets = release.assets
+            val buildMetadata = assets
+                .firstOrNull { it.isBuildMetadata }
+                ?.downloadUrl
+                ?.let { metadataUrl ->
+                    fetchRemoteText(metadataUrl, required = false)
+                }
+                ?.let(::parseBuildMetadata)
+            val verificationMetadata = assets
+                .firstOrNull { it.isVerificationMetadata }
+                ?.downloadUrl
+                ?.let { metadataUrl ->
+                    fetchRemoteText(metadataUrl, required = false)
+                }
+                ?.let(::parseVerificationMetadata)
             val updateAvailable = isRemoteNewer(currentVersion, latestVersion)
             val message = if (updateAvailable) {
                 "发现新版本 v$latestVersion"
@@ -91,7 +156,10 @@ object AppUpdateChecker {
                 releaseNotes = releaseNotes,
                 publishedAt = publishedAt,
                 assets = assets,
-                message = message
+                message = message,
+                releaseIsImmutable = release.isImmutable,
+                buildMetadata = buildMetadata,
+                verificationMetadata = verificationMetadata
             )
         }
     }
@@ -280,6 +348,7 @@ object AppUpdateChecker {
         val releaseNotes = releaseObject["body"]?.jsonPrimitive?.content.orEmpty().trim()
         val publishedAt = releaseObject["published_at"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val isPrerelease = releaseObject["prerelease"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+        val isImmutable = releaseObject["immutable"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
         val assets = parseReleaseAssets(releaseObject.toString())
         return AppUpdateReleaseCandidate(
             tagName = tagName,
@@ -287,7 +356,8 @@ object AppUpdateChecker {
             releaseNotes = releaseNotes,
             publishedAt = publishedAt,
             assets = assets,
-            isPrerelease = isPrerelease
+            isPrerelease = isPrerelease,
+            isImmutable = isImmutable
         )
     }
 
@@ -306,9 +376,10 @@ object AppUpdateChecker {
                     name = assetJson["name"]?.jsonPrimitive?.content.orEmpty().trim(),
                     downloadUrl = assetJson["browser_download_url"]?.jsonPrimitive?.content.orEmpty().trim(),
                     sizeBytes = assetJson["size"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
-                    contentType = assetJson["content_type"]?.jsonPrimitive?.content.orEmpty().trim()
+                    contentType = assetJson["content_type"]?.jsonPrimitive?.content.orEmpty().trim(),
+                    digest = assetJson["digest"]?.jsonPrimitive?.content.orEmpty().trim()
                 )
-                if (asset.name.isBlank() || asset.downloadUrl.isBlank() || !asset.isApk) continue
+                if (asset.name.isBlank() || asset.downloadUrl.isBlank()) continue
                 add(asset)
             }
         }
@@ -316,5 +387,67 @@ object AppUpdateChecker {
 
     internal fun parseReleaseAssets(releaseJson: JSONObject): List<AppUpdateAsset> {
         return parseReleaseAssets(releaseJson.toString())
+    }
+
+    internal fun parseBuildMetadata(rawMetadataJson: String): AppReleaseBuildMetadata? {
+        val metadataObject = runCatching {
+            releaseJson.parseToJsonElement(rawMetadataJson).jsonObject
+        }.getOrNull() ?: return null
+
+        val artifacts = metadataObject["artifacts"]
+            ?.jsonArray
+            ?.mapNotNull { element ->
+                val artifact = element.jsonObject
+                val name = artifact["name"]?.jsonPrimitive?.content.orEmpty().trim()
+                val sha256 = artifact["sha256"]?.jsonPrimitive?.content.orEmpty().trim()
+                if (name.isBlank() || sha256.isBlank()) return@mapNotNull null
+                AppReleaseBuildArtifact(
+                    name = name,
+                    sha256 = sha256,
+                    sizeBytes = artifact["sizeBytes"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                )
+            }
+            .orEmpty()
+
+        return AppReleaseBuildMetadata(
+            schemaVersion = metadataObject["schemaVersion"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1,
+            appId = metadataObject["appId"]?.jsonPrimitive?.content.orEmpty(),
+            versionName = metadataObject["versionName"]?.jsonPrimitive?.content.orEmpty(),
+            versionCode = metadataObject["versionCode"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            gitCommitSha = metadataObject["gitCommitSha"]?.jsonPrimitive?.content.orEmpty(),
+            gitRef = metadataObject["gitRef"]?.jsonPrimitive?.content.orEmpty(),
+            workflowRunId = metadataObject["workflowRunId"]?.jsonPrimitive?.content.orEmpty(),
+            workflowRunUrl = metadataObject["workflowRunUrl"]?.jsonPrimitive?.content.orEmpty(),
+            releaseTag = metadataObject["releaseTag"]?.jsonPrimitive?.content.orEmpty(),
+            generatedAt = metadataObject["generatedAt"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
+            artifacts = artifacts
+        )
+    }
+
+    internal fun parseVerificationMetadata(rawMetadataJson: String): AppReleaseVerificationMetadata? {
+        val metadataObject = runCatching {
+            releaseJson.parseToJsonElement(rawMetadataJson).jsonObject
+        }.getOrNull() ?: return null
+
+        val attestationUrl = metadataObject["attestationUrl"]
+            ?.jsonPrimitive
+            ?.content
+            .orEmpty()
+            .trim()
+        if (attestationUrl.isBlank()) return null
+
+        return AppReleaseVerificationMetadata(
+            attestationUrl = attestationUrl,
+            bundleFileName = metadataObject["bundleFileName"]
+                ?.jsonPrimitive
+                ?.content
+                .orEmpty()
+                .trim(),
+            predicateType = metadataObject["predicateType"]
+                ?.jsonPrimitive
+                ?.content
+                .orEmpty()
+                .trim()
+        )
     }
 }

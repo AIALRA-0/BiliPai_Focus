@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 class MainActivityUserLeaveHintPolicyTest {
 
     @Test
-    fun forceStopsWhenLeavingVideoDetailAndStopOnExitEnabled() {
-        assertTrue(
+    fun doesNotForceStopWhenUserLeavesAppFromVideoDetailEvenIfStopOnExitEnabled() {
+        assertFalse(
             shouldForceStopPlaybackOnUserLeaveHint(
                 isInVideoDetail = true,
                 stopPlaybackOnExit = true,
@@ -46,6 +46,39 @@ class MainActivityUserLeaveHintPolicyTest {
                 isInVideoDetail = true,
                 stopPlaybackOnExit = true,
                 shouldTriggerPip = true
+            )
+        )
+    }
+
+    @Test
+    fun restoresPlaybackRouteResumeStateWhenVideoOrAudioRouteIsActive() {
+        assertTrue(
+            shouldRestorePlaybackRouteStateOnResume(
+                isPlaybackRouteActive = true
+            )
+        )
+        assertFalse(
+            shouldRestorePlaybackRouteStateOnResume(
+                isPlaybackRouteActive = false
+            )
+        )
+    }
+
+    @Test
+    fun restoresMutedPlayerVolumeOnlyWhenPlaybackPlayerWasInternallyMuted() {
+        assertTrue(
+            shouldRestoreMutedPlaybackPlayerVolumeOnResume(
+                playerVolume = 0f
+            )
+        )
+        assertTrue(
+            shouldRestoreMutedPlaybackPlayerVolumeOnResume(
+                playerVolume = -0.1f
+            )
+        )
+        assertFalse(
+            shouldRestoreMutedPlaybackPlayerVolumeOnResume(
+                playerVolume = 0.3f
             )
         )
     }

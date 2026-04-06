@@ -49,7 +49,7 @@ class VideoPlaybackUserSeekPolicyTest {
 
         seekPlayerFromUserAction(player, 12_345L)
 
-        verify(exactly = 1) { player.seekTo(12_345L) }
+        verify(exactly = 2) { player.seekTo(12_345L) }
         verify(exactly = 1) { player.play() }
     }
 
@@ -63,5 +63,22 @@ class VideoPlaybackUserSeekPolicyTest {
 
         verify(exactly = 1) { player.seekTo(12_345L) }
         verify(exactly = 0) { player.play() }
+    }
+
+    @Test
+    fun `seekPlayerFromUserAction honors explicit resume override from scrubbing session`() {
+        val player = mockk<Player>(relaxed = true)
+        every { player.playWhenReady } returns false
+        every { player.playbackState } returns Player.STATE_READY
+        every { player.mediaItemCount } returns 1
+
+        seekPlayerFromUserAction(
+            player = player,
+            positionMs = 12_345L,
+            shouldResumePlaybackOverride = true
+        )
+
+        verify(exactly = 2) { player.seekTo(12_345L) }
+        verify(exactly = 1) { player.play() }
     }
 }

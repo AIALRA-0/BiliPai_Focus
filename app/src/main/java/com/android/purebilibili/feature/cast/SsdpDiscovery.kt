@@ -25,22 +25,14 @@ object SsdpDiscovery {
     private const val SSDP_ADDRESS = "239.255.255.250"
     private const val SSDP_PORT = 1900
     
-    // M-SEARCH 请求 - 仅搜索 MediaRenderer
-    private val M_SEARCH_RENDERER = """
+    // Keep precise targets first, then add broad fallbacks for TVs/boxes
+    // that only respond to root-device or catch-all discovery.
+    private fun buildSearchPayload(searchTarget: String): String = """
         M-SEARCH * HTTP/1.1
         HOST: 239.255.255.250:1900
         MAN: "ssdp:discover"
         MX: 3
-        ST: urn:schemas-upnp-org:device:MediaRenderer:1
-        
-    """.trimIndent().replace("\n", "\r\n")
-
-    private val M_SEARCH_AV_TRANSPORT = """
-        M-SEARCH * HTTP/1.1
-        HOST: 239.255.255.250:1900
-        MAN: "ssdp:discover"
-        MX: 3
-        ST: urn:schemas-upnp-org:service:AVTransport:1
+        ST: $searchTarget
         
     """.trimIndent().replace("\n", "\r\n")
     
@@ -132,9 +124,11 @@ object SsdpDiscovery {
     }
 
     internal fun resolveSsdpSearchPayloads(): List<String> = listOf(
-        M_SEARCH_RENDERER,
-        M_SEARCH_AV_TRANSPORT
-    )
+        "urn:schemas-upnp-org:device:MediaRenderer:1",
+        "urn:schemas-upnp-org:service:AVTransport:1",
+        "upnp:rootdevice",
+        "ssdp:all"
+    ).map(::buildSearchPayload).distinct()
 
     private fun bindSocketToLocalNetworkInterface(context: Context, socket: MulticastSocket) {
         try {

@@ -29,4 +29,20 @@ class DanmakuSendDialogLayoutPolicyTest {
         assertEquals(0, liftWhenImeVisible)
         assertEquals(14, liftWhenImeHidden)
     }
+
+    @Test
+    fun `invalid remembered send options should fall back to safe defaults`() {
+        val selection = resolveDanmakuSendSelectionState(
+            initialColor = 123,
+            initialMode = 99,
+            initialFontSize = 77,
+            colorOptions = listOf(16777215, 16646914),
+            modeOptions = listOf(1, 4, 5),
+            fontSizeOptions = listOf(18, 25, 36)
+        )
+
+        assertEquals(16777215, selection.color)
+        assertEquals(1, selection.mode)
+        assertEquals(25, selection.fontSize)
+    }
 }

@@ -1,8 +1,11 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.android.purebilibili.data.model.response
 
 import com.android.purebilibili.core.util.ClosestTargetFallback
 import com.android.purebilibili.core.util.findClosestTarget
 import com.android.purebilibili.data.model.VideoDecodeFormat
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -80,6 +83,7 @@ data class Durl(
 @Serializable
 data class Dash(
     val duration: Int = 0,
+    @JsonNames("minBufferTime", "min_buffer_time")
     val minBufferTime: Float = 0f,
     val video: List<DashVideo> = emptyList(),
     val audio: List<DashAudio>? = emptyList(),
@@ -91,7 +95,9 @@ data class Dash(
 @Serializable
 data class DashVideo(
     val id: Int = 0,
+    @JsonNames("baseUrl", "base_url")
     val baseUrl: String = "",
+    @JsonNames("backupUrl", "backup_url")
     val backupUrl: List<String>? = null,
     @SerialName("bandwidth")
     val bandwidth: Int = 0,
@@ -100,9 +106,12 @@ data class DashVideo(
     val codecs: String = "",
     val width: Int = 0,
     val height: Int = 0,
+    @JsonNames("frameRate", "frame_rate")
     val frameRate: String = "",
     val sar: String = "",
+    @JsonNames("startWithSap", "start_with_sap")
     val startWithSap: Int? = null,
+    @JsonNames("segmentBase", "segment_base")
     val segmentBase: SegmentBase? = null,
     val codecid: Int? = null
 ) {
@@ -117,7 +126,9 @@ data class DashVideo(
 @Serializable
 data class DashAudio(
     val id: Int = 0,
+    @JsonNames("baseUrl", "base_url")
     val baseUrl: String = "",
+    @JsonNames("backupUrl", "backup_url")
     val backupUrl: List<String>? = null,
     @SerialName("bandwidth")
     val bandwidth: Int = 0,
@@ -126,9 +137,12 @@ data class DashAudio(
     val codecs: String = "",
     val width: Int = 0,
     val height: Int = 0,
+    @JsonNames("frameRate", "frame_rate")
     val frameRate: String = "",
     val sar: String = "",
+    @JsonNames("startWithSap", "start_with_sap")
     val startWithSap: Int? = null,
+    @JsonNames("segmentBase", "segment_base")
     val segmentBase: SegmentBase? = null,
     val codecid: Int? = null
 ) {
@@ -139,6 +153,7 @@ data class DashAudio(
 @Serializable
 data class SegmentBase(
     val initialization: String? = null,
+    @JsonNames("indexRange", "index_range")
     val indexRange: String? = null
 )
 

@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.util
 
 import android.content.Context
+import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
 import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.cooldown.PlaybackCooldownManager
@@ -14,6 +15,15 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.File
 
+enum class CacheClearTarget {
+    PLAYBACK_QUALITY,
+    NETWORK,
+    IMAGE_PREVIEW,
+    SUBTITLE_DANMAKU,
+    TEMP_FILES_AND_LOGS,
+    APP_METADATA
+}
+
 /**
  *  缓存工具类 - 优化版
  * 
@@ -23,6 +33,7 @@ import java.io.File
  * 3. 正确的清理顺序避免冲突
  * 4. 完整的内存缓存清理（包含 PlayUrlCache）
  */
+@OptIn(ExperimentalCoilApi::class)
 object CacheUtils {
 
     private const val TAG = "CacheUtils"
@@ -31,12 +42,16 @@ object CacheUtils {
      * 缓存详情数据类
      */
     data class CacheBreakdown(
-        val imageCache: Long = 0L,      // Coil 图片缓存
+        val imageDiskCache: Long = 0L,  // Coil 图片磁盘缓存
+        val imageMemoryCache: Long = 0L, // Coil 图片内存缓存
         val httpCache: Long = 0L,       // OkHttp HTTP 缓存
         val otherCache: Long = 0L,      // 其他文件缓存
-        val memoryCache: Long = 0L      // 内存缓存 (Coil + PlayUrlCache)
+        val playUrlMemoryCache: Long = 0L, // PlayUrl 内存缓存
+        val subtitleDanmakuMemoryCache: Long = 0L // 字幕/弹幕内存缓存
     ) {
-        val totalSize: Long get() = imageCache + httpCache + otherCache + memoryCache
+        val imageCache: Long get() = imageDiskCache + imageMemoryCache
+        val memoryCache: Long get() = imageMemoryCache + playUrlMemoryCache + subtitleDanmakuMemoryCache
+        val totalSize: Long get() = imageDiskCache + httpCache + otherCache + memoryCache
         
         fun format(): String = formatSize(totalSize.toDouble())
         
@@ -61,21 +76,23 @@ object CacheUtils {
      *  获取详细缓存统计
      */
     suspend fun getCacheBreakdown(context: Context): CacheBreakdown = withContext(Dispatchers.IO) {
-        var imageCache = 0L
+        var imageDiskCache = 0L
+        var imageMemoryCache = 0L
         var httpCache = 0L
         var otherCache = 0L
-        var memoryCache = 0L
+        var playUrlMemoryCache = 0L
+        var subtitleDanmakuMemoryCache = 0L
 
         // 1. Coil 内存缓存
-        context.imageLoader.memoryCache?.size?.let { memoryCache += it }
+        context.imageLoader.memoryCache?.size?.let { imageMemoryCache += it }
         
         // 2. PlayUrlCache 内存缓存（估算：每条约 2KB）
         val playUrlCacheSize = PlayUrlCache.size()
-        memoryCache += playUrlCacheSize * 2048L
+        playUrlMemoryCache += playUrlCacheSize * 2048L
 
         // 3. 字幕与弹幕内存缓存
-        memoryCache += VideoRepository.getSubtitleCueCacheStats().estimatedBytes
-        memoryCache += DanmakuRepository.getDanmakuCacheStats().totalBytes
+        subtitleDanmakuMemoryCache += VideoRepository.getSubtitleCueCacheStats().estimatedBytes
+        subtitleDanmakuMemoryCache += DanmakuRepository.getDanmakuCacheStats().totalBytes
 
         // 4. 内部缓存目录分类统计
         context.cacheDir?.let { cacheDir ->
@@ -85,7 +102,7 @@ object CacheUtils {
                     val size = file.length()
                     when {
                         // Coil 图片缓存目录
-                        file.absolutePath.contains("image_cache") -> imageCache += size
+                        file.absolutePath.contains("image_cache") -> imageDiskCache += size
                         // OkHttp 缓存目录
                         file.absolutePath.contains("http_cache") ||
                         file.absolutePath.contains("okhttp") -> httpCache += size
@@ -104,10 +121,12 @@ object CacheUtils {
         }
 
         CacheBreakdown(
-            imageCache = imageCache,
+            imageDiskCache = imageDiskCache,
+            imageMemoryCache = imageMemoryCache,
             httpCache = httpCache,
             otherCache = otherCache,
-            memoryCache = memoryCache
+            playUrlMemoryCache = playUrlMemoryCache,
+            subtitleDanmakuMemoryCache = subtitleDanmakuMemoryCache
         )
     }
 
@@ -115,64 +134,62 @@ object CacheUtils {
      *  清除所有缓存（优化顺序，避免冲突）
      */
     suspend fun clearAllCache(context: Context): Result<Unit> = withContext(Dispatchers.IO) {
+        clearCache(context, CacheClearTarget.entries.toSet())
+    }
+
+    suspend fun clearCache(
+        context: Context,
+        targets: Set<CacheClearTarget>
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            // ===== 第 1 阶段：清除内存缓存 =====
-            
-            // 1.1 清除 Coil 图片内存缓存
-            context.imageLoader.memoryCache?.clear()
-            Logger.d(TAG, " Coil memory cache cleared")
-            
-            // 1.2  清除 PlayUrlCache（之前遗漏的）
-            PlayUrlCache.clear()
-            Logger.d(TAG, " PlayUrlCache cleared")
-
-            // 1.3 清除字幕与弹幕内存缓存
-            VideoRepository.clearSubtitleCueCache()
-            DanmakuRepository.clearDanmakuCache()
-            Logger.d(TAG, " Subtitle and danmaku cache cleared")
-
-            // ===== 第 2 阶段：清除 API 管理的磁盘缓存 =====
-            
-            // 2.1 清除 Coil 磁盘缓存（通过 API 清除，避免文件锁冲突）
-            context.imageLoader.diskCache?.clear()
-            Logger.d(TAG, " Coil disk cache cleared")
-            
-            // 2.2 清除 OkHttp 缓存
-            try {
-                com.android.purebilibili.core.network.NetworkModule.okHttpClient.cache?.evictAll()
-                Logger.d(TAG, " OkHttp cache cleared")
-            } catch (e: Exception) {
-                Logger.w(TAG, "OkHttp cache clear failed: ${e.message}")
+            if (CacheClearTarget.IMAGE_PREVIEW in targets) {
+                context.imageLoader.memoryCache?.clear()
+                context.imageLoader.diskCache?.clear()
+                Logger.d(TAG, " Image preview cache cleared")
             }
 
-            // ===== 第 3 阶段：清除剩余文件缓存 =====
-            
-            // 3.1 清除内部缓存目录（排除已通过 API 清除的目录）
-            context.cacheDir?.let { cacheDir ->
-                clearDirContentsSelective(cacheDir, excludePatterns = listOf("image_cache", "okhttp"))
+            if (CacheClearTarget.PLAYBACK_QUALITY in targets) {
+                PlayUrlCache.clear()
+                PlaybackCooldownManager.clearAll()
+                Logger.d(TAG, " Playback quality cache cleared")
             }
-            Logger.d(TAG, " Internal cache cleared")
-            
-            // 3.2 清除外部缓存
-            context.externalCacheDir?.let { clearDirContents(it) }
-            Logger.d(TAG, " External cache cleared")
 
-            // ===== 第 4 阶段：清除应用级缓存 =====
-            
-            // 4.1 清除关注列表缓存
-            FollowingCacheStore.clear(context)
-            Logger.d(TAG, " Following cache cleared")
-            
-            // 4.2 清除 WBI 签名缓存（让其自动重新获取）
-            com.android.purebilibili.core.network.WbiKeyManager.invalidateCache()
-            Logger.d(TAG, " WBI cache invalidated")
-            
-            // 4.3  清除播放冷却状态（让用户可以重新尝试）
-            PlaybackCooldownManager.clearAll()
-            Logger.d(TAG, " Playback cooldown cleared")
+            if (CacheClearTarget.SUBTITLE_DANMAKU in targets) {
+                VideoRepository.clearSubtitleCueCache()
+                DanmakuRepository.clearDanmakuCache()
+                Logger.d(TAG, " Subtitle and danmaku cache cleared")
+            }
 
-            // 4.4 清除应用私有日志文件与更新残留
-            Logger.clearPrivateLogArtifacts(context)
+            if (CacheClearTarget.NETWORK in targets) {
+                try {
+                    com.android.purebilibili.core.network.NetworkModule.okHttpClient.cache?.evictAll()
+                    Logger.d(TAG, " Network cache cleared")
+                } catch (e: Exception) {
+                    Logger.w(TAG, "OkHttp cache clear failed: ${e.message}")
+                }
+            }
+
+            if (CacheClearTarget.TEMP_FILES_AND_LOGS in targets) {
+                val excludePatterns = buildList {
+                    if (CacheClearTarget.IMAGE_PREVIEW !in targets) add("image_cache")
+                    if (CacheClearTarget.NETWORK !in targets) {
+                        add("okhttp")
+                        add("http_cache")
+                    }
+                }
+                context.cacheDir?.let { cacheDir ->
+                    clearDirContentsSelective(cacheDir, excludePatterns = excludePatterns)
+                }
+                context.externalCacheDir?.let { clearDirContents(it) }
+                Logger.clearPrivateLogArtifacts(context)
+                Logger.d(TAG, " Temp files and log artifacts cleared")
+            }
+
+            if (CacheClearTarget.APP_METADATA in targets) {
+                FollowingCacheStore.clear(context)
+                com.android.purebilibili.core.network.WbiKeyManager.invalidateCache()
+                Logger.d(TAG, " App metadata cache cleared")
+            }
         }.onFailure { e ->
             Logger.e(TAG, "Error clearing cache", e)
         }

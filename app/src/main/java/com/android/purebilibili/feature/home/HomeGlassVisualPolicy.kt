@@ -115,6 +115,12 @@ internal fun resolveHomeRefreshTipAppearance(
     }
 }
 
+internal fun resolveHomeGlassCoverPillBaseColor(): Color {
+    // Cover badges sit directly on top of unpredictable thumbnails, so keep the
+    // glass tint dark to preserve white text contrast in history/favorites/etc.
+    return Color.Black
+}
+
 @Composable
 internal fun rememberHomeGlassChromeColors(
     glassEnabled: Boolean,

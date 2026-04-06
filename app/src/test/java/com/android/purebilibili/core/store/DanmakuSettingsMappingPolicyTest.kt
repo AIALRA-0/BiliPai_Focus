@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DanmakuSettingsMappingPolicyTest {
@@ -44,6 +45,14 @@ class DanmakuSettingsMappingPolicyTest {
         assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
         assertEquals("", result.blockRulesRaw)
         assertEquals(emptyList(), result.blockRules)
+        assertEquals(5, propertyValue<Int>(result, "fontWeight"))
+        assertEquals(1.5f, propertyValue<Float>(result, "strokeWidth"))
+        assertEquals(1.6f, propertyValue<Float>(result, "lineHeight"))
+        assertEquals(7.0f, propertyValue<Float>(result, "scrollDurationSeconds"))
+        assertEquals(4.0f, propertyValue<Float>(result, "staticDurationSeconds"))
+        assertFalse(propertyValue<Boolean>(result, "scrollFixedVelocity"))
+        assertFalse(propertyValue<Boolean>(result, "staticDanmakuToScroll"))
+        assertFalse(propertyValue<Boolean>(result, "massiveMode"))
     }
 
     @Test
@@ -54,6 +63,14 @@ class DanmakuSettingsMappingPolicyTest {
             floatPreferencesKey("danmaku_font_scale") to 1.3f,
             floatPreferencesKey("danmaku_speed") to 1.6f,
             floatPreferencesKey("danmaku_area") to 0.75f,
+            intPreferencesKey("danmaku_font_weight") to 8,
+            floatPreferencesKey("danmaku_stroke_width") to 4.2f,
+            floatPreferencesKey("danmaku_line_height") to 2.1f,
+            floatPreferencesKey("danmaku_scroll_duration_seconds") to 12.5f,
+            floatPreferencesKey("danmaku_static_duration_seconds") to 9.5f,
+            booleanPreferencesKey("danmaku_scroll_fixed_velocity") to true,
+            booleanPreferencesKey("danmaku_static_to_scroll") to true,
+            booleanPreferencesKey("danmaku_massive_mode") to true,
             booleanPreferencesKey("danmaku_merge_duplicates") to false,
             booleanPreferencesKey("danmaku_allow_scroll") to false,
             booleanPreferencesKey("danmaku_allow_top") to false,
@@ -82,6 +99,14 @@ class DanmakuSettingsMappingPolicyTest {
         assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
         assertEquals("剧透\n广告\n  \n测试", result.blockRulesRaw)
         assertEquals(listOf("剧透", "广告", "测试"), result.blockRules)
+        assertEquals(8, propertyValue<Int>(result, "fontWeight"))
+        assertEquals(4.2f, propertyValue<Float>(result, "strokeWidth"))
+        assertEquals(2.1f, propertyValue<Float>(result, "lineHeight"))
+        assertEquals(12.5f, propertyValue<Float>(result, "scrollDurationSeconds"))
+        assertEquals(9.5f, propertyValue<Float>(result, "staticDurationSeconds"))
+        assertTrue(propertyValue<Boolean>(result, "scrollFixedVelocity"))
+        assertTrue(propertyValue<Boolean>(result, "staticDanmakuToScroll"))
+        assertTrue(propertyValue<Boolean>(result, "massiveMode"))
     }
 
     @Test
@@ -177,6 +202,8 @@ class DanmakuSettingsMappingPolicyTest {
             floatPreferencesKey("danmaku_landscape_opacity") to 0.72f,
             floatPreferencesKey("danmaku_portrait_font_scale") to 0.9f,
             floatPreferencesKey("danmaku_landscape_font_scale") to 1.6f,
+            floatPreferencesKey("danmaku_portrait_stroke_width") to 1.2f,
+            floatPreferencesKey("danmaku_landscape_stroke_width") to 3.8f,
             stringPreferencesKey("danmaku_portrait_block_rules") to "竖屏",
             stringPreferencesKey("danmaku_landscape_block_rules") to "横屏"
         )
@@ -188,7 +215,33 @@ class DanmakuSettingsMappingPolicyTest {
         assertEquals(0.72f, landscape.opacity)
         assertEquals(0.9f, portrait.fontScale)
         assertEquals(1.6f, landscape.fontScale)
+        assertEquals(1.2f, propertyValue<Float>(portrait, "strokeWidth"))
+        assertEquals(3.8f, propertyValue<Float>(landscape, "strokeWidth"))
         assertEquals(listOf("竖屏"), portrait.blockRules)
         assertEquals(listOf("横屏"), landscape.blockRules)
+    }
+
+    @Test
+    fun danmakuSettings_exposesAdvancedParityFields() {
+        val getterNames = DanmakuSettings::class.java.methods.map { it.name }.toSet()
+
+        assertTrue("getFontWeight" in getterNames)
+        assertTrue("getStrokeWidth" in getterNames)
+        assertTrue("getLineHeight" in getterNames)
+        assertTrue("getScrollDurationSeconds" in getterNames)
+        assertTrue("getStaticDurationSeconds" in getterNames)
+        assertTrue("getScrollFixedVelocity" in getterNames || "isScrollFixedVelocity" in getterNames)
+        assertTrue("getStaticDanmakuToScroll" in getterNames || "isStaticDanmakuToScroll" in getterNames)
+        assertTrue("getMassiveMode" in getterNames || "isMassiveMode" in getterNames)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> propertyValue(instance: Any, name: String): T {
+        val upperName = name.replaceFirstChar { it.uppercase() }
+        val getter = instance.javaClass.methods.firstOrNull {
+            it.name == "get$upperName" || it.name == "is$upperName"
+        }
+        assertNotNull(getter, "Expected property `$name` to exist on ${instance.javaClass.simpleName}")
+        return getter.invoke(instance) as T
     }
 }

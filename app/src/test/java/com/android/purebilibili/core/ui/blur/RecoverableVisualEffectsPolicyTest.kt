@@ -43,7 +43,7 @@ class RecoverableVisualEffectsPolicyTest {
     }
 
     @Test
-    fun directHazeLiquidGlassFallbackIsDisabledOnAndroid16AndAbove() {
+    fun directHazeLiquidGlassFallbackIsAvailableFromAndroid13UntilAndroid15() {
         assertFalse(
             shouldAllowDirectHazeLiquidGlassFallback(
                 sdkInt = 36
@@ -51,21 +51,21 @@ class RecoverableVisualEffectsPolicyTest {
         )
         assertTrue(
             shouldAllowDirectHazeLiquidGlassFallback(
-                sdkInt = 35
+                sdkInt = 33
             )
         )
     }
 
     @Test
-    fun homeChromeLiquidGlassIsDisabledOnAndroid13AndEnabledOnAndroid14Plus() {
+    fun homeChromeLiquidGlassIsEnabledOnAndroid13AndAbove() {
         assertFalse(
             shouldAllowHomeChromeLiquidGlass(
-                sdkInt = 33
+                sdkInt = 32
             )
         )
         assertTrue(
             shouldAllowHomeChromeLiquidGlass(
-                sdkInt = 34
+                sdkInt = 33
             )
         )
     }

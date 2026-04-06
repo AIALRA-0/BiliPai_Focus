@@ -1,6 +1,10 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import com.android.purebilibili.feature.video.playback.policy.PlaybackQualityMode
+import com.android.purebilibili.feature.video.controller.QualityPermissionResult
+import com.android.purebilibili.data.model.VideoLoadError
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -74,6 +78,122 @@ class VideoLoadRequestPolicyTest {
             resolveRequestedStartPositionMs(
                 cachedPositionMs = -1L,
                 fallbackResumePositionMs = -20L
+            )
+        )
+    }
+
+    @Test
+    fun `initial playback quality mode defaults to auto`() {
+        assertEquals(
+            PlaybackQualityMode.AUTO,
+            resolveInitialPlaybackQualityMode()
+        )
+    }
+
+    @Test
+    fun `manual quality selection locks positive quality ids`() {
+        assertEquals(
+            PlaybackQualityMode.LOCKED(80),
+            resolvePlaybackQualityModeForQualitySelection(80)
+        )
+    }
+
+    @Test
+    fun `manual auto selection clears quality lock`() {
+        assertEquals(
+            PlaybackQualityMode.AUTO,
+            resolvePlaybackQualityModeForQualitySelection(-1)
+        )
+    }
+
+    @Test
+    fun `quality switch failure message explains permission denial`() {
+        val message = resolveQualitySwitchFailureMessage(
+            requestedQualityLabel = "1080P60",
+            permissionResult = QualityPermissionResult.RequiresVip("1080P60")
+        )
+
+        assertContains(message, "需要大会员")
+    }
+
+    @Test
+    fun `quality switch failure message explains network style load error`() {
+        val message = resolveQualitySwitchFailureMessage(
+            requestedQualityLabel = "1080P",
+            loadError = VideoLoadError.Timeout
+        )
+
+        assertContains(message, "超时")
+    }
+
+    @Test
+    fun `quality switch failure message explains app api cooldown for premium quality`() {
+        val message = resolveQualitySwitchFailureMessage(
+            requestedQualityLabel = "1080P60",
+            hasCachedDashTracks = true,
+            cacheContainsRequestedQuality = false,
+            qualityRefetchCooldownRemainingMs = 95_000L
+        )
+
+        assertContains(message, "接口风控")
+        assertContains(message, "1 分 35 秒")
+    }
+
+    @Test
+    fun `premium quality switch is blocked when cooldown active and cache misses target`() {
+        assertTrue(
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = 116,
+                cacheContainsRequestedQuality = false,
+                appApiCooldownRemainingMs = 20_000L
+            )
+        )
+        assertFalse(
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = 80,
+                cacheContainsRequestedQuality = false,
+                appApiCooldownRemainingMs = 20_000L
+            )
+        )
+        assertFalse(
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = 116,
+                cacheContainsRequestedQuality = true,
+                appApiCooldownRemainingMs = 20_000L
+            )
+        )
+    }
+
+    @Test
+    fun `effective av1 support is disabled when current session has blocked av1`() {
+        assertFalse(
+            resolveEffectiveAv1Support(
+                deviceSupportsAv1 = true,
+                sessionBlockedCodecs = setOf("av01")
+            )
+        )
+    }
+
+    @Test
+    fun `effective codec preference rewrites av1 setting to avc when current session has blocked av1`() {
+        assertEquals(
+            "avc1",
+            resolveEffectiveVideoCodecPreference(
+                requestCodecOverride = null,
+                settingsCodecPreference = "av01",
+                sessionBlockedCodecs = setOf("av01")
+            )
+        )
+    }
+
+    @Test
+    fun `explicit request codec override wins over session codec block fallback`() {
+        assertEquals(
+            "hev1",
+            resolveEffectiveVideoCodecPreference(
+                requestCodecOverride = "hev1",
+                settingsCodecPreference = "av01",
+                sessionBlockedCodecs = setOf("av01")
             )
         )
     }

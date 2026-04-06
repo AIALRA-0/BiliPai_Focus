@@ -26,6 +26,7 @@ import com.android.purebilibili.feature.settings.DarkThemeStyle
 import com.android.purebilibili.feature.settings.resolveAppLanguagePreference
 import com.android.purebilibili.feature.settings.resolveDarkThemeStylePreference
 import com.android.purebilibili.feature.settings.resolveThemeModePreference
+import com.android.purebilibili.feature.video.ui.components.CollectionSortMode
 import com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuOpacity
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
@@ -38,15 +39,21 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.abs
 
 // 声明 DataStore 扩展属性
 internal val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
+
+internal const val DEFAULT_CRASH_TRACKING_ENABLED = true
+internal const val DEFAULT_ANALYTICS_ENABLED = false
+internal const val DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED = true
 
 /**
  *  首页设置合并类 - 减少 HomeScreen 重组次数
@@ -85,6 +92,63 @@ internal fun resolveDefaultLiquidGlassStrength(mode: LiquidGlassMode): Float = w
 }
 
 internal fun normalizeLiquidGlassStrength(value: Float): Float = value.coerceIn(0f, 1f)
+
+internal fun normalizeLiquidGlassProgress(value: Float): Float = value.coerceIn(0f, 1f)
+
+internal fun resolveLegacyLiquidGlassProgress(
+    mode: LiquidGlassMode,
+    strength: Float
+): Float {
+    val normalizedStrength = normalizeLiquidGlassStrength(strength)
+    val (start, end) = when (mode) {
+        LiquidGlassMode.CLEAR -> 0f to 0.32f
+        LiquidGlassMode.BALANCED -> 0.34f to 0.66f
+        LiquidGlassMode.FROSTED -> 0.68f to 1f
+    }
+    return normalizeLiquidGlassProgress(start + (end - start) * normalizedStrength)
+}
+
+internal fun resolveLegacyLiquidGlassProgress(style: LiquidGlassStyle): Float {
+    val mode = resolveLegacyLiquidGlassMode(style)
+    return resolveLegacyLiquidGlassProgress(
+        mode = mode,
+        strength = resolveDefaultLiquidGlassStrength(mode)
+    )
+}
+
+internal fun resolveLiquidGlassModeFromProgress(progress: Float): LiquidGlassMode {
+    val normalizedProgress = normalizeLiquidGlassProgress(progress)
+    return when {
+        normalizedProgress < 0.34f -> LiquidGlassMode.CLEAR
+        normalizedProgress < 0.68f -> LiquidGlassMode.BALANCED
+        else -> LiquidGlassMode.FROSTED
+    }
+}
+
+internal fun resolveLiquidGlassStrengthFromProgress(progress: Float): Float {
+    val normalizedProgress = normalizeLiquidGlassProgress(progress)
+    val mode = resolveLiquidGlassModeFromProgress(normalizedProgress)
+    val (start, end) = when (mode) {
+        LiquidGlassMode.CLEAR -> 0f to 0.32f
+        LiquidGlassMode.BALANCED -> 0.34f to 0.66f
+        LiquidGlassMode.FROSTED -> 0.68f to 1f
+    }
+    return normalizeLiquidGlassStrength(
+        if (end <= start) {
+            0f
+        } else {
+            (normalizedProgress - start) / (end - start)
+        }
+    )
+}
+
+internal fun resolveLegacyLiquidGlassStyleFromProgress(progress: Float): LiquidGlassStyle {
+    return when (resolveLiquidGlassModeFromProgress(progress)) {
+        LiquidGlassMode.CLEAR -> LiquidGlassStyle.IOS26
+        LiquidGlassMode.BALANCED -> LiquidGlassStyle.CLASSIC
+        LiquidGlassMode.FROSTED -> LiquidGlassStyle.SIMP_MUSIC
+    }
+}
 
 enum class HomeHeaderBlurMode(val value: Int, val label: String) {
     FOLLOW_PRESET(0, "跟随预设"),
@@ -212,6 +276,7 @@ data class HomeSettings(
     val liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
+    val liquidGlassProgress: Float = 0.5f,
     val isHeaderCollapseEnabled: Boolean = true, // [New] 首页顶部栏自动收缩开关
     val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-6=固定)
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
@@ -274,6 +339,14 @@ data class DanmakuSettings(
     val fontScale: Float = 1.0f,
     val speed: Float = 1.0f,
     val displayArea: Float = 0.5f,
+    val fontWeight: Int = 5,
+    val strokeWidth: Float = 1.5f,
+    val lineHeight: Float = 1.6f,
+    val scrollDurationSeconds: Float = 7.0f,
+    val staticDurationSeconds: Float = 4.0f,
+    val scrollFixedVelocity: Boolean = false,
+    val staticDanmakuToScroll: Boolean = false,
+    val massiveMode: Boolean = false,
     val mergeDuplicates: Boolean = true,
     val allowScroll: Boolean = true,
     val allowTop: Boolean = true,
@@ -450,6 +523,62 @@ internal fun mapPlayerInteractionSettingsFromPreferences(
     return SettingsManager.mapPlayerInteractionSettingsFromPreferences(preferences)
 }
 
+internal fun decodeCollectionSubscriptionIds(rawValue: String?): Set<String> {
+    return rawValue
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.toSet()
+        ?: emptySet()
+}
+
+internal fun encodeCollectionSubscriptionIds(collectionIds: Set<String>): String {
+    return collectionIds
+        .filter { it.isNotBlank() }
+        .sorted()
+        .joinToString(",")
+}
+
+internal fun toggleCollectionSubscription(
+    subscribedCollectionIds: Set<String>,
+    collectionId: Long
+): Set<String> {
+    val normalizedId = collectionId.takeIf { it > 0L }?.toString() ?: return subscribedCollectionIds
+    return if (normalizedId in subscribedCollectionIds) {
+        subscribedCollectionIds - normalizedId
+    } else {
+        subscribedCollectionIds + normalizedId
+    }
+}
+
+internal fun decodeCollectionSortPreferences(rawValue: String?): Map<Long, CollectionSortMode> {
+    if (rawValue.isNullOrBlank()) return emptyMap()
+    return runCatching {
+        Json.parseToJsonElement(rawValue).jsonObject.entries.mapNotNull { (key, value) ->
+            val collectionId = key.toLongOrNull() ?: return@mapNotNull null
+            val sortMode = runCatching {
+                CollectionSortMode.valueOf(value.jsonPrimitive.content)
+            }.getOrNull() ?: return@mapNotNull null
+            collectionId to sortMode
+        }.toMap()
+    }.getOrDefault(emptyMap())
+}
+
+internal fun encodeCollectionSortPreferences(
+    preferences: Map<Long, CollectionSortMode>
+): String {
+    if (preferences.isEmpty()) return "{}"
+    return preferences.entries
+        .sortedBy { it.key }
+        .joinToString(
+            separator = ",",
+            prefix = "{",
+            postfix = "}"
+        ) { entry ->
+            "\"${entry.key}\":\"${entry.value.name}\""
+        }
+}
+
 object SettingsManager {
     // 键定义
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
@@ -599,6 +728,11 @@ object SettingsManager {
     private val KEY_CRASH_TRACKING_CONSENT_SHOWN = booleanPreferencesKey("crash_tracking_consent_shown")
     private val KEY_LIQUID_GLASS_MODE = intPreferencesKey("liquid_glass_mode")
     private val KEY_LIQUID_GLASS_STRENGTH = floatPreferencesKey("liquid_glass_strength")
+    private val KEY_LIQUID_GLASS_PROGRESS = floatPreferencesKey("liquid_glass_progress")
+    private val FIXED_LIQUID_GLASS_STYLE = LiquidGlassStyle.CLASSIC
+    private val FIXED_LIQUID_GLASS_MODE = LiquidGlassMode.BALANCED
+    private const val FIXED_LIQUID_GLASS_STRENGTH = 0.52f
+    private const val FIXED_LIQUID_GLASS_PROGRESS = 0.5f
     //  [新增] 底栏自定义 - 顺序和可见性
     private val KEY_BOTTOM_BAR_ORDER = stringPreferencesKey("bottom_bar_order")  // 逗号分隔的项目顺序
     private val KEY_BOTTOM_BAR_VISIBLE_TABS = stringPreferencesKey("bottom_bar_visible_tabs")  // 逗号分隔的可见项目
@@ -626,15 +760,6 @@ object SettingsManager {
             rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
             legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED]
         )
-        val legacyStyle = LiquidGlassStyle.fromValue(
-            preferences[KEY_LIQUID_GLASS_STYLE] ?: LiquidGlassStyle.CLASSIC.value
-        )
-        val liquidGlassMode = preferences[KEY_LIQUID_GLASS_MODE]
-            ?.let(LiquidGlassMode::fromValue)
-            ?: resolveLegacyLiquidGlassMode(legacyStyle)
-        val liquidGlassStrength = normalizeLiquidGlassStrength(
-            preferences[KEY_LIQUID_GLASS_STRENGTH] ?: resolveDefaultLiquidGlassStrength(liquidGlassMode)
-        )
         return HomeSettings(
             displayMode = preferences[KEY_DISPLAY_MODE] ?: 0,
             isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: true,
@@ -645,9 +770,10 @@ object SettingsManager {
             isHeaderCollapseEnabled = preferences[KEY_HEADER_COLLAPSE_ENABLED] ?: true,
             isBottomBarBlurEnabled = preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true,
             isLiquidGlassEnabled = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true,
-            liquidGlassStyle = legacyStyle,
-            liquidGlassMode = liquidGlassMode,
-            liquidGlassStrength = liquidGlassStrength,
+            liquidGlassStyle = FIXED_LIQUID_GLASS_STYLE,
+            liquidGlassMode = FIXED_LIQUID_GLASS_MODE,
+            liquidGlassStrength = FIXED_LIQUID_GLASS_STRENGTH,
+            liquidGlassProgress = FIXED_LIQUID_GLASS_PROGRESS,
             gridColumnCount = preferences[KEY_GRID_COLUMN_COUNT] ?: 0,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: true,
@@ -1720,46 +1846,50 @@ object SettingsManager {
     }
     
     fun getLiquidGlassStyle(context: Context): Flow<LiquidGlassStyle> = context.settingsDataStore.data
-        .map { preferences -> 
-            LiquidGlassStyle.fromValue(preferences[KEY_LIQUID_GLASS_STYLE] ?: LiquidGlassStyle.CLASSIC.value)
-        }
+        .map { FIXED_LIQUID_GLASS_STYLE }
 
     suspend fun setLiquidGlassStyle(context: Context, style: LiquidGlassStyle) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_LIQUID_GLASS_STYLE] = style.value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LIQUID_GLASS_STYLE] = FIXED_LIQUID_GLASS_STYLE.value
+            preferences[KEY_LIQUID_GLASS_MODE] = FIXED_LIQUID_GLASS_MODE.value
+            preferences[KEY_LIQUID_GLASS_STRENGTH] = FIXED_LIQUID_GLASS_STRENGTH
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = FIXED_LIQUID_GLASS_PROGRESS
+        }
     }
 
     fun getLiquidGlassMode(context: Context): Flow<LiquidGlassMode> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[KEY_LIQUID_GLASS_MODE]
-                ?.let(LiquidGlassMode::fromValue)
-                ?: resolveLegacyLiquidGlassMode(
-                    LiquidGlassStyle.fromValue(
-                        preferences[KEY_LIQUID_GLASS_STYLE] ?: LiquidGlassStyle.CLASSIC.value
-                    )
-                )
-        }
+        .map { FIXED_LIQUID_GLASS_MODE }
 
     suspend fun setLiquidGlassMode(context: Context, mode: LiquidGlassMode) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_LIQUID_GLASS_MODE] = mode.value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LIQUID_GLASS_MODE] = FIXED_LIQUID_GLASS_MODE.value
+            preferences[KEY_LIQUID_GLASS_STRENGTH] = FIXED_LIQUID_GLASS_STRENGTH
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = FIXED_LIQUID_GLASS_PROGRESS
+            preferences[KEY_LIQUID_GLASS_STYLE] = FIXED_LIQUID_GLASS_STYLE.value
+        }
     }
 
     fun getLiquidGlassStrength(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences ->
-            val mode = preferences[KEY_LIQUID_GLASS_MODE]
-                ?.let(LiquidGlassMode::fromValue)
-                ?: resolveLegacyLiquidGlassMode(
-                    LiquidGlassStyle.fromValue(
-                        preferences[KEY_LIQUID_GLASS_STYLE] ?: LiquidGlassStyle.CLASSIC.value
-                    )
-                )
-            normalizeLiquidGlassStrength(
-                preferences[KEY_LIQUID_GLASS_STRENGTH] ?: resolveDefaultLiquidGlassStrength(mode)
-            )
-        }
+        .map { FIXED_LIQUID_GLASS_STRENGTH }
 
     suspend fun setLiquidGlassStrength(context: Context, strength: Float) {
         context.settingsDataStore.edit { preferences ->
-            preferences[KEY_LIQUID_GLASS_STRENGTH] = normalizeLiquidGlassStrength(strength)
+            preferences[KEY_LIQUID_GLASS_STRENGTH] = FIXED_LIQUID_GLASS_STRENGTH
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = FIXED_LIQUID_GLASS_PROGRESS
+            preferences[KEY_LIQUID_GLASS_MODE] = FIXED_LIQUID_GLASS_MODE.value
+            preferences[KEY_LIQUID_GLASS_STYLE] = FIXED_LIQUID_GLASS_STYLE.value
+        }
+    }
+
+    fun getLiquidGlassProgress(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { FIXED_LIQUID_GLASS_PROGRESS }
+
+    suspend fun setLiquidGlassProgress(context: Context, progress: Float) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LIQUID_GLASS_PROGRESS] = FIXED_LIQUID_GLASS_PROGRESS
+            preferences[KEY_LIQUID_GLASS_MODE] = FIXED_LIQUID_GLASS_MODE.value
+            preferences[KEY_LIQUID_GLASS_STRENGTH] = FIXED_LIQUID_GLASS_STRENGTH
+            preferences[KEY_LIQUID_GLASS_STYLE] = FIXED_LIQUID_GLASS_STYLE.value
         }
     }
     
@@ -1825,12 +1955,45 @@ object SettingsManager {
     
     // ==========  弹幕设置 ==========
     
-    private const val DANMAKU_DEFAULTS_VERSION = 4
+    private const val DANMAKU_DEFAULTS_VERSION = 5
     private const val HOME_VISUAL_DEFAULTS_VERSION = 1
     private const val DEFAULT_DANMAKU_OPACITY = DANMAKU_DEFAULT_OPACITY
     private const val DEFAULT_DANMAKU_FONT_SCALE = 1.0f
     private const val DEFAULT_DANMAKU_SPEED = 1.0f
     private const val DEFAULT_DANMAKU_AREA = 0.5f
+    private const val DEFAULT_DANMAKU_FONT_WEIGHT = 5
+    private const val DEFAULT_DANMAKU_STROKE_WIDTH = 1.5f
+    private const val DEFAULT_DANMAKU_LINE_HEIGHT = 1.6f
+    private const val DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS = 7.0f
+    private const val DEFAULT_DANMAKU_STATIC_DURATION_SECONDS = 4.0f
+
+    private fun normalizeDanmakuFontWeight(value: Int?): Int {
+        return (value ?: DEFAULT_DANMAKU_FONT_WEIGHT).coerceIn(0, 8)
+    }
+
+    private fun normalizeDanmakuStrokeWidth(value: Float?): Float {
+        val raw = value ?: DEFAULT_DANMAKU_STROKE_WIDTH
+        if (!raw.isFinite()) return DEFAULT_DANMAKU_STROKE_WIDTH
+        return raw.coerceIn(0f, 5f)
+    }
+
+    private fun normalizeDanmakuLineHeight(value: Float?): Float {
+        val raw = value ?: DEFAULT_DANMAKU_LINE_HEIGHT
+        if (!raw.isFinite()) return DEFAULT_DANMAKU_LINE_HEIGHT
+        return raw.coerceIn(1.0f, 3.0f)
+    }
+
+    private fun normalizeDanmakuScrollDurationSeconds(value: Float?): Float {
+        val raw = value ?: DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS
+        if (!raw.isFinite()) return DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS
+        return raw.coerceIn(1.0f, 50.0f)
+    }
+
+    private fun normalizeDanmakuStaticDurationSeconds(value: Float?): Float {
+        val raw = value ?: DEFAULT_DANMAKU_STATIC_DURATION_SECONDS
+        if (!raw.isFinite()) return DEFAULT_DANMAKU_STATIC_DURATION_SECONDS
+        return raw.coerceIn(1.0f, 50.0f)
+    }
 
     private fun buildScopedDanmakuKeyName(
         scope: DanmakuSettingsScope,
@@ -1842,6 +2005,18 @@ object SettingsManager {
     private val KEY_DANMAKU_FONT_SCALE = floatPreferencesKey("danmaku_font_scale")
     private val KEY_DANMAKU_SPEED = floatPreferencesKey("danmaku_speed")
     private val KEY_DANMAKU_AREA = floatPreferencesKey("danmaku_area")
+    private val KEY_DANMAKU_FONT_WEIGHT = intPreferencesKey("danmaku_font_weight")
+    private val KEY_DANMAKU_STROKE_WIDTH = floatPreferencesKey("danmaku_stroke_width")
+    private val KEY_DANMAKU_LINE_HEIGHT = floatPreferencesKey("danmaku_line_height")
+    private val KEY_DANMAKU_SCROLL_DURATION_SECONDS =
+        floatPreferencesKey("danmaku_scroll_duration_seconds")
+    private val KEY_DANMAKU_STATIC_DURATION_SECONDS =
+        floatPreferencesKey("danmaku_static_duration_seconds")
+    private val KEY_DANMAKU_SCROLL_FIXED_VELOCITY =
+        booleanPreferencesKey("danmaku_scroll_fixed_velocity")
+    private val KEY_DANMAKU_STATIC_TO_SCROLL =
+        booleanPreferencesKey("danmaku_static_to_scroll")
+    private val KEY_DANMAKU_MASSIVE_MODE = booleanPreferencesKey("danmaku_massive_mode")
     private val KEY_DANMAKU_ALLOW_SCROLL = booleanPreferencesKey("danmaku_allow_scroll")
     private val KEY_DANMAKU_ALLOW_TOP = booleanPreferencesKey("danmaku_allow_top")
     private val KEY_DANMAKU_ALLOW_BOTTOM = booleanPreferencesKey("danmaku_allow_bottom")
@@ -1852,6 +2027,9 @@ object SettingsManager {
         intPreferencesKey("danmaku_fullscreen_panel_width_mode")
     private val KEY_DANMAKU_BLOCK_RULES = stringPreferencesKey("danmaku_block_rules")
     private val KEY_DANMAKU_MERGE_DUPLICATES = booleanPreferencesKey("danmaku_merge_duplicates")
+    private val KEY_DANMAKU_SEND_COLOR = intPreferencesKey("danmaku_send_color")
+    private val KEY_DANMAKU_SEND_MODE = intPreferencesKey("danmaku_send_mode")
+    private val KEY_DANMAKU_SEND_FONT_SIZE = intPreferencesKey("danmaku_send_font_size")
     private val KEY_DANMAKU_DEFAULTS_VERSION = intPreferencesKey("danmaku_defaults_version")
     private val KEY_HOME_VISUAL_DEFAULTS_VERSION = intPreferencesKey("home_visual_defaults_version")
 
@@ -1865,6 +2043,22 @@ object SettingsManager {
         floatPreferencesKey(buildScopedDanmakuKeyName(scope, "speed"))
     private fun keyDanmakuArea(scope: DanmakuSettingsScope) =
         floatPreferencesKey(buildScopedDanmakuKeyName(scope, "area"))
+    private fun keyDanmakuFontWeight(scope: DanmakuSettingsScope) =
+        intPreferencesKey(buildScopedDanmakuKeyName(scope, "font_weight"))
+    private fun keyDanmakuStrokeWidth(scope: DanmakuSettingsScope) =
+        floatPreferencesKey(buildScopedDanmakuKeyName(scope, "stroke_width"))
+    private fun keyDanmakuLineHeight(scope: DanmakuSettingsScope) =
+        floatPreferencesKey(buildScopedDanmakuKeyName(scope, "line_height"))
+    private fun keyDanmakuScrollDurationSeconds(scope: DanmakuSettingsScope) =
+        floatPreferencesKey(buildScopedDanmakuKeyName(scope, "scroll_duration_seconds"))
+    private fun keyDanmakuStaticDurationSeconds(scope: DanmakuSettingsScope) =
+        floatPreferencesKey(buildScopedDanmakuKeyName(scope, "static_duration_seconds"))
+    private fun keyDanmakuScrollFixedVelocity(scope: DanmakuSettingsScope) =
+        booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "scroll_fixed_velocity"))
+    private fun keyDanmakuStaticToScroll(scope: DanmakuSettingsScope) =
+        booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "static_to_scroll"))
+    private fun keyDanmakuMassiveMode(scope: DanmakuSettingsScope) =
+        booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "massive_mode"))
     private fun keyDanmakuAllowScroll(scope: DanmakuSettingsScope) =
         booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "allow_scroll"))
     private fun keyDanmakuAllowTop(scope: DanmakuSettingsScope) =
@@ -1937,6 +2131,64 @@ object SettingsManager {
                     legacyKey = KEY_DANMAKU_AREA,
                     defaultValue = DEFAULT_DANMAKU_AREA
                 )
+            ),
+            fontWeight = normalizeDanmakuFontWeight(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuFontWeight(scope),
+                    legacyKey = KEY_DANMAKU_FONT_WEIGHT,
+                    defaultValue = DEFAULT_DANMAKU_FONT_WEIGHT
+                )
+            ),
+            strokeWidth = normalizeDanmakuStrokeWidth(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuStrokeWidth(scope),
+                    legacyKey = KEY_DANMAKU_STROKE_WIDTH,
+                    defaultValue = DEFAULT_DANMAKU_STROKE_WIDTH
+                )
+            ),
+            lineHeight = normalizeDanmakuLineHeight(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuLineHeight(scope),
+                    legacyKey = KEY_DANMAKU_LINE_HEIGHT,
+                    defaultValue = DEFAULT_DANMAKU_LINE_HEIGHT
+                )
+            ),
+            scrollDurationSeconds = normalizeDanmakuScrollDurationSeconds(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuScrollDurationSeconds(scope),
+                    legacyKey = KEY_DANMAKU_SCROLL_DURATION_SECONDS,
+                    defaultValue = DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS
+                )
+            ),
+            staticDurationSeconds = normalizeDanmakuStaticDurationSeconds(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuStaticDurationSeconds(scope),
+                    legacyKey = KEY_DANMAKU_STATIC_DURATION_SECONDS,
+                    defaultValue = DEFAULT_DANMAKU_STATIC_DURATION_SECONDS
+                )
+            ),
+            scrollFixedVelocity = readScopedDanmakuPreference(
+                preferences = preferences,
+                scopeKey = keyDanmakuScrollFixedVelocity(scope),
+                legacyKey = KEY_DANMAKU_SCROLL_FIXED_VELOCITY,
+                defaultValue = false
+            ),
+            staticDanmakuToScroll = readScopedDanmakuPreference(
+                preferences = preferences,
+                scopeKey = keyDanmakuStaticToScroll(scope),
+                legacyKey = KEY_DANMAKU_STATIC_TO_SCROLL,
+                defaultValue = false
+            ),
+            massiveMode = readScopedDanmakuPreference(
+                preferences = preferences,
+                scopeKey = keyDanmakuMassiveMode(scope),
+                legacyKey = KEY_DANMAKU_MASSIVE_MODE,
+                defaultValue = false
             ),
             mergeDuplicates = readScopedDanmakuPreference(
                 preferences = preferences,
@@ -2123,6 +2375,202 @@ object SettingsManager {
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[keyDanmakuArea(scope)] = normalizeDanmakuDisplayArea(value)
+        }
+    }
+
+    fun getDanmakuFontWeight(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeDanmakuFontWeight(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuFontWeight(scope),
+                    legacyKey = KEY_DANMAKU_FONT_WEIGHT,
+                    defaultValue = DEFAULT_DANMAKU_FONT_WEIGHT
+                )
+            )
+        }
+
+    suspend fun setDanmakuFontWeight(
+        context: Context,
+        value: Int,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuFontWeight(scope)] = normalizeDanmakuFontWeight(value)
+        }
+    }
+
+    fun getDanmakuStrokeWidth(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeDanmakuStrokeWidth(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuStrokeWidth(scope),
+                    legacyKey = KEY_DANMAKU_STROKE_WIDTH,
+                    defaultValue = DEFAULT_DANMAKU_STROKE_WIDTH
+                )
+            )
+        }
+
+    suspend fun setDanmakuStrokeWidth(
+        context: Context,
+        value: Float,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuStrokeWidth(scope)] = normalizeDanmakuStrokeWidth(value)
+        }
+    }
+
+    fun getDanmakuLineHeight(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeDanmakuLineHeight(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuLineHeight(scope),
+                    legacyKey = KEY_DANMAKU_LINE_HEIGHT,
+                    defaultValue = DEFAULT_DANMAKU_LINE_HEIGHT
+                )
+            )
+        }
+
+    suspend fun setDanmakuLineHeight(
+        context: Context,
+        value: Float,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuLineHeight(scope)] = normalizeDanmakuLineHeight(value)
+        }
+    }
+
+    fun getDanmakuScrollDurationSeconds(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeDanmakuScrollDurationSeconds(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuScrollDurationSeconds(scope),
+                    legacyKey = KEY_DANMAKU_SCROLL_DURATION_SECONDS,
+                    defaultValue = DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS
+                )
+            )
+        }
+
+    suspend fun setDanmakuScrollDurationSeconds(
+        context: Context,
+        value: Float,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuScrollDurationSeconds(scope)] =
+                normalizeDanmakuScrollDurationSeconds(value)
+        }
+    }
+
+    fun getDanmakuStaticDurationSeconds(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeDanmakuStaticDurationSeconds(
+                readScopedDanmakuPreference(
+                    preferences = preferences,
+                    scopeKey = keyDanmakuStaticDurationSeconds(scope),
+                    legacyKey = KEY_DANMAKU_STATIC_DURATION_SECONDS,
+                    defaultValue = DEFAULT_DANMAKU_STATIC_DURATION_SECONDS
+                )
+            )
+        }
+
+    suspend fun setDanmakuStaticDurationSeconds(
+        context: Context,
+        value: Float,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuStaticDurationSeconds(scope)] =
+                normalizeDanmakuStaticDurationSeconds(value)
+        }
+    }
+
+    fun getDanmakuScrollFixedVelocity(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            readScopedDanmakuPreference(
+                preferences = preferences,
+                scopeKey = keyDanmakuScrollFixedVelocity(scope),
+                legacyKey = KEY_DANMAKU_SCROLL_FIXED_VELOCITY,
+                defaultValue = false
+            )
+        }
+
+    suspend fun setDanmakuScrollFixedVelocity(
+        context: Context,
+        value: Boolean,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuScrollFixedVelocity(scope)] = value
+        }
+    }
+
+    fun getDanmakuStaticToScroll(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            readScopedDanmakuPreference(
+                preferences = preferences,
+                scopeKey = keyDanmakuStaticToScroll(scope),
+                legacyKey = KEY_DANMAKU_STATIC_TO_SCROLL,
+                defaultValue = false
+            )
+        }
+
+    suspend fun setDanmakuStaticToScroll(
+        context: Context,
+        value: Boolean,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuStaticToScroll(scope)] = value
+        }
+    }
+
+    fun getDanmakuMassiveMode(
+        context: Context,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            readScopedDanmakuPreference(
+                preferences = preferences,
+                scopeKey = keyDanmakuMassiveMode(scope),
+                legacyKey = KEY_DANMAKU_MASSIVE_MODE,
+                defaultValue = false
+            )
+        }
+
+    suspend fun setDanmakuMassiveMode(
+        context: Context,
+        value: Boolean,
+        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[keyDanmakuMassiveMode(scope)] = value
         }
     }
 
@@ -2323,6 +2771,33 @@ object SettingsManager {
             preferences[keyDanmakuBlockRules(scope)] = normalized
         }
     }
+
+    fun getDanmakuSendColor(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_SEND_COLOR] ?: 16777215 }
+
+    suspend fun setDanmakuSendColor(context: Context, value: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_SEND_COLOR] = value
+        }
+    }
+
+    fun getDanmakuSendMode(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_SEND_MODE] ?: 1 }
+
+    suspend fun setDanmakuSendMode(context: Context, value: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_SEND_MODE] = value
+        }
+    }
+
+    fun getDanmakuSendFontSize(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_SEND_FONT_SIZE] ?: 25 }
+
+    suspend fun setDanmakuSendFontSize(context: Context, value: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_SEND_FONT_SIZE] = value
+        }
+    }
     
     // --- 弹幕合并重复 (默认开启) ---
     fun getDanmakuMergeDuplicates(
@@ -2357,6 +2832,16 @@ object SettingsManager {
                 preferences[KEY_DANMAKU_FONT_SCALE] = DEFAULT_DANMAKU_FONT_SCALE
                 preferences[KEY_DANMAKU_SPEED] = DEFAULT_DANMAKU_SPEED
                 preferences[KEY_DANMAKU_AREA] = DEFAULT_DANMAKU_AREA
+                preferences[KEY_DANMAKU_FONT_WEIGHT] = DEFAULT_DANMAKU_FONT_WEIGHT
+                preferences[KEY_DANMAKU_STROKE_WIDTH] = DEFAULT_DANMAKU_STROKE_WIDTH
+                preferences[KEY_DANMAKU_LINE_HEIGHT] = DEFAULT_DANMAKU_LINE_HEIGHT
+                preferences[KEY_DANMAKU_SCROLL_DURATION_SECONDS] =
+                    DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS
+                preferences[KEY_DANMAKU_STATIC_DURATION_SECONDS] =
+                    DEFAULT_DANMAKU_STATIC_DURATION_SECONDS
+                preferences[KEY_DANMAKU_SCROLL_FIXED_VELOCITY] = false
+                preferences[KEY_DANMAKU_STATIC_TO_SCROLL] = false
+                preferences[KEY_DANMAKU_MASSIVE_MODE] = false
                 preferences[KEY_DANMAKU_ALLOW_SCROLL] = true
                 preferences[KEY_DANMAKU_ALLOW_TOP] = true
                 preferences[KEY_DANMAKU_ALLOW_BOTTOM] = true
@@ -2575,6 +3060,8 @@ object SettingsManager {
     private val KEY_VIDEO_CODEC = stringPreferencesKey("video_codec_preference")
     private val KEY_VIDEO_SECOND_CODEC = stringPreferencesKey("video_second_codec_preference")
     private val KEY_AUDIO_QUALITY = intPreferencesKey("audio_quality_preference")
+    private val KEY_SUBSCRIBED_COLLECTION_IDS = stringPreferencesKey("subscribed_collection_ids")
+    private val KEY_COLLECTION_SORT_PREFERENCES = stringPreferencesKey("collection_sort_preferences")
     
     // --- WiFi 默认画质 (默认 80 = 1080P) ---
     fun getWifiQuality(context: Context): Flow<Int> = context.settingsDataStore.data
@@ -2611,6 +3098,59 @@ object SettingsManager {
     fun getMobileQualitySync(context: Context): Int {
         return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
             .getInt("mobile_quality", 64)
+    }
+
+    fun getSubscribedCollectionIds(context: Context): Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences -> decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS]) }
+        .distinctUntilChanged()
+
+    fun isCollectionSubscribed(context: Context, collectionId: Long): Flow<Boolean> {
+        val normalizedId = collectionId.takeIf { it > 0L }?.toString()
+            ?: return kotlinx.coroutines.flow.flowOf(false)
+        return getSubscribedCollectionIds(context)
+            .map { subscribedIds -> normalizedId in subscribedIds }
+            .distinctUntilChanged()
+    }
+
+    suspend fun toggleCollectionSubscription(context: Context, collectionId: Long) {
+        if (collectionId <= 0L) return
+        context.settingsDataStore.edit { preferences ->
+            val current = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
+            preferences[KEY_SUBSCRIBED_COLLECTION_IDS] = encodeCollectionSubscriptionIds(
+                toggleCollectionSubscription(current, collectionId)
+            )
+        }
+    }
+
+    fun getCollectionSortPreferences(context: Context): Flow<Map<Long, CollectionSortMode>> =
+        context.settingsDataStore.data
+            .map { preferences -> decodeCollectionSortPreferences(preferences[KEY_COLLECTION_SORT_PREFERENCES]) }
+            .distinctUntilChanged()
+
+    fun getCollectionSortMode(context: Context, collectionId: Long): Flow<CollectionSortMode> {
+        if (collectionId <= 0L) return kotlinx.coroutines.flow.flowOf(CollectionSortMode.ASCENDING)
+        return getCollectionSortPreferences(context)
+            .map { preferences -> preferences[collectionId] ?: CollectionSortMode.ASCENDING }
+            .distinctUntilChanged()
+    }
+
+    suspend fun setCollectionSortMode(
+        context: Context,
+        collectionId: Long,
+        sortMode: CollectionSortMode
+    ) {
+        if (collectionId <= 0L) return
+        context.settingsDataStore.edit { preferences ->
+            val current = decodeCollectionSortPreferences(
+                preferences[KEY_COLLECTION_SORT_PREFERENCES]
+            ).toMutableMap()
+            if (sortMode == CollectionSortMode.ASCENDING) {
+                current.remove(collectionId)
+            } else {
+                current[collectionId] = sortMode
+            }
+            preferences[KEY_COLLECTION_SORT_PREFERENCES] = encodeCollectionSortPreferences(current)
+        }
     }
     
     // --- 🚀 自动最高画质 (开启后忽略上方设置，始终选择最高可用画质) ---
@@ -2765,7 +3305,7 @@ object SettingsManager {
     
     // --- 崩溃追踪开关 ---
     fun getCrashTrackingEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_CRASH_TRACKING_ENABLED] ?: true }  // 默认开启
+        .map { preferences -> preferences[KEY_CRASH_TRACKING_ENABLED] ?: DEFAULT_CRASH_TRACKING_ENABLED }
 
     suspend fun setCrashTrackingEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CRASH_TRACKING_ENABLED] = value }
@@ -2789,7 +3329,7 @@ object SettingsManager {
     
     // --- Analytics 开关 (与崩溃追踪共享设置) ---
     fun getAnalyticsEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_ANALYTICS_ENABLED] ?: true }  // 默认开启
+        .map { preferences -> preferences[KEY_ANALYTICS_ENABLED] ?: DEFAULT_ANALYTICS_ENABLED }
 
     suspend fun setAnalyticsEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_ANALYTICS_ENABLED] = value }
@@ -3373,7 +3913,10 @@ object SettingsManager {
     }
 
     fun getPlayerDiagnosticLoggingEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED] ?: true }
+        .map { preferences ->
+            preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED]
+                ?: DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
+        }
 
     suspend fun setPlayerDiagnosticLoggingEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -3759,6 +4302,26 @@ object SettingsManager {
             FloatShareablePreferenceDefinition(KEY_DANMAKU_FONT_SCALE, SettingsShareSection.DANMAKU),
             FloatShareablePreferenceDefinition(KEY_DANMAKU_SPEED, SettingsShareSection.DANMAKU),
             FloatShareablePreferenceDefinition(KEY_DANMAKU_AREA, SettingsShareSection.DANMAKU),
+            IntShareablePreferenceDefinition(KEY_DANMAKU_FONT_WEIGHT, SettingsShareSection.DANMAKU),
+            FloatShareablePreferenceDefinition(KEY_DANMAKU_STROKE_WIDTH, SettingsShareSection.DANMAKU),
+            FloatShareablePreferenceDefinition(KEY_DANMAKU_LINE_HEIGHT, SettingsShareSection.DANMAKU),
+            FloatShareablePreferenceDefinition(
+                KEY_DANMAKU_SCROLL_DURATION_SECONDS,
+                SettingsShareSection.DANMAKU
+            ),
+            FloatShareablePreferenceDefinition(
+                KEY_DANMAKU_STATIC_DURATION_SECONDS,
+                SettingsShareSection.DANMAKU
+            ),
+            BooleanShareablePreferenceDefinition(
+                KEY_DANMAKU_SCROLL_FIXED_VELOCITY,
+                SettingsShareSection.DANMAKU
+            ),
+            BooleanShareablePreferenceDefinition(
+                KEY_DANMAKU_STATIC_TO_SCROLL,
+                SettingsShareSection.DANMAKU
+            ),
+            BooleanShareablePreferenceDefinition(KEY_DANMAKU_MASSIVE_MODE, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_SCROLL, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_TOP, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_BOTTOM, SettingsShareSection.DANMAKU),

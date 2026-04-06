@@ -253,4 +253,73 @@ class SpaceLoadPolicyTest {
         assertEquals("BVSEASON", updated.seasonArchives.getValue(1L).single().bvid)
         assertEquals("BVSERIES", updated.seriesArchives.getValue(2L).single().bvid)
     }
+
+    @Test
+    fun `shouldHydrateSpaceContributionVideos hydrates when seeded videos are missing`() {
+        assertTrue(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 0,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertFalse(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 20,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertFalse(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 133,
+                seededVideoCount = 0,
+                selectedSubTab = SpaceSubTab.AUDIO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+        assertFalse(
+            shouldHydrateSpaceContributionVideos(
+                totalVideos = 0,
+                seededVideoCount = 0,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedTid = 0,
+                currentOrder = VideoSortOrder.PUBDATE,
+                currentKeyword = ""
+            )
+        )
+    }
+
+    @Test
+    fun `buildInitialSpaceSuccessState keeps first video paint in loading state when hydration is needed`() {
+        val state = buildInitialSpaceSuccessState(
+            seed = SpaceInitialSeed(
+                userInfo = SpaceUserInfo(mid = 42L, name = "UP"),
+                relationStat = null,
+                upStat = null,
+                videos = emptyList(),
+                totalVideos = 133,
+                audios = emptyList(),
+                totalAudios = 0,
+                articles = emptyList(),
+                totalArticles = 0,
+                defaultMainTab = SpaceMainTab.CONTRIBUTION,
+                defaultSubTab = SpaceSubTab.VIDEO
+            ),
+            selectedMainTab = SpaceMainTab.CONTRIBUTION,
+            selectedSubTab = SpaceSubTab.VIDEO
+        )
+
+        assertTrue(state.isLoadingMore)
+        assertEquals(133, state.totalVideos)
+        assertTrue(state.videos.isEmpty())
+    }
 }

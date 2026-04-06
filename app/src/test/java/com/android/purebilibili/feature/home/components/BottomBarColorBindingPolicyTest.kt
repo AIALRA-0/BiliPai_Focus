@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.ui.graphics.Color
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -49,5 +50,41 @@ class BottomBarColorBindingPolicyTest {
 
         assertEquals(0, binding.colorIndex)
         assertFalse(binding.hasCustomAccent)
+    }
+
+    @Test
+    fun `light mode bottom bar always uses dark readable foreground`() {
+        assertEquals(
+            Color.Black,
+            resolveBottomBarReadableContentColor(
+                isLightMode = true,
+                liquidGlassProgress = 0.08f,
+                contentLuminance = 0.95f
+            )
+        )
+    }
+
+    @Test
+    fun `bright frosted backdrop flips bottom bar content to dark foreground`() {
+        val color = resolveBottomBarReadableContentColor(
+            isLightMode = false,
+            liquidGlassProgress = 0.92f,
+            contentLuminance = 0.84f
+        )
+
+        assertTrue(color.red < 0.2f)
+        assertTrue(color.alpha >= 0.8f)
+    }
+
+    @Test
+    fun `clear dark glass keeps bright foreground for contrast`() {
+        val color = resolveBottomBarReadableContentColor(
+            isLightMode = false,
+            liquidGlassProgress = 0.18f,
+            contentLuminance = 0.22f
+        )
+
+        assertTrue(color.red > 0.9f)
+        assertTrue(color.alpha >= 0.95f)
     }
 }
