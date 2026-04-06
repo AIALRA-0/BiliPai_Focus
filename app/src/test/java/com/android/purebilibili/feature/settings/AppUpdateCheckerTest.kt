@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.BuildConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -130,7 +131,7 @@ class AppUpdateCheckerTest {
         )
 
         assertEquals("7.0.0 RC2", candidate?.tagName)
-        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus", candidate?.releaseUrl)
+        assertEquals(BuildConfig.FOCUS_REPOSITORY_URL, candidate?.releaseUrl)
         assertTrue(candidate?.releaseNotes?.contains("未创建 GitHub Release") == true)
         assertTrue(candidate?.isPrerelease == true)
     }

@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 //  Lottie 动画
 import com.airbnb.lottie.compose.*
+import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.LottieUrls
 
@@ -296,10 +297,10 @@ fun OnboardingBottomSheet(
                         )
                         GithubLinkCard(
                             title = "Focus",
-                            path = "AIALRA-0/BiliPai_Focus",
+                            path = BuildConfig.FOCUS_REPOSITORY_PATH,
                             modifier = Modifier.weight(1f),
                             onClick = {
-                                uriHandler.openUri("https://github.com/AIALRA-0/BiliPai_Focus")
+                                uriHandler.openUri(BuildConfig.FOCUS_REPOSITORY_URL)
                             }
                         )
                     }

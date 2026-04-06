@@ -11,9 +11,9 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Focus-7.5.0--focus.1-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.5.0-00a1d6?style=flat-square" alt="Upstream Version">
-  <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
-  <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
-  <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
+  <img src="https://img.shields.io/badge/Channel-Focus-fb7299?style=flat-square" alt="Channel">
+  <img src="https://img.shields.io/badge/Update-Release%20Only-3fb950?style=flat-square" alt="Update Channel">
+  <img src="https://img.shields.io/badge/Install-Coexist%20Enabled-8250df?style=flat-square" alt="Coexist Install">
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Focus Release Notes](docs/releases/focus-7.5.0-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · Focus Releases (the Releases page of the current repository) · [Focus Release Notes](docs/releases/focus-7.5.0-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,7 +50,7 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | [Repository](https://github.com/AIALRA-0/BiliPai_Focus) · [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Release Notes](docs/releases/focus-7.5.0-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | Current Focus repository · Current repository Releases page · [Release Notes](docs/releases/focus-7.5.0-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
@@ -95,7 +95,7 @@ From the perspective of attention psychology and behavioral design, recommendati
 ### Maintenance cadence and test scope
 
 - Focus tries to stay on the same upstream major version. For now, the plan is to follow upstream major releases first, then roll Focus sub-versions on top of that baseline.
-- Testing is currently performed only on `realme Neo 7` and `Lenovo Y700 2023`. If you hit compatibility or behavior issues on other devices, please open an [issue](https://github.com/AIALRA-0/BiliPai_Focus/issues).
+- Testing is currently performed only on `realme Neo 7` and `Lenovo Y700 2023`. If you hit compatibility or behavior issues on other devices, please open an issue in the current repository.
 
 ### Focus feature screenshots
 
@@ -454,7 +454,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
   <a href="https://github.com/jay3-yy/BiliPai/releases">
     <img src="https://img.shields.io/badge/Download-Official%20Release-fb7299?style=for-the-badge&logo=github" alt="Official Download">
   </a>
-  <a href="https://github.com/AIALRA-0/BiliPai_Focus/releases">
+  <a href="docs/releases/focus-7.5.0-focus.1-en.md">
     <img src="https://img.shields.io/badge/Download-Focus%20Release-1f8bff?style=for-the-badge&logo=github" alt="Focus Download">
   </a>
 </p>
@@ -464,7 +464,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 | Edition | Notes | Download |
 | --- | --- | --- |
 | Official upstream | Matches upstream defaults and release rhythm | [jay3-yy/BiliPai Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | Adds Focus switches, quieter defaults, and follow-group filtering on top of upstream | [AIALRA-0/BiliPai_Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) |
+| Focus edition | Adds Focus switches, quieter defaults, and follow-group filtering on top of upstream | Current repository Releases page |
 
 ### Requirements
 
@@ -478,7 +478,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ### Installation
 
 1. If you want the upstream default experience, download the APK from [Official Releases](https://github.com/jay3-yy/BiliPai/releases)
-2. If you want this customized build, download the APK from [Focus Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases)
+2. If you want this customized build, download the APK from the current repository Releases page
 3. Install it on your device (Unknown Sources permission may be required)
 4. Open the app and log in via QR code or Web
 5. On the Focus build, go to `Settings -> General -> Focus` to adjust Focus mode and follow filtering
@@ -591,7 +591,7 @@ See full changelog: [CHANGELOG.md](CHANGELOG.md)
 ## 🏗️ Build
 
 ```bash
-git clone git@github.com:AIALRA-0/BiliPai_Focus.git
+git clone git@github.com:<your-org>/BiliPai_Focus.git
 cd BiliPai_Focus
 ./gradlew assembleDebug
 ```
@@ -674,7 +674,7 @@ If you like BiliPai, buy me a coffee ☕
 
 If this project helps you, a Star is appreciated.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=AIALRA-0/BiliPai_Focus&type=Date)](https://github.com/AIALRA-0/BiliPai_Focus/stargazers)
+Use the current repository page for stars, forks, and release navigation.
 
 <p align="center">
   <img src="docs/donate.jpg" alt="Donation" width="300">

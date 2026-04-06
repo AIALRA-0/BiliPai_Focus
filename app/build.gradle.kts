@@ -32,6 +32,52 @@ fun String.toBuildConfigStringLiteral(): String {
     return "\"$escaped\""
 }
 
+data class GitHubRepositoryCoordinates(
+    val owner: String,
+    val name: String
+) {
+    val path: String = "$owner/$name"
+    val repositoryUrl: String = "https://github.com/$path"
+    val releasesUrl: String = "$repositoryUrl/releases"
+    val releasesApiUrl: String = "https://api.github.com/repos/$path/releases"
+    val rawBuildGradleUrl: String = "https://raw.githubusercontent.com/$path/main/app/build.gradle.kts"
+}
+
+fun parseGitHubRepositoryCoordinates(raw: String?): GitHubRepositoryCoordinates? {
+    val normalized = raw
+        ?.trim()
+        ?.removeSuffix(".git")
+        ?.takeIf { it.isNotBlank() }
+        ?: return null
+    val githubPath = when {
+        normalized.startsWith("git@github.com:", ignoreCase = true) ->
+            normalized.substringAfter("git@github.com:")
+        normalized.startsWith("https://github.com/", ignoreCase = true) ->
+            normalized.substringAfter("https://github.com/")
+        normalized.startsWith("http://github.com/", ignoreCase = true) ->
+            normalized.substringAfter("http://github.com/")
+        normalized.count { it == '/' } == 1 && !normalized.contains("github.com", ignoreCase = true) ->
+            normalized
+        else -> null
+    } ?: return null
+    val owner = githubPath.substringBefore('/').trim()
+    val name = githubPath.substringAfter('/', "").trim()
+    if (owner.isBlank() || name.isBlank()) return null
+    return GitHubRepositoryCoordinates(owner = owner, name = name)
+}
+
+fun detectFocusRepositoryCoordinates(): GitHubRepositoryCoordinates {
+    val explicit = sequenceOf(
+        System.getenv("FOCUS_GITHUB_REPOSITORY"),
+        System.getenv("GITHUB_REPOSITORY")
+    ).mapNotNull(::parseGitHubRepositoryCoordinates).firstOrNull()
+    if (explicit != null) return explicit
+    return GitHubRepositoryCoordinates(
+        owner = "focus-release",
+        name = "BiliPai_Focus"
+    )
+}
+
 val debugVerboseLogsEnabled = providers.gradleProperty("bili.debug.verboseLogs")
     .map(String::toBoolean)
     .orElse(false)
@@ -72,6 +118,7 @@ val buildWorkflowRunUrl = providers.gradleProperty("bili.build.workflowRunUrl")
 val buildReleaseTag = providers.gradleProperty("bili.build.releaseTag")
     .orElse("")
     .get()
+val focusRepository = detectFocusRepositoryCoordinates()
 
 android {
     namespace = "com.android.purebilibili"
@@ -110,6 +157,11 @@ android {
         buildConfigField("String", "BUILD_WORKFLOW_RUN_ID", buildWorkflowRunId.toBuildConfigStringLiteral())
         buildConfigField("String", "BUILD_WORKFLOW_RUN_URL", buildWorkflowRunUrl.toBuildConfigStringLiteral())
         buildConfigField("String", "BUILD_RELEASE_TAG", buildReleaseTag.toBuildConfigStringLiteral())
+        buildConfigField("String", "FOCUS_REPOSITORY_PATH", focusRepository.path.toBuildConfigStringLiteral())
+        buildConfigField("String", "FOCUS_REPOSITORY_URL", focusRepository.repositoryUrl.toBuildConfigStringLiteral())
+        buildConfigField("String", "FOCUS_RELEASES_URL", focusRepository.releasesUrl.toBuildConfigStringLiteral())
+        buildConfigField("String", "FOCUS_RELEASES_API_URL", focusRepository.releasesApiUrl.toBuildConfigStringLiteral())
+        buildConfigField("String", "FOCUS_REPOSITORY_BUILD_GRADLE_URL", focusRepository.rawBuildGradleUrl.toBuildConfigStringLiteral())
     }
 
     signingConfigs {

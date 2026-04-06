@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -95,10 +96,10 @@ internal data class AppUpdateReleaseCandidate(
 )
 
 object AppUpdateChecker {
-    private const val RELEASES_API = "https://api.github.com/repos/AIALRA-0/BiliPai_Focus/releases"
-    private const val REPOSITORY_BUILD_GRADLE_URL =
-        "https://raw.githubusercontent.com/AIALRA-0/BiliPai_Focus/main/app/build.gradle.kts"
-    private const val REPOSITORY_URL = "https://github.com/AIALRA-0/BiliPai_Focus"
+    private val RELEASES_API = BuildConfig.FOCUS_RELEASES_API_URL
+    private val REPOSITORY_BUILD_GRADLE_URL = BuildConfig.FOCUS_REPOSITORY_BUILD_GRADLE_URL
+    private val REPOSITORY_URL = BuildConfig.FOCUS_REPOSITORY_URL
+    private val RELEASES_PAGE_URL = BuildConfig.FOCUS_RELEASES_URL
     private const val CONNECT_TIMEOUT_MS = 6000
     private const val READ_TIMEOUT_MS = 8000
     private val releaseJson = Json { ignoreUnknownKeys = true }
@@ -344,7 +345,7 @@ object AppUpdateChecker {
         if (tagName.isBlank()) return null
         val releaseUrl = releaseObject["html_url"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
-            ?: "https://github.com/AIALRA-0/BiliPai_Focus/releases"
+            ?: RELEASES_PAGE_URL
         val releaseNotes = releaseObject["body"]?.jsonPrimitive?.content.orEmpty().trim()
         val publishedAt = releaseObject["published_at"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val isPrerelease = releaseObject["prerelease"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false

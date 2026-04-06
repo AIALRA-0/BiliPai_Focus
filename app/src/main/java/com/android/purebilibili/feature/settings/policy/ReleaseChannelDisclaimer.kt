@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.BuildConfig
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.AlertDialog
@@ -10,7 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 
 const val OFFICIAL_GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
-const val FOCUS_GITHUB_URL = "https://github.com/AIALRA-0/BiliPai_Focus"
+val FOCUS_GITHUB_URL: String
+    get() = BuildConfig.FOCUS_REPOSITORY_URL
 const val OFFICIAL_TELEGRAM_GROUP_URL = "https://t.me/BiliPaii"
 const val OFFICIAL_TELEGRAM_CHANNEL_URL = "https://t.me/BiliPai"
 const val RELEASE_DISCLAIMER_ACK_KEY = "release_disclaimer_ack_v1"

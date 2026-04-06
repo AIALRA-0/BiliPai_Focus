@@ -572,7 +572,7 @@
 - `2026-03-22T10:44:32.7236053-04:00` 将已安装 `debug` 包的应用名称从 `BiliPai Debug` 改为 `BliPai Focus`，以便桌面显示名与当前定制分支保持一致。
 - `2026-03-22T10:54:48.5027499-04:00` 按“仅应用内用户可见文案”范围清理中文句号，句中文案改为中文分号，句末文案去掉句号，并确认 `app/src/main` 可见文案无残留 `。` 且 `:app:assembleDebug` 通过。
 - `2026-03-22T11:07:57.6328683-04:00` 优化 Focus 相关 UI：增大新分组/重命名输入框圆角，重新排版 Focus 设置页与关注分组筛选简介，并把 onboarding 页底部 GitHub 入口拆成“官方 / Focus”双链接，随后确认 `:app:assembleDebug` 通过。
-- `2026-03-22T11:20:13.2168020-04:00` 将本地 `origin` 切换到 `AIALRA-0/BiliPai_Focus`，同步把 onboarding 的 Focus GitHub 链接与应用内更新检查源改到新仓库，并确认 `:app:assembleDebug` 通过；匿名 HTTPS 已确认仓库存在，但当前 `git@github.com` 仍因 `publickey` 认证失败而暂时无法 push。
+- `2026-03-22T11:20:13.2168020-04:00` 将本地 `origin` 切换到新的 Focus 仓库，onboarding 的 Focus GitHub 链接与应用内更新检查源同步切换到当前 Focus 发布源，并确认 `:app:assembleDebug` 通过；匿名 HTTPS 仓库可访问，但当时的 `git@github.com` 仍因 `publickey` 认证失败而暂时无法 push。
 - `2026-03-22T11:54:50.0872419-04:00` 将“关注对象归属”重构为按分组展开查看的结构，避免大关注列表整页平铺；同时补强中英文 README，保留官方原版说明并新增 Focus 专属仓库 / Releases / 变更日志入口，顺手修正已失效的更新检查与缓存清理单测断言，并确认 `.\scripts\ci_verify_windows.ps1` 全量通过。
 - `2026-03-22T12:14:29.8211951-04:00` 为 Focus 建立首个“官方主版本 + Focus 子版本”发布方案，当前版本号升级为 `7.1.0-focus.1 / 124`；同时补上 Focus 子版本比较逻辑、本机私有 release keystore 接线与签名出包能力，产出 `BliPai-Focus-release-7.1.0-focus.1.apk` 并确认 `.\scripts\ci_verify_windows.ps1` 全量通过、release APK 已完成签名验证。
 - `2026-03-22T12:42:37.5692431-04:00` 修复首次使用声明只显示上游链接的问题，新增 Focus GitHub 入口；修复动态页“关注分组”工作表因重复 `LazyColumn` key 导致的闪退；收紧首页顶部关注标签行边界，避免下拉时按钮外溢；同时把 Focus 设置页简介压缩为两行，并重新确认 `:app:testDebugUnitTest`、`:app:lintDebug`、`:app:assembleDebug` 通过，真机已验证动态齿轮可正常打开工作表。
