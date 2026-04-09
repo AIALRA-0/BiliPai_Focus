@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-06 · Upstream base v7.5.0 · Current Focus release v7.5.0-focus.1</sub>
+  <sub>Last updated: 2026-04-08 · Upstream base v7.5.1 · Current Focus release v7.5.1-focus.1</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.5.0--focus.1-fb7299?style=flat-square" alt="Focus Version">
-  <img src="https://img.shields.io/badge/Upstream-7.5.0-00a1d6?style=flat-square" alt="Upstream Version">
+  <img src="https://img.shields.io/badge/Focus-7.5.1--focus.1-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Upstream-7.5.1-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/badge/Channel-Focus-fb7299?style=flat-square" alt="Channel">
   <img src="https://img.shields.io/badge/Update-Release%20Only-3fb950?style=flat-square" alt="Update Channel">
   <img src="https://img.shields.io/badge/Install-Coexist%20Enabled-8250df?style=flat-square" alt="Coexist Install">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · Focus Releases (the Releases page of the current repository) · [Focus Release Notes](docs/releases/focus-7.5.0-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · Focus Releases (the Releases page of the current repository) · [Focus Release Notes](docs/releases/focus-7.5.1-focus.1-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | Current Focus repository · Current repository Releases page · [Release Notes](docs/releases/focus-7.5.0-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | Current Focus repository · Current repository Releases page · [Release Notes](docs/releases/focus-7.5.1-focus.1-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.5.0-focus.1` |
-| Upstream base | `7.5.0` |
-| Release tag | `v7.5.0-focus.1` |
-| Release notes | [docs/releases/focus-7.5.0-focus.1-en.md](docs/releases/focus-7.5.0-focus.1-en.md) |
-| Main refinements | Full sync of upstream `7.3.1 -> 7.5.0`, including aggregated creator-space first load, dynamic back-to-top, playback/live/danmaku/update stabilization, while keeping Focus coexist packaging, Focus-only updates, FOLLOW customizations, and the portrait aspect-ratio recovery patch |
-| Public APK | `BliPai-Focus-release-7.5.0-focus.1.apk` |
+| Focus version | `7.5.1-focus.1` |
+| Upstream base | `7.5.1` |
+| Release tag | `v7.5.1-focus.1` |
+| Release notes | [docs/releases/focus-7.5.1-focus.1-en.md](docs/releases/focus-7.5.1-focus.1-en.md) |
+| Main refinements | Tracks the official `7.5.1` release line (whose tag points to the same commit as `7.5.0`) and fixes the player top-left Home button so it always jumps straight to Home, while keeping the Focus coexist package, Focus-only updates, FOLLOW customizations, and portrait aspect-ratio recovery patch |
+| Public APK | `BliPai-Focus-release-7.5.1-focus.1.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.5.0-focus.1.md` | Chinese release notes for `v7.5.0-focus.1` |
-| Added | `docs/releases/focus-7.5.0-focus.1-en.md` | English release notes for `v7.5.0-focus.1` |
+| Added | `docs/releases/focus-7.5.1-focus.1.md` | Chinese release notes for `v7.5.1-focus.1` |
+| Added | `docs/releases/focus-7.5.1-focus.1-en.md` | English release notes for `v7.5.1-focus.1` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -454,7 +454,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
   <a href="https://github.com/jay3-yy/BiliPai/releases">
     <img src="https://img.shields.io/badge/Download-Official%20Release-fb7299?style=for-the-badge&logo=github" alt="Official Download">
   </a>
-  <a href="docs/releases/focus-7.5.0-focus.1-en.md">
+  <a href="docs/releases/focus-7.5.1-focus.1-en.md">
     <img src="https://img.shields.io/badge/Download-Focus%20Release-1f8bff?style=for-the-badge&logo=github" alt="Focus Download">
   </a>
 </p>
@@ -579,12 +579,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.5.0 / v7.5.0-focus.1 · 2026-04-06)
+### Latest (v7.5.1 / v7.5.1-focus.1 · 2026-04-08)
 
-- 🚀 **Full upstream sync from `7.3.1` to `7.5.0`**: aggregated creator-space first load, dynamic back-to-top, playback quality-mode/diagnostics/cover transitions, live recovery, danmaku improvements, and cache-clear flows are now aligned with upstream releases.
-- 👤 **Creator space first screen is more reliable**: the screen keeps a true loading state while the first page is still hydrating, preserves flexible numeric parsing, and keeps the Focus suspicious-empty retry fallback for creator spaces opened from search.
-- 📱 **Portrait aspect-ratio stabilization**: leaving portrait fullscreen for in-app jumps, external navigation, or background/foreground transitions now resets inline layout and viewport state before shared-player recovery, reducing squashed frames, black bars, and wrong-aspect flashes.
-- 🧩 **Focus customizations remain intact**: coexist package name, Focus-only update source, Home FOLLOW grouping/sorting/auto-sync, and the first-use Focus entry points all remain preserved on top of `7.5.0`.
+- 🔄 **Aligned with the official `7.5.1` release line**: the official `7.5.1` tag points to the same source commit as `7.5.0`, so this Focus release syncs the version line, docs, and release channel without re-merging upstream code that is already present.
+- 🏠 **Player Home button now goes straight to Home**: the top-left house icon no longer reuses the back-stack behavior. Standard video pages, portrait fullscreen, and tablet layouts now all route directly to the Home screen.
+- 📱 **Existing stability fixes stay in place**: creator-space aggregate loading, suspicious-empty single retry, portrait aspect-ratio recovery, FOLLOW customizations, and the Focus-only update path all remain preserved on the `7.5.1` line.
+- 🔍 **Repository audit reconfirmed no cross-project residue**: no unintended files or keywords from unrelated projects were found in the tracked files or working tree of `bli`.
 
 ---
 

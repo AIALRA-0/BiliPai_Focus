@@ -99,7 +99,7 @@ fun PortraitFullscreenOverlay(
     
     // 回调
     onBack: () -> Unit,
-    onHomeClick: () -> Unit = onBack,
+    onHomeClick: () -> Unit,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onSeekStart: () -> Unit = {},

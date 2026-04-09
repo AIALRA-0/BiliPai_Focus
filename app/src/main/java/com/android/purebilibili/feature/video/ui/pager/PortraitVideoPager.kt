@@ -169,7 +169,7 @@ fun PortraitVideoPager(
     recommendations: List<RelatedVideo>,
     showRelatedVideosSection: Boolean = true,
     onBack: () -> Unit,
-    onHomeClick: () -> Unit = onBack,
+    onHomeClick: () -> Unit,
     onVideoChange: (String) -> Unit,
     viewModel: PlayerViewModel,
     commentViewModel: VideoCommentViewModel,

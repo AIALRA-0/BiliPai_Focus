@@ -73,6 +73,7 @@ fun TabletVideoLayout(
     bvid: String,
     coverUrl: String = "",
     onBack: () -> Unit,
+    onHomeClick: () -> Unit = onBack,
     onUpClick: (Long) -> Unit,
     onNavigateToAudioMode: () -> Unit,
     onToggleFullscreen: () -> Unit,  // 📺 全屏切换回调
@@ -178,6 +179,7 @@ fun TabletVideoLayout(
                             onToggleFullscreen = onToggleFullscreen,
                             onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                             onBack = onBack,
+                            onHomeClick = onHomeClick,
                             bvid = bvid,
                             coverUrl = coverUrl,
                             onDoubleTapLike = { viewModel.toggleLike() },

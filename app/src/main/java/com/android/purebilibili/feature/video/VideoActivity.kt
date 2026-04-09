@@ -109,6 +109,14 @@ class VideoActivity : ComponentActivity() {
                     bvid = bvid,
                     coverUrl = "", // Will be updated when video info loads
                     onBack = { onBackPressedDispatcher.onBackPressed() },
+                    onHomeClick = {
+                        startActivity(
+                            Intent(this, com.android.purebilibili.MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                        )
+                        finish()
+                    },
                     onNavigateToAudioMode = {
                         viewModel.setAudioMode(true)
                     },

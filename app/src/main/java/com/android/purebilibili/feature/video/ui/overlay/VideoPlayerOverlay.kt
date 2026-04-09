@@ -270,7 +270,7 @@ fun VideoPlayerOverlay(
     onQualitySelected: (Int) -> Unit,
 
     onBack: () -> Unit,
-    onHomeClick: () -> Unit = onBack,
+    onHomeClick: () -> Unit,
     onToggleFullscreen: () -> Unit,
     // [New] Player Data for Download
     bvid: String = "",

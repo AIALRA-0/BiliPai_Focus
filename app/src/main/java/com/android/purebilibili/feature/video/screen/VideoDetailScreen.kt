@@ -490,6 +490,7 @@ fun VideoDetailScreen(
     transitionEnterDurationMillis: Int = 320,
     transitionMaxBlurRadiusPx: Float = 20f,
     onBack: () -> Unit,
+    onHomeClick: () -> Unit,
     onNavigateToAudioMode: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onVideoClick: (String, android.os.Bundle?) -> Unit,
@@ -886,6 +887,31 @@ fun VideoDetailScreen(
                     kotlinx.coroutines.delay(coverTakeoverBeforeBackDelayMillis)
                 }
                 onBack() // 执行实际的返回导航
+            }
+        }
+    }
+
+    val handleHome = remember(
+        onHomeClick,
+        miniPlayerManager,
+        currentBvid,
+        coverTakeoverBeforeBackDelayMillis,
+        backNavigationScope
+    ) {
+        home@{
+            if (isActuallyLeaving) return@home
+            isActuallyLeaving = true
+            isScreenActive = false
+            forceCoverOnlyOnReturn = true
+            CardPositionManager.markReturning()
+            miniPlayerManager?.markLeavingByNavigation(expectedBvid = currentBvid)
+
+            restoreStatusBar()
+            backNavigationScope.launch {
+                if (coverTakeoverBeforeBackDelayMillis > 0L) {
+                    kotlinx.coroutines.delay(coverTakeoverBeforeBackDelayMillis)
+                }
+                onHomeClick()
             }
         }
     }
@@ -1896,6 +1922,7 @@ fun VideoDetailScreen(
                 onToggleFullscreen = { toggleFullscreen() },
                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                 onBack = { toggleFullscreen() },
+                onHomeClick = handleHome,
                 onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                 // 🔗 [新增] 分享功能
                 bvid = videoPlayerSectionTarget.bvid,
@@ -2040,6 +2067,7 @@ fun VideoDetailScreen(
                                 handleBack()
                             }
                         },
+                        onHomeClick = handleHome,
                         onUpClick = onUpClick,
                         onNavigateToAudioMode = {
                             isNavigatingToAudioMode = true // [Fix] Set flag to prevent notification cancellation
@@ -2281,6 +2309,7 @@ fun VideoDetailScreen(
                                 onToggleFullscreen = { toggleFullscreen() },
                                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                                 onBack = handleBack,
+                                onHomeClick = handleHome,
                                 onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                                 // 🔗 [新增] 分享功能
                                 bvid = videoPlayerSectionTarget.bvid,
@@ -2746,7 +2775,7 @@ fun VideoDetailScreen(
                 onBack = { isPortraitFullscreen = false },
                 onHomeClick = {
                     isPortraitFullscreen = false
-                    handleBack()
+                    handleHome()
                 },
                 onVideoChange = { newBvid ->
                     // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。

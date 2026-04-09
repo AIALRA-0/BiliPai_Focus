@@ -939,6 +939,11 @@ fun AppNavigation(
                         //  [修复] 不再在这里调用 enterMiniMode，由 onDispose 统一处理
                         navController.popBackStack() 
                     },
+                    onHomeClick = {
+                        CardPositionManager.markReturning()
+                        miniPlayerManager?.markLeavingByNavigation(expectedBvid = bvid)
+                        navigateTo(ScreenRoutes.Home.route)
+                    },
                     //  [新增] 导航到音频模式
                     onNavigateToAudioMode = { 
                         isNavigatingToAudioMode = true
