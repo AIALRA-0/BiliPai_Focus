@@ -1,5 +1,20 @@
 # Focus Changelog
 
+## v7.5.1 Focus / focus.3 (2026-04-08)
+
+### 版本信息
+- 继续停留在上游 `BiliPai v7.5.1` 版本线，当前推荐对外版本更新为 `7.5.1-focus.3`。
+- 为保证已发布 `v7.5.1-focus.2 / 162` 用户可直接升级，`versionCode` 继续递增到 `163`。
+- 官方 `7.5.1` tag 与 `7.5.0` 仍指向同一源码提交，因此这一版仍不重复 merge upstream 代码，主要用于继续验证 Focus 应用内更新链路与正式发布流程。
+
+### 发布收口
+- 业务代码维持 `v7.5.1-focus.2` 的播放器 Home 返回主页修复不变。
+- 本次主要抬升 Focus 版本线、README、release notes 和 GitHub Release，用于验证应用内更新从 `.2` 到 `.3` 的检测链路。
+- 继续保持只发布 `release` APK，不附带 `debug` 资产。
+
+### 验证
+- 已通过 `:app:assembleRelease`。
+
 ## v7.5.1 Focus / focus.2 (2026-04-08)
 
 ### 版本信息

@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-08 · Upstream base v7.5.1 · Current Focus release v7.5.1-focus.2</sub>
+  <sub>Last updated: 2026-04-08 · Upstream base v7.5.1 · Current Focus release v7.5.1-focus.3</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.5.1--focus.2-fb7299?style=flat-square" alt="Focus Version">
+  <img src="https://img.shields.io/badge/Focus-7.5.1--focus.3-fb7299?style=flat-square" alt="Focus Version">
   <img src="https://img.shields.io/badge/Upstream-7.5.1-00a1d6?style=flat-square" alt="Upstream Version">
   <img src="https://img.shields.io/badge/Channel-Focus-fb7299?style=flat-square" alt="Channel">
   <img src="https://img.shields.io/badge/Update-Release%20Only-3fb950?style=flat-square" alt="Update Channel">
@@ -33,7 +33,7 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · Focus Releases (the Releases page of the current repository) · [Focus Release Notes](docs/releases/focus-7.5.1-focus.2-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · Focus Releases (the Releases page of the current repository) · [Focus Release Notes](docs/releases/focus-7.5.1-focus.3-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -50,18 +50,18 @@ From the perspective of attention psychology and behavioral design, recommendati
 | Edition | Best for | Entry |
 | --- | --- | --- |
 | Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | Current Focus repository · Current repository Releases page · [Release Notes](docs/releases/focus-7.5.1-focus.2-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | Current Focus repository · Current repository Releases page · [Release Notes](docs/releases/focus-7.5.1-focus.3-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
 
 ### Current Focus release
 
 | Item | Value |
 | --- | --- |
-| Focus version | `7.5.1-focus.2` |
+| Focus version | `7.5.1-focus.3` |
 | Upstream base | `7.5.1` |
-| Release tag | `v7.5.1-focus.2` |
-| Release notes | [docs/releases/focus-7.5.1-focus.2-en.md](docs/releases/focus-7.5.1-focus.2-en.md) |
-| Main refinements | Stays on the official `7.5.1` line and hardens the player top-left Home button so it always jumps to the real Home root instead of only leaving the current page/back stack, while keeping the Focus coexist package, Focus-only updates, FOLLOW customizations, and portrait aspect-ratio recovery patch |
-| Public APK | `BliPai-Focus-release-7.5.1-focus.2.apk` |
+| Release tag | `v7.5.1-focus.3` |
+| Release notes | [docs/releases/focus-7.5.1-focus.3-en.md](docs/releases/focus-7.5.1-focus.3-en.md) |
+| Main refinements | Stays on the official `7.5.1` line and uses a `.3` patch release to verify the Focus in-app update and release pipeline, while keeping the `.2` player Home-root fix unchanged |
+| Public APK | `BliPai-Focus-release-7.5.1-focus.3.apk` |
 
 ### Default customizations
 
@@ -152,8 +152,8 @@ This list only covers the main Focus-maintained entry points; use the repository
 | Type | File | Purpose |
 | --- | --- | --- |
 | Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.5.1-focus.2.md` | Chinese release notes for `v7.5.1-focus.2` |
-| Added | `docs/releases/focus-7.5.1-focus.2-en.md` | English release notes for `v7.5.1-focus.2` |
+| Added | `docs/releases/focus-7.5.1-focus.3.md` | Chinese release notes for `v7.5.1-focus.3` |
+| Added | `docs/releases/focus-7.5.1-focus.3-en.md` | English release notes for `v7.5.1-focus.3` |
 | Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
 | Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
 | Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
@@ -454,7 +454,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
   <a href="https://github.com/jay3-yy/BiliPai/releases">
     <img src="https://img.shields.io/badge/Download-Official%20Release-fb7299?style=for-the-badge&logo=github" alt="Official Download">
   </a>
-  <a href="docs/releases/focus-7.5.1-focus.2-en.md">
+  <a href="docs/releases/focus-7.5.1-focus.3-en.md">
     <img src="https://img.shields.io/badge/Download-Focus%20Release-1f8bff?style=for-the-badge&logo=github" alt="Focus Download">
   </a>
 </p>
@@ -579,10 +579,10 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.5.1 / v7.5.1-focus.2 · 2026-04-08)
+### Latest (v7.5.1 / v7.5.1-focus.3 · 2026-04-08)
 
-- 🔄 **Still aligned with the official `7.5.1` release line**: the official `7.5.1` tag still points to the same source commit as `7.5.0`, so this is a patch release on the same line focused on the local Home-navigation fix.
-- 🏠 **Player Home now truly returns to Home**: the top-left house icon now hard-jumps to the real Home root instead of only leaving the current page or previous video, including portrait fullscreen playback.
+- 🔄 **Still aligned with the official `7.5.1` release line**: the official `7.5.1` tag still points to the same source commit as `7.5.0`, so this `.3` build does not add new upstream code and is intended to verify the Focus in-app update and release pipeline.
+- 🏠 **The player Home fix remains in place**: the `.2` change that makes the house icon truly jump to the Home root is preserved unchanged.
 - 📱 **Existing stability fixes stay in place**: creator-space aggregate loading, suspicious-empty single retry, portrait aspect-ratio recovery, FOLLOW customizations, and the Focus-only update path all remain preserved on the `7.5.1` line.
 - 🔍 **Repository audit reconfirmed no cross-project residue**: no unintended files or keywords from unrelated projects were found in the tracked files or working tree of `bli`.
 
