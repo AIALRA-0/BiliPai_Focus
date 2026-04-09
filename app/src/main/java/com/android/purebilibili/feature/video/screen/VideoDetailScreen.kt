@@ -2773,10 +2773,7 @@ fun VideoDetailScreen(
                 recommendations = success.related,
                 showRelatedVideosSection = showRelatedVideosSection,
                 onBack = { isPortraitFullscreen = false },
-                onHomeClick = {
-                    isPortraitFullscreen = false
-                    handleHome()
-                },
+                onHomeClick = handleHome,
                 onVideoChange = { newBvid ->
                     // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
                     // 仅记录竖屏会话内当前浏览目标，真正退出时再提交给主播放器。

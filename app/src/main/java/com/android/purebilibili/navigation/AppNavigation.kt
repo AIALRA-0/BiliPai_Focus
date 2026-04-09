@@ -27,6 +27,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.android.purebilibili.feature.article.ArticleDetailScreen
 import com.android.purebilibili.feature.article.shouldUseArticleNoOpRouteTransition
 import com.android.purebilibili.feature.home.HomeVideoClickRequest
@@ -304,7 +305,19 @@ fun AppNavigation(
 
     //  [修复] 通用单例跳转（防止重复打开相同页面）
     fun navigateTo(route: String) {
-        if (!canNavigate()) return
+        val currentTime = System.currentTimeMillis()
+        val bypassDebounce = shouldBypassNavigationDebounceForRoute(route)
+        if (
+            !canProceedWithNavigation(
+                currentTimeMillis = currentTime,
+                lastNavigationTimeMillis = lastNavigationTime.longValue,
+                debounceWindowMillis = 300L,
+                bypassDebounce = bypassDebounce
+            )
+        ) {
+            return
+        }
+        lastNavigationTime.longValue = currentTime
 
         val currentRouteSnapshot = navController.currentBackStackEntry?.destination?.route
         val hasTargetInPreviousBackStack =
@@ -329,6 +342,24 @@ fun AppNavigation(
             // 避免在重新选择同一项目时出现同一目标的多个副本
             launchSingleTop = true
             // 重新选择以前选择的项目时恢复状态
+            restoreState = true
+        }
+    }
+
+    fun navigateHomeFromPlayer() {
+        lastNavigationTime.longValue = System.currentTimeMillis()
+
+        if (navController.popBackStack(ScreenRoutes.Home.route, inclusive = false)) {
+            if (navController.currentBackStackEntry?.destination?.route == ScreenRoutes.Home.route) {
+                return
+            }
+        }
+
+        navController.navigate(ScreenRoutes.Home.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
             restoreState = true
         }
     }
@@ -942,7 +973,7 @@ fun AppNavigation(
                     onHomeClick = {
                         CardPositionManager.markReturning()
                         miniPlayerManager?.markLeavingByNavigation(expectedBvid = bvid)
-                        navigateTo(ScreenRoutes.Home.route)
+                        navigateHomeFromPlayer()
                     },
                     //  [新增] 导航到音频模式
                     onNavigateToAudioMode = { 

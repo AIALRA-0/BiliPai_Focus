@@ -1,5 +1,25 @@
 # Focus Changelog
 
+## v7.5.1 Focus / focus.2 (2026-04-08)
+
+### 版本信息
+- 继续跟进上游 `BiliPai v7.5.1` 版本线，当前推荐对外版本更新为 `7.5.1-focus.2`。
+- 为保证已发布 `v7.5.1-focus.1 / 161` 用户可直接升级，`versionCode` 继续递增到 `162`。
+- 官方 `7.5.1` tag 与 `7.5.0` 仍指向同一源码提交，因此这一版继续不重复 merge upstream 代码，重点是修正播放器 Home 真正回首页的行为并完成补丁发布。
+
+### 播放器 Home 返回主页修复
+- 播放器左上角房子按钮现在会强制回到首页根页面，不再只是退回当前页、上一条视频，或被当前栈状态吞掉。
+- 播放器专用 `home` 导航改成独立的顶层回首页逻辑，不再复用通用页面跳转中的“已有目标就恢复/弹栈”判断。
+- 竖屏全屏场景也一并修正，不会再先退回当前详情页再尝试跳首页。
+
+### Focus 同步与审计
+- Focus 版本线、README、release notes 和应用内更新展示版本已统一切到 `7.5.1-focus.2`。
+- 当前 `bli` 仓库工作树仅包含这次补丁发版所需改动，未发现跨项目残留。
+
+### 验证
+- 已通过 `:app:testDebugUnitTest --tests "*AppTopLevelNavigationPolicyTest" --tests "*VideoDetailScreenPolicyTest" --tests "*PortraitVideoPagerPolicyTest"`。
+- 已通过 `:app:assembleRelease` 并继续保持只发布 `release` APK。
+
 ## v7.5.1 Focus / focus.1 (2026-04-08)
 
 ### 版本信息
