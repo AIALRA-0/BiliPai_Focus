@@ -1,6 +1,7 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.data.model.response.ReplyData
+import com.android.purebilibili.data.model.response.ReplyItem
 
 internal enum class CommentReadApiMode {
     AUTH,
@@ -35,6 +36,26 @@ internal fun hasRenderableCommentPayload(data: ReplyData?): Boolean {
     return data.replies.orEmpty().isNotEmpty() ||
         data.hots.orEmpty().isNotEmpty() ||
         data.collectTopReplies().isNotEmpty()
+}
+
+private fun collectRenderableComments(data: ReplyData): Sequence<ReplyItem> {
+    return sequenceOf(
+        data.collectTopReplies().asSequence(),
+        data.hots.orEmpty().asSequence(),
+        data.replies.orEmpty().asSequence()
+    ).flatten()
+}
+
+internal fun hasAnyReplyLocation(data: ReplyData?): Boolean {
+    if (data == null) return false
+    return collectRenderableComments(data)
+        .any { !it.replyControl?.location.isNullOrBlank() }
+}
+
+internal fun shouldFallbackGrpcCommentReadOnMissingLocation(data: ReplyData?): Boolean {
+    return data != null &&
+        hasRenderableCommentPayload(data) &&
+        !hasAnyReplyLocation(data)
 }
 
 internal fun shouldFallbackGuestHotCommentReadOnEmptySuccess(

@@ -55,9 +55,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun DynamicCardV2(
     item: DynamicItem,
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> },
     onDynamicDetailClick: ((dynamicId: String) -> Unit)? = null,
+    isDetail: Boolean = false,
     gifImageLoader: ImageLoader,
     //  [新增] 评论/转发/点赞回调
     onCommentClick: (dynamicId: String) -> Unit = {},
@@ -70,9 +72,6 @@ fun DynamicCardV2(
     val stat = item.modules.module_stat
     val type = DynamicType.fromApiValue(item.type)
     val cardClickAction = remember(item) { resolveDynamicCardPrimaryAction(item) }
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     val isPrimaryClickEnabled = remember(cardClickAction, onDynamicDetailClick) {
         when (cardClickAction) {
             is DynamicCardPrimaryAction.OpenDynamicDetail -> onDynamicDetailClick != null
@@ -81,37 +80,27 @@ fun DynamicCardV2(
         }
     }
 
-    //  [优化] 卡片式设计：圆角 + 微阴影 + 更好的间距
-    //  [优化] 使用 GlassCard 替换 Surface
-    GlassCard(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = resolveDynamicCardOuterPadding(),
-                vertical = if (isMiuix) 4.dp else 6.dp
-            )
+            .padding(horizontal = resolveDynamicCardOuterPadding())
             .clickable(enabled = isPrimaryClickEnabled) {
                 dispatchDynamicCardPrimaryAction(
                     action = cardClickAction,
                     onVideoClick = onVideoClick,
+                    onBangumiClick = onBangumiClick,
                     onDynamicDetailClick = onDynamicDetailClick,
                     onUserClick = onUserClick,
                     onLiveClick = onLiveClick
                 )
-            },
-        backgroundColor = if (isMiuix) MiuixTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface,
-        borderColor = if (isMiuix) {
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
-        } else {
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-        },
-        shape = RoundedCornerShape(if (isMiuix) 18.dp else 20.dp)
+            }
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(resolveDynamicCardContentPadding())  // 卡片内部间距
-    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = resolveDynamicCardContentPadding())
+                .padding(top = 12.dp, bottom = if (isDetail) 0.dp else 10.dp)
+        ) {
         //  [新增] 更多菜单状态
         var showMoreMenu by remember { mutableStateOf(false) }
         val context = LocalContext.current
@@ -136,6 +125,7 @@ fun DynamicCardV2(
                             dispatchDynamicCardPrimaryAction(
                                 action = DynamicCardPrimaryAction.OpenUser(author.mid),
                                 onVideoClick = onVideoClick,
+                                onBangumiClick = onBangumiClick,
                                 onDynamicDetailClick = onDynamicDetailClick,
                                 onUserClick = onUserClick,
                                 onLiveClick = onLiveClick
@@ -241,6 +231,21 @@ fun DynamicCardV2(
                         ?: onDynamicDetailClick?.invoke(item.id_str)
                 },
                 transitionName = "video-${archive.bvid}" // [新增] 共享元素过渡名称
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        content?.major?.pgc?.let { pgc ->
+            val bangumiTarget = resolveArchiveBangumiTarget(pgc)
+            VideoCardLarge(
+                archive = pgc,
+                publishTs = author?.pub_ts ?: 0L,
+                cornerBadgeText = "番剧",
+                onClick = {
+                    bangumiTarget?.let { onBangumiClick(it.seasonId, it.epId) }
+                        ?: onDynamicDetailClick?.invoke(item.id_str)
+                },
+                transitionName = "video-${pgc.bvid.ifBlank { item.id_str }}"
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -393,6 +398,7 @@ fun DynamicCardV2(
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),
                         onVideoClick = onVideoClick,
+                        onBangumiClick = onBangumiClick,
                         onDynamicDetailClick = onDynamicDetailClick,
                         onUserClick = onUserClick,
                         onLiveClick = onLiveClick
@@ -407,6 +413,7 @@ fun DynamicCardV2(
             ForwardedContent(
                 orig = item.orig,
                 onVideoClick = onVideoClick,
+                onBangumiClick = onBangumiClick,
                 onUserClick = onUserClick,
                 gifImageLoader = gifImageLoader
             )
@@ -447,8 +454,16 @@ fun DynamicCardV2(
                 onClick = { onLikeClick(item.id_str) }
             )
         }
+        }
+
+        if (!isDetail) {
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                thickness = 0.7.dp
+            )
+        }
     }
-    }  //  关闭 Surface
 }
 
 /**

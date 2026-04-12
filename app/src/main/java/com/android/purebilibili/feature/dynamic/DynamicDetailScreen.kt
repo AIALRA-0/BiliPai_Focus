@@ -54,6 +54,7 @@ fun DynamicDetailScreen(
     dynamicId: String,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> }
 ) {
@@ -133,15 +134,17 @@ fun DynamicDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .responsiveContentWidth(),
+                        .responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth()),
                     contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
                     item {
                         DynamicCardV2(
                             item = state.item,
                             onVideoClick = onVideoClick,
+                            onBangumiClick = onBangumiClick,
                             onUserClick = onUserClick,
                             onLiveClick = onLiveClick,
+                            isDetail = true,
                             gifImageLoader = gifImageLoader,
                             onCommentClick = { interactionViewModel.openCommentSheet(state.item) },
                             onRepostClick = { showRepostDialog = it },

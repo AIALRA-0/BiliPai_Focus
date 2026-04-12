@@ -59,9 +59,9 @@ class VideoCommentSheetHostPolicyTest {
     }
 
     @Test
-    fun `thread only detail should fill the screen`() {
+    fun `thread only detail should stay below the reserved top area`() {
         assertEquals(
-            1f,
+            0.55f,
             resolveVideoCommentSheetHostHeightFraction(
                 mainSheetVisible = false,
                 screenHeightPx = 1000,
@@ -69,5 +69,30 @@ class VideoCommentSheetHostPolicyTest {
             )
         )
         assertEquals(0f, resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = false))
+    }
+
+    @Test
+    fun `detached fullscreen thread detail should keep status bar padding`() {
+        assertEquals(
+            true,
+            shouldApplyVideoCommentThreadStatusBarPadding(
+                mainSheetVisible = false,
+                topReservedPx = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldApplyVideoCommentThreadStatusBarPadding(
+                mainSheetVisible = false,
+                topReservedPx = 450
+            )
+        )
+        assertEquals(
+            false,
+            shouldApplyVideoCommentThreadStatusBarPadding(
+                mainSheetVisible = true,
+                topReservedPx = 0
+            )
+        )
     }
 }

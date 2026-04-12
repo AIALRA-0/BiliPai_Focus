@@ -106,6 +106,13 @@ internal fun resolveVideoCommentSheetHostScrimAlpha(
     }
 }
 
+internal fun shouldApplyVideoCommentThreadStatusBarPadding(
+    mainSheetVisible: Boolean,
+    topReservedPx: Int = 0
+): Boolean {
+    return !mainSheetVisible && topReservedPx <= 0
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun VideoCommentSheetHost(
@@ -150,6 +157,10 @@ fun VideoCommentSheetHost(
         topReservedPx = topReservedPx
     )
     val scrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
+    val applyThreadStatusBarPadding = shouldApplyVideoCommentThreadStatusBarPadding(
+        mainSheetVisible = mainSheetVisible,
+        topReservedPx = topReservedPx
+    )
     val uiPreset = LocalUiPreset.current
     val motionSpec = remember(uiPreset) { resolveAdaptiveBottomSheetMotionSpec(uiPreset) }
     val appearance = rememberVideoCommentAppearance()
@@ -315,7 +326,7 @@ fun VideoCommentSheetHost(
                                     emoteMap = emoteMap,
                                     onLoadMore = { commentViewModel.loadMoreSubReplies() },
                                     onDismiss = { commentViewModel.closeSubReply() },
-                                    applyStatusBarPadding = true,
+                                    applyStatusBarPadding = applyThreadStatusBarPadding,
                                     onRootCommentClick = onRootCommentClick,
                                     onTimestampClick = onTimestampClick,
                                     upMid = subReplyState.upMid,

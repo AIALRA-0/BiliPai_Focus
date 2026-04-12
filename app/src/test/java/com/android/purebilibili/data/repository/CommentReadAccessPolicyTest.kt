@@ -2,6 +2,7 @@ package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.data.model.response.ReplyCursor
 import com.android.purebilibili.data.model.response.ReplyData
+import com.android.purebilibili.data.model.response.ReplyControl
 import com.android.purebilibili.data.model.response.ReplyItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -80,6 +81,49 @@ class CommentReadAccessPolicyTest {
             hasRenderableCommentPayload(
                 ReplyData(
                     hots = listOf(ReplyItem(rpid = 1L))
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `grpc comment read falls back when rendered comments all miss ip location`() {
+        assertTrue(
+            shouldFallbackGrpcCommentReadOnMissingLocation(
+                ReplyData(
+                    replies = listOf(
+                        ReplyItem(rpid = 1L),
+                        ReplyItem(rpid = 2L, replyControl = ReplyControl(location = ""))
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `grpc comment read keeps payload when any rendered comment has ip location`() {
+        assertFalse(
+            shouldFallbackGrpcCommentReadOnMissingLocation(
+                ReplyData(
+                    hots = listOf(
+                        ReplyItem(
+                            rpid = 1L,
+                            replyControl = ReplyControl(location = "IP属地：上海")
+                        )
+                    ),
+                    replies = listOf(ReplyItem(rpid = 2L))
+                )
+            )
+        )
+        assertTrue(
+            hasAnyReplyLocation(
+                ReplyData(
+                    replies = listOf(
+                        ReplyItem(
+                            rpid = 3L,
+                            replyControl = ReplyControl(location = "IP属地：北京")
+                        )
+                    )
                 )
             )
         )

@@ -31,13 +31,39 @@ private fun resolveCommentTargetFromBasic(basic: DynamicBasic?): DynamicCommentT
 internal fun shouldIncludeDynamicItemInVideoTab(item: DynamicItem): Boolean {
     return when (item.type.trim()) {
         "DYNAMIC_TYPE_AV",
-        "DYNAMIC_TYPE_PGC",
         "DYNAMIC_TYPE_UGC_SEASON" -> true
         else -> {
             val major = item.modules.module_dynamic?.major
-            major?.archive != null || major?.ugc_season != null
+            (major?.archive != null || major?.ugc_season != null) &&
+                !shouldIncludeDynamicItemInPgcTab(item)
         }
     }
+}
+
+internal fun shouldIncludeDynamicItemInPgcTab(item: DynamicItem): Boolean {
+    return when (item.type.trim()) {
+        "DYNAMIC_TYPE_PGC",
+        "DYNAMIC_TYPE_PGC_UNION" -> true
+        else -> false
+    }
+}
+
+internal fun shouldIncludeDynamicItemInArticleTab(item: DynamicItem): Boolean {
+    return when (item.type.trim()) {
+        "DYNAMIC_TYPE_ARTICLE",
+        "DYNAMIC_TYPE_DRAW",
+        "DYNAMIC_TYPE_WORD" -> true
+        else -> {
+            val major = item.modules.module_dynamic?.major
+            major?.opus != null || major?.draw != null
+        }
+    }
+}
+
+internal fun shouldIncludeDynamicItemInUpTab(item: DynamicItem): Boolean {
+    return !shouldIncludeDynamicItemInVideoTab(item) &&
+        !shouldIncludeDynamicItemInPgcTab(item) &&
+        !shouldIncludeDynamicItemInArticleTab(item)
 }
 
 internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarget? {
@@ -49,6 +75,10 @@ internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarge
         }
         "MAJOR_TYPE_ARCHIVE" -> {
             val aid = major?.archive?.aid?.toPositiveLongOrNull() ?: return null
+            return DynamicCommentTarget(oid = aid, type = 1)
+        }
+        "MAJOR_TYPE_PGC" -> {
+            val aid = major?.pgc?.aid?.toPositiveLongOrNull() ?: return null
             return DynamicCommentTarget(oid = aid, type = 1)
         }
         "MAJOR_TYPE_UGC_SEASON" -> {
@@ -65,9 +95,11 @@ internal fun resolveDynamicCommentTarget(item: DynamicItem): DynamicCommentTarge
     return when (item.type.trim()) {
         "DYNAMIC_TYPE_AV",
         "DYNAMIC_TYPE_PGC",
+        "DYNAMIC_TYPE_PGC_UNION",
         "DYNAMIC_TYPE_UGC_SEASON" -> {
             val oid = resolveCommentTargetFromBasic(basic)?.takeIf { it.type == 1 }?.oid
                 ?: major?.archive?.aid?.toPositiveLongOrNull()
+                ?: major?.pgc?.aid?.toPositiveLongOrNull()
                 ?: major?.ugc_season?.aid?.takeIf { it > 0L }
                 ?: return null
             DynamicCommentTarget(oid = oid, type = 1)

@@ -95,6 +95,7 @@ import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
@@ -268,6 +269,7 @@ fun PortraitVideoPager(
     var watchLaterVideos by remember { mutableStateOf<List<RelatedVideo>>(emptyList()) }
     var isLoadingMoreRecommendations by remember { mutableStateOf(false) }
     val appendedRecommendationSeeds = remember { mutableStateListOf<String>() }
+    var recommendationFeedCursor by rememberSaveable(initialInfo.bvid) { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         if (TokenManager.sessDataCache.isNullOrEmpty()) {
@@ -300,9 +302,45 @@ fun PortraitVideoPager(
             }
         }
     }
-    
+
     val pagerState = rememberPagerState(initialPage = initialPageIndex) {
         pageItems.size
+    }
+    LaunchedEffect(initialInfo.bvid) {
+        val discoveryRecommendations = VideoRepository.getHomeVideos(idx = 0)
+            .getOrNull()
+            .orEmpty()
+            .mapNotNull(::toRelatedVideoForPortraitRecommendation)
+        if (discoveryRecommendations.isEmpty()) return@LaunchedEffect
+
+        val shuffledDiscoveryRecommendations = shufflePortraitRecommendations(
+            seed = resolvePortraitRecommendationAppendSeed(
+                baseSeed = recommendationShuffleSeed,
+                currentBvid = initialInfo.bvid
+            ),
+            recommendations = discoveryRecommendations
+        )
+        val insertion = withContext(Dispatchers.Main.immediate) {
+            recommendationFeedCursor = 1
+            mergePortraitRecommendationAppendItems(
+                currentBvid = initialInfo.bvid,
+                existingBvids = snapshotPortraitPageBvids(pageItems),
+                existingRecommendations = recommendationItems.toList(),
+                fetchedRecommendations = shuffledDiscoveryRecommendations
+            )
+        }
+        if (insertion.isEmpty()) return@LaunchedEffect
+
+        withContext(Dispatchers.Main.immediate) {
+            val insertNearHead = pagerState.currentPage == 0 && !pagerState.isScrollInProgress
+            if (insertNearHead) {
+                recommendationItems.addAll(0, insertion)
+                pageItems.addAll(1, insertion)
+            } else {
+                recommendationItems.addAll(insertion)
+                pageItems.addAll(insertion)
+            }
+        }
     }
     var currentPageScale by remember { mutableFloatStateOf(1f) }
 
@@ -572,20 +610,36 @@ fun PortraitVideoPager(
                     isLoadingMoreRecommendations = true
                     launch {
                         try {
-                            val existingBvids = withContext(Dispatchers.Main.immediate) {
-                                snapshotPortraitPageBvids(pageItems)
+                            val (existingBvids, existingRecommendations, homeFeedCursor) = withContext(Dispatchers.Main.immediate) {
+                                Triple(
+                                    snapshotPortraitPageBvids(pageItems),
+                                    recommendationItems.toList(),
+                                    recommendationFeedCursor
+                                )
+                            }
+                            val homeFeedRecommendations = VideoRepository.getHomeVideos(idx = homeFeedCursor)
+                                .getOrNull()
+                                .orEmpty()
+                                .mapNotNull(::toRelatedVideoForPortraitRecommendation)
+                            withContext(Dispatchers.Main.immediate) {
+                                recommendationFeedCursor = homeFeedCursor + 1
+                            }
+                            val relatedFallbackRecommendations = if (homeFeedRecommendations.size < 8) {
+                                VideoRepository.getRelatedVideos(bvid)
+                            } else {
+                                emptyList()
                             }
                             val shuffledFetchedRecommendations = shufflePortraitRecommendations(
                                 seed = resolvePortraitRecommendationAppendSeed(
                                     baseSeed = recommendationShuffleSeed,
                                     currentBvid = bvid
                                 ),
-                                recommendations = com.android.purebilibili.data.repository.VideoRepository
-                                    .getRelatedVideos(bvid)
+                                recommendations = homeFeedRecommendations + relatedFallbackRecommendations
                             )
                             val appendItems = mergePortraitRecommendationAppendItems(
                                 currentBvid = bvid,
                                 existingBvids = existingBvids,
+                                existingRecommendations = existingRecommendations,
                                 fetchedRecommendations = shuffledFetchedRecommendations
                             )
                             if (appendItems.isNotEmpty()) {

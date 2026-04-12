@@ -3,10 +3,24 @@ package com.android.purebilibili.feature.video.ui.pager
 import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.data.model.response.RelatedVideo
+import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.ViewInfo
 import kotlin.random.Random
+import kotlin.math.abs
 
 private const val PORTRAIT_RECOMMENDATION_PREFETCH_THRESHOLD = 1
+private val PORTRAIT_RECOMMENDATION_STOP_WORDS = setOf(
+    "视频", "合集", "最新", "一个", "我们", "你们", "今天", "真的", "这个",
+    "竖屏", "横屏", "官方", "完整版", "全集", "合集版"
+)
+
+private data class PortraitRecommendationSignature(
+    val normalizedTitle: String,
+    val coverKey: String,
+    val titleKeywords: Set<String>,
+    val ownerMid: Long,
+    val duration: Int
+)
 
 internal fun resolveCommittedPage(
     isScrollInProgress: Boolean,
@@ -122,17 +136,26 @@ internal fun shouldLoadMorePortraitRecommendations(
 internal fun mergePortraitRecommendationAppendItems(
     currentBvid: String,
     existingBvids: Set<String>,
+    existingRecommendations: List<RelatedVideo>,
     fetchedRecommendations: List<RelatedVideo>
 ): List<RelatedVideo> {
-    return fetchedRecommendations
-        .asSequence()
-        .filter { candidate ->
-            candidate.bvid.isNotBlank() &&
-                candidate.bvid != currentBvid &&
-                candidate.bvid !in existingBvids
+    val accepted = existingRecommendations
+        .filter { it.bvid.isNotBlank() }
+        .toMutableList()
+
+    return fetchedRecommendations.fold(mutableListOf<RelatedVideo>()) { appended, candidate ->
+        val canAppend = candidate.bvid.isNotBlank() &&
+            candidate.bvid != currentBvid &&
+            candidate.bvid !in existingBvids &&
+            appended.none { it.bvid == candidate.bvid } &&
+            accepted.none { existing -> arePortraitRecommendationsContentSimilar(existing, candidate) }
+
+        if (canAppend) {
+            appended += candidate
+            accepted += candidate
         }
-        .distinctBy { it.bvid }
-        .toList()
+        appended
+    }
 }
 
 internal fun resolvePortraitRecommendationShuffleSeed(
@@ -156,11 +179,141 @@ internal fun shufflePortraitRecommendations(
     seed: Int,
     recommendations: List<RelatedVideo>
 ): List<RelatedVideo> {
-    val unique = recommendations
+    val shuffled = recommendations
         .filter { it.bvid.isNotBlank() }
         .distinctBy { it.bvid }
-    if (unique.size <= 1) return unique
-    return unique.shuffled(Random(seed))
+        .shuffled(Random(seed))
+
+    val deduplicated = mutableListOf<RelatedVideo>()
+    shuffled.forEach { candidate ->
+        if (deduplicated.none { existing -> arePortraitRecommendationsContentSimilar(existing, candidate) }) {
+            deduplicated += candidate
+        }
+    }
+    if (deduplicated.size <= 1) return deduplicated
+
+    val remaining = deduplicated.toMutableList()
+    val arranged = mutableListOf<RelatedVideo>()
+    while (remaining.isNotEmpty()) {
+        val last = arranged.lastOrNull()
+        val candidateIndex = remaining.indexOfFirst { candidate ->
+            last == null || (
+                !arePortraitRecommendationsContentSimilar(last, candidate) &&
+                    (last.owner.mid <= 0L || candidate.owner.mid <= 0L || last.owner.mid != candidate.owner.mid)
+                )
+        }.takeIf { it >= 0 }
+            ?: remaining.indexOfFirst { candidate ->
+                last == null || !arePortraitRecommendationsContentSimilar(last, candidate)
+            }.takeIf { it >= 0 }
+            ?: 0
+
+        arranged += remaining.removeAt(candidateIndex)
+    }
+    return arranged
+}
+
+internal fun toRelatedVideoForPortraitRecommendation(item: VideoItem): RelatedVideo? {
+    val bvid = item.bvid.trim()
+    if (bvid.isEmpty()) return null
+    return RelatedVideo(
+        aid = item.aid.takeIf { it > 0L } ?: item.id,
+        bvid = bvid,
+        cid = item.cid,
+        title = item.title,
+        pic = item.pic,
+        owner = item.owner,
+        stat = item.stat,
+        duration = item.duration
+    )
+}
+
+internal fun arePortraitRecommendationsContentSimilar(
+    first: RelatedVideo,
+    second: RelatedVideo
+): Boolean {
+    if (first.bvid.isBlank() || second.bvid.isBlank()) return false
+    if (first.bvid == second.bvid) return true
+
+    val firstSignature = buildPortraitRecommendationSignature(first)
+    val secondSignature = buildPortraitRecommendationSignature(second)
+
+    if (
+        firstSignature.normalizedTitle.isNotBlank() &&
+            firstSignature.normalizedTitle == secondSignature.normalizedTitle
+    ) {
+        return true
+    }
+
+    if (
+        firstSignature.coverKey.isNotBlank() &&
+            firstSignature.coverKey == secondSignature.coverKey
+    ) {
+        return true
+    }
+
+    val keywordOverlap = firstSignature.titleKeywords
+        .intersect(secondSignature.titleKeywords)
+        .size
+    val durationDelta = abs(firstSignature.duration - secondSignature.duration)
+    if (keywordOverlap >= 3) return true
+    if (keywordOverlap >= 2 && durationDelta <= 30) return true
+    if (
+        firstSignature.ownerMid > 0L &&
+            firstSignature.ownerMid == secondSignature.ownerMid &&
+            keywordOverlap >= 1 &&
+            durationDelta <= 45
+    ) {
+        return true
+    }
+
+    return false
+}
+
+private fun buildPortraitRecommendationSignature(
+    video: RelatedVideo
+): PortraitRecommendationSignature {
+    return PortraitRecommendationSignature(
+        normalizedTitle = normalizePortraitRecommendationTitle(video.title),
+        coverKey = normalizePortraitRecommendationCoverKey(video.pic),
+        titleKeywords = extractPortraitRecommendationKeywords(video.title),
+        ownerMid = video.owner.mid,
+        duration = video.duration.coerceAtLeast(0)
+    )
+}
+
+private fun normalizePortraitRecommendationTitle(title: String): String {
+    return title.lowercase()
+        .replace(Regex("[\\[{（(【].*?[\\]})）)】]"), " ")
+        .replace(Regex("[^\\u4e00-\\u9fa5a-z0-9]+"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+}
+
+private fun normalizePortraitRecommendationCoverKey(pic: String): String {
+    return pic.trim()
+        .substringBefore('?')
+        .substringAfterLast('/')
+        .lowercase()
+}
+
+private fun extractPortraitRecommendationKeywords(title: String): Set<String> {
+    val normalized = normalizePortraitRecommendationTitle(title)
+    if (normalized.isBlank()) return emptySet()
+
+    val zhTokens = Regex("[\\u4e00-\\u9fa5]{2,6}")
+        .findAll(normalized)
+        .map { it.value }
+        .filter { it !in PORTRAIT_RECOMMENDATION_STOP_WORDS }
+        .take(6)
+        .toList()
+
+    val enTokens = Regex("[a-z0-9]{3,}")
+        .findAll(normalized)
+        .map { it.value }
+        .take(4)
+        .toList()
+
+    return (zhTokens + enTokens).toSet()
 }
 
 internal fun snapshotPortraitPageBvids(

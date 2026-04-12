@@ -113,6 +113,7 @@ class CommentGrpcRepositoryTest {
         assertEquals(6, first.member.levelInfo.currentLevel)
         assertEquals(true, first.replyControl?.isUpTop)
         assertEquals(true, first.replyControl?.upReply)
+        assertEquals("IP属地：上海", first.replyControl?.location)
         assertEquals("UP主觉得很赞", first.cardLabels?.firstOrNull()?.textContent)
         assertEquals(12345L, first.content.atNameToMid["路人"])
         assertEquals("视频标题", first.content.urls["https://b23.tv/demo"]?.title)

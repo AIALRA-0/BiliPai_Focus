@@ -4,6 +4,7 @@ import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
+import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -15,13 +16,18 @@ class PortraitPagerSwitchPolicyTest {
     private fun related(
         bvid: String,
         aid: Long = 0L,
-        title: String = bvid
+        title: String = bvid,
+        ownerMid: Long = 1L,
+        duration: Int = 0,
+        pic: String = ""
     ): RelatedVideo {
         return RelatedVideo(
             aid = aid,
             bvid = bvid,
             title = title,
-            owner = Owner(mid = 1L, name = "up")
+            pic = pic,
+            owner = Owner(mid = ownerMid, name = "up"),
+            duration = duration
         )
     }
 
@@ -356,6 +362,7 @@ class PortraitPagerSwitchPolicyTest {
         val appendItems = mergePortraitRecommendationAppendItems(
             currentBvid = "BV_CURRENT",
             existingBvids = setOf("BV_CURRENT", "BV_A", "BV_B"),
+            existingRecommendations = emptyList(),
             fetchedRecommendations = listOf(
                 related("BV_CURRENT", aid = 1L),
                 related("BV_B", aid = 2L),
@@ -366,6 +373,41 @@ class PortraitPagerSwitchPolicyTest {
         )
 
         assertEquals(listOf("BV_C", "BV_D"), appendItems.map { it.bvid })
+    }
+
+    @Test
+    fun mergePortraitRecommendationAppendItems_filtersNearDuplicateContentAgainstExistingRecommendations() {
+        val appendItems = mergePortraitRecommendationAppendItems(
+            currentBvid = "BV_CURRENT",
+            existingBvids = setOf("BV_CURRENT"),
+            existingRecommendations = listOf(
+                related(
+                    bvid = "BV_EXISTING",
+                    aid = 11L,
+                    title = "勇士vs湖人 全场集锦",
+                    ownerMid = 7L,
+                    duration = 120
+                )
+            ),
+            fetchedRecommendations = listOf(
+                related(
+                    bvid = "BV_DUPLICATE",
+                    aid = 12L,
+                    title = "勇士 VS 湖人 全场集锦",
+                    ownerMid = 9L,
+                    duration = 118
+                ),
+                related(
+                    bvid = "BV_FRESH",
+                    aid = 13L,
+                    title = "猫咪踩奶名场面",
+                    ownerMid = 20L,
+                    duration = 45
+                )
+            )
+        )
+
+        assertEquals(listOf("BV_FRESH"), appendItems.map { it.bvid })
     }
 
     @Test
@@ -397,6 +439,62 @@ class PortraitPagerSwitchPolicyTest {
         )
 
         assertEquals(listOf("BV_A", "BV_B").sorted(), shuffled.map { it.bvid }.sorted())
+    }
+
+    @Test
+    fun shufflePortraitRecommendations_filtersNearDuplicateTitles() {
+        val shuffled = shufflePortraitRecommendations(
+            seed = 17,
+            recommendations = listOf(
+                related(
+                    bvid = "BV_A",
+                    aid = 1L,
+                    title = "勇士vs湖人 全场集锦",
+                    ownerMid = 1L,
+                    duration = 120
+                ),
+                related(
+                    bvid = "BV_B",
+                    aid = 2L,
+                    title = "勇士 VS 湖人 全场集锦",
+                    ownerMid = 2L,
+                    duration = 122
+                ),
+                related(
+                    bvid = "BV_C",
+                    aid = 3L,
+                    title = "旅行随手拍",
+                    ownerMid = 3L,
+                    duration = 80
+                )
+            )
+        )
+
+        assertEquals(2, shuffled.size)
+        assertEquals(1, shuffled.count { "湖人" in it.title })
+    }
+
+    @Test
+    fun toRelatedVideoForPortraitRecommendation_mapsVideoItemFields() {
+        val related = toRelatedVideoForPortraitRecommendation(
+            VideoItem(
+                id = 80L,
+                bvid = "BV1xx411c7mD",
+                aid = 81L,
+                cid = 82L,
+                title = "sample",
+                pic = "https://example.com/cover.jpg",
+                owner = Owner(mid = 6L, name = "up"),
+                stat = Stat(view = 10, like = 5),
+                duration = 99
+            )
+        )
+
+        assertEquals("BV1xx411c7mD", related?.bvid)
+        assertEquals(81L, related?.aid)
+        assertEquals(82L, related?.cid)
+        assertEquals("sample", related?.title)
+        assertEquals(99, related?.duration)
     }
 
     @Test

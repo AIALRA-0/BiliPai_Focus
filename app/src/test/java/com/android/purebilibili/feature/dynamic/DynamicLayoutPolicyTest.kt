@@ -7,14 +7,14 @@ import androidx.compose.ui.unit.dp
 class DynamicLayoutPolicyTest {
 
     @Test
-    fun `dynamic feed narrows large-screen content width slightly`() {
-        assertEquals(700.dp, resolveDynamicFeedMaxWidth())
+    fun `dynamic feed matches pili plus single-column content width`() {
+        assertEquals(480.dp, resolveDynamicFeedMaxWidth())
     }
 
     @Test
-    fun `dynamic video card switches to horizontal layout on wide content`() {
+    fun `dynamic video card keeps vertical layout on wide content`() {
         assertEquals(
-            DynamicVideoCardLayoutMode.HORIZONTAL,
+            DynamicVideoCardLayoutMode.VERTICAL,
             resolveDynamicVideoCardLayoutMode(containerWidthDp = 620)
         )
     }
@@ -28,9 +28,9 @@ class DynamicLayoutPolicyTest {
     }
 
     @Test
-    fun `dynamic cards tighten outer and inner horizontal spacing`() {
-        assertEquals(10.dp, resolveDynamicCardOuterPadding())
-        assertEquals(14.dp, resolveDynamicCardContentPadding())
+    fun `dynamic cards use flat list spacing like pili plus`() {
+        assertEquals(0.dp, resolveDynamicCardOuterPadding())
+        assertEquals(12.dp, resolveDynamicCardContentPadding())
     }
 
     @Test

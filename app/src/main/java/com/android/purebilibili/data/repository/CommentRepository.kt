@@ -212,13 +212,21 @@ object CommentRepository {
                     nextOffset = paginationOffset
                 )
                 if (grpcResult.isSuccess) {
-                    Logger.d("CommentRepo", " getComments (gRPC MainList): oid=$oid, type=$type, page=$page, mode=$mode")
-                    return@withContext grpcResult
+                    val grpcData = grpcResult.getOrNull()
+                    if (!shouldFallbackGrpcCommentReadOnMissingLocation(grpcData)) {
+                        Logger.d("CommentRepo", " getComments (gRPC MainList): oid=$oid, type=$type, page=$page, mode=$mode")
+                        return@withContext grpcResult
+                    }
+                    Logger.w(
+                        "CommentRepo",
+                        "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, reason=missing-location"
+                    )
+                } else {
+                    Logger.w(
+                        "CommentRepo",
+                        "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, error=${grpcResult.exceptionOrNull()?.message}"
+                    )
                 }
-                Logger.w(
-                    "CommentRepo",
-                    "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, error=${grpcResult.exceptionOrNull()?.message}"
-                )
             }
 
             val hasSession = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
@@ -368,13 +376,21 @@ object CommentRepository {
                     nextOffset = paginationOffset
                 )
                 if (grpcResult.isSuccess) {
-                    Logger.d("CommentRepo", " getSubComments (gRPC DetailList): oid=$oid, type=$type, root=$rootId, page=$page")
-                    return@withContext grpcResult
+                    val grpcData = grpcResult.getOrNull()
+                    if (!shouldFallbackGrpcCommentReadOnMissingLocation(grpcData)) {
+                        Logger.d("CommentRepo", " getSubComments (gRPC DetailList): oid=$oid, type=$type, root=$rootId, page=$page")
+                        return@withContext grpcResult
+                    }
+                    Logger.w(
+                        "CommentRepo",
+                        "getSubComments gRPC fallback to REST: oid=$oid, type=$type, root=$rootId, page=$page, reason=missing-location"
+                    )
+                } else {
+                    Logger.w(
+                        "CommentRepo",
+                        "getSubComments gRPC fallback to REST: oid=$oid, type=$type, root=$rootId, page=$page, error=${grpcResult.exceptionOrNull()?.message}"
+                    )
                 }
-                Logger.w(
-                    "CommentRepo",
-                    "getSubComments gRPC fallback to REST: oid=$oid, type=$type, root=$rootId, page=$page, error=${grpcResult.exceptionOrNull()?.message}"
-                )
             }
             
             Logger.d("CommentRepo", " getSubComments: oid=$oid, type=$type, rootId=$rootId, page=$page")

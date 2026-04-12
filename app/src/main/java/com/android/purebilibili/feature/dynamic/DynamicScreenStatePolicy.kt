@@ -16,12 +16,45 @@ internal fun resolveDynamicSelectedUserIdAfterClick(
     return if (selectedUserId == clickedUserId) null else clickedUserId
 }
 
+internal fun shouldUseSelectedUserDynamicFeed(
+    selectedTab: Int,
+    selectedUserId: Long?
+): Boolean {
+    return selectedTab == 4 && selectedUserId != null
+}
+
+internal fun resolveDynamicTabAfterUserSelection(
+    selectedUserId: Long?,
+    clickedUserId: Long?,
+    currentTab: Int
+): Int {
+    val nextUserId = resolveDynamicSelectedUserIdAfterClick(selectedUserId, clickedUserId)
+    return when {
+        nextUserId != null -> 4
+        currentTab == 4 -> 0
+        else -> currentTab
+    }
+}
+
 internal fun resolveDynamicSelectedTab(
     savedTab: Int?,
     tabCount: Int
 ): Int {
     if (tabCount <= 0) return 0
     return savedTab?.takeIf { it in 0 until tabCount } ?: 0
+}
+
+internal fun resolveDynamicFeedRequestType(selectedTab: Int): String {
+    return when (selectedTab) {
+        1 -> "video"
+        2 -> "pgc"
+        3 -> "article"
+        else -> "all"
+    }
+}
+
+internal fun shouldUseServerFilteredDynamicFeed(selectedTab: Int): Boolean {
+    return selectedTab in 1..3
 }
 
 internal fun resolveHorizontalUserListVerticalPaddingDp(): Int {

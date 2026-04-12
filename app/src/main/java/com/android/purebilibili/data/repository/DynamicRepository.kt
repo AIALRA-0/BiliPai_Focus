@@ -23,7 +23,8 @@ object DynamicRepository {
      */
     suspend fun getDynamicFeed(
         refresh: Boolean = false,
-        scope: DynamicFeedScope = DynamicFeedScope.DYNAMIC_SCREEN
+        scope: DynamicFeedScope = DynamicFeedScope.DYNAMIC_SCREEN,
+        type: String = "all"
     ): Result<List<DynamicItem>> = withContext(Dispatchers.IO) {
         try {
             if (refresh) {
@@ -40,7 +41,7 @@ object DynamicRepository {
                 val previousOffset = feedPagination.offset(scope)
                 val response = fetchDynamicFeedPageWithRetry {
                     NetworkModule.dynamicApi.getDynamicFeed(
-                        type = "all",
+                        type = type,
                         offset = previousOffset
                     )
                 }.getOrElse { error ->

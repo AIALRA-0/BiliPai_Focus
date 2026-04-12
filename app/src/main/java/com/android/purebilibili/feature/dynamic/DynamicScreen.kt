@@ -92,6 +92,7 @@ val LocalDynamicScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
 fun DynamicScreen(
     viewModel: DynamicViewModel = viewModel(),
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onDynamicDetailClick: (String) -> Unit = {},
     onUserClick: (Long) -> Unit = {},
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> },
@@ -120,7 +121,13 @@ fun DynamicScreen(
     var showRepostDialog by remember { mutableStateOf<String?>(null) }  // 存储要转发的动态ID
     
     // Tab 选择
-    val tabs = listOf("全部", "视频")
+    val tabs = listOf("全部", "投稿", "番剧", "专栏", "UP")
+    val isSelectedUserTabActive = remember(selectedTab, selectedUserId) {
+        shouldUseSelectedUserDynamicFeed(
+            selectedTab = selectedTab,
+            selectedUserId = selectedUserId
+        )
+    }
     
     //  布局模式状态（侧边栏/横向）
     val displayMode by viewModel.displayMode.collectAsState()
@@ -148,10 +155,33 @@ fun DynamicScreen(
             )
         }
     }
+    val handleUserSelection = remember(selectedUserId, selectedTab) {
+        { clickedUserId: Long? ->
+            val nextUserId = resolveDynamicSelectedUserIdAfterClick(
+                selectedUserId = selectedUserId,
+                clickedUserId = clickedUserId
+            )
+            val nextTab = resolveDynamicTabAfterUserSelection(
+                selectedUserId = selectedUserId,
+                clickedUserId = clickedUserId,
+                currentTab = selectedTab
+            )
+
+            if (nextUserId == null && nextTab != selectedTab) {
+                viewModel.setSelectedTab(nextTab)
+                viewModel.selectUser(null)
+            } else {
+                viewModel.selectUser(nextUserId)
+                if (nextTab != selectedTab) {
+                    viewModel.setSelectedTab(nextTab)
+                }
+            }
+        }
+    }
     
     //  [修改] 过滤动态 - 选中用户时使用 userItems
-    val filteredItems = remember(state.items, state.userItems, selectedTab, selectedUserId) {
-        val baseItems = if (selectedUserId != null) {
+    val filteredItems = remember(state.items, state.userItems, selectedTab, selectedUserId, isSelectedUserTabActive) {
+        val baseItems = if (isSelectedUserTabActive) {
             resolveSelectedUserVisibleItems(
                 timelineItems = state.items,
                 remoteUserItems = state.userItems,
@@ -161,13 +191,21 @@ fun DynamicScreen(
             state.items
         }
         var items = baseItems
-        if (selectedTab == 1) {
-            items = items.filter(::shouldIncludeDynamicItemInVideoTab)
+        items = when (selectedTab) {
+            1 -> items.filter(::shouldIncludeDynamicItemInVideoTab)
+            2 -> items.filter(::shouldIncludeDynamicItemInPgcTab)
+            3 -> items.filter(::shouldIncludeDynamicItemInArticleTab)
+            4 -> if (isSelectedUserTabActive) items else emptyList()
+            else -> items
         }
         items.distinctBy { it.id_str }
     }
-    val oldContentDividerLabel = remember(selectedTab) {
-        if (selectedTab == 1) "以下是之前的视频" else "以下是之前的动态"
+    val oldContentDividerLabel = remember(selectedTab, tabs) {
+        if (selectedTab == 0) {
+            "以下是之前的动态"
+        } else {
+            "以下是之前的${tabs.getOrElse(selectedTab) { "内容" }}"
+        }
     }
     val oldContentDividerIndex = remember(
         filteredItems,
@@ -175,7 +213,7 @@ fun DynamicScreen(
         state.incrementalRefreshBoundaryKey,
         state.incrementalPrependedCount
     ) {
-        if (selectedUserId != null) {
+        if (isSelectedUserTabActive) {
             -1
         } else {
             resolveOldContentDividerIndex(
@@ -187,39 +225,48 @@ fun DynamicScreen(
     }
     
     //  [修改] 判断是否加载更多（区分全部动态和用户动态）
-    val currentHasMore = if (selectedUserId != null) {
+    val currentHasMore = if (isSelectedUserTabActive) {
         state.hasUserMore && (
             state.userItems.isNotEmpty() ||
                 state.userIsLoading ||
                 !state.userError.isNullOrBlank()
-            )
+        )
     } else {
         state.hasMore
     }
-    val activeLoading = remember(state, selectedUserId) {
+    val activeLoading = remember(state, selectedUserId, selectedTab, isSelectedUserTabActive) {
+        if (selectedTab == 4 && !isSelectedUserTabActive) {
+            false
+        } else {
         resolveDynamicActiveLoadingState(
             currentState = state,
-            selectedUserId = selectedUserId
+                selectedUserId = selectedUserId.takeIf { isSelectedUserTabActive }
         )
+        }
     }
-    val activeError = remember(state, selectedUserId) {
+    val activeError = remember(state, selectedUserId, selectedTab, isSelectedUserTabActive) {
+        if (selectedTab == 4 && !isSelectedUserTabActive) {
+            null
+        } else {
         resolveDynamicActiveError(
             currentState = state,
-            selectedUserId = selectedUserId
+                selectedUserId = selectedUserId.takeIf { isSelectedUserTabActive }
         )
+        }
     }
 
     var handledUserListRefreshBoundary by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(
         state.incrementalRefreshBoundaryKey,
         state.incrementalPrependedCount,
-        selectedUserId
+        selectedUserId,
+        isSelectedUserTabActive
     ) {
         val boundaryKey = state.incrementalRefreshBoundaryKey
         if (!shouldResetFollowedUserListToTopOnRefresh(
                 boundaryKey = boundaryKey,
                 prependedCount = state.incrementalPrependedCount,
-                selectedUserId = selectedUserId,
+                selectedUserId = selectedUserId.takeIf { isSelectedUserTabActive },
                 handledBoundaryKey = handledUserListRefreshBoundary
             )
         ) {
@@ -245,9 +292,9 @@ fun DynamicScreen(
     }
     
     //  [修改] 加载更多 - 区分全部动态和用户动态
-    LaunchedEffect(shouldLoadMore, selectedUserId) {
+    LaunchedEffect(shouldLoadMore, selectedUserId, isSelectedUserTabActive) {
         if (shouldLoadMore) {
-            if (selectedUserId != null) {
+            if (isSelectedUserTabActive) {
                 viewModel.loadMoreUserDynamics()
             } else {
                 viewModel.loadMore()
@@ -366,14 +413,7 @@ fun DynamicScreen(
                             selectedUserId = selectedUserId,
                             isExpanded = isSidebarExpanded,
                             userListState = sidebarUserListState,
-                            onUserClick = { clickedUserId ->
-                                viewModel.selectUser(
-                                    resolveDynamicSelectedUserIdAfterClick(
-                                        selectedUserId = selectedUserId,
-                                        clickedUserId = clickedUserId
-                                    )
-                                )
-                            },
+                            onUserClick = handleUserSelection,
                             showHiddenUsers = showHiddenUsers,
                             hiddenCount = hiddenUserIds.size,
                             onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
@@ -398,6 +438,8 @@ fun DynamicScreen(
                                     activeLoading = activeLoading,
                                     activeError = activeError,
                                     hasMore = currentHasMore,
+                                    selectedTab = selectedTab,
+                                    isSelectedUserTabActive = isSelectedUserTabActive,
                                     filteredItems = filteredItems,
                                     listState = listState,
                                     statusBarHeight = statusBarHeight,
@@ -408,6 +450,7 @@ fun DynamicScreen(
                                     oldContentDividerIndex = oldContentDividerIndex,
                                     oldContentDividerLabel = oldContentDividerLabel,
                                     onVideoClick = onVideoClick,
+                                    onBangumiClick = onBangumiClick,
                                     onDynamicDetailClick = onDynamicDetailClick,
                                     onUserClick = onUserClick,
                                     onLiveClick = onLiveClick,
@@ -429,7 +472,7 @@ fun DynamicScreen(
                                 DynamicTopBarWithTabs(
                                     selectedTab = selectedTab,
                                     tabs = tabs,
-                                    onTabSelected = viewModel::setSelectedTab,
+                                    onTabSelected = { tab -> viewModel.setSelectedTab(tab) },
                                     displayMode = displayMode,
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     hazeState = hazeState, // 传入 hazeState
@@ -443,7 +486,11 @@ fun DynamicScreen(
                                 activeItemsCount = filteredItems.size,
                                 onLoginClick = onLoginClick,
                                 onRetry = {
-                                    selectedUserId?.let(viewModel::selectUser) ?: viewModel.refresh()
+                                    if (isSelectedUserTabActive) {
+                                        selectedUserId?.let(viewModel::selectUser)
+                                    } else {
+                                        viewModel.refresh()
+                                    }
                                 },
                                 modifier = Modifier.align(Alignment.Center)
                             )
@@ -466,6 +513,8 @@ fun DynamicScreen(
                                  activeLoading = activeLoading,
                                  activeError = activeError,
                                  hasMore = currentHasMore,
+                                 selectedTab = selectedTab,
+                                 isSelectedUserTabActive = isSelectedUserTabActive,
                                  filteredItems = filteredItems,
                                  listState = listState,
                                     statusBarHeight = statusBarHeight,
@@ -473,9 +522,10 @@ fun DynamicScreen(
                                         isHorizontalMode = true
                                     ).dp,
                                     bottomPadding = dynamicListBottomPadding,
-                                    oldContentDividerIndex = oldContentDividerIndex,
+                                 oldContentDividerIndex = oldContentDividerIndex,
                                  oldContentDividerLabel = oldContentDividerLabel,
                                  onVideoClick = onVideoClick,
+                                 onBangumiClick = onBangumiClick,
                                  onDynamicDetailClick = onDynamicDetailClick,
                                  onUserClick = onUserClick,
                                  onLiveClick = onLiveClick,
@@ -511,7 +561,7 @@ fun DynamicScreen(
                                      DynamicTopBarWithTabs(
                                          selectedTab = selectedTab,
                                          tabs = tabs,
-                                         onTabSelected = viewModel::setSelectedTab,
+                                         onTabSelected = { tab -> viewModel.setSelectedTab(tab) },
                                          displayMode = displayMode,
                                          onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                          hazeState = null // 禁用内部模糊，由外层统一处理
@@ -524,14 +574,7 @@ fun DynamicScreen(
                                          listState = horizontalUserListState,
                                          showHiddenUsers = showHiddenUsers,
                                          hiddenCount = hiddenUserIds.size,
-                                         onUserClick = { clickedUserId ->
-                                             viewModel.selectUser(
-                                                 resolveDynamicSelectedUserIdAfterClick(
-                                                     selectedUserId = selectedUserId,
-                                                     clickedUserId = clickedUserId
-                                                 )
-                                             )
-                                         },
+                                         onUserClick = handleUserSelection,
                                          onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
                                          onTogglePin = { viewModel.togglePinUser(it) },
                                          onToggleHidden = { viewModel.toggleHiddenUser(it) },
@@ -546,7 +589,11 @@ fun DynamicScreen(
                             activeItemsCount = filteredItems.size,
                             onLoginClick = onLoginClick,
                             onRetry = {
-                                selectedUserId?.let(viewModel::selectUser) ?: viewModel.refresh()
+                                if (isSelectedUserTabActive) {
+                                    selectedUserId?.let(viewModel::selectUser)
+                                } else {
+                                    viewModel.refresh()
+                                }
                             },
                             modifier = Modifier.align(Alignment.Center)
                         )
@@ -611,6 +658,8 @@ private fun DynamicList(
     activeLoading: Boolean,
     activeError: String?,
     hasMore: Boolean,
+    selectedTab: Int,
+    isSelectedUserTabActive: Boolean,
     filteredItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     statusBarHeight: androidx.compose.ui.unit.Dp,
@@ -619,6 +668,7 @@ private fun DynamicList(
     oldContentDividerIndex: Int,
     oldContentDividerLabel: String,
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit,
     onDynamicDetailClick: (String) -> Unit,
     onUserClick: (Long) -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
@@ -643,8 +693,8 @@ private fun DynamicList(
         if (filteredItems.isEmpty() && !activeLoading && activeError == null) {
             item {
                 EmptyState(
-                    message = "暂无动态",
-                    actionText = "登录后查看关注 UP主 的动态",
+                    message = if (selectedTab == 4 && !isSelectedUserTabActive) "选择一个UP查看专属动态" else "暂无动态",
+                    actionText = if (selectedTab == 4 && !isSelectedUserTabActive) "从左侧或顶部 UP 列表中选择一个用户" else "登录后查看关注 UP主 的动态",
                     modifier = Modifier.height(300.dp)
                 )
             }
@@ -658,6 +708,7 @@ private fun DynamicList(
             DynamicCardV2(
                 item = item,
                 onVideoClick = onVideoClick,
+                onBangumiClick = onBangumiClick,
                 onDynamicDetailClick = onDynamicDetailClick,
                 onUserClick = onUserClick,
                 onLiveClick = onLiveClick,
@@ -667,8 +718,6 @@ private fun DynamicList(
                 onLikeClick = onLikeClick,
                 isLiked = likedDynamics.contains(item.id_str)
             )
-            //  [优化] 移除分隔线，卡片式设计使用留白分隔
-            Spacer(modifier = Modifier.height(2.dp))
         }
         
         // 加载中

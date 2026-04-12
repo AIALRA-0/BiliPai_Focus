@@ -381,6 +381,16 @@ fun AppNavigation(
         }
     }
 
+    fun navigateToBangumiTarget(seasonId: Long, epId: Long) {
+        when {
+            seasonId > 0L && epId > 0L -> navController.navigate(
+                ScreenRoutes.BangumiPlayer.createRoute(seasonId, epId)
+            )
+            seasonId > 0L -> navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId, epId))
+            epId > 0L -> navController.navigate(ScreenRoutes.BangumiDetail.createRoute(0L, epId))
+        }
+    }
+
     //  [修复] 通用单例跳转（防止重复打开相同页面）
     fun navigateTo(route: String) {
         if (!canNavigate(shouldBypassNavigationDebounceForRoute(route))) return
@@ -1444,6 +1454,7 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 DynamicScreen(
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onBangumiClick = { seasonId, epId -> navigateToBangumiTarget(seasonId, epId) },
                     onDynamicDetailClick = { dynamicId ->
                         navController.navigate(ScreenRoutes.DynamicDetail.createRoute(dynamicId))
                     },
@@ -1470,13 +1481,14 @@ fun AppNavigation(
             popExitTransition = { slideExitRight(navMotionSpec) }
         ) { backStackEntry ->
             val dynamicId = android.net.Uri.decode(backStackEntry.arguments?.getString("dynamicId") ?: "")
-            com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
-                dynamicId = dynamicId,
-                onBack = { navController.popBackStack() },
-                onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
-                onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
-                onLiveClick = { roomId, title, uname ->
-                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
+                    dynamicId = dynamicId,
+                    onBack = { navController.popBackStack() },
+                    onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onBangumiClick = { seasonId, epId -> navigateToBangumiTarget(seasonId, epId) },
+                    onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
+                    onLiveClick = { roomId, title, uname ->
+                        navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
                 }
             )
         }
