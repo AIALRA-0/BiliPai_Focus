@@ -8,6 +8,21 @@ import kotlin.test.assertTrue
 class DanmakuPlaybackSyncPolicyTest {
 
     @Test
+    fun `engine play speed should follow video playback speed percent`() {
+        assertEquals(100, resolveDanmakuEnginePlaySpeedPercent(1.0f))
+        assertEquals(150, resolveDanmakuEnginePlaySpeedPercent(1.5f))
+        assertEquals(25, resolveDanmakuEnginePlaySpeedPercent(0.25f))
+        assertEquals(300, resolveDanmakuEnginePlaySpeedPercent(3.0f))
+    }
+
+    @Test
+    fun `playback adjusted duration should scale visual durations inversely to speed`() {
+        assertEquals(3500L, resolveDanmakuPlaybackAdjustedDurationMillis(7000L, 2.0f))
+        assertEquals(16000L, resolveDanmakuPlaybackAdjustedDurationMillis(4000L, 0.25f))
+        assertEquals(4000L, resolveDanmakuPlaybackAdjustedDurationMillis(4000L, Float.NaN))
+    }
+
+    @Test
     fun `drift sync interval should be aggressive for high speed`() {
         assertEquals(900L, resolveDanmakuDriftSyncIntervalMs(2.0f))
         assertEquals(1200L, resolveDanmakuDriftSyncIntervalMs(1.5f))

@@ -130,6 +130,10 @@ class DanmakuManager private constructor(
     
     //  [新增] 记录原始弹幕滚动时间（用于倍速同步）
     private var originalMoveTime: Long = 8000L  // 默认 8 秒
+    private var originalTopShowTimeMin: Long = 4000L
+    private var originalTopShowTimeMax: Long = 4000L
+    private var originalBottomShowTimeMin: Long = 4000L
+    private var originalBottomShowTimeMax: Long = 4000L
     private var currentVideoSpeed: Float = 1.0f
     private var pluginObserverJob: Job? = null
     private var lastDanmakuPluginUpdateToken: Long = 0L
@@ -856,13 +860,13 @@ class DanmakuManager private constructor(
             val viewHeight = danmakuView?.height ?: 0
             config.applyTo(ctrl.config, viewWidth, viewHeight)
 
-            // 记录设置后的基准滚动时间，供倍速同步使用
+            // 记录设置后的基准时间，供倍速同步使用
             originalMoveTime = ctrl.config.scroll.moveTime
-
-            // 若视频非 1.0x，则按倍速调整弹幕滚动时间
-            if (currentVideoSpeed != 1.0f) {
-                ctrl.config.scroll.moveTime = (originalMoveTime / currentVideoSpeed).toLong()
-            }
+            originalTopShowTimeMin = ctrl.config.top.showTimeMin
+            originalTopShowTimeMax = ctrl.config.top.showTimeMax
+            originalBottomShowTimeMin = ctrl.config.bottom.showTimeMin
+            originalBottomShowTimeMax = ctrl.config.bottom.showTimeMax
+            applyPlaybackSpeedToController(ctrl)
 
             //  [关键修复] fontScale/displayArea/viewHeight 改变时，需要重新设置弹幕数据
             // 因为引擎的 config.text.size 只对新弹幕生效，已显示的弹幕不会更新
@@ -897,9 +901,39 @@ class DanmakuManager private constructor(
                     "allowScroll=${config.allowScroll}, allowTop=${config.allowTop}, allowBottom=${config.allowBottom}, " +
                     "allowColorful=${config.allowColorful}, allowSpecial=${config.allowSpecial}, " +
                     "baseMoveTime=$originalMoveTime, videoSpeed=$currentVideoSpeed, " +
-                    "moveTime=${ctrl.config.scroll.moveTime}"
+                    "enginePlaySpeed=${ctrl.config.common.playSpeed}, moveTime=${ctrl.config.scroll.moveTime}, " +
+                    "topShow=${ctrl.config.top.showTimeMin}-${ctrl.config.top.showTimeMax}, " +
+                    "bottomShow=${ctrl.config.bottom.showTimeMin}-${ctrl.config.bottom.showTimeMax}"
             )
         }
+    }
+
+    private fun applyPlaybackSpeedToController(ctrl: DanmakuController) {
+        val normalizedSpeed = normalizeDanmakuPlaybackSpeed(currentVideoSpeed)
+        val enginePlaySpeed = resolveDanmakuEnginePlaySpeedPercent(normalizedSpeed)
+        if (ctrl.config.common.playSpeed != enginePlaySpeed) {
+            ctrl.config.common.playSpeed = enginePlaySpeed
+        }
+        ctrl.config.scroll.moveTime = resolveDanmakuPlaybackAdjustedDurationMillis(
+            baseDurationMs = originalMoveTime,
+            videoSpeed = normalizedSpeed
+        )
+        ctrl.config.top.showTimeMin = resolveDanmakuPlaybackAdjustedDurationMillis(
+            baseDurationMs = originalTopShowTimeMin,
+            videoSpeed = normalizedSpeed
+        )
+        ctrl.config.top.showTimeMax = resolveDanmakuPlaybackAdjustedDurationMillis(
+            baseDurationMs = originalTopShowTimeMax,
+            videoSpeed = normalizedSpeed
+        )
+        ctrl.config.bottom.showTimeMin = resolveDanmakuPlaybackAdjustedDurationMillis(
+            baseDurationMs = originalBottomShowTimeMin,
+            videoSpeed = normalizedSpeed
+        )
+        ctrl.config.bottom.showTimeMax = resolveDanmakuPlaybackAdjustedDurationMillis(
+            baseDurationMs = originalBottomShowTimeMax,
+            videoSpeed = normalizedSpeed
+        )
     }
     
     //  [新增] 记录上次应用的视图尺寸，用于检测横竖屏切换
@@ -1107,9 +1141,9 @@ class DanmakuManager private constructor(
         }
         
         player = exoPlayer
-        currentVideoSpeed = exoPlayer.playbackParameters.speed.coerceAtLeast(0.1f)
+        currentVideoSpeed = normalizeDanmakuPlaybackSpeed(exoPlayer.playbackParameters.speed)
         controller?.let { ctrl ->
-            ctrl.config.scroll.moveTime = (originalMoveTime / currentVideoSpeed).toLong()
+            applyPlaybackSpeedToController(ctrl)
         }
         
         // 🎬 [根本修复] 不在这里启动帧同步，而是在 onIsPlayingChanged 中启动
@@ -1254,20 +1288,16 @@ class DanmakuManager private constructor(
             //  [新增] 视频倍速变化时同步弹幕速度
             //  [问题10修复] 优化长按加速视频时的弹幕同步
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
-                val videoSpeed = playbackParameters.speed.coerceAtLeast(0.1f)
+                val videoSpeed = normalizeDanmakuPlaybackSpeed(playbackParameters.speed)
                 Log.w(TAG, "⏩ onPlaybackParametersChanged: videoSpeed=$videoSpeed, previous=$currentVideoSpeed")
                 
-                //  同步弹幕速度：视频 2x 时，弹幕也需要 2 倍速滚动
-                // 通过减少 moveTime 来加快弹幕滚动
-                if (videoSpeed != currentVideoSpeed) {
+                //  同步弹幕速度：同时更新引擎时间轴、滚动速度和静态弹幕停留时间。
+                if (abs(videoSpeed - currentVideoSpeed) > 0.001f) {
                     val previousSpeed = currentVideoSpeed
                     currentVideoSpeed = videoSpeed
                     
                     controller?.let { ctrl ->
-                        // 根据视频倍速调整弹幕滚动时间
-                        // 视频 2x 倍速 = 弹幕滚动时间减半
-                        val adjustedMoveTime = (originalMoveTime / videoSpeed).toLong()
-                        ctrl.config.scroll.moveTime = adjustedMoveTime
+                        applyPlaybackSpeedToController(ctrl)
                         
                         if (
                             resolveDanmakuActionForPlaybackSpeedChange(
@@ -1290,7 +1320,14 @@ class DanmakuManager private constructor(
                         }
                         
                         ctrl.invalidateView()
-                        Log.w(TAG, "⏩ Danmaku moveTime: original=$originalMoveTime, adjusted=$adjustedMoveTime (video=${videoSpeed}x)")
+                        Log.w(
+                            TAG,
+                            "⏩ Danmaku speed sync: engine=${ctrl.config.common.playSpeed}, " +
+                                "moveTime=${ctrl.config.scroll.moveTime} (base=$originalMoveTime), " +
+                                "topShow=${ctrl.config.top.showTimeMin}-${ctrl.config.top.showTimeMax}, " +
+                                "bottomShow=${ctrl.config.bottom.showTimeMin}-${ctrl.config.bottom.showTimeMax}, " +
+                                "video=${videoSpeed}x"
+                        )
                     }
                 }
             }

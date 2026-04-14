@@ -40,6 +40,12 @@ fun createBitmapDanmaku(
         this.textSize = textSize
         this.color = textColor
         this.isAntiAlias = true
+        setShadowLayer(
+            (textSize / 8f).coerceIn(2f, 5f),
+            0f,
+            0f,
+            Color.BLACK
+        )
     }
     
     val fontMetrics = paint.fontMetrics
@@ -149,6 +155,12 @@ private fun drawContent(
     onUpdate: () -> Unit,
     targetBitmap: Bitmap // 用于重绘
 ) {
+    val strokePaint = TextPaint(paint).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = (paint.textSize / 8f).coerceIn(2.2f, 4.5f)
+        color = Color.BLACK
+        isAntiAlias = true
+    }
     // 清除画布 (如果重绘)
     // 但 BitmapData 可能持有引用，所以我们最好重绘到同一个 Bitmap 上
     // 注意: 在 Coil 回调中，我们会在同一个 Canvas 上绘制吗？ No, create new Canvas for the bitmap
@@ -168,6 +180,7 @@ private fun drawContent(
     segments.forEach { seg ->
         if (seg.isEmoticon) {
             if (emoticonCount >= maxEmoticonPerDanmaku) {
+                canvas.drawText(seg.content, xOffset, textBaseLine, strokePaint)
                 canvas.drawText(seg.content, xOffset, textBaseLine, paint)
                 xOffset += paint.measureText(seg.content)
                 return@forEach
@@ -206,10 +219,12 @@ private fun drawContent(
                 
                 xOffset += iconSize + 4
             } else {
+                 canvas.drawText("[${seg.content}]", xOffset, textBaseLine, strokePaint)
                  canvas.drawText("[${seg.content}]", xOffset, textBaseLine, paint)
                  xOffset += paint.measureText("[${seg.content}]")
             }
         } else {
+            canvas.drawText(seg.content, xOffset, textBaseLine, strokePaint)
             canvas.drawText(seg.content, xOffset, textBaseLine, paint)
             xOffset += paint.measureText(seg.content)
         }

@@ -1,12 +1,16 @@
 package com.android.purebilibili.feature.video.danmaku
 
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 private const val NORMAL_SYNC_INTERVAL_MS = 3200L
 private const val NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 6
 private const val NON_NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 3
 private const val EXPLICIT_SEEK_RESYNC_TOLERANCE_MS = 500L
 private const val EXPLICIT_SEEK_RESYNC_WINDOW_MS = 1500L
+private const val MIN_ENGINE_PLAYBACK_SPEED = 0.1f
+private const val MAX_ENGINE_PLAYBACK_SPEED = 4.0f
 
 internal enum class DanmakuSyncAction {
     None,
@@ -14,20 +18,42 @@ internal enum class DanmakuSyncAction {
     HardResync
 }
 
+internal fun normalizeDanmakuPlaybackSpeed(videoSpeed: Float): Float {
+    if (videoSpeed.isNaN()) return 1.0f
+    return videoSpeed.coerceIn(MIN_ENGINE_PLAYBACK_SPEED, MAX_ENGINE_PLAYBACK_SPEED)
+}
+
+internal fun resolveDanmakuEnginePlaySpeedPercent(videoSpeed: Float): Int {
+    return (normalizeDanmakuPlaybackSpeed(videoSpeed) * 100f)
+        .roundToInt()
+        .coerceAtLeast(1)
+}
+
+internal fun resolveDanmakuPlaybackAdjustedDurationMillis(
+    baseDurationMs: Long,
+    videoSpeed: Float
+): Long {
+    if (baseDurationMs <= 0L) return 0L
+    return (baseDurationMs / normalizeDanmakuPlaybackSpeed(videoSpeed))
+        .roundToLong()
+        .coerceAtLeast(1L)
+}
+
 internal fun resolveDanmakuDriftSyncIntervalMs(videoSpeed: Float): Long {
+    val normalizedSpeed = normalizeDanmakuPlaybackSpeed(videoSpeed)
     return when {
-        videoSpeed >= 1.75f -> 900L
-        videoSpeed >= 1.25f -> 1200L
-        videoSpeed > 1.02f -> 2000L
-        videoSpeed <= 0.75f -> 3000L
-        videoSpeed < 0.98f -> 3500L
+        normalizedSpeed >= 1.75f -> 900L
+        normalizedSpeed >= 1.25f -> 1200L
+        normalizedSpeed > 1.02f -> 2000L
+        normalizedSpeed <= 0.75f -> 3000L
+        normalizedSpeed < 0.98f -> 3500L
         else -> NORMAL_SYNC_INTERVAL_MS
     }
 }
 
 internal fun shouldForceDanmakuDataResync(videoSpeed: Float, tickCount: Int): Boolean {
     if (tickCount <= 0) return false
-    val isNearNormalSpeed = abs(videoSpeed - 1.0f) <= 0.02f
+    val isNearNormalSpeed = abs(normalizeDanmakuPlaybackSpeed(videoSpeed) - 1.0f) <= 0.02f
     val interval = if (isNearNormalSpeed) {
         NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS
     } else {
