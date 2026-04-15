@@ -261,7 +261,8 @@ fun VideoContentSection(
     ownerVideoCount: Int? = null,
     showUpBadge: Boolean = true,
     showInteractionActions: Boolean = true,
-    isVideoPlaying: Boolean = false
+    isVideoPlaying: Boolean = false,
+    onSelectedTabChange: (Int) -> Unit = {}
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -305,6 +306,9 @@ fun VideoContentSection(
 
     val onTabSelected: (Int) -> Unit = { index ->
         scope.launch { pagerState.animateScrollToPage(index) }
+    }
+    LaunchedEffect(pagerState.currentPage) {
+        onSelectedTabChange(pagerState.currentPage)
     }
     val bottomContentPadding = if (showInteractionActions) 84.dp else 12.dp
 

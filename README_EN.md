@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-14 · Synced to v7.8.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-15 · Synced to v7.8.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.8.1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.8.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-14 (v7.8.1). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-15 (v7.8.2). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,15 +430,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.8.1 · 2026-04-14)
+### Latest (v7.8.2 · 2026-04-15)
 
-- 🔴 **Live stack upgrades**: followed-live loading, room snapshots, danmaku history, super chat seeds, and live-room shielding are being filled in to improve live usage first.
-- 🎛️ **Live playback controls**: live stream requests now expose audio-only parameters, richer room APIs, and like-click counts for future control improvements.
-- 💬 **Danmaku speed sync**: scrolling, top, and bottom danmaku durations now scale together with playback speed for more consistent fast-play behavior.
-- ✨ **Danmaku readability**: bitmap danmaku and emoticon danmaku now render with stronger outlines/shadows on busy backgrounds.
-- 🔎 **Search landing refactor**: the search home now includes trending, discovery, suggestions, and a dedicated hot-search page backed by official endpoints.
-- ⚠️ **Search experience notice**: search is still being refactored step by step, so landing, trending, suggestions, and result transitions may feel unstable in some cases.
-- ⚡ **Direct default search**: the top-right search action can now submit the current default suggested keyword even when the text field is empty.
+- 🎬 **Player hot-path parity**: progress dragging, tap seek, and quality switching now follow a shorter PiliPlus-style control path.
+- 🧭 **Single seek session**: progress dragging uses one seek session, with old UI-only seek state and unused landscape control code removed.
+- 🎚️ **Stable quality switching**: quality changes now read playback position from the player layer instead of UI callbacks.
+- ▶️ **Playback intent preservation**: seek and source replacement explicitly keep playback intent to reduce unexpected pauses.
 
 ---
 

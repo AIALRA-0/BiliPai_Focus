@@ -52,6 +52,9 @@ import coil.compose.AsyncImage
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.util.responsiveContentWidth
 
+private const val SEARCH_HIGHLIGHT_START_TOKEN = "§hl§"
+private const val SEARCH_HIGHLIGHT_END_TOKEN = "§/hl§"
+
 @Composable
 fun SearchLandingContent(
     historyListState: LazyListState,
@@ -481,27 +484,27 @@ private fun rememberSuggestionAnnotatedText(
     }
 }
 
-private fun buildSuggestionAnnotatedString(
+internal fun buildSuggestionAnnotatedString(
     richText: String,
     fallback: String,
     highlightColor: Color
 ): AnnotatedString {
     val source = richText.ifBlank { fallback }
     val normalized = source
-        .replace("<suggest_high_light>", "§hl§")
-        .replace("</suggest_high_light>", "§/hl§")
-        .replace(Regex("<em[^>]*>"), "§hl§")
-        .replace("</em>", "§/hl§")
+        .replace("<suggest_high_light>", SEARCH_HIGHLIGHT_START_TOKEN)
+        .replace("</suggest_high_light>", SEARCH_HIGHLIGHT_END_TOKEN)
+        .replace(Regex("<em[^>]*>"), SEARCH_HIGHLIGHT_START_TOKEN)
+        .replace("</em>", SEARCH_HIGHLIGHT_END_TOKEN)
         .replace(Regex("<.*?>"), "")
 
-    if (!normalized.contains("§hl§")) {
+    if (!normalized.contains(SEARCH_HIGHLIGHT_START_TOKEN)) {
         return AnnotatedString(normalized.ifBlank { fallback })
     }
 
     val builder = AnnotatedString.Builder()
     var remaining = normalized
     while (remaining.isNotEmpty()) {
-        val start = remaining.indexOf("§hl§")
+        val start = remaining.indexOf(SEARCH_HIGHLIGHT_START_TOKEN)
         if (start < 0) {
             builder.append(remaining)
             break
@@ -509,16 +512,17 @@ private fun buildSuggestionAnnotatedString(
         if (start > 0) {
             builder.append(remaining.substring(0, start))
         }
-        val end = remaining.indexOf("§/hl§", startIndex = start + 4)
+        val contentStart = start + SEARCH_HIGHLIGHT_START_TOKEN.length
+        val end = remaining.indexOf(SEARCH_HIGHLIGHT_END_TOKEN, startIndex = contentStart)
         if (end < 0) {
-            builder.append(remaining.substring(start + 4))
+            builder.append(remaining.substring(contentStart))
             break
         }
-        val highlightText = remaining.substring(start + 4, end)
+        val highlightText = remaining.substring(contentStart, end)
         builder.pushStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.SemiBold))
         builder.append(highlightText)
         builder.pop()
-        remaining = remaining.substring(end + 6)
+        remaining = remaining.substring(end + SEARCH_HIGHLIGHT_END_TOKEN.length)
     }
     return builder.toAnnotatedString()
 }

@@ -1963,6 +1963,7 @@ fun VideoDetailScreen(
             pendingMainReloadBvidAfterPortrait != uiSuccessState?.info?.bvid ||
                 (portraitSyncSnapshotCid > 0L && portraitSyncSnapshotCid != (uiSuccessState?.info?.cid ?: 0L))
             )
+    var selectedVideoContentTabIndex by rememberSaveable(currentBvid) { mutableIntStateOf(0) }
 
     Box(
         modifier = Modifier
@@ -1978,7 +1979,7 @@ fun VideoDetailScreen(
                 isInPipMode = isPipMode,
                 transitionEnabled = transitionEnabled,
                 onToggleFullscreen = { toggleFullscreen() },
-                onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                onQualityChange = { qid -> viewModel.changeQuality(qid) },
                 onBack = { toggleFullscreen() },
                 onHomeClick = {
                     handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
@@ -2167,6 +2168,12 @@ fun VideoDetailScreen(
                         swipeHidePlayerEnabled = swipeHidePlayerEnabled,
                         useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience
                     )
+                    val compactInlinePlayerForCommentTab =
+                        shouldUseCompactInlinePortraitPlayerForCommentTab(
+                            useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
+                            selectedTabIndex = selectedVideoContentTabIndex,
+                            isPortraitFullscreen = isPortraitFullscreen
+                        )
                     
                     // 📏 [Collapsing Player] 上滑隐藏播放器逻辑
                     val expandedPortraitInlineSpec = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
@@ -2256,6 +2263,18 @@ fun VideoDetailScreen(
                         collapseRangePx = collapseRangePx,
                         isPortraitFullscreen = isPortraitFullscreen
                     )
+                    val commentTabCollapseProgress by animateFloatAsState(
+                        targetValue = if (compactInlinePlayerForCommentTab) 1f else 0f,
+                        animationSpec = tween(
+                            durationMillis = 260,
+                            easing = FastOutSlowInEasing
+                        ),
+                        label = "inline_portrait_comment_tab_collapse"
+                    )
+                    val effectiveCollapseProgress = resolveInlinePortraitPlayerCollapseProgress(
+                        manualCollapseProgress = collapseProgress,
+                        compactForCommentTabProgress = commentTabCollapseProgress
+                    )
                     val expandedViewportHeight = if (useOfficialInlinePortraitDetailExperience) {
                         expandedPortraitInlineSpec.heightDp.dp
                     } else {
@@ -2269,7 +2288,7 @@ fun VideoDetailScreen(
                     val animatedViewportHeight = lerp(
                         expandedViewportHeight,
                         collapsedViewportHeight,
-                        collapseProgress
+                        effectiveCollapseProgress
                     )
                     val expandedViewportWidth = if (useOfficialInlinePortraitDetailExperience) {
                         expandedPortraitInlineSpec.widthDp.dp
@@ -2284,7 +2303,7 @@ fun VideoDetailScreen(
                     val animatedViewportWidth = lerp(
                         expandedViewportWidth,
                         collapsedViewportWidth,
-                        collapseProgress
+                        effectiveCollapseProgress
                     )
                     val animatedPlayerHeight = animatedViewportHeight + statusBarHeight
                     
@@ -2368,7 +2387,7 @@ fun VideoDetailScreen(
                                 isInPipMode = isPipMode,
                                 transitionEnabled = transitionEnabled,
                                 onToggleFullscreen = { toggleFullscreen() },
-                                onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                                onQualityChange = { qid -> viewModel.changeQuality(qid) },
                                 onBack = handleBack,
                                 onHomeClick = {
                                     handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
@@ -2659,7 +2678,8 @@ fun VideoDetailScreen(
                                                         ownerVideoCount = success.ownerVideoCount,
                                                         showUpBadge = homeUpBadgesVisible,
                                                         showInteractionActions = shouldShowVideoDetailActionButtons(),
-                                                        isVideoPlaying = isVideoPlaying
+                                                        isVideoPlaying = isVideoPlaying,
+                                                        onSelectedTabChange = { selectedVideoContentTabIndex = it }
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)

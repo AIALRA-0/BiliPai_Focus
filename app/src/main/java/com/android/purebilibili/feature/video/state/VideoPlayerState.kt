@@ -451,7 +451,7 @@ class VideoPlayerState(
                         "state=$playbackState, pos=${player.currentPosition}"
                 )
                 player.play()
-            } else if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+            } else if (playbackState == Player.STATE_ENDED) {
                 pendingResumeIntentAfterBuffering = false
             }
             PlaybackUserActionTracker.resolveIfResponded(

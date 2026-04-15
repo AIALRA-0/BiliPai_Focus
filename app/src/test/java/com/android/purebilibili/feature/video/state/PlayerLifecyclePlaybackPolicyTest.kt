@@ -100,6 +100,30 @@ class PlayerLifecyclePlaybackPolicyTest {
     }
 
     @Test
+    fun sourceReplacementIdleKeepsResumeIntentWhenPlaybackWasActive() {
+        assertTrue(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = false,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
+    fun sourceReplacementIdleKeepsExistingResumeIntentEvenAfterPlayIntentDrops() {
+        assertTrue(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = true,
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
     fun pausedBufferingDoesNotCreateResumeIntent() {
         assertFalse(
             shouldRememberResumeIntentForBuffering(
@@ -134,8 +158,8 @@ class PlayerLifecyclePlaybackPolicyTest {
     }
 
     @Test
-    fun bufferingRecoveryDoesNotAutoResumeWhenPlayerStillHasIntent() {
-        assertFalse(
+    fun bufferingRecoveryStillAutoResumesWhenReadyStateIsSilent() {
+        assertTrue(
             shouldAutoResumeAfterBufferingRecovery(
                 hasPendingResumeIntent = true,
                 isPlaying = false,

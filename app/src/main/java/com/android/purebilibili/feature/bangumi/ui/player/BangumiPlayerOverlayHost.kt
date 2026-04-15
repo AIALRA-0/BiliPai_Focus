@@ -135,9 +135,7 @@ internal fun BangumiPlayerOverlayHost(
         showDislikeAction = shouldShowBangumiOverlayDislikeAction(),
         coverUrl = coverUrl,
         onReloadVideo = onReloadVideo,
-        onQualityChange = { qualityId, _ ->
-            onQualityChange(qualityId)
-        },
+        onQualityChange = onQualityChange,
         onPipClick = {},
         onCaptureScreenshot = onCaptureScreenshot,
         onAudioOnlyToggle = {

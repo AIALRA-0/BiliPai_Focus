@@ -38,14 +38,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
-import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
-import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
-import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.shouldHoldPlaybackSeekSettledProgress
-import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.draw.clip
@@ -65,8 +57,6 @@ data class PlayerProgress(
     val duration: Long = 0L,
     val buffered: Long = 0L
 )
-
-private const val VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE = 0.01f
 
 internal fun resolveSeekableDurationMs(
     playbackDurationMs: Long,
@@ -107,6 +97,20 @@ internal fun resolveDisplayedPlayerProgress(
     return progress.copy(current = resolvedCurrent)
 }
 
+internal fun resolveDisplayedPlayerProgressWithOverride(
+    progress: PlayerProgress,
+    overridePositionMs: Long?
+): PlayerProgress {
+    val resolvedCurrent = overridePositionMs ?: return progress
+    val safeDuration = progress.duration.coerceAtLeast(0L)
+    val clampedCurrent = if (safeDuration > 0L) {
+        resolvedCurrent.coerceIn(0L, safeDuration)
+    } else {
+        resolvedCurrent.coerceAtLeast(0L)
+    }
+    return progress.copy(current = clampedCurrent)
+}
+
 internal fun resolveSeekPreviewTargetPositionMs(
     displayPositionMs: Long,
     dragTargetPositionMs: Long,
@@ -117,35 +121,6 @@ internal fun resolveSeekPreviewTargetPositionMs(
     } else {
         displayPositionMs.coerceAtLeast(0L)
     }
-}
-
-internal fun shouldHoldVideoProgressBarSettledProgress(
-    progress: Float,
-    pendingSettledProgress: Float?,
-    tolerance: Float = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
-): Boolean {
-    return shouldHoldPlaybackSeekSettledProgress(
-        playbackProgress = progress,
-        pendingSettledProgress = pendingSettledProgress,
-        tolerance = tolerance
-    )
-}
-
-internal fun resolveVideoProgressBarDisplayProgress(
-    progress: Float,
-    dragProgress: Float,
-    isDragging: Boolean,
-    pendingSettledProgress: Float?
-): Float {
-    return resolvePlaybackSeekDisplayProgress(
-        playbackProgress = progress,
-        state = PlaybackSeekUiState(
-            isScrubbing = isDragging,
-            dragProgress = dragProgress,
-            pendingSettledProgress = pendingSettledProgress
-        ),
-        tolerance = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
-    )
 }
 
 data class LandscapeDanmakuPlaceholderPolicy(
@@ -293,7 +268,6 @@ fun BottomControlBar(
     onSeekDragStart: (Long) -> Unit = {},
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
-    onScrubbingChanged: (Boolean) -> Unit = {},
     seekPositionMs: Long = progress.current,
     isSeekScrubbing: Boolean = false,
     onSpeedClick: () -> Unit = {},
@@ -505,7 +479,6 @@ fun BottomControlBar(
             onSeekDragStart = onSeekDragStart,
             onSeekDragUpdate = onSeekDragUpdate,
             onSeekDragCancel = onSeekDragCancel,
-            onScrubbingChanged = onScrubbingChanged,
             videoshotData = videoshotData,
             viewPoints = viewPoints,
             sponsorMarkers = sponsorMarkers,
@@ -995,7 +968,6 @@ fun VideoProgressBar(
     onSeekDragStart: (Long) -> Unit = {},
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
-    onScrubbingChanged: (Boolean) -> Unit = {},
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
     sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
@@ -1069,7 +1041,6 @@ fun VideoProgressBar(
                         }
                         dragTargetPositionMs = targetPositionMs
                         dragOffsetX = offset.x
-                        onScrubbingChanged(true)
                         onSeekStart()
                         onSeekDragStart(targetPositionMs)
                     },
@@ -1085,11 +1056,9 @@ fun VideoProgressBar(
                         onSeekDragUpdate(targetPositionMs)
                     },
                     onDragEnd = {
-                        onScrubbingChanged(false)
                         onSeek(dragTargetPositionMs)
                     },
                     onDragCancel = {
-                        onScrubbingChanged(false)
                         onSeekDragCancel()
                     }
                 )

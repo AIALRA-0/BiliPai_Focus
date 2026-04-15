@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.video.playback.session
 
+import androidx.media3.common.Player
+import io.mockk.every
+import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,7 +20,6 @@ class PlaybackSeekControllerTest {
 
         assertEquals(12_000L, state.playbackPositionMs)
         assertEquals(12_000L, state.sliderPositionMs)
-        assertEquals(12_000L, state.sliderTempPositionMs)
         assertFalse(state.isSliderMoving)
     }
 
@@ -40,7 +42,6 @@ class PlaybackSeekControllerTest {
 
         assertEquals(11_000L, synced.playbackPositionMs)
         assertEquals(24_000L, synced.sliderPositionMs)
-        assertEquals(24_000L, synced.sliderTempPositionMs)
         assertTrue(synced.isSliderMoving)
     }
 
@@ -90,7 +91,6 @@ class PlaybackSeekControllerTest {
         assertFalse(cancelled.isSliderMoving)
         assertEquals(8_000L, cancelled.playbackPositionMs)
         assertEquals(8_000L, cancelled.sliderPositionMs)
-        assertEquals(8_000L, cancelled.sliderTempPositionMs)
         assertNull(cancelled.pendingSeekPositionMs)
     }
 
@@ -132,68 +132,22 @@ class PlaybackSeekControllerTest {
     }
 
     @Test
-    fun startScrubbing_entersScrubbingStateWithClampedProgress() {
-        val state = startPlaybackSeekSession(progress = 1.4f)
+    fun startSeekInteractionForPlayerCapturesResumeIntentFromCurrentPlaybackState() {
+        val player = mockk<Player>()
+        every { player.playWhenReady } returns true
+        every { player.playbackState } returns Player.STATE_READY
 
-        assertTrue(state.isScrubbing)
-        assertEquals(1f, state.dragProgress)
-        assertNull(state.pendingSettledProgress)
-    }
-
-    @Test
-    fun finishScrubbing_commitsCurrentDragProgressAndKeepsSettledTarget() {
-        val state = updatePlaybackSeekSession(
-            state = startPlaybackSeekSession(progress = 0.2f),
-            progress = 0.72f
-        )
-
-        val result = finishPlaybackSeekSession(state)
-
-        assertFalse(result.state.isScrubbing)
-        assertEquals(0.72f, result.committedProgress)
-        assertEquals(0.72f, result.state.pendingSettledProgress)
-    }
-
-    @Test
-    fun cancelScrubbing_clearsPendingAndReturnsToIdle() {
-        val state = cancelPlaybackSeekSession(
-            state = PlaybackSeekUiState(
-                isScrubbing = true,
-                dragProgress = 0.55f,
-                pendingSettledProgress = 0.8f
-            )
-        )
-
-        assertFalse(state.isScrubbing)
-        assertNull(state.pendingSettledProgress)
-        assertEquals(0.55f, state.dragProgress)
-    }
-
-    @Test
-    fun settleAgainstPlaybackProgress_clearsPendingWhenPlaybackCatchesUp() {
-        val state = settlePlaybackSeekSession(
-            state = PlaybackSeekUiState(
-                isScrubbing = false,
-                dragProgress = 0.72f,
-                pendingSettledProgress = 0.72f
+        val state = startPlaybackSeekInteraction(
+            state = syncPlaybackSeekSession(
+                state = PlaybackSeekSessionState(),
+                playbackPositionMs = 8_000L
             ),
-            playbackProgress = 0.719f
+            player = player,
+            positionMs = 30_000L
         )
 
-        assertNull(state.pendingSettledProgress)
-    }
-
-    @Test
-    fun resolveDisplayProgress_prefersSettledProgressUntilPlaybackCatchesUp() {
-        val display = resolvePlaybackSeekDisplayProgress(
-            playbackProgress = 0.15f,
-            state = PlaybackSeekUiState(
-                isScrubbing = false,
-                dragProgress = 0.72f,
-                pendingSettledProgress = 0.72f
-            )
-        )
-
-        assertEquals(0.72f, display)
+        assertEquals(30_000L, state.sliderPositionMs)
+        assertTrue(state.isSliderMoving)
+        assertEquals(true, state.shouldResumePlayback)
     }
 }

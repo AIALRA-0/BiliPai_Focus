@@ -4817,7 +4817,7 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    fun changeQuality(qualityId: Int, currentPos: Long) {
+    fun changeQuality(qualityId: Int) {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         if (current.isQualitySwitching) {
             toast("正在切换中...", PlayerToastPresentation.CenteredHighlight)
@@ -4845,6 +4845,8 @@ class PlayerViewModel : ViewModel() {
             serverAdvertisedQualities = current.qualityIds
         )
         
+        val currentPos = playbackUseCase.getCurrentPosition().coerceAtLeast(0L)
+
         when (permissionResult) {
             is QualityPermissionResult.RequiresVip -> {
                 showQualitySwitchFailureDialog(
@@ -4860,7 +4862,7 @@ class PlayerViewModel : ViewModel() {
                     isDolbyVisionSupported = isDolbyVisionSupported
                 )
                 if (fallbackQuality != current.currentQuality) {
-                    changeQuality(fallbackQuality, currentPos)
+                    changeQuality(fallbackQuality)
                 }
                 return
             }
@@ -4884,7 +4886,7 @@ class PlayerViewModel : ViewModel() {
                     isDolbyVisionSupported = isDolbyVisionSupported
                 )
                 if (fallbackQuality != current.currentQuality && fallbackQuality != qualityId) {
-                    changeQuality(fallbackQuality, currentPos)
+                    changeQuality(fallbackQuality)
                 }
                 return
             }

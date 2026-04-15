@@ -29,50 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
-import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
-import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.shouldHoldPlaybackSeekSettledProgress
-import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
-
-private const val PORTRAIT_PROGRESS_SETTLED_TOLERANCE = 0.01f
-
-internal fun shouldHoldPortraitSettledProgress(
-    progress: Float,
-    pendingSettledProgress: Float?,
-    tolerance: Float = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
-): Boolean {
-    return shouldHoldPlaybackSeekSettledProgress(
-        playbackProgress = progress,
-        pendingSettledProgress = pendingSettledProgress,
-        tolerance = tolerance
-    )
-}
-
-internal fun resolvePortraitProgressDisplayProgress(
-    progress: Float,
-    dragProgress: Float,
-    isDragging: Boolean,
-    pendingSettledProgress: Float?
-): Float {
-    return resolvePlaybackSeekDisplayProgress(
-        playbackProgress = progress,
-        state = PlaybackSeekUiState(
-            isScrubbing = isDragging,
-            dragProgress = dragProgress,
-            pendingSettledProgress = pendingSettledProgress
-        ),
-        tolerance = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
-    )
-}
 
 /**
  * 竖屏模式下的底部容器 (含进度条)

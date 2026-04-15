@@ -139,7 +139,6 @@ import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtit
 import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
-import com.android.purebilibili.feature.video.usecase.shouldResumePlaybackAfterUserSeek
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import com.android.purebilibili.feature.video.playback.session.PlaybackSeekSessionState
@@ -282,7 +281,7 @@ fun VideoPlayerSection(
     isInPipMode: Boolean,
     transitionEnabled: Boolean = true,
     onToggleFullscreen: () -> Unit,
-    onQualityChange: (Int, Long) -> Unit,
+    onQualityChange: (Int) -> Unit,
     onBack: () -> Unit,
     onHomeClick: (() -> Unit)? = null,
     onDanmakuInputClick: () -> Unit = {},
@@ -1149,11 +1148,8 @@ fun VideoPlayerSection(
                                     if (!sharedSeekSession.isSliderMoving) {
                                         sharedSeekSession = startPlaybackSeekInteraction(
                                             state = sharedSeekSession,
-                                            positionMs = startPosition,
-                                            shouldResumePlayback = shouldResumePlaybackAfterUserSeek(
-                                                playWhenReadyBeforeSeek = playerState.player.playWhenReady,
-                                                playbackStateBeforeSeek = playerState.player.playbackState
-                                            )
+                                            player = playerState.player,
+                                            positionMs = startPosition
                                         )
                                     }
                                     // 距离已在上方累积，直接计算目标位置
@@ -3177,7 +3173,7 @@ fun VideoPlayerSection(
                 switchableQualityIds = uiState.switchableQualityIds,
                 onQualitySelected = { index ->
                     val id = uiState.qualityIds.getOrNull(index) ?: 0
-                    onQualityChange(id, playerState.player.currentPosition)
+                    onQualityChange(id)
                 },
                 onBack = onBack,
                 onHomeClick = resolveVideoPlayerOverlayHomeClick(
@@ -3497,8 +3493,8 @@ fun VideoPlayerSection(
                 onFlipHorizontal = { isFlippedHorizontal = !isFlippedHorizontal },
                 onFlipVertical = { isFlippedVertical = !isFlippedVertical },
                 //  [新增] 画质切换（用于设置面板）
-                onQualityChange = { qid, pos ->
-                    onQualityChange(qid, playerState.player.currentPosition)
+                onQualityChange = { qid ->
+                    onQualityChange(qid)
                 },
                 //  [新增] CDN 线路切换
                 currentCdnIndex = currentCdnIndex,
@@ -3573,11 +3569,8 @@ fun VideoPlayerSection(
                 onSeekDragStart = { position ->
                     sharedSeekSession = startPlaybackSeekInteraction(
                         state = sharedSeekSession,
-                        positionMs = position,
-                        shouldResumePlayback = shouldResumePlaybackAfterUserSeek(
-                            playWhenReadyBeforeSeek = playerState.player.playWhenReady,
-                            playbackStateBeforeSeek = playerState.player.playbackState
-                        )
+                        player = playerState.player,
+                        positionMs = position
                     )
                 },
                 onSeekDragUpdate = { position ->
@@ -3589,6 +3582,7 @@ fun VideoPlayerSection(
                 onSeekDragCancel = {
                     sharedSeekSession = cancelPlaybackSeekInteraction(sharedSeekSession)
                 },
+                isSeekScrubbing = sharedSeekSession.isSliderMoving,
                 //  [加固] 显式同步弹幕到新进度，避免某些设备 seek 回调时机差导致短暂不同步
                 onSeekTo = { position ->
                     val commitResult = finishPlaybackSeekInteraction(
@@ -3606,9 +3600,12 @@ fun VideoPlayerSection(
                     danmakuManager.seekTo(commitResult.committedPositionMs)
                     onUserSeek(commitResult.committedPositionMs)
                 },
-                previewSeekPositionMs = sharedSeekSession.sliderPositionMs,
-                previewSeekActive = shouldUsePlaybackSeekSessionPosition(sharedSeekSession),
-                playbackTransitionPositionMs = uiState.pendingPlaybackTransitionPositionMs,
+                progressDisplayOverridePositionMs = when {
+                    shouldUsePlaybackSeekSessionPosition(sharedSeekSession) ->
+                        sharedSeekSession.sliderPositionMs
+                    else -> uiState.pendingPlaybackTransitionPositionMs
+                },
+                isPlaybackTransitionPending = uiState.pendingPlaybackTransitionPositionMs != null,
                 // [New] Codec & Audio
                 currentCodec = currentCodec,
                 onCodecChange = onCodecChange,

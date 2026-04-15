@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-14 · 文档已同步至 v7.8.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-15 · 文档已同步至 v7.8.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.8.1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.8.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-14（v7.8.1）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-15（v7.8.2）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,15 +572,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.8.1 · 2026-04-14)
+### 最近更新 (v7.8.2 · 2026-04-15)
 
-- 🔴 **直播链路增强**：关注直播列表、房间快照、历史弹幕、醒目留言和直播间屏蔽能力继续补齐，直播体验优先优化。
-- 🎛️ **直播控制扩展**：直播拉流补充仅音频参数、点赞点击次数透传和更多房间接口，为后续控制能力打基础。
-- 💬 **弹幕倍速同步**：滚动、顶部和底部弹幕停留时间会跟随视频倍速一起调整，高倍速场景更一致。
-- ✨ **弹幕可读性优化**：位图弹幕和表情弹幕补上描边/阴影，复杂背景下更容易看清。
-- 🔎 **搜索首页重构中**：首页补上热搜榜单、搜索发现、联想建议和独立热搜页，搜索入口继续拆分优化。
-- ⚠️ **搜索体验提示**：搜索功能仍在逐步重构中，部分场景下的首页、热搜、联想和结果切换体验可能波动。
-- ⚡ **直接搜索默认词**：顶部搜索栏在空输入时也可直接搜索默认推荐词，无需手动复制到输入框。
+- 🎬 **播放器热路径对齐**：进度条拖动、点击跳转和切清晰度链路按 PiliPlus 思路收敛，减少高频操作后的暂停误触发。
+- 🧭 **单一 seek 会话**：进度条拖动统一走一套 seek session，移除旧 UI-only seek 状态和未使用的旧横屏控制栏。
+- 🎚️ **切清晰度更稳**：清晰度切换改由播放器层读取当前位置，UI 不再传递播放进度。
+- ▶️ **播放意图保持**：seek 与切源后显式保持播放意图，降低拖放进度条、点击跳转和切分辨率后的异常暂停风险。
 
 ### 历史版本
 

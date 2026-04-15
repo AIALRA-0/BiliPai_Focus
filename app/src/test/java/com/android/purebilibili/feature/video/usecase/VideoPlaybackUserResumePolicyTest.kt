@@ -37,4 +37,30 @@ class VideoPlaybackUserResumePolicyTest {
         verify(exactly = 1) { player.seekTo(0L) }
         verify(exactly = 1) { player.play() }
     }
+
+    @Test
+    fun `applyPlaybackIntentAfterSourceChange replays source swaps when autoplay should continue`() {
+        val player = mockk<Player>(relaxed = true)
+
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = true
+        )
+
+        verify(exactly = 1) { player.playWhenReady = true }
+        verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `applyPlaybackIntentAfterSourceChange keeps paused transitions paused`() {
+        val player = mockk<Player>(relaxed = true)
+
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = false
+        )
+
+        verify(exactly = 1) { player.playWhenReady = false }
+        verify(exactly = 0) { player.play() }
+    }
 }

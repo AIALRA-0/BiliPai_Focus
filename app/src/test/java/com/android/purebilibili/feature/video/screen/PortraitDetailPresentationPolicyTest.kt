@@ -122,6 +122,56 @@ class PortraitDetailPresentationPolicyTest {
     }
 
     @Test
+    fun inlinePortraitPlayer_compactsWhenCommentTabSelectedForVerticalVideo() {
+        assertTrue(
+            shouldUseCompactInlinePortraitPlayerForCommentTab(
+                useOfficialInlinePortraitDetailExperience = true,
+                selectedTabIndex = 1,
+                isPortraitFullscreen = false
+            )
+        )
+        assertFalse(
+            shouldUseCompactInlinePortraitPlayerForCommentTab(
+                useOfficialInlinePortraitDetailExperience = true,
+                selectedTabIndex = 0,
+                isPortraitFullscreen = false
+            )
+        )
+        assertFalse(
+            shouldUseCompactInlinePortraitPlayerForCommentTab(
+                useOfficialInlinePortraitDetailExperience = true,
+                selectedTabIndex = 1,
+                isPortraitFullscreen = true
+            )
+        )
+    }
+
+    @Test
+    fun inlinePortraitPlayer_commentTabUsesCollapsedVisualProgressWithoutChangingManualState() {
+        assertEquals(
+            1f,
+            resolveInlinePortraitPlayerCollapseProgress(
+                manualCollapseProgress = 0f,
+                compactForCommentTabProgress = 1f
+            )
+        )
+        assertEquals(
+            0.4f,
+            resolveInlinePortraitPlayerCollapseProgress(
+                manualCollapseProgress = 0.4f,
+                compactForCommentTabProgress = 0f
+            )
+        )
+        assertEquals(
+            0.6f,
+            resolveInlinePortraitPlayerCollapseProgress(
+                manualCollapseProgress = 0.2f,
+                compactForCommentTabProgress = 0.6f
+            )
+        )
+    }
+
+    @Test
     fun standalonePortraitPagerMotionSpec_keepsExitTransitionShortAndTight() {
         val spec = resolveStandalonePortraitPagerMotionSpec()
 

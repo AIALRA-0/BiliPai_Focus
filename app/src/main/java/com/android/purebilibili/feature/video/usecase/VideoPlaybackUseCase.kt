@@ -108,6 +108,16 @@ data class PlaybackSelectionResult(
 
 internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
 
+internal fun applyPlaybackIntentAfterSourceChange(
+    player: Player,
+    playWhenReady: Boolean
+) {
+    player.playWhenReady = playWhenReady
+    if (playWhenReady) {
+        player.play()
+    }
+}
+
 // TODO: Re-enable local adaptive DASH playback after the generated MPD seek path
 // is validated on real devices and covered by a playback-level regression test.
 private const val LOCAL_ADAPTIVE_DASH_PLAYBACK_ENABLED = false
@@ -610,7 +620,10 @@ class VideoPlaybackUseCase(
         if (shouldPreparePlayerOnLoad(playWhenReady)) {
             player.prepare()
         }
-        player.playWhenReady = playWhenReady
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = playWhenReady
+        )
     }
     
     /**
@@ -629,7 +642,10 @@ class VideoPlaybackUseCase(
         if (shouldPreparePlayerOnLoad(playWhenReady)) {
             player.prepare()
         }
-        player.playWhenReady = playWhenReady
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = playWhenReady
+        )
     }
     
     /**

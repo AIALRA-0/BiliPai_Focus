@@ -71,6 +71,25 @@ internal fun resolvePortraitFullscreenButtonAction(
     return PortraitFullscreenButtonAction.ENTER_PORTRAIT_FULLSCREEN
 }
 
+internal fun shouldUseCompactInlinePortraitPlayerForCommentTab(
+    useOfficialInlinePortraitDetailExperience: Boolean,
+    selectedTabIndex: Int,
+    isPortraitFullscreen: Boolean
+): Boolean {
+    return useOfficialInlinePortraitDetailExperience &&
+        selectedTabIndex == 1 &&
+        !isPortraitFullscreen
+}
+
+internal fun resolveInlinePortraitPlayerCollapseProgress(
+    manualCollapseProgress: Float,
+    compactForCommentTabProgress: Float
+): Float {
+    return manualCollapseProgress
+        .coerceIn(0f, 1f)
+        .coerceAtLeast(compactForCommentTabProgress.coerceIn(0f, 1f))
+}
+
 internal fun resolvePortraitInlinePlayerLayoutSpec(
     screenWidthDp: Float,
     screenHeightDp: Float,

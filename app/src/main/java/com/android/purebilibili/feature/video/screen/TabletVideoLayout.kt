@@ -181,7 +181,7 @@ fun TabletVideoLayout(
                             isFullscreen = false,
                             isInPipMode = isInPipMode,
                             onToggleFullscreen = onToggleFullscreen,
-                            onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                            onQualityChange = { qid -> viewModel.changeQuality(qid) },
                             onBack = onBack,
                             bvid = bvid,
                             coverUrl = coverUrl,

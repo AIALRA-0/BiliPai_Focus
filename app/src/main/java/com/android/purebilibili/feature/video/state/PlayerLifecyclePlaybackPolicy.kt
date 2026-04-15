@@ -34,7 +34,7 @@ internal fun shouldRememberResumeIntentForBuffering(
     playWhenReady: Boolean,
     playbackState: Int
 ): Boolean {
-    return playbackState == Player.STATE_BUFFERING &&
+    return (playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_IDLE) &&
         (hasPendingResumeIntent || isPlaying || playWhenReady)
 }
 
@@ -53,7 +53,6 @@ internal fun shouldAutoResumeAfterBufferingRecovery(
 ): Boolean {
     return hasPendingResumeIntent &&
         !isPlaying &&
-        !playWhenReady &&
         playbackState == Player.STATE_READY
 }
 
