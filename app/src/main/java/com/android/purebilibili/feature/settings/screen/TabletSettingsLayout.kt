@@ -292,6 +292,7 @@ fun TabletSettingsLayout(
                                 state = state,
                                 viewModel = viewModel,
                                 context = context,
+                                onNavigateToBottomBarSettings = { activeDetail = SettingsDetail.BOTTOM_BAR },
                                 onNavigateToIconSettings = { activeDetail = SettingsDetail.ICONS },
                                 onNavigateToAnimationSettings = { activeDetail = SettingsDetail.ANIMATION },
                                 onAppLanguageChange = { language ->

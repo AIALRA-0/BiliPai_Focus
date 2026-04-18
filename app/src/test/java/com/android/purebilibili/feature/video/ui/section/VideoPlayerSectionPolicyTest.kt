@@ -635,6 +635,53 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun playbackStateAutoFullscreen_triggersWhenReadyStartsPlayingInline() {
+        assertTrue(
+            shouldToggleAutoFullscreenForPlaybackEvent(
+                autoEnterFullscreenEnabled = true,
+                autoExitFullscreenEnabled = true,
+                allowPlaybackStateAutoFullscreen = true,
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                hasAutoEnteredFullscreen = false,
+                isFullscreen = false
+            )
+        )
+    }
+
+    @Test
+    fun playbackStateAutoFullscreen_triggersWhenPlayWhenReadyTurnsTrueAfterReady() {
+        assertTrue(
+            shouldToggleAutoFullscreenForPlaybackEvent(
+                autoEnterFullscreenEnabled = true,
+                autoExitFullscreenEnabled = true,
+                allowPlaybackStateAutoFullscreen = true,
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                hasAutoEnteredFullscreen = false,
+                isFullscreen = false,
+                previousPlayWhenReady = false
+            )
+        )
+    }
+
+    @Test
+    fun playbackStateAutoFullscreen_ignoresRepeatedPlayWhenReadyTrueEventsAfterEntering() {
+        assertFalse(
+            shouldToggleAutoFullscreenForPlaybackEvent(
+                autoEnterFullscreenEnabled = true,
+                autoExitFullscreenEnabled = true,
+                allowPlaybackStateAutoFullscreen = true,
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                hasAutoEnteredFullscreen = true,
+                isFullscreen = false,
+                previousPlayWhenReady = false
+            )
+        )
+    }
+
+    @Test
     fun autoplayChromeAutoHide_triggersOnceAfterFirstFrameWhilePlaying() {
         assertTrue(
             shouldAutoHidePlayerChromeOnPlaybackStart(

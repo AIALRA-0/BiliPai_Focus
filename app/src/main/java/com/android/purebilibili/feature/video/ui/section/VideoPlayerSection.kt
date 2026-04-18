@@ -479,6 +479,9 @@ fun VideoPlayerSection(
     }
     val hasShownHiResCompatHint = hiResCompatHintShownPersisted || hasShownHiResCompatHintLocally
     var hasAutoEnteredFullscreen by remember(bvid) { mutableStateOf(false) }
+    var previousPlayWhenReady by remember(playerState.player, bvid) {
+        mutableStateOf(playerState.player.playWhenReady)
+    }
 
     LaunchedEffect(hiResCompatHintShownPersisted) {
         if (hiResCompatHintShownPersisted) {
@@ -598,25 +601,47 @@ fun VideoPlayerSection(
         allowPlaybackStateAutoFullscreen,
         bvid
     ) {
+        previousPlayWhenReady = playerState.player.playWhenReady
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (
-                    allowPlaybackStateAutoFullscreen &&
-                    playbackState == Player.STATE_READY &&
-                    autoEnterFullscreenEnabled &&
-                    !hasAutoEnteredFullscreen &&
-                    playerState.player.playWhenReady &&
-                    !latestIsFullscreen
+                if (shouldToggleAutoFullscreenForPlaybackEvent(
+                        autoEnterFullscreenEnabled = autoEnterFullscreenEnabled,
+                        autoExitFullscreenEnabled = autoExitFullscreenEnabled,
+                        allowPlaybackStateAutoFullscreen = allowPlaybackStateAutoFullscreen,
+                        playbackState = playbackState,
+                        playWhenReady = playerState.player.playWhenReady,
+                        hasAutoEnteredFullscreen = hasAutoEnteredFullscreen,
+                        isFullscreen = latestIsFullscreen,
+                        previousPlayWhenReady = previousPlayWhenReady
+                    )
                 ) {
-                    hasAutoEnteredFullscreen = true
+                    if (
+                        playbackState == Player.STATE_READY &&
+                        playerState.player.playWhenReady &&
+                        !hasAutoEnteredFullscreen &&
+                        !latestIsFullscreen
+                    ) {
+                        hasAutoEnteredFullscreen = true
+                    }
                     latestOnToggleFullscreen()
                 }
-                if (
-                    allowPlaybackStateAutoFullscreen &&
-                    playbackState == Player.STATE_ENDED &&
-                    autoExitFullscreenEnabled &&
-                    latestIsFullscreen
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                val previousValue = previousPlayWhenReady
+                previousPlayWhenReady = playWhenReady
+                if (shouldToggleAutoFullscreenForPlaybackEvent(
+                        autoEnterFullscreenEnabled = autoEnterFullscreenEnabled,
+                        autoExitFullscreenEnabled = autoExitFullscreenEnabled,
+                        allowPlaybackStateAutoFullscreen = allowPlaybackStateAutoFullscreen,
+                        playbackState = playerState.player.playbackState,
+                        playWhenReady = playWhenReady,
+                        hasAutoEnteredFullscreen = hasAutoEnteredFullscreen,
+                        isFullscreen = latestIsFullscreen,
+                        previousPlayWhenReady = previousValue
+                    )
                 ) {
+                    hasAutoEnteredFullscreen = true
                     latestOnToggleFullscreen()
                 }
             }
@@ -3617,7 +3642,7 @@ fun VideoPlayerSection(
                 // 📲 [新增] 小窗模式
                 onPipClick = onPipClick,
                 //  [新增] 拖动进度条开始时清除弹幕
-                onSeekStart = { danmakuManager.clear() },
+                onSeekStart = { danmakuManager.prepareForSeekScrub() },
                 onSeekDragStart = { position ->
                     sharedSeekSession = startPlaybackSeekInteraction(
                         state = sharedSeekSession,

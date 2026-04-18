@@ -183,7 +183,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "底栏设置",
-        subtitle = "自定义底栏项目",
+        subtitle = "自定义底栏和顶部标签",
         section = "常规",
         aliases = listOf(
             "底栏",

@@ -157,6 +157,14 @@ internal inline fun executeExplicitDanmakuResync(
     start()
 }
 
+internal inline fun executeDanmakuSeekScrubStart(
+    pause: () -> Unit,
+    clear: () -> Unit
+) {
+    pause()
+    clear()
+}
+
 internal fun shouldSuppressFollowupDanmakuHardResync(
     positionMs: Long,
     explicitSeekPositionMs: Long?,

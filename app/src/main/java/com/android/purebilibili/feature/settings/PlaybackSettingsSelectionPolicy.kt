@@ -52,6 +52,7 @@ internal fun resolveSegmentedSwipeTargetIndex(
 
 internal fun resolveDefaultPlaybackQualityOptions(): List<PlaybackSegmentOption<Int>> {
     return listOf(
+        PlaybackSegmentOption(125, "4K HDR"),
         PlaybackSegmentOption(116, "1080P60"),
         PlaybackSegmentOption(80, "1080P"),
         PlaybackSegmentOption(64, "720P"),

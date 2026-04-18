@@ -246,6 +246,28 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun manualFullscreenRequestReleasePolicy_clearsRequestAfterLeavingObservedFullscreen() {
+        assertFalse(
+            shouldKeepManualFullscreenRequest(
+                manualFullscreenRequested = true,
+                hasEnteredFullscreenDuringRequest = true,
+                isFullscreenMode = false
+            )
+        )
+    }
+
+    @Test
+    fun manualFullscreenRequestReleasePolicy_keepsRequestWhileEnteringFullscreen() {
+        assertTrue(
+            shouldKeepManualFullscreenRequest(
+                manualFullscreenRequested = true,
+                hasEnteredFullscreenDuringRequest = false,
+                isFullscreenMode = false
+            )
+        )
+    }
+
+    @Test
     fun phoneOrientationPolicy_autoRotateHorizontalMode_withoutManualRequest_usesSensor() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,

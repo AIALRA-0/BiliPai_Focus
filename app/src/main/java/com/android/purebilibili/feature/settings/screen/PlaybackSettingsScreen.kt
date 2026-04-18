@@ -1300,7 +1300,7 @@ fun PlaybackSettingsContent(
                             icon = CupertinoIcons.Default.Sparkles,
                             title = "自动最高画质",
                             subtitle = if (autoHighestQualityEnabled) {
-                                "已开启，始终请求账号与设备可用的最高画质"
+                                "已开启，优先请求账号与设备可稳播的最高画质（最高到 4K HDR）"
                             } else {
                                 "全局开关，开启后覆盖下方无线网络和流量默认画质"
                             },

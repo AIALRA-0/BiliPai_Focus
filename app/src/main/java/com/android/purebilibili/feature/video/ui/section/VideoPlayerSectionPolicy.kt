@@ -297,6 +297,32 @@ internal fun shouldAllowPlaybackStateAutoFullscreen(
     return smallestScreenWidthDp < 600
 }
 
+internal fun shouldToggleAutoFullscreenForPlaybackEvent(
+    autoEnterFullscreenEnabled: Boolean,
+    autoExitFullscreenEnabled: Boolean,
+    allowPlaybackStateAutoFullscreen: Boolean,
+    playbackState: Int,
+    playWhenReady: Boolean,
+    hasAutoEnteredFullscreen: Boolean,
+    isFullscreen: Boolean,
+    previousPlayWhenReady: Boolean = playWhenReady
+): Boolean {
+    if (!allowPlaybackStateAutoFullscreen) return false
+
+    val shouldEnterFullscreen =
+        autoEnterFullscreenEnabled &&
+            playbackState == Player.STATE_READY &&
+            playWhenReady &&
+            !hasAutoEnteredFullscreen &&
+            !isFullscreen &&
+            (!previousPlayWhenReady || playbackState == Player.STATE_READY)
+    if (shouldEnterFullscreen) return true
+
+    return autoExitFullscreenEnabled &&
+        playbackState == Player.STATE_ENDED &&
+        isFullscreen
+}
+
 internal fun resolveGestureIndicatorLabel(mode: VideoGestureMode): String {
     return when (mode) {
         VideoGestureMode.Brightness -> "亮度"

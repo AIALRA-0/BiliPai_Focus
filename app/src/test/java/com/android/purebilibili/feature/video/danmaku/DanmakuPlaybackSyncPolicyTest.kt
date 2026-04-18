@@ -61,6 +61,18 @@ class DanmakuPlaybackSyncPolicyTest {
     }
 
     @Test
+    fun `explicit seek scrub start should pause before clearing stale danmaku`() {
+        val calls = mutableListOf<String>()
+
+        executeDanmakuSeekScrubStart(
+            pause = { calls += "pause" },
+            clear = { calls += "clear" }
+        )
+
+        assertEquals(listOf("pause", "clear"), calls)
+    }
+
+    @Test
     fun `follow-up hard resync should be suppressed right after explicit user seek to same position`() {
         assertTrue(
             shouldSuppressFollowupDanmakuHardResync(

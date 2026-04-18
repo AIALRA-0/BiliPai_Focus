@@ -1547,6 +1547,23 @@ class DanmakuManager private constructor(
         Log.d(TAG, "🧹 clear() - clearing displayed danmakus")
         controller?.clear()
     }
+
+    /**
+     * 进入进度条拖动预览前，先暂停旧时间线，再清空屏幕上的旧弹幕。
+     * 仅用于显式 seek scrub，避免用户拖动时继续看到旧时间线弹幕。
+     */
+    fun prepareForSeekScrub() {
+        val ctrl = controller ?: return
+        executeDanmakuSeekScrubStart(
+            pause = {
+                ctrl.pause()
+                isPlaying = false
+                stopDriftSync()
+            },
+            clear = { ctrl.clear() }
+        )
+        Log.d(TAG, "🧹 prepareForSeekScrub() - paused and cleared stale danmakus")
+    }
     
     /**
      *  跳转到指定时间（拖动进度条完成时调用）

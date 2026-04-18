@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.download
 
 import android.content.Context
+import android.os.Build
 import androidx.work.*
+import com.android.purebilibili.app.DOWNLOAD_NOTIFICATION_CHANNEL_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -101,16 +103,19 @@ class DownloadWorker(
         // 创建前台通知（Android 12+ WorkManager 要求）
         val notification = androidx.core.app.NotificationCompat.Builder(
             applicationContext, 
-            "download_channel"
+            DOWNLOAD_NOTIFICATION_CHANNEL_ID
         )
             .setContentTitle("下载中...")
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
             .build()
-        
-        return ForegroundInfo(
-            System.currentTimeMillis().toInt(),
-            notification
-        )
+
+        val notificationId = System.currentTimeMillis().toInt()
+        val serviceType = resolveDownloadForegroundServiceType(Build.VERSION.SDK_INT)
+        return if (serviceType != null) {
+            ForegroundInfo(notificationId, notification, serviceType)
+        } else {
+            ForegroundInfo(notificationId, notification)
+        }
     }
 }

@@ -127,6 +127,7 @@ fun AppearanceSettingsScreen(
             AppearanceSettingsContent(
                 modifier = Modifier.padding(padding),
                 state = state,
+                onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
                 onNavigateToIconSettings = onNavigateToIconSettings,
                 onNavigateToAnimationSettings = onNavigateToAnimationSettings,
                 viewModel = viewModel,
@@ -156,6 +157,7 @@ fun AppearanceSettingsScreen(
             AppearanceSettingsContent(
                 modifier = Modifier.padding(padding),
                 state = state,
+                onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
                 onNavigateToIconSettings = onNavigateToIconSettings,
                 onNavigateToAnimationSettings = onNavigateToAnimationSettings,
                 viewModel = viewModel,
@@ -205,6 +207,7 @@ fun AppearanceSettingsScreen(
 fun AppearanceSettingsContent(
     modifier: Modifier = Modifier,
     state: SettingsUiState,
+    onNavigateToBottomBarSettings: () -> Unit,
     onNavigateToIconSettings: () -> Unit,
     onNavigateToAnimationSettings: () -> Unit,
     viewModel: SettingsViewModel,
@@ -1160,6 +1163,17 @@ fun AppearanceSettingsContent(
                         }
                         
                         IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSClickableItem(
+                            icon = CupertinoIcons.Default.ListBullet,
+                            title = "顶部标签页",
+                            value = "显示/隐藏、排序",
+                            onClick = {
+                                openTopTabManagement(onNavigateToBottomBarSettings)
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChevronUp,
                             title = "顶部栏自动收缩",
@@ -1329,6 +1343,16 @@ fun AppearanceSettingsContent(
         
 
     }
+}
+
+internal fun openTopTabManagement(
+    onNavigateToBottomBarSettings: () -> Unit
+) {
+    SettingsSearchFocusController.submit(
+        SettingsSearchTarget.BOTTOM_BAR,
+        SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS
+    )
+    onNavigateToBottomBarSettings()
 }
 
 @Composable

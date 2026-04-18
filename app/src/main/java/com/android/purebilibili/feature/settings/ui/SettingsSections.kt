@@ -173,7 +173,7 @@ fun GeneralSection(
             icon = bottomBarVisual.icon,
             iconPainter = bottomBarVisual.iconResId?.let { painterResource(id = it) },
             title = "底栏设置",
-            value = "自定义底栏项目",
+            value = "自定义底栏和顶部标签",
             onClick = onBottomBarClick,
             iconTint = bottomBarVisual.iconTint
         )

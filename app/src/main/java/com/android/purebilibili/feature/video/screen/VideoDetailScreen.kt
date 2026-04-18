@@ -754,6 +754,11 @@ fun VideoDetailScreen(
         useTabletLayout = useTabletLayout
     )
     val isFullscreenMode = if (isOrientationDrivenFullscreen) isLandscape else userRequestedFullscreen
+    ManualFullscreenRequestLifecycleEffect(
+        manualFullscreenRequested = userRequestedFullscreen,
+        isFullscreenMode = isFullscreenMode,
+        onReleaseManualFullscreenRequest = { userRequestedFullscreen = false }
+    )
     val activeDanmakuScope = remember(isFullscreenMode) {
         com.android.purebilibili.core.store.resolveDanmakuSettingsScope(isLandscape = isFullscreenMode)
     }
@@ -4197,6 +4202,45 @@ internal fun resolvePhoneFullscreenEnterOrientation(
         com.android.purebilibili.core.store.FullscreenMode.AUTO -> {
             if (isVerticalVideo) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+    }
+}
+
+internal fun shouldKeepManualFullscreenRequest(
+    manualFullscreenRequested: Boolean,
+    hasEnteredFullscreenDuringRequest: Boolean,
+    isFullscreenMode: Boolean
+): Boolean {
+    if (!manualFullscreenRequested) return false
+    if (isFullscreenMode) return true
+    return !hasEnteredFullscreenDuringRequest
+}
+
+@Composable
+private fun ManualFullscreenRequestLifecycleEffect(
+    manualFullscreenRequested: Boolean,
+    isFullscreenMode: Boolean,
+    onReleaseManualFullscreenRequest: () -> Unit
+) {
+    var hasEnteredFullscreenDuringRequest by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(manualFullscreenRequested, isFullscreenMode) {
+        if (manualFullscreenRequested && isFullscreenMode) {
+            hasEnteredFullscreenDuringRequest = true
+            return@LaunchedEffect
+        }
+
+        if (
+            !shouldKeepManualFullscreenRequest(
+                manualFullscreenRequested = manualFullscreenRequested,
+                hasEnteredFullscreenDuringRequest = hasEnteredFullscreenDuringRequest,
+                isFullscreenMode = isFullscreenMode
+            )
+        ) {
+            if (manualFullscreenRequested) {
+                onReleaseManualFullscreenRequest()
+            }
+            hasEnteredFullscreenDuringRequest = false
         }
     }
 }

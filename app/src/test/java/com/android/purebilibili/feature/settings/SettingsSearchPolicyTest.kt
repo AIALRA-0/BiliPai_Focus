@@ -103,4 +103,13 @@ class SettingsSearchPolicyTest {
 
         assertTrue(results.any { it.target == SettingsSearchTarget.CHECK_UPDATE })
     }
+
+    @Test
+    fun queryByBottomBar_surfacesTopTabDiscoverabilityInSubtitle() {
+        val result = resolveSettingsSearchResults("底栏").firstOrNull {
+            it.target == SettingsSearchTarget.BOTTOM_BAR && it.title == "底栏设置"
+        }
+
+        assertEquals("自定义底栏和顶部标签", result?.subtitle)
+    }
 }

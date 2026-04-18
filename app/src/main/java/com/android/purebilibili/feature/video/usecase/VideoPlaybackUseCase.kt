@@ -1106,7 +1106,7 @@ class VideoPlaybackUseCase(
         isDolbyVisionSupported: Boolean
     ): Int {
         val capabilityCeiling = when {
-            isVip -> Int.MAX_VALUE
+            isVip -> 125
             isLoggedIn -> 80
             else -> 64
         }
