@@ -1166,7 +1166,7 @@ fun AppearanceSettingsContent(
                         IOSClickableItem(
                             icon = CupertinoIcons.Default.ListBullet,
                             title = "顶部标签页",
-                            value = "显示/隐藏、排序",
+                            value = "显示/隐藏、排序、自动收缩",
                             onClick = {
                                 openTopTabManagement(onNavigateToBottomBarSettings)
                             },
@@ -1177,7 +1177,7 @@ fun AppearanceSettingsContent(
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChevronUp,
                             title = "顶部栏自动收缩",
-                            subtitle = "上滑时自动收起推荐分类",
+                            subtitle = "列表离开顶部时自动隐藏标签，回到顶部时自动出现",
                             checked = state.isHeaderCollapseEnabled,
                             onCheckedChange = { viewModel.toggleHeaderCollapse(it) },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue

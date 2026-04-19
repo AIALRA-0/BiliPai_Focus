@@ -964,6 +964,14 @@ fun HomeScreen(
     // [Feature] Sticky Header Options
     // If true, header will shrink but stay visible. If false, it scrolls away.
     val isHeaderCollapseEnabled = homeSettings.isHeaderCollapseEnabled // Enable shrinking based on settings
+    val areTopTabsAutoCollapsed by remember(headerOffsetHeightPx, isHeaderCollapseEnabled) {
+        derivedStateOf {
+            resolveHomeTopTabsAutoCollapsed(
+                currentHeaderOffsetPx = headerOffsetHeightPx,
+                isHeaderCollapseEnabled = isHeaderCollapseEnabled
+            )
+        }
+    }
     
     // [Feature] Bottom Bar Auto-Hide (based on scroll hide mode)
     val isBottomBarAutoHideEnabled = bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE
@@ -1422,9 +1430,15 @@ fun HomeScreen(
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
                 isReturningFromDetail = CardPositionManager.isReturningFromDetail
             ),
-            topTabsCollapsed = areTopTabsManuallyCollapsed,
+            topTabsCollapsed = if (isHeaderCollapseEnabled) {
+                areTopTabsAutoCollapsed
+            } else {
+                areTopTabsManuallyCollapsed
+            },
             onTopTabsCollapsedChange = { collapsed ->
-                areTopTabsManuallyCollapsed = collapsed
+                if (!isHeaderCollapseEnabled) {
+                    areTopTabsManuallyCollapsed = collapsed
+                }
             },
             motionTier = deviceUiProfile.motionTier,
             isScrolling = isFeedScrollInProgress,

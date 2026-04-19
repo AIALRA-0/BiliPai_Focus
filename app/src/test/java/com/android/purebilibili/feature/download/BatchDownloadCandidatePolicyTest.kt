@@ -92,6 +92,52 @@ class BatchDownloadCandidatePolicyTest {
     }
 
     @Test
+    fun resolveBatchDownloadCandidates_prefersCollectionEpisodesWhenPagesAlsoExist() {
+        val info = ViewInfo(
+            bvid = "BVep2",
+            cid = 2002L,
+            title = "当前稿件标题",
+            pic = "cover",
+            owner = Owner(name = "UP"),
+            stat = Stat(),
+            pages = listOf(
+                Page(cid = 2002L, page = 1, part = "当前稿件分P")
+            ),
+            ugc_season = UgcSeason(
+                id = 9L,
+                title = "完整合集",
+                sections = listOf(
+                    UgcSection(
+                        id = 11L,
+                        title = "正片",
+                        episodes = listOf(
+                            UgcEpisode(
+                                bvid = "BVep1",
+                                cid = 2001L,
+                                title = "EP1",
+                                arc = UgcEpisodeArc(title = "第一集", pic = "ep1")
+                            ),
+                            UgcEpisode(
+                                bvid = "BVep2",
+                                cid = 2002L,
+                                title = "EP2",
+                                arc = UgcEpisodeArc(title = "第二集", pic = "ep2")
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val candidates = resolveBatchDownloadCandidates(info)
+
+        assertEquals(listOf("BVep1#2001", "BVep2#2002"), candidates.map { it.id })
+        assertEquals(2, candidates.size)
+        assertEquals(2, candidates[0].episodeCount)
+        assertTrue(candidates[1].selected)
+    }
+
+    @Test
     fun resolveBatchDownloadCandidate_returnsMatchedEpisodeMetadata() {
         val info = ViewInfo(
             bvid = "BV1xx",

@@ -114,7 +114,7 @@ import java.nio.charset.StandardCharsets
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
-    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&resumePositionMs={resumePositionMs}&commentRootRpid={commentRootRpid}"
+    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&fullscreen={fullscreen}&resumePositionMs={resumePositionMs}&commentRootRpid={commentRootRpid}"
 
     internal fun resolveVideoRoutePath(
         bvid: String,
@@ -122,10 +122,11 @@ object VideoRoute {
         encodedCover: String,
         startAudio: Boolean,
         autoPortrait: Boolean,
+        fullscreen: Boolean = false,
         resumePositionMs: Long = 0L,
         commentRootRpid: Long = 0L
     ): String {
-        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}&commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}"
+        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&fullscreen=$fullscreen&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}&commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}"
     }
 
     // 构建 helper
@@ -135,6 +136,7 @@ object VideoRoute {
         coverUrl: String,
         startAudio: Boolean = false,
         autoPortrait: Boolean = false,
+        fullscreen: Boolean = false,
         resumePositionMs: Long = 0L,
         commentRootRpid: Long = 0L
     ): String {
@@ -145,6 +147,7 @@ object VideoRoute {
             encodedCover = encodedCover,
             startAudio = startAudio,
             autoPortrait = autoPortrait,
+            fullscreen = fullscreen,
             resumePositionMs = resumePositionMs,
             commentRootRpid = commentRootRpid
         )
@@ -159,6 +162,7 @@ internal fun resolveStandardVideoRoute(
     coverUrl: String,
     startAudio: Boolean = false,
     autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
+    fullscreen: Boolean = false,
     resumePositionMs: Long = 0L,
     commentRootRpid: Long = 0L
 ): String {
@@ -169,6 +173,7 @@ internal fun resolveStandardVideoRoute(
         encodedCover = encodedCover,
         startAudio = startAudio,
         autoPortrait = autoPortrait,
+        fullscreen = fullscreen,
         resumePositionMs = resumePositionMs,
         commentRootRpid = commentRootRpid
     )

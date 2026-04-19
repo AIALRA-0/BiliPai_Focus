@@ -1438,7 +1438,7 @@ fun iOSHomeHeader(
         targetValue = resolveHomeTopTabPresentationHeight(
             expandedHeight = expandedTabHeight,
             isCollapsed = topTabsVisible && topTabsCollapsed,
-            collapsedHandleHeight = resolveHomeTopCollapsedHandleHeight()
+            collapsedHandleHeight = if (isHeaderCollapseEnabled) 0.dp else resolveHomeTopCollapsedHandleHeight()
         ),
         animationSpec = tween(durationMillis = 180),
         label = "currentTabHeight"
@@ -2157,7 +2157,7 @@ fun iOSHomeHeader(
                                 softenWideChrome = true
                             )
                         },
-                        gestureEnabled = topTabsVisible,
+                        gestureEnabled = topTabsVisible && !isHeaderCollapseEnabled,
                         isTabsCollapsed = topTabsCollapsed,
                         onTabsCollapsedChange = onTopTabsCollapsedChange
                     ) {

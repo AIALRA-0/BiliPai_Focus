@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.home
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class HomeTopTabGesturePolicyTest {
 
@@ -49,6 +51,34 @@ class HomeTopTabGesturePolicyTest {
             resolveHomeTopTabPresentationHeight(
                 expandedHeight = 48.dp,
                 isCollapsed = true
+            )
+        )
+    }
+
+    @Test
+    fun autoCollapsedTabs_canHideCompletelyWithoutHandle() {
+        assertEquals(
+            0.dp,
+            resolveHomeTopTabPresentationHeight(
+                expandedHeight = 48.dp,
+                isCollapsed = true,
+                collapsedHandleHeight = 0.dp
+            )
+        )
+    }
+
+    @Test
+    fun headerOffsetBelowThreshold_autoCollapsesTabs() {
+        assertTrue(
+            resolveHomeTopTabsAutoCollapsed(
+                currentHeaderOffsetPx = -1f,
+                isHeaderCollapseEnabled = true
+            )
+        )
+        assertFalse(
+            resolveHomeTopTabsAutoCollapsed(
+                currentHeaderOffsetPx = 0f,
+                isHeaderCollapseEnabled = true
             )
         )
     }

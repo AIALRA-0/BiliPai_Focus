@@ -39,7 +39,8 @@ internal fun resolveHomeVideoRoute(request: HomeVideoClickRequest): String? {
         cid = intent.cid,
         encodedCover = encodedCover,
         startAudio = false,
-        autoPortrait = true
+        autoPortrait = true,
+        fullscreen = false
     )
 }
 

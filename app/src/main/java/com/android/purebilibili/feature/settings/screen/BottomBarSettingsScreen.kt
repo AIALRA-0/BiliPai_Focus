@@ -250,6 +250,7 @@ fun BottomBarSettingsContent(
     val visibleTabs by SettingsManager.getBottomBarVisibleTabs(context).collectAsState(initial = setOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"))
     val topTabOrder by SettingsManager.getTopTabOrder(context).collectAsState(initial = defaultTopTabIds)
     val topTabVisible by SettingsManager.getTopTabVisibleTabs(context).collectAsState(initial = defaultTopTabIds.toSet())
+    val headerCollapseEnabled by SettingsManager.getHeaderCollapseEnabled(context).collectAsState(initial = true)
     
     // 可编辑的本地状态
     var localOrder by remember(order) { mutableStateOf(order) }
@@ -709,10 +710,47 @@ fun BottomBarSettingsContent(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "推荐固定显示。可调整其余标签的显示/隐藏与顺序。",
+                                text = "推荐固定显示。可调整其余标签的显示/隐藏、顺序，以及下滑时的自动收起行为。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = CupertinoIcons.Default.ChevronUp,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "顶部栏自动收缩",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "列表离开顶部时自动隐藏推荐、直播那一排标签，回到顶部时恢复",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                AppAdaptiveSwitch(
+                                    checked = headerCollapseEnabled,
+                                    onCheckedChange = { checked ->
+                                        scope.launch {
+                                            SettingsManager.setHeaderCollapseEnabled(context, checked)
+                                        }
+                                    }
+                                )
+                            }
 
                             val visibleTopOrder = localTopTabOrder.filter { it in localTopTabVisible }
                             Text(

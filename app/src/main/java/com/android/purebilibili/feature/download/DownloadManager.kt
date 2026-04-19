@@ -90,7 +90,7 @@ object DownloadManager {
         downloadDir = resolveDownloadDir(context, initialPath)
         tasksFile = File(context.filesDir, "download_tasks.json")
         loadTasks()
-        DownloadWorker.cancelAll(context)
+        scheduleNextQueuedDownload()
 
         scope.launch {
             com.android.purebilibili.core.store.SettingsManager.getDownloadPath(context)

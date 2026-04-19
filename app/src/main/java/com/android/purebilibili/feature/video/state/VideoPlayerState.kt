@@ -7,7 +7,6 @@ import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 
 import android.app.NotificationChannel
-import android.support.v4.media.session.PlaybackStateCompat
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context

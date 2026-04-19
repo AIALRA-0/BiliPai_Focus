@@ -105,6 +105,42 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun systemMultiWindowFullscreenPolicy_restoresMainWindowBeforeEnteringFullscreen() {
+        assertTrue(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = true,
+                isInPictureInPictureMode = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertFalse(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = false,
+                isInPictureInPictureMode = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertFalse(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = true,
+                isInPictureInPictureMode = true,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertFalse(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = true,
+                isInPictureInPictureMode = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
     fun sharedCoverTransition_requiresSwitchAndBothScopes() {
         assertTrue(
             shouldEnableVideoCoverSharedTransition(

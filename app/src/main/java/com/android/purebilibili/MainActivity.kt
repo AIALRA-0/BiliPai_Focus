@@ -102,6 +102,7 @@ import kotlin.math.pow
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
 private const val KEY_FIRST_LAUNCH = "first_launch_shown"
+internal const val EXTRA_PENDING_NAVIGATION_ROUTE = "pending_navigation_route"
 private val PLUGIN_INSTALL_HTTPS_HOSTS = setOf(
     "bilipai.app",
     "www.bilipai.app",
@@ -178,7 +179,8 @@ internal fun shouldNavigateToVideoFromNotification(
 
 internal fun resolveMainActivityVideoRoute(
     bvid: String,
-    cid: Long
+    cid: Long,
+    startFullscreen: Boolean = false
 ): String {
     return com.android.purebilibili.navigation.VideoRoute.resolveVideoRoutePath(
         bvid = bvid,
@@ -186,6 +188,7 @@ internal fun resolveMainActivityVideoRoute(
         encodedCover = "",
         startAudio = false,
         autoPortrait = true,
+        fullscreen = startFullscreen,
         resumePositionMs = 0L
     )
 }
@@ -1638,6 +1641,14 @@ class MainActivity : AppCompatActivity() {
      */
     private fun handleIntent(intent: android.content.Intent?) {
         if (intent == null) return
+
+        intent.getStringExtra(EXTRA_PENDING_NAVIGATION_ROUTE)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { route ->
+                Logger.d(TAG, "🧭 restore route from intent extra: $route")
+                pendingNavigationRoute = route
+                return
+            }
         
         Logger.d(TAG, "🔗 handleIntent: action=${intent.action}, data=${intent.data}")
         

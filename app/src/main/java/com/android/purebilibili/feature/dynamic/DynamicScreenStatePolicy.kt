@@ -4,8 +4,19 @@ import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 
-internal fun resolveDynamicListTopPaddingExtraDp(isHorizontalMode: Boolean): Int {
-    return if (isHorizontalMode) 168 else 100
+internal fun resolveDynamicListTopPaddingExtraDp(
+    isHorizontalMode: Boolean,
+    isHorizontalUserListCollapsed: Boolean = false
+): Int {
+    return if (isHorizontalMode && !isHorizontalUserListCollapsed) 168 else 100
+}
+
+internal fun shouldCollapseDynamicHorizontalUserList(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    topTolerancePx: Int = 8
+): Boolean {
+    return firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > topTolerancePx
 }
 
 internal fun resolveDynamicSelectedUserIdAfterClick(

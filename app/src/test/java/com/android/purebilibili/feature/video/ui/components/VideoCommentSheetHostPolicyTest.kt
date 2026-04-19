@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.video.ui.components
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class VideoCommentSheetHostPolicyTest {
 
@@ -92,6 +94,20 @@ class VideoCommentSheetHostPolicyTest {
             shouldApplyVideoCommentThreadStatusBarPadding(
                 mainSheetVisible = true,
                 topReservedPx = 0
+            )
+        )
+    }
+
+    @Test
+    fun `backdrop tap dismissal only applies to main comment sheet`() {
+        assertTrue(
+            shouldDismissVideoCommentSheetHostOnBackdropTap(
+                mainSheetVisible = true
+            )
+        )
+        assertFalse(
+            shouldDismissVideoCommentSheetHostOnBackdropTap(
+                mainSheetVisible = false
             )
         )
     }

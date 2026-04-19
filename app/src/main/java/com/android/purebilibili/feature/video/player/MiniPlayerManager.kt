@@ -2049,9 +2049,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
 
         val compactActionOrder = resolveExternalTransportActionOrder()
-        val style = androidx.media.app.NotificationCompat.MediaStyle()
-            .setMediaSession(mediaSession?.sessionCompatToken)
-            .setShowActionsInCompactView(0, 1, 2)
+        val style = mediaSession?.let { session ->
+            androidx.media3.session.MediaStyleNotificationHelper.MediaStyle(session)
+                .setShowActionsInCompactView(0, 1, 2)
+        }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(
@@ -2063,13 +2064,15 @@ class MiniPlayerManager private constructor(private val context: Context) :
             .setContentTitle(title)
             .setContentText(artist)
             .setLargeIcon(effectiveArtworkBitmap)
-            .setStyle(style)
             .setColor(THEME_COLOR)
             .setColorized(true)
             .setOngoing(notificationIsPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setContentIntent(mediaSession?.sessionActivity)
+            .apply {
+                style?.let(::setStyle)
+            }
         
         // 🎯 [修复] 确保点击通知本体也能正确跳转（覆盖 setContentIntent 作为双重保障）
         val intent = Intent(context, com.android.purebilibili.MainActivity::class.java).apply {

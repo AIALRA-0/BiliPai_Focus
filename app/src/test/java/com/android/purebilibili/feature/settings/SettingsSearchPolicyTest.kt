@@ -112,4 +112,13 @@ class SettingsSearchPolicyTest {
 
         assertEquals("自定义底栏和顶部标签", result?.subtitle)
     }
+
+    @Test
+    fun queryByAutoCollapse_hitsTopTabManagementEntry() {
+        val result = resolveSettingsSearchResults("自动收缩").firstOrNull {
+            it.target == SettingsSearchTarget.BOTTOM_BAR && it.title == "顶部标签管理"
+        }
+
+        assertEquals("显示/隐藏、排序、自动收缩", result?.subtitle)
+    }
 }

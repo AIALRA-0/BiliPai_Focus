@@ -29,9 +29,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -46,7 +48,6 @@ import kotlinx.coroutines.launch // [Fix] Import
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -67,13 +68,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
@@ -96,6 +100,8 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.article.ArticleSharedElementSlot
 import com.android.purebilibili.feature.article.resolveHistoryArticleCoverAspectRatio
 import com.android.purebilibili.feature.article.resolveArticleSharedTransitionKey
+import com.android.purebilibili.feature.settings.IOSSlidingSegmentedControl
+import com.android.purebilibili.feature.settings.PlaybackSegmentOption
 import com.android.purebilibili.feature.space.SeasonSeriesDetailViewModel
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
@@ -165,6 +171,7 @@ fun CommonListScreen(
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
@@ -409,6 +416,12 @@ fun CommonListScreen(
     
     // 🔍 搜索状态
     var searchQuery by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    val favoriteBrowseOptions = remember {
+        listOf(
+            PlaybackSegmentOption(FavoriteBrowseSection.OWNED, "收藏夹"),
+            PlaybackSegmentOption(FavoriteBrowseSection.SUBSCRIBED, "订阅")
+        )
+    }
 
     // [New] 动态顶栏高度测量 (最准确的方式)
     var headerHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -427,15 +440,26 @@ fun CommonListScreen(
             uiPreset = uiPreset
         )
     }
+    val favoriteHeaderLayout = remember(uiPreset, androidNativeVariant) {
+        resolveCommonListFavoriteHeaderLayout(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
+    }
     val blurIntensity = currentUnifiedBlurIntensity()
     val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
+    val headerBackgroundAlpha = if (favoriteViewModel != null) {
+        (backgroundAlpha * favoriteHeaderLayout.headerBackgroundAlphaMultiplier).coerceIn(0f, 1f)
+    } else {
+        backgroundAlpha
+    }
     
     // 决定顶栏背景 (使用私有的 localHazeState)
     val topBarBackgroundModifier = if (isHeaderBlurEnabled) {
         Modifier
             .fillMaxWidth()
             .unifiedBlur(localHazeState)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = headerBackgroundAlpha))
     } else {
         Modifier
             .fillMaxWidth()
@@ -474,6 +498,7 @@ fun CommonListScreen(
 
             Box(modifier = contentModifier) {
                 if (isSubscribedBrowse) {
+                    val favoriteVm = requireNotNull(favoriteViewModel)
                     FavoriteSubscribedFolderList(
                         folders = filterFavoriteFoldersByQuery(subscribedFoldersState, searchQuery),
                         searchQuery = searchQuery,
@@ -485,7 +510,7 @@ fun CommonListScreen(
                         spacing = spacing.medium,
                         hasMore = subscribedFolderProgressState.hasMore,
                         isLoadingMore = subscribedFolderProgressState.isLoadingMore,
-                        onLoadMore = { favoriteViewModel?.loadMoreSubscribedFolders() },
+                        onLoadMore = { favoriteVm.loadMoreSubscribedFolders() },
                         onFolderClick = { folder ->
                             val collectionRoute = resolveSubscribedFavoriteCollectionRoute(folder)
                             if (collectionRoute != null) {
@@ -791,80 +816,55 @@ fun CommonListScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(
+                                horizontal = favoriteHeaderLayout.searchBarHorizontalPaddingDp.dp,
+                                vertical = favoriteHeaderLayout.searchBarVerticalPaddingDp.dp
+                            )
                     ) {
                         com.android.purebilibili.core.ui.components.IOSSearchBar(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
                             placeholder = if (isSubscribedBrowse) "搜索订阅收藏夹" else "搜索视频",
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                            heightOverride = favoriteHeaderLayout.searchBarHeightDp.dp
                         )
                     }
 
                     if (favoriteViewModel != null && subscribedFoldersState.isNotEmpty()) {
-                        TabRow(
-                            selectedTabIndex = if (isSubscribedBrowse) 1 else 0,
-                            containerColor = Color.Transparent,
-                            divider = {}
-                        ) {
-                            Tab(
-                                selected = !isSubscribedBrowse,
-                                onClick = {
-                                    favoriteBrowseSection = FavoriteBrowseSection.OWNED
-                                    searchQuery = ""
-                                },
-                                text = { Text("收藏夹") }
-                            )
-                            Tab(
-                                selected = isSubscribedBrowse,
-                                onClick = {
-                                    favoriteBrowseSection = FavoriteBrowseSection.SUBSCRIBED
-                                    searchQuery = ""
-                                },
-                                text = { Text("订阅") }
-                            )
-                        }
+                        IOSSlidingSegmentedControl(
+                            options = favoriteBrowseOptions,
+                            selectedValue = favoriteBrowseSection,
+                            modifier = Modifier.padding(
+                                start = favoriteHeaderLayout.browseToggleHorizontalPaddingDp.dp,
+                                end = favoriteHeaderLayout.browseToggleHorizontalPaddingDp.dp,
+                                top = favoriteHeaderLayout.browseToggleTopPaddingDp.dp
+                            ),
+                            onSelectionChange = { section ->
+                                favoriteBrowseSection = section
+                                searchQuery = ""
+                            }
+                        )
                     }
                     
                     // 📁 [新增] 收藏夹 Tab 栏（仅显示多个收藏夹时）
                     if (!isSubscribedBrowse && foldersState.size > 1) {
-                        ScrollableTabRow(
-                            selectedTabIndex = selectedFolderIndex,
-                            containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.primary,
-                            edgePadding = 16.dp,
-                            indicator = { tabPositions ->
-                                if (selectedFolderIndex < tabPositions.size) {
-                                    TabRowDefaults.SecondaryIndicator(
-                                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedFolderIndex]),
-                                        color = MaterialTheme.colorScheme.primary // 使用主题色
-                                    )
+                        val favoriteVm = requireNotNull(favoriteViewModel)
+                        FavoriteFolderChipRow(
+                            folders = foldersState,
+                            selectedFolderIndex = selectedFolderIndex,
+                            layout = favoriteHeaderLayout,
+                            onFolderSelected = { index ->
+                                favoriteVm.switchFolder(index)
+                                scope.launch {
+                                    pagerState.animateScrollToPage(index)
                                 }
-                            },
-                            divider = {}
-                        ) {
-                            foldersState.forEachIndexed { index, folder ->
-                                Tab(
-                                    selected = selectedFolderIndex == index,
-                                    onClick = { 
-                                        favoriteViewModel?.switchFolder(index)
-                                        // 
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(index)
-                                        }
-                                        searchQuery = ""
-                                    },
-                                    text = {
-                                        Text(
-                                            text = resolveFavoriteFolderTabLabel(folder),
-                                            maxLines = 1,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (selectedFolderIndex == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                )
+                                searchQuery = ""
                             }
-                        }
+                        )
+                    }
+
+                    if (favoriteViewModel != null) {
+                        Spacer(modifier = Modifier.height(favoriteHeaderLayout.headerBottomPaddingDp.dp))
                     }
                 }
             }
@@ -952,6 +952,63 @@ fun CommonListScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun FavoriteFolderChipRow(
+    folders: List<com.android.purebilibili.data.model.response.FavFolder>,
+    selectedFolderIndex: Int,
+    layout: CommonListFavoriteHeaderLayout,
+    onFolderSelected: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(
+                start = layout.folderChipRowHorizontalPaddingDp.dp,
+                end = layout.folderChipRowHorizontalPaddingDp.dp,
+                top = layout.folderChipRowTopPaddingDp.dp
+            ),
+        horizontalArrangement = Arrangement.spacedBy(layout.folderChipSpacingDp.dp)
+    ) {
+        folders.forEachIndexed { index, folder ->
+            val isSelected = index == selectedFolderIndex
+            Surface(
+                onClick = { onFolderSelected(index) },
+                shape = RoundedCornerShape(layout.folderChipMinHeightDp.dp),
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                },
+                tonalElevation = if (isSelected) 1.dp else 0.dp
+            ) {
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = layout.folderChipMinHeightDp.dp)
+                        .padding(horizontal = layout.folderChipHorizontalPaddingDp.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = resolveFavoriteFolderTabLabel(folder),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                        ),
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

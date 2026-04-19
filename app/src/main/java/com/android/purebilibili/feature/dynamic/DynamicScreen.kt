@@ -5,10 +5,12 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import kotlinx.coroutines.flow.distinctUntilChanged // [Fix] Missing import
 import androidx.compose.animation.slideOutHorizontally
@@ -153,6 +155,15 @@ fun DynamicScreen(
                 firstVisibleItemIndex = listState.firstVisibleItemIndex,
                 firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset
             )
+        }
+    }
+    val shouldCollapseHorizontalUserList by remember(listState, displayMode) {
+        derivedStateOf {
+            displayMode == DynamicDisplayMode.HORIZONTAL &&
+                shouldCollapseDynamicHorizontalUserList(
+                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset
+                )
         }
     }
     val handleUserSelection = remember(selectedUserId, selectedTab) {
@@ -519,7 +530,8 @@ fun DynamicScreen(
                                  listState = listState,
                                     statusBarHeight = statusBarHeight,
                                     topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
-                                        isHorizontalMode = true
+                                        isHorizontalMode = true,
+                                        isHorizontalUserListCollapsed = shouldCollapseHorizontalUserList
                                     ).dp,
                                     bottomPadding = dynamicListBottomPadding,
                                  oldContentDividerIndex = oldContentDividerIndex,
@@ -568,18 +580,24 @@ fun DynamicScreen(
                                      )
                                      
                                      //  横向 UP 主列表
-                                     HorizontalUserList(
-                                         users = followedUsers,
-                                         selectedUserId = selectedUserId,
-                                         listState = horizontalUserListState,
-                                         showHiddenUsers = showHiddenUsers,
-                                         hiddenCount = hiddenUserIds.size,
-                                         onUserClick = handleUserSelection,
-                                         onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
-                                         onTogglePin = { viewModel.togglePinUser(it) },
-                                         onToggleHidden = { viewModel.toggleHiddenUser(it) },
-                                         modifier = Modifier.fillMaxWidth()
-                                     )
+                                     AnimatedVisibility(
+                                         visible = !shouldCollapseHorizontalUserList,
+                                         enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(180)),
+                                         exit = shrinkVertically(animationSpec = tween(180)) + fadeOut(animationSpec = tween(140))
+                                     ) {
+                                         HorizontalUserList(
+                                             users = followedUsers,
+                                             selectedUserId = selectedUserId,
+                                             listState = horizontalUserListState,
+                                             showHiddenUsers = showHiddenUsers,
+                                             hiddenCount = hiddenUserIds.size,
+                                             onUserClick = handleUserSelection,
+                                             onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
+                                             onTogglePin = { viewModel.togglePinUser(it) },
+                                             onToggleHidden = { viewModel.toggleHiddenUser(it) },
+                                             modifier = Modifier.fillMaxWidth()
+                                         )
+                                     }
                                  }
                              }
                         }

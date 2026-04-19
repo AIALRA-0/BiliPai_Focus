@@ -11,13 +11,54 @@ class DynamicScreenStatePolicyTest {
 
     @Test
     fun `horizontal dynamic header should use tighter list top padding`() {
-        assertEquals(168, resolveDynamicListTopPaddingExtraDp(isHorizontalMode = true))
-        assertEquals(100, resolveDynamicListTopPaddingExtraDp(isHorizontalMode = false))
+        assertEquals(
+            168,
+            resolveDynamicListTopPaddingExtraDp(
+                isHorizontalMode = true,
+                isHorizontalUserListCollapsed = false
+            )
+        )
+        assertEquals(
+            100,
+            resolveDynamicListTopPaddingExtraDp(
+                isHorizontalMode = true,
+                isHorizontalUserListCollapsed = true
+            )
+        )
+        assertEquals(
+            100,
+            resolveDynamicListTopPaddingExtraDp(
+                isHorizontalMode = false,
+                isHorizontalUserListCollapsed = false
+            )
+        )
     }
 
     @Test
     fun `horizontal user list should use compact vertical padding`() {
         assertEquals(4, resolveHorizontalUserListVerticalPaddingDp())
+    }
+
+    @Test
+    fun `horizontal user list collapses once feed leaves top`() {
+        assertFalse(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 12
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
     }
 
     @Test

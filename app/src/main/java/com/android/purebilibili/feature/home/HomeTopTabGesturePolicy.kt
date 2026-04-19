@@ -24,6 +24,15 @@ internal fun resolveHomeTopTabGestureAction(
 
 internal fun resolveHomeTopCollapsedHandleHeight(): Dp = 12.dp
 
+internal fun resolveHomeTopTabsAutoCollapsed(
+    currentHeaderOffsetPx: Float,
+    isHeaderCollapseEnabled: Boolean,
+    collapseThresholdPx: Float = 0.5f
+): Boolean {
+    if (!isHeaderCollapseEnabled) return false
+    return currentHeaderOffsetPx <= -collapseThresholdPx
+}
+
 internal fun resolveHomeTopTabPresentationHeight(
     expandedHeight: Dp,
     isCollapsed: Boolean,

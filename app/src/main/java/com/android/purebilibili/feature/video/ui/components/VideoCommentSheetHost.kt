@@ -113,6 +113,12 @@ internal fun shouldApplyVideoCommentThreadStatusBarPadding(
     return !mainSheetVisible && topReservedPx <= 0
 }
 
+internal fun shouldDismissVideoCommentSheetHostOnBackdropTap(
+    mainSheetVisible: Boolean
+): Boolean {
+    return mainSheetVisible
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun VideoCommentSheetHost(
@@ -157,6 +163,9 @@ fun VideoCommentSheetHost(
         topReservedPx = topReservedPx
     )
     val scrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
+    val dismissOnBackdropTap = shouldDismissVideoCommentSheetHostOnBackdropTap(
+        mainSheetVisible = mainSheetVisible
+    )
     val applyThreadStatusBarPadding = shouldApplyVideoCommentThreadStatusBarPadding(
         mainSheetVisible = mainSheetVisible,
         topReservedPx = topReservedPx
@@ -281,7 +290,11 @@ fun VideoCommentSheetHost(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss
+                    onClick = {
+                        if (dismissOnBackdropTap) {
+                            onDismiss()
+                        }
+                    }
                 )
         ) {
             AnimatedVisibility(

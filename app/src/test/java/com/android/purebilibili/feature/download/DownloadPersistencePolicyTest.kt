@@ -8,30 +8,32 @@ import kotlin.test.assertTrue
 class DownloadPersistencePolicyTest {
 
     @Test
-    fun normalizeRestoredDownloadTask_convertsDownloadingStateToPaused() {
+    fun normalizeRestoredDownloadTask_requeuesInterruptedActiveStates() {
         assertEquals(
-            DownloadStatus.PAUSED,
+            DownloadStatus.QUEUED,
             normalizeRestoredDownloadTask(baseTask.copy(status = DownloadStatus.QUEUED)).status
         )
         assertEquals(
-            DownloadStatus.PAUSED,
+            DownloadStatus.QUEUED,
             normalizeRestoredDownloadTask(baseTask.copy(status = DownloadStatus.PENDING)).status
         )
         assertEquals(
-            DownloadStatus.PAUSED,
+            DownloadStatus.QUEUED,
             normalizeRestoredDownloadTask(baseTask.copy(status = DownloadStatus.DOWNLOADING)).status
         )
         assertEquals(
-            DownloadStatus.PAUSED,
+            DownloadStatus.QUEUED,
             normalizeRestoredDownloadTask(baseTask.copy(status = DownloadStatus.MERGING)).status
         )
     }
 
     @Test
-    fun normalizeRestoredDownloadTask_keepsStableStateUntouched() {
+    fun normalizeRestoredDownloadTask_keepsStableAndUserPausedStatesUntouched() {
         val completedTask = baseTask.copy(status = DownloadStatus.COMPLETED)
+        val pausedTask = baseTask.copy(status = DownloadStatus.PAUSED)
 
         assertEquals(completedTask, normalizeRestoredDownloadTask(completedTask))
+        assertEquals(pausedTask, normalizeRestoredDownloadTask(pausedTask))
     }
 
     @Test

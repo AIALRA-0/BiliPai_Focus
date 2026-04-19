@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.screen
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
@@ -78,6 +79,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.ui.layout.ContentScale
 import androidx.core.view.WindowCompat
+import com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE
+import com.android.purebilibili.resolveMainActivityVideoRoute
 import com.android.purebilibili.data.model.response.BgmInfo
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.Player
@@ -1886,49 +1889,24 @@ fun VideoDetailScreen(
     // 辅助函数：切换全屏状态
     val toggleFullscreen = {
         val activity = context.findActivity()
-        if (activity != null) {
-            if (!isOrientationDrivenFullscreen) {
-                // 🖥️ 平板：仅切换 UI 状态，不改变屏幕方向
-                // [修复] 如果退出全屏且是手机（sw < 600），强制转回竖屏
-                val wasFullscreen = userRequestedFullscreen
-                userRequestedFullscreen = !userRequestedFullscreen
-                
-                if (wasFullscreen && !userRequestedFullscreen) {
-                    // check if it is a phone
-                    if (configuration.smallestScreenWidthDp < 600 &&
-                        fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL
-                    ) {
-                        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    }
-                }
-            } else {
-                // 📱 手机：通过旋转屏幕触发全屏
-                if (isLandscape) {
-                    userRequestedFullscreen = false
-                    manualPortraitHoldActive = true
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                } else {
-                    val targetOrientation = resolvePhoneFullscreenEnterOrientation(
-                        fullscreenMode = fullscreenMode,
-                        isVerticalVideo = isVerticalVideo
-                    ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    if (shouldEnterPortraitFullscreenOnFullscreenToggle(
-                            targetOrientation = targetOrientation,
-                            portraitExperienceEnabled = portraitExperienceEnabled
-                        )
-                    ) {
-                        // 比例模式命中竖屏目标时，进入竖屏全屏覆盖层，避免点击后“无变化”。
-                        userRequestedFullscreen = false
-                        manualPortraitHoldActive = false
-                        enterPortraitFullscreen()
-                    } else {
-                        userRequestedFullscreen = true
-                        manualPortraitHoldActive = false
-                        activity.requestedOrientation = targetOrientation
-                    }
-                }
-            }
-        }
+        val currentSuccess = viewModel.uiState.value as? PlayerUiState.Success
+        val currentCid = currentSuccess?.info?.cid ?: cid
+        toggleVideoDetailFullscreen(
+            context = context,
+            activity = activity,
+            currentBvid = currentBvid,
+            currentCid = currentCid,
+            isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+            isLandscape = isLandscape,
+            isFullscreenMode = isFullscreenMode,
+            smallestScreenWidthDp = configuration.smallestScreenWidthDp,
+            fullscreenMode = fullscreenMode,
+            isVerticalVideo = isVerticalVideo,
+            portraitExperienceEnabled = portraitExperienceEnabled,
+            onEnterPortraitFullscreen = { enterPortraitFullscreen() },
+            onUserRequestedFullscreenChange = { requested -> userRequestedFullscreen = requested },
+            onManualPortraitHoldActiveChange = { active -> manualPortraitHoldActive = active }
+        )
     }
 
     //  拦截系统返回键：如果是全屏模式，则先退出全屏
@@ -4130,6 +4108,103 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+private fun restoreMainWindowForFullscreenPlayback(
+    context: Context,
+    bvid: String,
+    cid: Long
+) {
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        ?: return
+    launchIntent.putExtra(
+        EXTRA_PENDING_NAVIGATION_ROUTE,
+        resolveMainActivityVideoRoute(
+            bvid = bvid,
+            cid = cid,
+            startFullscreen = true
+        )
+    )
+    launchIntent.addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP
+    )
+    context.startActivity(launchIntent)
+}
+
+private fun toggleVideoDetailFullscreen(
+    context: Context,
+    activity: Activity?,
+    currentBvid: String,
+    currentCid: Long,
+    isOrientationDrivenFullscreen: Boolean,
+    isLandscape: Boolean,
+    isFullscreenMode: Boolean,
+    smallestScreenWidthDp: Int,
+    fullscreenMode: com.android.purebilibili.core.store.FullscreenMode,
+    isVerticalVideo: Boolean,
+    portraitExperienceEnabled: Boolean,
+    onEnterPortraitFullscreen: () -> Unit,
+    onUserRequestedFullscreenChange: (Boolean) -> Unit,
+    onManualPortraitHoldActiveChange: (Boolean) -> Unit
+) {
+    if (activity == null) return
+
+    val shouldRestoreMainWindow = shouldRestoreMainWindowBeforeEnteringFullscreen(
+        isInMultiWindowMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInMultiWindowMode,
+        isInPictureInPictureMode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            activity.isInPictureInPictureMode,
+        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+        isFullscreenMode = isFullscreenMode
+    )
+    if (shouldRestoreMainWindow) {
+        restoreMainWindowForFullscreenPlayback(
+            context = context,
+            bvid = currentBvid,
+            cid = currentCid
+        )
+        return
+    }
+
+    if (!isOrientationDrivenFullscreen) {
+        val nextRequestedFullscreen = !isFullscreenMode
+        onUserRequestedFullscreenChange(nextRequestedFullscreen)
+        if (!nextRequestedFullscreen &&
+            smallestScreenWidthDp < 600 &&
+            fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL
+        ) {
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        return
+    }
+
+    if (isLandscape) {
+        onUserRequestedFullscreenChange(false)
+        onManualPortraitHoldActiveChange(true)
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        return
+    }
+
+    val targetOrientation = resolvePhoneFullscreenEnterOrientation(
+        fullscreenMode = fullscreenMode,
+        isVerticalVideo = isVerticalVideo
+    ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+
+    if (shouldEnterPortraitFullscreenOnFullscreenToggle(
+            targetOrientation = targetOrientation,
+            portraitExperienceEnabled = portraitExperienceEnabled
+        )
+    ) {
+        onUserRequestedFullscreenChange(false)
+        onManualPortraitHoldActiveChange(false)
+        onEnterPortraitFullscreen()
+        return
+    }
+
+    onUserRequestedFullscreenChange(true)
+    onManualPortraitHoldActiveChange(false)
+    activity.requestedOrientation = targetOrientation
+}
+
 internal fun resolveNextPlayerHeightOffset(
     currentOffsetPx: Float,
     deltaPx: Float,
@@ -4333,6 +4408,18 @@ internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
     portraitExperienceEnabled: Boolean
 ): Boolean {
     return portraitExperienceEnabled && targetOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+}
+
+internal fun shouldRestoreMainWindowBeforeEnteringFullscreen(
+    isInMultiWindowMode: Boolean,
+    isInPictureInPictureMode: Boolean,
+    isOrientationDrivenFullscreen: Boolean,
+    isFullscreenMode: Boolean
+): Boolean {
+    if (!isOrientationDrivenFullscreen) return false
+    if (isFullscreenMode) return false
+    if (isInPictureInPictureMode) return false
+    return isInMultiWindowMode
 }
 
 internal fun resolvePortraitRotateTargetOrientation(

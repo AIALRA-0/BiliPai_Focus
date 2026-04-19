@@ -5,7 +5,7 @@ internal fun normalizeRestoredDownloadTask(task: DownloadTask): DownloadTask {
         DownloadStatus.QUEUED,
         DownloadStatus.PENDING,
         DownloadStatus.DOWNLOADING,
-        DownloadStatus.MERGING -> task.copy(status = DownloadStatus.PAUSED)
+        DownloadStatus.MERGING -> task.copy(status = DownloadStatus.QUEUED)
         else -> task
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -844,7 +845,8 @@ fun IOSSearchBar(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "搜索",
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    heightOverride: Dp? = null
 ) {
     val uiPreset = LocalUiPreset.current
     val androidNativeVariant = LocalAndroidNativeVariant.current
@@ -863,6 +865,7 @@ fun IOSSearchBar(
         fallbackColor = containerColor,
         androidNativeVariant = androidNativeVariant
     )
+    val resolvedHeight = heightOverride ?: visualSpec.searchBarHeightDp.dp
 
     if (shouldUseNativeMiuixSearchBar(uiPreset, androidNativeVariant)) {
         MiuixAdaptiveSearchBar(
@@ -871,7 +874,7 @@ fun IOSSearchBar(
             modifier = modifier,
             placeholder = placeholder,
             containerColor = resolvedContainerColor,
-            height = visualSpec.searchBarHeightDp.dp
+            height = resolvedHeight
         )
         return
     }
@@ -881,7 +884,7 @@ fun IOSSearchBar(
         onValueChange = onQueryChange,
         modifier = modifier
             .fillMaxWidth()
-            .height(visualSpec.searchBarHeightDp.dp)
+            .height(resolvedHeight)
             .clip(RoundedCornerShape(searchBarCornerRadius))
             .background(resolvedContainerColor),
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
