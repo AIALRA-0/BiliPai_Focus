@@ -1411,9 +1411,102 @@ fun AppNavigation(
                     onLiveClick = { roomId, title, uname ->
                         navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
                     },
+                    onSearchClick = { navController.navigate(ScreenRoutes.LiveSearch.route) },
+                    onAreaListClick = { navController.navigate(ScreenRoutes.LiveArea.route) },
+                    onFollowingClick = { navController.navigate(ScreenRoutes.LiveFollowing.route) },
+                    onAreaDetailClick = { parentAreaId, areaId, title ->
+                        navController.navigate(
+                            ScreenRoutes.LiveAreaDetail.createRoute(
+                                parentAreaId = parentAreaId,
+                                areaId = areaId,
+                                title = title
+                            )
+                        )
+                    },
                     globalHazeState = mainHazeState // [新增] 传入全局 HazeState (LiveListScreen 需支持)
                 )
             }
+        }
+
+        composable(
+            route = ScreenRoutes.LiveSearch.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.live.LiveSearchScreen(
+                onBack = { navController.popBackStack() },
+                onLiveClick = { roomId, title, uname ->
+                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                },
+                onUserClick = { mid ->
+                    navController.navigate(ScreenRoutes.Space.createRoute(mid))
+                }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.LiveArea.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.live.LiveAreaScreen(
+                onBack = { navController.popBackStack() },
+                onAreaClick = { parentAreaId, areaId, title ->
+                    navController.navigate(
+                        ScreenRoutes.LiveAreaDetail.createRoute(
+                            parentAreaId = parentAreaId,
+                            areaId = areaId,
+                            title = title
+                        )
+                    )
+                }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.LiveAreaDetail.route,
+            arguments = listOf(
+                navArgument("parentAreaId") { type = NavType.IntType },
+                navArgument("areaId") { type = NavType.IntType },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" }
+            ),
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) { backStackEntry ->
+            val parentAreaId = backStackEntry.arguments?.getInt("parentAreaId") ?: 0
+            val areaId = backStackEntry.arguments?.getInt("areaId") ?: 0
+            val title = backStackEntry.arguments?.getString("title").orEmpty()
+            com.android.purebilibili.feature.live.LiveAreaDetailScreen(
+                parentAreaId = parentAreaId,
+                areaId = areaId,
+                title = Uri.decode(title),
+                onBack = { navController.popBackStack() },
+                onAreaClick = { nextParentAreaId, nextAreaId, nextTitle ->
+                    navController.navigate(
+                        ScreenRoutes.LiveAreaDetail.createRoute(
+                            parentAreaId = nextParentAreaId,
+                            areaId = nextAreaId,
+                            title = nextTitle
+                        )
+                    )
+                },
+                onLiveClick = { roomId, roomTitle, uname ->
+                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, roomTitle, uname))
+                }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.LiveFollowing.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.live.LiveFollowingScreen(
+                onBack = { navController.popBackStack() },
+                onLiveClick = { roomId, title, uname ->
+                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                }
+            )
         }
         
         // --- 5.5  关注列表 ---

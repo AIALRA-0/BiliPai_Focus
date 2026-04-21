@@ -245,8 +245,9 @@ private fun ChatMessageItem(
     val replyColor = if (darkOverlay) Color(0xFF8FD5FF) else palette.accent
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val bubbleWidthFraction = if (isOverlay) 0.76f else 0.70f
         val bubbleModifier = Modifier
-            .widthIn(max = maxWidth * 0.92f)
+            .widthIn(max = maxWidth * bubbleWidthFraction)
             .clip(bubbleShape)
             .background(bubbleBackground)
             .border(
@@ -468,7 +469,7 @@ private fun SuperChatMessageItem(
     Surface(
         color = bg,
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.fillMaxWidth(if (isOverlay) 0.88f else 1f)
+        modifier = Modifier.fillMaxWidth(if (isOverlay) 0.72f else 0.82f)
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -503,7 +504,7 @@ private fun SuperChatMessageItem(
                     color = Color.White,
                     fontSize = 14.sp,
                     lineHeight = 19.sp,
-                    maxLines = if (isOverlay) 3 else 6,
+                    maxLines = if (isOverlay) 2 else 4,
                     overflow = TextOverflow.Ellipsis
                 )
             }

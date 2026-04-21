@@ -1,12 +1,7 @@
 package com.android.purebilibili.feature.live
 
 import android.app.Application
-import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -222,6 +217,14 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         loadAreaLive(parentAreaId)
     }
 
+    fun selectHomeArea(areaId: Int) {
+        if (areaId == 0) {
+            _uiState.value = _uiState.value.copy(selectedAreaId = 0, areaItems = emptyList())
+            return
+        }
+        loadAreaLive(areaId)
+    }
+
     fun setTab(tabIndex: Int) {
         _uiState.value = _uiState.value.copy(currentTab = tabIndex)
         if (tabIndex == 2 && _uiState.value.followItems.isEmpty()) {
@@ -244,6 +247,10 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
 fun LiveListScreen(
     onBack: () -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
+    onSearchClick: () -> Unit,
+    onAreaListClick: () -> Unit,
+    onFollowingClick: () -> Unit,
+    onAreaDetailClick: (Int, Int, String) -> Unit,
     viewModel: LiveListViewModel = viewModel(),
     globalHazeState: HazeState? = null
 ) {
@@ -297,19 +304,9 @@ fun LiveListScreen(
                 livingCount = state.livingCount,
                 primaryFace = state.followItems.firstOrNull()?.face.orEmpty(),
                 onBack = onBack,
-                onSearchClick = {
-                    Toast.makeText(context, "直播搜索即将接入", Toast.LENGTH_SHORT).show()
-                },
-                onInboxClick = { viewModel.setTab(2) },
-                onAvatarClick = {
-                    Toast.makeText(context, "直播功能页暂未接入个人入口", Toast.LENGTH_SHORT).show()
-                }
-            )
-            LiveListPrimaryTabs(
-                selectedTabIndex = state.currentTab,
-                titles = listOf("推荐", "分区", "关注"),
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
-                onTabSelected = viewModel::setTab
+                onSearchClick = onSearchClick,
+                onInboxClick = onFollowingClick,
+                onAvatarClick = onAreaListClick
             )
             Box(
                 modifier = Modifier
@@ -328,44 +325,126 @@ fun LiveListScreen(
                         )
                     }
                     else -> {
-                        AnimatedContent(
-                            targetState = state.currentTab,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "live_tab"
-                        ) { tab ->
-                            when (tab) {
-                                0 -> RecommendTab(
-                                    items = state.recommendItems,
-                                    followItems = state.followItems,
-                                    areaList = state.areaList,
-                                    selectedAreaId = state.selectedAreaId,
-                                    livingCount = state.livingCount,
-                                    gridColumns = gridColumns,
-                                    bottomPadding = gridBottomPadding,
-                                    onLiveClick = onLiveClick,
-                                    onJumpToArea = viewModel::openArea
-                                )
-                                1 -> AreaTab(
-                                    areaList = state.areaList,
-                                    selectedAreaId = state.selectedAreaId,
-                                    areaItems = state.areaItems,
-                                    isLoading = state.isAreaLoading,
-                                    gridColumns = gridColumns,
-                                    bottomPadding = gridBottomPadding,
-                                    onAreaSelected = viewModel::loadAreaLive,
-                                    onLiveClick = onLiveClick
-                                )
-                                else -> FollowTab(
-                                    items = state.followItems,
-                                    livingCount = state.livingCount,
-                                    gridColumns = gridColumns,
-                                    bottomPadding = gridBottomPadding,
-                                    onLiveClick = onLiveClick
-                                )
-                            }
-                        }
+                        LiveHomeContent(
+                            recommendItems = state.recommendItems,
+                            followItems = state.followItems,
+                            areaList = state.areaList,
+                            selectedAreaId = state.selectedAreaId,
+                            areaItems = state.areaItems,
+                            livingCount = state.livingCount,
+                            isAreaLoading = state.isAreaLoading,
+                            gridColumns = gridColumns,
+                            bottomPadding = gridBottomPadding,
+                            onLiveClick = onLiveClick,
+                            onAreaSelected = viewModel::selectHomeArea,
+                            onAreaDetailClick = onAreaDetailClick,
+                            onAreaListClick = onAreaListClick,
+                            onFollowingClick = onFollowingClick
+                        )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveHomeContent(
+    recommendItems: List<LiveRoomItem>,
+    followItems: List<LiveRoomItem>,
+    areaList: List<LiveAreaParent>,
+    selectedAreaId: Int,
+    areaItems: List<LiveRoomItem>,
+    livingCount: Int,
+    isAreaLoading: Boolean,
+    gridColumns: Int,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    onLiveClick: (Long, String, String) -> Unit,
+    onAreaSelected: (Int) -> Unit,
+    onAreaDetailClick: (Int, Int, String) -> Unit,
+    onAreaListClick: () -> Unit,
+    onFollowingClick: () -> Unit
+) {
+    val selectedArea = areaList.firstOrNull { it.id == selectedAreaId }
+    val contentItems = if (selectedAreaId == 0) recommendItems else areaItems
+    val sectionTitle = selectedArea?.name ?: "推荐直播"
+    val sectionSubtitle = when {
+        selectedAreaId == 0 && recommendItems.isNotEmpty() -> "精选 ${recommendItems.size} 个直播间"
+        selectedAreaId == 0 -> "暂无推荐内容"
+        isAreaLoading -> "正在切换分区"
+        else -> "当前分区直播流"
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(gridColumns),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = bottomPadding),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            LiveHeroSummaryCard(
+                livingCount = livingCount,
+                onFollowingClick = onFollowingClick,
+                onAreaListClick = onAreaListClick
+            )
+        }
+        if (followItems.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LiveSectionHeader(
+                    title = "我的关注",
+                    subtitle = if (livingCount > 0) "$livingCount 人正在直播" else "关注开播动态",
+                    actionLabel = "查看全部",
+                    onActionClick = onFollowingClick
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LiveFollowAvatarRow(
+                    items = followItems.take(10),
+                    onLiveClick = onLiveClick
+                )
+            }
+        }
+        if (areaList.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LiveSectionHeader(
+                    title = "分区浏览",
+                    subtitle = if (selectedArea == null) "选择一个分区继续浏览" else "当前分区：${selectedArea.name}",
+                    actionLabel = "全部标签",
+                    onActionClick = onAreaListClick
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LiveAreaHomeChipRow(
+                    areaList = areaList,
+                    selectedAreaId = selectedAreaId,
+                    onAreaSelected = onAreaSelected
+                )
+            }
+            if (!selectedArea?.list.isNullOrEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    LiveAreaChildChipRow(
+                        items = selectedArea?.list.orEmpty(),
+                        parentAreaId = selectedAreaId,
+                        onAreaDetailClick = onAreaDetailClick
+                    )
+                }
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            LiveSectionHeader(
+                title = sectionTitle,
+                subtitle = sectionSubtitle
+            )
+        }
+        when {
+            isAreaLoading -> item(span = { GridItemSpan(maxLineSpan) }) { LiveListLoadingState() }
+            contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { EmptyState("暂无直播内容") }
+            else -> items(contentItems, key = { it.roomId }) { item ->
+                LiveRoomCard(
+                    item = item,
+                    onClick = { onLiveClick(item.roomId, item.title, item.uname) }
+                )
             }
         }
     }
@@ -501,219 +580,58 @@ private fun LiveListHeader(
 }
 
 @Composable
-private fun LiveListPrimaryTabs(
-    selectedTabIndex: Int,
-    titles: List<String>,
-    onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+private fun LiveHeroSummaryCard(
+    livingCount: Int,
+    onFollowingClick: () -> Unit,
+    onAreaListClick: () -> Unit
 ) {
     val palette = rememberLiveChromePalette()
-    val colors = resolveLiveListTabColors(
-        primary = palette.accent,
-        onPrimary = palette.primaryText,
-        surfaceVariant = palette.surfaceMuted,
-        onSurfaceVariant = palette.secondaryText
-    )
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(22.dp)
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = palette.surfaceElevated,
+        border = androidx.compose.foundation.BorderStroke(1.dp, palette.border)
     ) {
-        titles.forEachIndexed { index, title ->
-            val selected = index == selectedTabIndex
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onTabSelected(index) }
-                    .padding(bottom = 2.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "直播主场",
+                    color = palette.primaryText,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (livingCount > 0) "我的关注里有 $livingCount 位主播正在直播" else "探索正在开播的直播间",
+                    color = palette.secondaryText,
+                    fontSize = 13.sp
+                )
+            }
+            Surface(
+                onClick = onFollowingClick,
+                shape = RoundedCornerShape(18.dp),
+                color = palette.accentSoft
             ) {
                 Text(
-                    text = title,
-                    color = if (selected) colors.selectedContentColor else colors.unselectedContentColor,
-                    fontSize = 18.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                )
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .height(4.dp)
-                        .width(if (selected) 26.dp else 10.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(if (selected) colors.selectedContainerColor else Color.Transparent)
+                    text = if (livingCount > 0) "关注直播" else "我的关注",
+                    color = palette.accentStrong,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun RecommendTab(
-    items: List<LiveRoomItem>,
-    followItems: List<LiveRoomItem>,
-    areaList: List<LiveAreaParent>,
-    selectedAreaId: Int,
-    livingCount: Int,
-    gridColumns: Int,
-    bottomPadding: androidx.compose.ui.unit.Dp,
-    onLiveClick: (Long, String, String) -> Unit,
-    onJumpToArea: (Int) -> Unit
-) {
-    val palette = rememberLiveChromePalette()
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(gridColumns),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = bottomPadding),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        if (followItems.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveSectionHeader(
-                    title = "我的关注",
-                    subtitle = if (livingCount > 0) "$livingCount 人正在直播" else "关注开播动态"
+            Surface(
+                onClick = onAreaListClick,
+                shape = RoundedCornerShape(18.dp),
+                color = palette.surfaceMuted
+            ) {
+                Text(
+                    text = "全部标签",
+                    color = palette.primaryText,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                 )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveFollowAvatarRow(
-                    items = followItems.take(10),
-                    onLiveClick = onLiveClick
-                )
-            }
-        }
-        if (areaList.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveSectionHeader(
-                    title = "热门分区",
-                    subtitle = "快速切到分区页",
-                    actionLabel = "全部",
-                    onActionClick = {
-                        areaList.firstOrNull()?.let { onJumpToArea(it.id) }
-                    }
-                )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveAreaChipRow(
-                    areaList = areaList.take(10),
-                    selectedAreaId = selectedAreaId,
-                    onAreaSelected = onJumpToArea
-                )
-            }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LiveSectionHeader(
-                title = "推荐直播",
-                subtitle = if (items.isNotEmpty()) "精选 ${items.size} 个直播间" else "暂无推荐内容"
-            )
-        }
-        if (items.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyState("暂无推荐直播")
-            }
-        } else {
-            items(items, key = { it.roomId }) { item ->
-                LiveRoomCard(
-                    item = item,
-                    accentBrush = Brush.horizontalGradient(
-                        colors = listOf(palette.accentStrong, palette.accent)
-                    ),
-                    onClick = { onLiveClick(item.roomId, item.title, item.uname) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AreaTab(
-    areaList: List<LiveAreaParent>,
-    selectedAreaId: Int,
-    areaItems: List<LiveRoomItem>,
-    isLoading: Boolean,
-    gridColumns: Int,
-    bottomPadding: androidx.compose.ui.unit.Dp,
-    onAreaSelected: (Int) -> Unit,
-    onLiveClick: (Long, String, String) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(gridColumns),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = bottomPadding),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LiveSectionHeader(
-                title = "分区筛选",
-                subtitle = if (selectedAreaId == 0) "选择一个分区" else "切换不同直播分区"
-            )
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LiveAreaChipRow(
-                areaList = areaList,
-                selectedAreaId = selectedAreaId,
-                onAreaSelected = onAreaSelected
-            )
-        }
-        when {
-            isLoading -> {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    LiveListLoadingState()
-                }
-            }
-            areaItems.isEmpty() -> {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyState("该分区暂无直播")
-                }
-            }
-            else -> {
-                items(areaItems, key = { it.roomId }) { item ->
-                    LiveRoomCard(
-                        item = item,
-                        onClick = { onLiveClick(item.roomId, item.title, item.uname) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FollowTab(
-    items: List<LiveRoomItem>,
-    livingCount: Int,
-    gridColumns: Int,
-    bottomPadding: androidx.compose.ui.unit.Dp,
-    onLiveClick: (Long, String, String) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(gridColumns),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = bottomPadding),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LiveSectionHeader(
-                title = "开播提醒",
-                subtitle = if (livingCount > 0) "$livingCount 位主播在线" else "关注的主播开播后会出现在这里"
-            )
-        }
-        if (items.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveFollowAvatarRow(
-                    items = items.take(12),
-                    onLiveClick = onLiveClick
-                )
-            }
-            items(items, key = { it.roomId }) { item ->
-                LiveRoomCard(
-                    item = item,
-                    onClick = { onLiveClick(item.roomId, item.title, item.uname) }
-                )
-            }
-        } else {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyState("暂无关注的直播")
             }
         }
     }
@@ -839,13 +757,33 @@ private fun LiveFollowAvatarRow(
 }
 
 @Composable
-private fun LiveAreaChipRow(
+private fun LiveAreaHomeChipRow(
     areaList: List<LiveAreaParent>,
     selectedAreaId: Int,
     onAreaSelected: (Int) -> Unit
 ) {
     val palette = rememberLiveChromePalette()
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            val selected = selectedAreaId == 0
+            Surface(
+                onClick = { onAreaSelected(0) },
+                color = if (selected) palette.accentSoft else palette.surfaceMuted,
+                shape = RoundedCornerShape(999.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = if (selected) palette.accent.copy(alpha = 0.45f) else palette.border
+                )
+            ) {
+                Text(
+                    text = "推荐",
+                    color = if (selected) palette.accentStrong else palette.primaryText,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                )
+            }
+        }
         items(areaList, key = { it.id }) { area ->
             val selected = area.id == selectedAreaId
             Surface(
@@ -877,6 +815,38 @@ private fun LiveAreaChipRow(
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveAreaChildChipRow(
+    items: List<com.android.purebilibili.data.model.response.LiveAreaChild>,
+    parentAreaId: Int,
+    onAreaDetailClick: (Int, Int, String) -> Unit
+) {
+    val palette = rememberLiveChromePalette()
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(items, key = { it.id }) { child ->
+            Surface(
+                onClick = {
+                    onAreaDetailClick(
+                        parentAreaId,
+                        child.id.toIntOrNull() ?: 0,
+                        child.name
+                    )
+                },
+                color = palette.surfaceMuted,
+                shape = RoundedCornerShape(999.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, palette.border)
+            ) {
+                Text(
+                    text = child.name,
+                    color = palette.primaryText,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                )
             }
         }
     }

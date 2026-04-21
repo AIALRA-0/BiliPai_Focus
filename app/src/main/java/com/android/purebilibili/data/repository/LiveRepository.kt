@@ -39,6 +39,16 @@ data class LiveSuperChatSeed(
     val backgroundColor: Int = 0
 )
 
+enum class LiveContributionRankType(
+    val title: String,
+    val switchValue: String
+) {
+    ONLINE("在线榜", "contribution_rank"),
+    DAILY("日榜", "today_rank"),
+    WEEKLY("周榜", "current_week_rank"),
+    MONTHLY("月榜", "current_month_rank")
+}
+
 /**
  * 直播相关数据仓库
  * 从 VideoRepository 拆分出来，专注于直播功能
@@ -71,6 +81,42 @@ object LiveRepository {
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("LiveRepo", " getLiveRooms failed", e)
             e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLiveAreaIndex(): Result<List<LiveAreaParent>> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getLiveAreaList()
+            if (resp.code == 0) {
+                Result.success(resp.data ?: emptyList())
+            } else {
+                Result.failure(Exception(resp.message.ifBlank { "获取直播标签失败" }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAreaRooms(
+        parentAreaId: Int,
+        areaId: Int = 0,
+        page: Int = 1,
+        sortType: String = "online"
+    ): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getLiveSecondAreaList(
+                parentAreaId = parentAreaId,
+                areaId = areaId,
+                page = page,
+                sortType = sortType
+            )
+            if (resp.code == 0) {
+                Result.success(resp.data?.list ?: emptyList())
+            } else {
+                Result.failure(Exception(resp.message.ifBlank { "获取分区直播失败" }))
+            }
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -135,6 +181,22 @@ object LiveRepository {
             )
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private suspend fun signWithWbi(params: Map<String, String>): Map<String, String> {
+        return try {
+            val navResp = api.getNavInfo()
+            val wbiImg = navResp.data?.wbi_img
+            val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
+            val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
+            if (imgKey.isNotEmpty() && subKey.isNotEmpty()) {
+                com.android.purebilibili.core.network.WbiUtils.sign(params, imgKey, subKey)
+            } else {
+                params
+            }
+        } catch (_: Exception) {
+            params
         }
     }
 
@@ -206,6 +268,37 @@ object LiveRepository {
                 }
             }
             Result.success(items)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLiveContributionRank(
+        roomId: Long,
+        ruid: Long,
+        type: LiveContributionRankType,
+        page: Int = 1
+    ): Result<List<LiveContributionRankItem>> = withContext(Dispatchers.IO) {
+        try {
+            val realRoomId = resolveRealRoomId(roomId)
+            val params = signWithWbi(
+                mapOf(
+                    "ruid" to ruid.toString(),
+                    "room_id" to realRoomId.toString(),
+                    "page" to page.toString(),
+                    "page_size" to "100",
+                    "type" to type.name.lowercase(),
+                    "switch" to type.switchValue,
+                    "platform" to "web",
+                    "web_location" to "444.8"
+                )
+            )
+            val resp = api.getLiveContributionRank(params)
+            if (resp.code == 0) {
+                Result.success(resp.data?.item ?: emptyList())
+            } else {
+                Result.failure(Exception(resp.message.ifBlank { "获取高能榜失败" }))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

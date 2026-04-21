@@ -386,6 +386,11 @@ interface BilibiliApi {
         @Query("room_id") roomId: Long
     ): ResponseBody
 
+    @GET("https://api.live.bilibili.com/xlive/general-interface/v1/rank/queryContributionRank")
+    suspend fun getLiveContributionRank(
+        @QueryMap params: Map<String, String>
+    ): LiveContributionRankResponse
+
 
     // ==================== 视频播放模块 ====================
     @GET("x/web-interface/view")
