@@ -122,6 +122,9 @@ internal fun mapSendDanmakuErrorMessage(code: Int, fallbackMessage: String): Str
     }
 }
 
+internal const val DANMAKU_VIP_GRADUAL_COLOR_CODE = 60001
+internal const val DANMAKU_ENCOURAGE_CHECKBOX_TYPE = 1
+
 internal fun resolveDanmakuSegmentCount(
     durationMs: Long,
     metadataSegmentCount: Int?
@@ -420,7 +423,9 @@ object DanmakuRepository {
         progress: Long,
         color: Int = 16777215,
         fontSize: Int = 25,
-        mode: Int = 1
+        mode: Int = 1,
+        colorful: Boolean = false,
+        encourage: Boolean = false
     ): Result<com.android.purebilibili.data.model.response.SendDanmakuData> = withContext(Dispatchers.IO) {
         try {
             // 验证登录状态
@@ -439,7 +444,7 @@ object DanmakuRepository {
             
             com.android.purebilibili.core.util.Logger.d(
                 "DanmakuRepo",
-                "📤 sendDanmaku: aid=$aid, cid=$cid, msg=$message, progress=${progress}ms, color=$color, mode=$mode"
+                "📤 sendDanmaku: aid=$aid, cid=$cid, msg=$message, progress=${progress}ms, color=$color, mode=$mode, colorful=$colorful, encourage=$encourage"
             )
             
             val response = api.sendDanmaku(
@@ -447,9 +452,11 @@ object DanmakuRepository {
                 aid = aid,
                 msg = message,
                 progress = progress,
-                color = color,
+                color = if (colorful) 16777215 else color,
                 fontsize = fontSize,
                 mode = mode,
+                colorful = DANMAKU_VIP_GRADUAL_COLOR_CODE.takeIf { colorful },
+                checkboxType = DANMAKU_ENCOURAGE_CHECKBOX_TYPE.takeIf { encourage },
                 csrf = csrf
             )
             

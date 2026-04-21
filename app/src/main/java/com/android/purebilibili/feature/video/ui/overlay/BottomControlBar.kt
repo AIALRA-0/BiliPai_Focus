@@ -1,6 +1,7 @@
 // File: feature/video/ui/overlay/BottomControlBar.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,7 +14,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Brush
@@ -30,28 +33,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
-import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
-import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
-import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.shouldHoldPlaybackSeekSettledProgress
-import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.draw.clip
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayOptions
 import com.android.purebilibili.feature.video.playback.policy.resolveDisplayedPlaybackTransitionPosition
+import kotlin.math.roundToInt
 
 /**
  * Bottom Control Bar Component
@@ -65,8 +67,6 @@ data class PlayerProgress(
     val duration: Long = 0L,
     val buffered: Long = 0L
 )
-
-private const val VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE = 0.01f
 
 internal fun resolveSeekableDurationMs(
     playbackDurationMs: Long,
@@ -107,6 +107,20 @@ internal fun resolveDisplayedPlayerProgress(
     return progress.copy(current = resolvedCurrent)
 }
 
+internal fun resolveDisplayedPlayerProgressWithOverride(
+    progress: PlayerProgress,
+    overridePositionMs: Long?
+): PlayerProgress {
+    val resolvedCurrent = overridePositionMs ?: return progress
+    val safeDuration = progress.duration.coerceAtLeast(0L)
+    val clampedCurrent = if (safeDuration > 0L) {
+        resolvedCurrent.coerceIn(0L, safeDuration)
+    } else {
+        resolvedCurrent.coerceAtLeast(0L)
+    }
+    return progress.copy(current = clampedCurrent)
+}
+
 internal fun resolveSeekPreviewTargetPositionMs(
     displayPositionMs: Long,
     dragTargetPositionMs: Long,
@@ -119,33 +133,22 @@ internal fun resolveSeekPreviewTargetPositionMs(
     }
 }
 
-internal fun shouldHoldVideoProgressBarSettledProgress(
-    progress: Float,
-    pendingSettledProgress: Float?,
-    tolerance: Float = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
-): Boolean {
-    return shouldHoldPlaybackSeekSettledProgress(
-        playbackProgress = progress,
-        pendingSettledProgress = pendingSettledProgress,
-        tolerance = tolerance
-    )
+internal fun resolveProgressFraction(
+    positionMs: Long,
+    durationMs: Long
+): Float {
+    if (durationMs <= 0L) return 0f
+    return (positionMs.coerceIn(0L, durationMs).toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
 }
 
-internal fun resolveVideoProgressBarDisplayProgress(
-    progress: Float,
-    dragProgress: Float,
-    isDragging: Boolean,
-    pendingSettledProgress: Float?
-): Float {
-    return resolvePlaybackSeekDisplayProgress(
-        playbackProgress = progress,
-        state = PlaybackSeekUiState(
-            isScrubbing = isDragging,
-            dragProgress = dragProgress,
-            pendingSettledProgress = pendingSettledProgress
-        ),
-        tolerance = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
-    )
+internal fun resolveSeekPositionFromTouch(
+    touchX: Float,
+    containerWidthPx: Float,
+    durationMs: Long
+): Long {
+    if (durationMs <= 0L || containerWidthPx <= 0f) return 0L
+    val fraction = (touchX / containerWidthPx).coerceIn(0f, 1f)
+    return (durationMs.toFloat() * fraction).roundToInt().toLong().coerceIn(0L, durationMs)
 }
 
 data class LandscapeDanmakuPlaceholderPolicy(
@@ -293,7 +296,6 @@ fun BottomControlBar(
     onSeekDragStart: (Long) -> Unit = {},
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
-    onScrubbingChanged: (Boolean) -> Unit = {},
     seekPositionMs: Long = progress.current,
     isSeekScrubbing: Boolean = false,
     onSpeedClick: () -> Unit = {},
@@ -505,7 +507,6 @@ fun BottomControlBar(
             onSeekDragStart = onSeekDragStart,
             onSeekDragUpdate = onSeekDragUpdate,
             onSeekDragCancel = onSeekDragCancel,
-            onScrubbingChanged = onScrubbingChanged,
             videoshotData = videoshotData,
             viewPoints = viewPoints,
             sponsorMarkers = sponsorMarkers,
@@ -995,249 +996,241 @@ fun VideoProgressBar(
     onSeekDragStart: (Long) -> Unit = {},
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
-    onScrubbingChanged: (Boolean) -> Unit = {},
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
     sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     currentChapter: String? = null,
     onChapterClick: () -> Unit = {}
 ) {
-    val displayProgress = if (duration > 0L) {
-        displayPositionMs.toFloat() / duration.toFloat()
-    } else {
-        0f
-    }
-    val bufferedProgress = if (duration > 0) bufferedPosition.toFloat() / duration else 0f
-    var dragOffsetX by remember { mutableFloatStateOf(0f) }
-    var containerWidth by remember { mutableFloatStateOf(0f) }
+    var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
     LaunchedEffect(displayPositionMs, isSeekScrubbing) {
         if (!isSeekScrubbing) {
             dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
         }
     }
+
     val primaryColor = MaterialTheme.colorScheme.primary
+    val activePositionMs = resolveSeekPreviewTargetPositionMs(
+        displayPositionMs = displayPositionMs,
+        dragTargetPositionMs = dragTargetPositionMs,
+        isSeekScrubbing = isSeekScrubbing
+    )
+    val displayProgress = resolveProgressFraction(
+        positionMs = activePositionMs,
+        durationMs = duration
+    )
+    val bufferedProgress = resolveProgressFraction(
+        positionMs = bufferedPosition,
+        durationMs = duration
+    )
     val resolvedSponsorMarkers = remember(duration, sponsorMarkers) {
         resolveSponsorProgressBarMarkers(
             durationMs = duration,
             markers = sponsorMarkers
         )
     }
-    val targetPositionMs = resolveSeekPreviewTargetPositionMs(
-        displayPositionMs = (displayProgress * duration).toLong(),
-        dragTargetPositionMs = dragTargetPositionMs,
-        isSeekScrubbing = isSeekScrubbing
-    )
-    val baseHeight = if (currentChapter != null) {
+    val baseHeightDp = if (currentChapter != null) {
         layoutPolicy.baseHeightWithChapterDp.dp
     } else {
         layoutPolicy.baseHeightWithoutChapterDp.dp
     }
-    val containerHeight = if (isSeekScrubbing && videoshotData != null) {
-        layoutPolicy.draggingContainerHeightDp.dp
-    } else {
-        baseHeight
+    val previewAreaHeightDp = remember(layoutPolicy.draggingContainerHeightDp, baseHeightDp, isSeekScrubbing) {
+        if (!isSeekScrubbing) {
+            0.dp
+        } else {
+            (layoutPolicy.draggingContainerHeightDp.dp - baseHeightDp).coerceAtLeast(52.dp)
+        }
     }
+    val thumbSizeDp = if (isSeekScrubbing) {
+        layoutPolicy.thumbDraggingSizeDp.dp
+    } else {
+        layoutPolicy.thumbIdleSizeDp.dp
+    }
+    val thumbSizePx = with(LocalDensity.current) { thumbSizeDp.toPx() }
+    val trackHeightPx = with(LocalDensity.current) { layoutPolicy.trackHeightDp.dp.toPx() }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(containerHeight)
-            .pointerInput(Unit) {
-                containerWidth = size.width.toFloat()
-                detectTapGestures { offset ->
-                    val targetPositionMs = if (duration > 0L) {
-                        ((offset.x / size.width).coerceIn(0f, 1f) * duration).toLong()
-                    } else {
-                        0L
-                    }
-                    dragTargetPositionMs = targetPositionMs
-                    onSeekStart()
-                    onSeekDragStart(targetPositionMs)
-                    onSeekDragUpdate(targetPositionMs)
-                    onSeek(targetPositionMs)
-                }
-            }
-            .pointerInput(Unit) {
-                containerWidth = size.width.toFloat()
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        val targetPositionMs = if (duration > 0L) {
-                            ((offset.x / size.width).coerceIn(0f, 1f) * duration).toLong()
-                        } else {
-                            0L
-                        }
-                        dragTargetPositionMs = targetPositionMs
-                        dragOffsetX = offset.x
-                        onScrubbingChanged(true)
-                        onSeekStart()
-                        onSeekDragStart(targetPositionMs)
-                    },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        val targetPositionMs = if (duration > 0L) {
-                            ((change.position.x / size.width).coerceIn(0f, 1f) * duration).toLong()
-                        } else {
-                            0L
-                        }
-                        dragTargetPositionMs = targetPositionMs
-                        dragOffsetX = change.position.x
-                        onSeekDragUpdate(targetPositionMs)
-                    },
-                    onDragEnd = {
-                        onScrubbingChanged(false)
-                        onSeek(dragTargetPositionMs)
-                    },
-                    onDragCancel = {
-                        onScrubbingChanged(false)
-                        onSeekDragCancel()
-                    }
-                )
-            }
+            .height(baseHeightDp + previewAreaHeightDp)
     ) {
-         if (isSeekScrubbing) {
+        if (isSeekScrubbing) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(bottom = layoutPolicy.previewBottomPaddingDp.dp)
+                    .fillMaxWidth()
+                    .height(previewAreaHeightDp)
+                    .padding(bottom = layoutPolicy.previewBottomPaddingDp.dp),
+                contentAlignment = Alignment.BottomCenter
             ) {
                 if (videoshotData != null && videoshotData.isValid) {
-                    com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble(
+                    SeekPreviewBubble(
                         videoshotData = videoshotData,
-                        targetPositionMs = targetPositionMs,
+                        targetPositionMs = activePositionMs,
                         currentPositionMs = currentPosition,
                         durationMs = duration,
-                        offsetX = dragOffsetX,
-                        containerWidth = containerWidth
+                        offsetX = 0f,
+                        containerWidth = 0f,
+                        placement = SeekPreviewBubblePlacement.Centered
                     )
                 } else {
-                    com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple(
-                        targetPositionMs = targetPositionMs,
+                    SeekPreviewBubbleSimple(
+                        targetPositionMs = activePositionMs,
                         currentPositionMs = currentPosition,
-                        offsetX = dragOffsetX,
-                        containerWidth = containerWidth
+                        offsetX = 0f,
+                        containerWidth = 0f,
+                        placement = SeekPreviewBubblePlacement.Centered
                     )
                 }
             }
         }
-        
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-        ) {
-             if (currentChapter != null) {
-                Row(
-                    modifier = Modifier
-                        .clickable(onClick = onChapterClick)
-                        .padding(
-                            bottom = layoutPolicy.chapterBottomPaddingDp.dp,
-                            start = layoutPolicy.chapterStartPaddingDp.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        CupertinoIcons.Default.ListBullet,
-                        contentDescription = "Chapter",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(layoutPolicy.chapterIconSizeDp.dp)
-                    )
-                    Spacer(modifier = Modifier.width(layoutPolicy.chapterSpacingDp.dp))
-                    Text(
-                        text = currentChapter,
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = layoutPolicy.chapterFontSp.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+
+        if (currentChapter != null) {
+            Row(
+                modifier = Modifier
+                    .clickable(onClick = onChapterClick)
+                    .padding(
+                        bottom = layoutPolicy.chapterBottomPaddingDp.dp,
+                        start = layoutPolicy.chapterStartPaddingDp.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    CupertinoIcons.Default.ListBullet,
+                    contentDescription = "Chapter",
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(layoutPolicy.chapterIconSizeDp.dp)
+                )
+                Spacer(modifier = Modifier.width(layoutPolicy.chapterSpacingDp.dp))
+                Text(
+                    text = currentChapter,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = layoutPolicy.chapterFontSp.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            
-            Box(
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(layoutPolicy.touchContainerHeightDp.dp)
+                .onSizeChanged { containerWidthPx = it.width.toFloat() }
+                .pointerInput(duration) {
+                    detectTapGestures { offset ->
+                        val targetPositionMs = resolveSeekPositionFromTouch(
+                            touchX = offset.x,
+                            containerWidthPx = size.width.toFloat(),
+                            durationMs = duration
+                        )
+                        dragTargetPositionMs = targetPositionMs
+                        onSeekStart()
+                        onSeekDragStart(targetPositionMs)
+                        onSeekDragUpdate(targetPositionMs)
+                        onSeek(targetPositionMs)
+                    }
+                }
+                .pointerInput(duration) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val targetPositionMs = resolveSeekPositionFromTouch(
+                                touchX = offset.x,
+                                containerWidthPx = size.width.toFloat(),
+                                durationMs = duration
+                            )
+                            dragTargetPositionMs = targetPositionMs
+                            onSeekStart()
+                            onSeekDragStart(targetPositionMs)
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val targetPositionMs = resolveSeekPositionFromTouch(
+                                touchX = change.position.x,
+                                containerWidthPx = size.width.toFloat(),
+                                durationMs = duration
+                            )
+                            dragTargetPositionMs = targetPositionMs
+                            onSeekDragUpdate(targetPositionMs)
+                        },
+                        onDragEnd = {
+                            onSeek(dragTargetPositionMs)
+                        },
+                        onDragCancel = {
+                            onSeekDragCancel()
+                        }
+                    )
+                },
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(layoutPolicy.touchContainerHeightDp.dp),
-                contentAlignment = Alignment.CenterStart
+                    .height(layoutPolicy.touchContainerHeightDp.dp)
             ) {
-                val trackCornerRadius = (layoutPolicy.trackHeightDp / 2f).dp
-                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(layoutPolicy.trackHeightDp.dp)
-                        .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(trackCornerRadius))
-                        .drawWithContent {
-                            drawContent()
-                            if (duration > 0 && viewPoints.isNotEmpty()) {
-                                viewPoints.forEach { point ->
-                                    val position = point.fromMs.toFloat() / duration
-                                    if (position > 0.01f && position < 0.99f) {
-                                        val x = size.width * position
-                                        drawLine(
-                                            color = Color.White.copy(alpha = 0.8f),
-                                            start = Offset(x, 0f),
-                                            end = Offset(x, size.height),
-                                            strokeWidth = 2f
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(bufferedProgress.coerceIn(0f, 1f))
-                        .height(layoutPolicy.trackHeightDp.dp)
-                        .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(trackCornerRadius))
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
-                        .height(layoutPolicy.trackHeightDp.dp)
-                        .background(primaryColor, RoundedCornerShape(trackCornerRadius))
-                )
+                val trackTop = ((size.height - trackHeightPx) / 2f).coerceAtLeast(0f)
+                val centerY = trackTop + trackHeightPx / 2f
+                val cornerRadius = CornerRadius(trackHeightPx / 2f, trackHeightPx / 2f)
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(layoutPolicy.trackHeightDp.dp)
-                        .drawWithContent {
-                            drawContent()
-                            resolvedSponsorMarkers.forEach { marker ->
-                                val startX = size.width * marker.startFraction
-                                val endX = size.width * marker.endFraction
-                                val centerY = size.height / 2f
-                                drawLine(
-                                    color = marker.color,
-                                    start = Offset(startX, centerY),
-                                    end = Offset(endX, centerY),
-                                    strokeWidth = size.height,
-                                    cap = StrokeCap.Round
-                                )
-                            }
-                        }
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .size(
-                                if (isSeekScrubbing) layoutPolicy.thumbDraggingSizeDp.dp
-                                else layoutPolicy.thumbIdleSizeDp.dp
-                            )
-                            .offset(
-                                x = if (isSeekScrubbing) layoutPolicy.thumbDraggingOffsetDp.dp
-                                else layoutPolicy.thumbIdleOffsetDp.dp
-                            )
-                            .background(primaryColor, CircleShape)
+                fun drawTrack(width: Float, color: Color) {
+                    if (width <= 0f) return
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(0f, trackTop),
+                        size = Size(width.coerceAtLeast(trackHeightPx), trackHeightPx),
+                        cornerRadius = cornerRadius
                     )
                 }
+
+                drawTrack(size.width, Color.White.copy(alpha = 0.24f))
+                drawTrack(size.width * bufferedProgress, Color.White.copy(alpha = 0.42f))
+                drawTrack(size.width * displayProgress, primaryColor)
+
+                resolvedSponsorMarkers.forEach { marker ->
+                    val startX = size.width * marker.startFraction
+                    val endX = size.width * marker.endFraction
+                    drawLine(
+                        color = marker.color,
+                        start = Offset(startX, centerY),
+                        end = Offset(endX, centerY),
+                        strokeWidth = trackHeightPx,
+                        cap = StrokeCap.Round
+                    )
+                }
+
+                if (duration > 0L) {
+                    viewPoints.forEach { point ->
+                        val fraction = resolveProgressFraction(
+                            positionMs = point.fromMs,
+                            durationMs = duration
+                        )
+                        if (fraction in 0.01f..0.99f) {
+                            val x = size.width * fraction
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.85f),
+                                start = Offset(x, trackTop - 2f),
+                                end = Offset(x, trackTop + trackHeightPx + 2f),
+                                strokeWidth = if (isSeekScrubbing) 2f else 1.5f
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (duration > 0L && containerWidthPx > 0f) {
+                val thumbOffsetPx = remember(containerWidthPx, displayProgress, thumbSizePx) {
+                    (containerWidthPx * displayProgress - thumbSizePx / 2f)
+                        .coerceIn(0f, (containerWidthPx - thumbSizePx).coerceAtLeast(0f))
+                        .roundToInt()
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset { IntOffset(thumbOffsetPx, 0) }
+                        .size(thumbSizeDp)
+                        .background(primaryColor, CircleShape)
+                )
             }
         }
     }

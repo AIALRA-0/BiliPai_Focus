@@ -71,12 +71,21 @@ fun OfflineVideoPlayerScreen(
     val miniPlayerManager = remember(context) { MiniPlayerManager.getInstance(context) }
     
     val tasks by DownloadManager.tasks.collectAsState()
-    val task = tasks[taskId]
+    var currentTaskId by remember(taskId) { mutableStateOf(taskId) }
+    val task = tasks[currentTaskId]
     
     // === 状态管理 ===
-    var isFullscreen by remember { mutableStateOf(false) }
+    var isFullscreen by remember(currentTaskId, task?.isAudioOnly, task?.isVerticalVideo) {
+        mutableStateOf(
+            resolveOfflineVideoStartFullscreen(
+                isAudioOnly = task?.isAudioOnly ?: false,
+                isVerticalVideo = task?.isVerticalVideo ?: false
+            )
+        )
+    }
     var showControls by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
+    var initialOrientationResolved by remember(currentTaskId) { mutableStateOf(false) }
     
     // 手势状态
     var gestureMode by remember { mutableStateOf(GestureMode.None) }
@@ -134,15 +143,20 @@ fun OfflineVideoPlayerScreen(
         }
         return
     }
+
+    val episodeQueue = remember(tasks, task.id) {
+        resolveOfflineEpisodeQueue(
+            tasks = tasks.values,
+            currentTask = task
+        )
+    }
+    val currentEpisodeIndex = remember(episodeQueue, task.id) {
+        episodeQueue.indexOfFirst { it.id == task.id }
+    }
     
     // 创建播放器
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(Uri.fromFile(file))
-            setMediaItem(mediaItem)
-            prepare()
-            playWhenReady = true
-        }
+    val player = remember(file.absolutePath) {
+        ExoPlayer.Builder(context).build()
     }
     val offlineSessionRegistered = remember(file.exists(), task.filePath) {
         shouldRegisterOfflinePlaybackSession(
@@ -152,6 +166,16 @@ fun OfflineVideoPlayerScreen(
     }
     val offlineMiniPlayerPayload = remember(task) {
         resolveOfflineMiniPlayerPayload(task)
+    }
+
+    fun persistCurrentPlaybackPosition(activeTask: DownloadTask, activePlayer: ExoPlayer) {
+        DownloadManager.updatePlaybackPosition(
+            taskId = activeTask.id,
+            positionMs = resolveOfflinePersistedPlaybackPosition(
+                currentPositionMs = activePlayer.currentPosition,
+                durationMs = activePlayer.duration
+            )
+        )
     }
     
     // 进度状态
@@ -199,13 +223,10 @@ fun OfflineVideoPlayerScreen(
     // 获取 Activity
     fun getActivity(): Activity? = activity
     
-    // 全屏切换函数
-    fun toggleFullscreen() {
+    fun applyWindowMode(fullscreen: Boolean) {
         val act = getActivity() ?: return
-        isFullscreen = !isFullscreen
-        
-        if (isFullscreen) {
-            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        if (fullscreen) {
+            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
             windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
             windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -215,12 +236,56 @@ fun OfflineVideoPlayerScreen(
             windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
         }
     }
+
+    // 全屏切换函数
+    fun toggleFullscreen() {
+        isFullscreen = !isFullscreen
+    }
+
+    fun seekToPosition(targetPositionMs: Long) {
+        val duration = player.duration.coerceAtLeast(0L)
+        val safeTarget = if (duration > 0L) targetPositionMs.coerceIn(0L, duration) else targetPositionMs.coerceAtLeast(0L)
+        val shouldResume = shouldResumePlaybackAfterOfflineSeek(
+            playbackState = player.playbackState,
+            wasPlayingBeforeSeek = player.isPlaying,
+            targetPositionMs = safeTarget,
+            durationMs = duration
+        )
+        player.seekTo(safeTarget)
+        if (shouldResume) {
+            player.play()
+        }
+    }
+
+    fun switchEpisode(targetTaskId: String) {
+        if (targetTaskId == task.id) return
+        persistCurrentPlaybackPosition(task, player)
+        currentTaskId = targetTaskId
+        showControls = true
+    }
     
     // 返回键处理
     BackHandler(enabled = isFullscreen) { toggleFullscreen() }
     
-    DisposableEffect(Unit) {
+    LaunchedEffect(activity, isFullscreen) {
+        applyWindowMode(isFullscreen)
+    }
+
+    LaunchedEffect(player, file.absolutePath, task.id) {
+        player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
+        player.prepare()
+        val restoredPosition = task.lastPlaybackPositionMs.coerceAtLeast(0L)
+        if (restoredPosition > 0L) {
+            player.seekTo(restoredPosition)
+        } else {
+            player.seekTo(0L)
+        }
+        player.playWhenReady = true
+    }
+
+    DisposableEffect(player, task.id) {
         onDispose {
+            persistCurrentPlaybackPosition(task, player)
             if (miniPlayerManager.isPlayerManaged(player)) {
                 miniPlayerManager.dismiss()
             } else {
@@ -261,11 +326,39 @@ fun OfflineVideoPlayerScreen(
                     coverUrl = offlineMiniPlayerPayload.coverUrl
                 )
             }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (initialOrientationResolved || task.isAudioOnly) return
+                if (task.isVerticalVideo) {
+                    initialOrientationResolved = true
+                    return
+                }
+                val videoSize = player.videoSize
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    isFullscreen = videoSize.width >= videoSize.height
+                    initialOrientationResolved = true
+                }
+            }
         }
         player.addListener(listener)
 
         onDispose {
             player.removeListener(listener)
+        }
+    }
+
+    LaunchedEffect(player, task.id) {
+        var lastPersistedPosition = task.lastPlaybackPositionMs
+        while (isActive) {
+            val resolvedPosition = resolveOfflinePersistedPlaybackPosition(
+                currentPositionMs = player.currentPosition,
+                durationMs = player.duration
+            )
+            if (abs(resolvedPosition - lastPersistedPosition) >= 2_000L) {
+                DownloadManager.updatePlaybackPosition(task.id, resolvedPosition)
+                lastPersistedPosition = resolvedPosition
+            }
+            delay(2_000L)
         }
     }
     
@@ -315,8 +408,7 @@ fun OfflineVideoPlayerScreen(
                     },
                     onDragEnd = {
                         if (gestureMode == GestureMode.Seek) {
-                            player.seekTo(seekTargetTime)
-                            player.play()
+                            seekToPosition(seekTargetTime)
                         }
                         isGestureVisible = false
                         gestureMode = GestureMode.None
@@ -403,7 +495,7 @@ fun OfflineVideoPlayerScreen(
                             offset.x > screenWidth * 2 / 3 -> {
                                 val seekMs = seekForwardSeconds * 1000L
                                 val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
-                                player.seekTo(newPos)
+                                seekToPosition(newPos)
                                 seekFeedbackText = "+${seekForwardSeconds}s"
                                 seekFeedbackVisible = true
                             }
@@ -411,7 +503,7 @@ fun OfflineVideoPlayerScreen(
                             offset.x < screenWidth / 3 -> {
                                 val seekMs = seekBackwardSeconds * 1000L
                                 val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
-                                player.seekTo(newPos)
+                                seekToPosition(newPos)
                                 seekFeedbackText = "-${seekBackwardSeconds}s"
                                 seekFeedbackVisible = true
                             }
@@ -627,7 +719,7 @@ fun OfflineVideoPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 Text(
-                    text = task.title,
+                    text = task.episodeLabel?.takeIf { it.isNotBlank() } ?: task.title,
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
@@ -655,10 +747,72 @@ fun OfflineVideoPlayerScreen(
                     currentPosition = progressState.current,
                     duration = progressState.duration,
                     bufferedPosition = progressState.buffered,
-                    onSeek = { player.seekTo(it) }
+                    onSeek = { seekToPosition(it) }
                 )
                 
                 Spacer(modifier = Modifier.height(4.dp))
+
+                if (episodeQueue.size > 1 && currentEpisodeIndex >= 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                val previousTask = episodeQueue.getOrNull(currentEpisodeIndex - 1) ?: return@Surface
+                                switchEpisode(previousTask.id)
+                            },
+                            enabled = currentEpisodeIndex > 0,
+                            color = Color.White.copy(alpha = if (currentEpisodeIndex > 0) 0.15f else 0.08f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    CupertinoIcons.Default.BackwardEnd,
+                                    contentDescription = "上一集",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("上一集", color = Color.White, fontSize = 12.sp)
+                            }
+                        }
+                        Text(
+                            text = "${currentEpisodeIndex + 1}/${episodeQueue.size}",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 12.sp
+                        )
+                        Surface(
+                            onClick = {
+                                val nextTask = episodeQueue.getOrNull(currentEpisodeIndex + 1) ?: return@Surface
+                                switchEpisode(nextTask.id)
+                            },
+                            enabled = currentEpisodeIndex < episodeQueue.lastIndex,
+                            color = Color.White.copy(alpha = if (currentEpisodeIndex < episodeQueue.lastIndex) 0.15f else 0.08f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("下一集", color = Color.White, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    CupertinoIcons.Default.ForwardEnd,
+                                    contentDescription = "下一集",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 // 控制按钮行
                 Row(

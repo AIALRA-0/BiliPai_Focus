@@ -119,6 +119,7 @@ fun RelatedVideoItem(
     video: RelatedVideo, 
     isFollowed: Boolean = false,
     transitionEnabled: Boolean = false,  // 🔗 [新增] 共享元素过渡开关
+    showUpBadge: Boolean = true,
     onClick: () -> Unit
 ) {
     // 🔗 获取共享元素作用域 (用于过渡动画)
@@ -347,6 +348,7 @@ fun RelatedVideoItem(
                             nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                             badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                            showUpBadge = showUpBadge,
                             modifier = upNameBoxModifier
                         )
                     }

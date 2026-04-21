@@ -27,6 +27,15 @@ class BangumiFollowStatusPolicyTest {
     }
 
     @Test
+    fun `follow status label should expose pili plus states`() {
+        assertEquals("追番", resolveBangumiFollowStatusLabel(UserStatus(follow = 0, followStatus = 0)))
+        assertEquals("想看", resolveBangumiFollowStatusLabel(UserStatus(follow = 1, followStatus = 1)))
+        assertEquals("在看", resolveBangumiFollowStatusLabel(UserStatus(follow = 1, followStatus = 2)))
+        assertEquals("看过", resolveBangumiFollowStatusLabel(UserStatus(follow = 1, followStatus = 3)))
+        assertEquals("已追", resolveBangumiFollowStatusLabel(UserStatus(follow = 1, followStatus = 0)))
+    }
+
+    @Test
     fun `follow preload page count should cap by max pages`() {
         assertEquals(9, resolveFollowPreloadPageCount(total = 250, pageSize = 30, maxPages = 30))
         assertEquals(30, resolveFollowPreloadPageCount(total = 5000, pageSize = 30, maxPages = 30))

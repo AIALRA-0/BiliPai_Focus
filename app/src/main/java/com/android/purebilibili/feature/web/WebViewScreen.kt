@@ -12,10 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
 import kotlinx.coroutines.launch
 
 /**
@@ -43,19 +44,13 @@ fun WebViewScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        text = title ?: "浏览器",
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1
-                    ) 
-                },
+            AdaptiveTopAppBar(
+                title = title ?: "浏览器",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Outlined.ChevronBackward, contentDescription = "Back")
+                        Icon(rememberAppBackIcon(), contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

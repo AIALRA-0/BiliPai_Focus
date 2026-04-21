@@ -45,6 +45,8 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 fun LiveRoomCard(
     room: LiveRoom,
     index: Int,
+    isDataSaverActive: Boolean = false,
+    preferLowQualityCover: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: (Long) -> Unit
 ) {
@@ -60,8 +62,12 @@ fun LiveRoomCard(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     
-    val coverUrl = remember(room.roomid) {
-        FormatUtils.fixImageUrl(room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } })
+    val useLowQualityCover = isDataSaverActive && preferLowQualityCover
+    val coverUrl = remember(room.roomid, useLowQualityCover) {
+        FormatUtils.resolveVideoCoverUrl(
+            room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } },
+            useLowQuality = useLowQualityCover
+        )
     }
     val triggerCardClick = { onClick(room.roomid) }
 

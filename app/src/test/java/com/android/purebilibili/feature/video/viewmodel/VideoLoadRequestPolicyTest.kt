@@ -107,6 +107,32 @@ class VideoLoadRequestPolicyTest {
     }
 
     @Test
+    fun `source replacement keeps playback intent when player was still running`() {
+        assertTrue(
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = true,
+                isPlaying = false
+            )
+        )
+        assertTrue(
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = false,
+                isPlaying = true
+            )
+        )
+    }
+
+    @Test
+    fun `source replacement keeps paused intent when player was already paused`() {
+        assertFalse(
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = false,
+                isPlaying = false
+            )
+        )
+    }
+
+    @Test
     fun `quality switch failure message explains permission denial`() {
         val message = resolveQualitySwitchFailureMessage(
             requestedQualityLabel = "1080P60",

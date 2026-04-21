@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.data.repository.BlockedUpRepository
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -35,10 +37,10 @@ fun BlockedListScreen(
     val blockedUps by repository.getAllBlockedUps().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("黑名单管理", fontWeight = FontWeight.Bold) },
+            AdaptiveTopAppBar(
+                title = "黑名单管理",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = "返回")

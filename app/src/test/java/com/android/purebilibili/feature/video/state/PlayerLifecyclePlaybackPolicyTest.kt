@@ -19,12 +19,34 @@ class PlayerLifecyclePlaybackPolicyTest {
     }
 
     @Test
+    fun readyWithPlayWhenReadyIsTreatedAsActivePlayback() {
+        assertTrue(
+            isPlaybackActiveForLifecycle(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
     fun pausedReadyStateIsNotActivePlayback() {
         assertFalse(
             isPlaybackActiveForLifecycle(
                 isPlaying = false,
                 playWhenReady = false,
                 playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun endedWithPlayWhenReadyIsNotActivePlayback() {
+        assertFalse(
+            isPlaybackActiveForLifecycle(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_ENDED
             )
         )
     }
@@ -42,6 +64,18 @@ class PlayerLifecyclePlaybackPolicyTest {
     }
 
     @Test
+    fun resumeNotNeededWhenReadyPlaybackIntentStillExists() {
+        assertFalse(
+            shouldResumeAfterLifecyclePause(
+                wasPlaybackActive = true,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
     fun resumeNotNeededWhenStillBuffering() {
         assertFalse(
             shouldResumeAfterLifecyclePause(
@@ -49,6 +83,88 @@ class PlayerLifecyclePlaybackPolicyTest {
                 isPlaying = false,
                 playWhenReady = true,
                 playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun bufferingWithPlaybackIntentRemembersResumeIntent() {
+        assertTrue(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = false,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun sourceReplacementIdleKeepsResumeIntentWhenPlaybackWasActive() {
+        assertTrue(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = false,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
+    fun sourceReplacementIdleKeepsExistingResumeIntentEvenAfterPlayIntentDrops() {
+        assertTrue(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = true,
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+    }
+
+    @Test
+    fun pausedBufferingDoesNotCreateResumeIntent() {
+        assertFalse(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = false,
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun userPauseClearsPendingResumeIntent() {
+        assertTrue(
+            shouldClearResumeIntentForPlayWhenReadyChange(
+                playWhenReady = false,
+                reason = Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+            )
+        )
+    }
+
+    @Test
+    fun bufferingRecoveryAutoResumesOnlyWhenIntentWasLost() {
+        assertTrue(
+            shouldAutoResumeAfterBufferingRecovery(
+                hasPendingResumeIntent = true,
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun bufferingRecoveryStillAutoResumesWhenReadyStateIsSilent() {
+        assertTrue(
+            shouldAutoResumeAfterBufferingRecovery(
+                hasPendingResumeIntent = true,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY
             )
         )
     }

@@ -4,11 +4,20 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
+import com.android.purebilibili.data.model.response.SearchSuggestTag
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.LiveRoomSearchItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+data class SearchTrendingBundle(
+    val pinnedItems: List<HotItem> = emptyList(),
+    val items: List<HotItem> = emptyList()
+) {
+    val allItems: List<HotItem>
+        get() = pinnedItems + items
+}
 
 object SearchRepository {
     private val api = NetworkModule.searchApi
@@ -38,7 +47,9 @@ object SearchRepository {
                 "duration" to duration.value.toString(),
                 "tids" to tids.toString(),
                 "page" to page.toString(),
-                "pagesize" to "20"
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
             
             com.android.purebilibili.core.util.Logger.d(
@@ -71,12 +82,15 @@ object SearchRepository {
                 )
                 return@withContext searchVideoFallback(keyword = keyword, page = page)
             }
-            
+            val resolvedPage = resolveSearchLoadedPage(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page
+            )
             val pageInfo = SearchPageInfo(
-                currentPage = response.data?.page ?: page,
+                currentPage = resolvedPage,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: videoList.size,
-                hasMore = (response.data?.page ?: page) < (response.data?.numPages ?: 1)
+                hasMore = resolvedPage < (response.data?.numPages ?: 1)
             )
             
             com.android.purebilibili.core.util.Logger.d(
@@ -112,7 +126,9 @@ object SearchRepository {
                 "order_sort" to orderSort.value.toString(),
                 "user_type" to userType.value.toString(),
                 "page" to page.toString(),
-                "pagesize" to "20"
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
 
             val signedParams = signWithWbi(params)
@@ -126,11 +142,15 @@ object SearchRepository {
                 ?.map { it.cleanupFields() }
                 ?: emptyList()
 
+            val resolvedPage = resolveSearchLoadedPage(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page
+            )
             val pageInfo = SearchPageInfo(
-                currentPage = response.data?.page ?: page,
+                currentPage = resolvedPage,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: upList.size,
-                hasMore = (response.data?.page ?: page) < (response.data?.numPages ?: 1)
+                hasMore = resolvedPage < (response.data?.numPages ?: 1)
             )
             
             com.android.purebilibili.core.util.Logger.d(
@@ -172,12 +192,21 @@ object SearchRepository {
         }
     }
 
-    //  热搜
-    suspend fun getHotSearch(): Result<List<HotItem>> = withContext(Dispatchers.IO) {
+    //  热搜榜单（PiliPlus 同源）
+    suspend fun getTrendingKeywords(limit: Int = 30): Result<SearchTrendingBundle> = withContext(Dispatchers.IO) {
         try {
-            val response = api.getHotSearch()
-            val list = response.data?.trending?.list ?: emptyList()
-            Result.success(list)
+            val response = api.getTrendingList(limit)
+            if (response.code != 0) {
+                return@withContext Result.failure(createSearchError(response.code, response.message))
+            }
+            val pinnedItems = response.topList ?: response.data?.topList ?: emptyList()
+            val items = response.list ?: response.data?.list ?: emptyList()
+            Result.success(
+                SearchTrendingBundle(
+                    pinnedItems = pinnedItems,
+                    items = items
+                )
+            )
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
@@ -193,7 +222,10 @@ object SearchRepository {
             val params = mutableMapOf(
                 "keyword" to keyword,
                 "search_type" to "media_bangumi",
-                "page" to page.toString()
+                "page" to page.toString(),
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
             
             val signedParams = signWithWbi(params)
@@ -211,11 +243,15 @@ object SearchRepository {
                 )
             } ?: emptyList()
             
+            val resolvedPage = resolveSearchLoadedPage(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page
+            )
             val pageInfo = SearchPageInfo(
-                currentPage = response.data?.page ?: page,
+                currentPage = resolvedPage,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: bangumiList.size,
-                hasMore = (response.data?.page ?: page) < (response.data?.numPages ?: 1)
+                hasMore = resolvedPage < (response.data?.numPages ?: 1)
             )
             
             com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Bangumi search result: ${bangumiList.size} items, page ${pageInfo.currentPage}/${pageInfo.totalPages}")
@@ -236,7 +272,10 @@ object SearchRepository {
             val params = mutableMapOf(
                 "keyword" to keyword,
                 "search_type" to "media_ft",
-                "page" to page.toString()
+                "page" to page.toString(),
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
 
             val signedParams = signWithWbi(params)
@@ -252,11 +291,15 @@ object SearchRepository {
                 )
             } ?: emptyList()
 
+            val resolvedPage = resolveSearchLoadedPage(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page
+            )
             val pageInfo = SearchPageInfo(
-                currentPage = response.data?.page ?: page,
+                currentPage = resolvedPage,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: resultList.size,
-                hasMore = (response.data?.page ?: page) < (response.data?.numPages ?: 1)
+                hasMore = resolvedPage < (response.data?.numPages ?: 1)
             )
 
             com.android.purebilibili.core.util.Logger.d(
@@ -282,7 +325,10 @@ object SearchRepository {
                 "keyword" to keyword,
                 "search_type" to "live_room",
                 "order" to order.value,
-                "page" to page.toString()
+                "page" to page.toString(),
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
             
             val signedParams = signWithWbi(params)
@@ -294,11 +340,15 @@ object SearchRepository {
             
             val liveList = response.data?.result?.map { it.cleanupFields() } ?: emptyList()
             
+            val resolvedPage = resolveSearchLoadedPage(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page
+            )
             val pageInfo = SearchPageInfo(
-                currentPage = response.data?.page ?: page,
+                currentPage = resolvedPage,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: liveList.size,
-                hasMore = (response.data?.page ?: page) < (response.data?.numPages ?: 1)
+                hasMore = resolvedPage < (response.data?.numPages ?: 1)
             )
             
             com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Live search result: ${liveList.size} rooms, page ${pageInfo.currentPage}/${pageInfo.totalPages}")
@@ -319,7 +369,9 @@ object SearchRepository {
                 "keyword" to keyword,
                 "search_type" to "article",
                 "page" to page.toString(),
-                "pagesize" to "20"
+                "page_size" to "20",
+                "platform" to "pc",
+                "web_location" to "1430654"
             )
 
             val signedParams = signWithWbi(params)
@@ -332,11 +384,15 @@ object SearchRepository {
                 ?.map { it.cleanupFields() }
                 ?: emptyList()
 
+            val resolvedPage = resolveSearchLoadedPage(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page
+            )
             val pageInfo = SearchPageInfo(
-                currentPage = response.data?.page ?: page,
+                currentPage = resolvedPage,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: articleList.size,
-                hasMore = (response.data?.page ?: page) < (response.data?.numPages ?: 1)
+                hasMore = resolvedPage < (response.data?.numPages ?: 1)
             )
 
             Result.success(Pair(articleList, pageInfo))
@@ -347,7 +403,7 @@ object SearchRepository {
     }
     
     //  搜索建议/联想
-    suspend fun getSuggest(keyword: String): Result<List<String>> = withContext(Dispatchers.IO) {
+    suspend fun getSuggest(keyword: String): Result<List<SearchSuggestTag>> = withContext(Dispatchers.IO) {
         try {
             if (keyword.isBlank()) return@withContext Result.success(emptyList())
             
@@ -355,7 +411,11 @@ object SearchRepository {
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, "搜索建议加载失败"))
             }
-            val suggestions = response.result?.tag?.map { it.value } ?: emptyList()
+            val suggestions = response.result?.tag
+                ?.filter { tag ->
+                    tag.term.isNotBlank() || tag.value.isNotBlank() || tag.name.isNotBlank()
+                }
+                ?: emptyList()
             Result.success(suggestions)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -363,36 +423,59 @@ object SearchRepository {
         }
     }
 
-    //  获取搜索发现 (个性化 + 官方热搜兜底)
-    suspend fun getSearchDiscover(historyKeywords: List<String>): Result<Pair<String, List<String>>> = withContext(Dispatchers.IO) {
+    //  获取搜索发现（优先官方推荐流，失败时退回热搜/联想）
+    suspend fun getSearchRecommend(historyKeywords: List<String>): Result<List<HotItem>> = withContext(Dispatchers.IO) {
         try {
-            // 1. 个性化推荐：尝试使用最近的搜索词进行联想
+            val recommendResponse = api.getSearchRecommend()
+            if (recommendResponse.code == 0) {
+                val recommendList = recommendResponse.data?.list
+                    ?.filter { item -> item.keyword.isNotBlank() || item.show_name.isNotBlank() }
+                    ?: emptyList()
+                if (recommendList.isNotEmpty()) {
+                    return@withContext Result.success(recommendList)
+                }
+            }
+
             if (historyKeywords.isNotEmpty()) {
                 val lastKeyword = historyKeywords.firstOrNull()
                 if (!lastKeyword.isNullOrBlank()) {
                     val response = api.getSearchSuggest(lastKeyword)
-                    val suggestions = response.result?.tag?.map { it.value }?.filter { it != lastKeyword }?.take(10)
+                    val suggestions = response.result?.tag
+                        ?.mapNotNull { tag ->
+                            tag.term.ifBlank { tag.value.ifBlank { null } }
+                        }
+                        ?.filter { it != lastKeyword }
+                        ?.take(10)
                     
                     if (!suggestions.isNullOrEmpty()) {
-                        return@withContext Result.success("大家都在搜 \"$lastKeyword\" 相关" to suggestions)
+                        return@withContext Result.success(
+                            suggestions.map { keyword ->
+                                HotItem(
+                                    keyword = keyword,
+                                    show_name = keyword,
+                                    recommend_reason = "与最近搜索相关"
+                                )
+                            }
+                        )
                     }
                 }
             }
             
-            // 2. 官方推荐：使用热搜词乱序 (模拟官方推荐流)
-            val hotResponse = api.getHotSearch()
-            val hotList = hotResponse.data?.trending?.list?.map { it.show_name }?.shuffled()?.take(10) ?: emptyList()
-            
-            if (hotList.isNotEmpty()) {
-                return@withContext Result.success(" 热门推荐" to hotList)
+            val trending = getTrendingKeywords(limit = 12).getOrNull()?.allItems?.shuffled()?.take(10).orEmpty()
+            if (trending.isNotEmpty()) {
+                return@withContext Result.success(trending)
             }
             
-            // 3. 静态兜底
-            Result.success("搜索发现" to listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"))
+            Result.success(
+                listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰")
+                    .map { keyword -> HotItem(keyword = keyword, show_name = keyword) }
+            )
         } catch (e: Exception) {
             e.printStackTrace()
-            // 发生异常时的最后兜底
-            Result.success("搜索发现" to listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"))
+            Result.success(
+                listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰")
+                    .map { keyword -> HotItem(keyword = keyword, show_name = keyword) }
+            )
         }
     }
 
@@ -430,7 +513,10 @@ object SearchRepository {
                 val response = api.searchAll(
                     mapOf(
                         "keyword" to keyword,
-                        "page" to page.toString()
+                        "page" to page.toString(),
+                        "page_size" to "20",
+                        "platform" to "pc",
+                        "web_location" to "1430654"
                     )
                 )
 

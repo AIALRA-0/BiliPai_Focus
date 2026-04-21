@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.section
 
+import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,12 +34,88 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun bottomGestureExclusion_includesExpandedProgressPreviewContainer() {
+        assertEquals(
+            186,
+            resolveVideoPlayerBottomGestureExclusionHeightDp(
+                controlBarBottomPaddingDp = 14,
+                progressSpacingDp = 10,
+                progressContainerHeightDp = 120,
+                controlRowHeightDp = 30,
+                extraBufferDp = 12
+            )
+        )
+    }
+
+    @Test
+    fun dragStart_ignoresProgressPreviewZoneAboveBottomControls() {
+        assertTrue(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 830f,
+                containerHeightPx = 1_000f,
+                edgeSafeZonePx = 48f,
+                bottomGestureExclusionPx = 186f
+            )
+        )
+    }
+
+    @Test
     fun gestureSeekDuration_usesFallbackWhenPlayerDurationIsUnset() {
         assertEquals(
             120_000L,
             resolveGestureSeekableDurationMs(
                 playbackDurationMs = 0L,
                 fallbackDurationMs = 120_000L
+            )
+        )
+    }
+
+    @Test
+    fun keepScreenAwake_onlyWhilePlaybackIsActiveOrStarting() {
+        assertTrue(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertTrue(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+        assertTrue(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun keepScreenAwake_allowsSleepBeforeStartPausedAndEnded() {
+        assertFalse(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+        assertFalse(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_ENDED
             )
         )
     }
@@ -558,6 +635,53 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun playbackStateAutoFullscreen_triggersWhenReadyStartsPlayingInline() {
+        assertTrue(
+            shouldToggleAutoFullscreenForPlaybackEvent(
+                autoEnterFullscreenEnabled = true,
+                autoExitFullscreenEnabled = true,
+                allowPlaybackStateAutoFullscreen = true,
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                hasAutoEnteredFullscreen = false,
+                isFullscreen = false
+            )
+        )
+    }
+
+    @Test
+    fun playbackStateAutoFullscreen_triggersWhenPlayWhenReadyTurnsTrueAfterReady() {
+        assertTrue(
+            shouldToggleAutoFullscreenForPlaybackEvent(
+                autoEnterFullscreenEnabled = true,
+                autoExitFullscreenEnabled = true,
+                allowPlaybackStateAutoFullscreen = true,
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                hasAutoEnteredFullscreen = false,
+                isFullscreen = false,
+                previousPlayWhenReady = false
+            )
+        )
+    }
+
+    @Test
+    fun playbackStateAutoFullscreen_ignoresRepeatedPlayWhenReadyTrueEventsAfterEntering() {
+        assertFalse(
+            shouldToggleAutoFullscreenForPlaybackEvent(
+                autoEnterFullscreenEnabled = true,
+                autoExitFullscreenEnabled = true,
+                allowPlaybackStateAutoFullscreen = true,
+                playbackState = Player.STATE_READY,
+                playWhenReady = true,
+                hasAutoEnteredFullscreen = true,
+                isFullscreen = false,
+                previousPlayWhenReady = false
+            )
+        )
+    }
+
+    @Test
     fun autoplayChromeAutoHide_triggersOnceAfterFirstFrameWhilePlaying() {
         assertTrue(
             shouldAutoHidePlayerChromeOnPlaybackStart(
@@ -565,7 +689,22 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
+            )
+        )
+    }
+
+    @Test
+    fun autoplayChromeAutoHide_staysOffWhileSeekScrubbing() {
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = true,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = true
             )
         )
     }
@@ -578,7 +717,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -587,7 +727,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = true,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -596,7 +737,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = false,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -605,7 +747,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = false,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -614,7 +757,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = true
+                forceCoverDuringReturnAnimation = true,
+                isSeekScrubbing = false
             )
         )
     }
@@ -651,6 +795,56 @@ class VideoPlayerSectionPolicyTest {
                 alreadyLocked = false,
                 totalDragDistanceY = -120f,
                 thresholdPx = 80f
+            )
+        )
+    }
+
+    @Test
+    fun longPressExclusiveDrag_onlyConsumesBeforeSpeedIsLocked() {
+        assertTrue(
+            shouldConsumeExclusiveLongPressSpeedDrag(
+                isLongPressing = true,
+                longPressSpeedLocked = false
+            )
+        )
+        assertFalse(
+            shouldConsumeExclusiveLongPressSpeedDrag(
+                isLongPressing = true,
+                longPressSpeedLocked = true
+            )
+        )
+        assertFalse(
+            shouldConsumeExclusiveLongPressSpeedDrag(
+                isLongPressing = false,
+                longPressSpeedLocked = false
+            )
+        )
+    }
+
+    @Test
+    fun lockedLongPressSpeed_reappliesWhenPlaybackSpeedUnexpectedlyResets() {
+        assertTrue(
+            shouldReapplyLockedLongPressSpeed(
+                longPressSpeedLocked = true,
+                isLongPressing = false,
+                observedPlaybackSpeed = 1.0f,
+                lockedLongPressSpeed = 2.0f
+            )
+        )
+        assertFalse(
+            shouldReapplyLockedLongPressSpeed(
+                longPressSpeedLocked = true,
+                isLongPressing = true,
+                observedPlaybackSpeed = 1.0f,
+                lockedLongPressSpeed = 2.0f
+            )
+        )
+        assertFalse(
+            shouldReapplyLockedLongPressSpeed(
+                longPressSpeedLocked = false,
+                isLongPressing = false,
+                observedPlaybackSpeed = 1.0f,
+                lockedLongPressSpeed = 2.0f
             )
         )
     }

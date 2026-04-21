@@ -299,22 +299,39 @@ data class MessageFeedAtItem(
     val user: MessageFeedUser? = null,
     val item: MessageFeedAtContent? = null,
     @SerialName("at_time")
-    val atTime: Int = 0
+    @Serializable(with = FlexibleLongSerializer::class)
+    val atTime: Long = 0
 )
 
 @Serializable
 data class MessageFeedAtContent(
+    val type: String = "",
     val business: String = "",
     @SerialName("business_id")
-    val businessId: Int = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val businessId: Long = 0,
     val title: String = "",
     @Serializable(with = MessageFeedImageUrlSerializer::class)
     val image: String = "",
     val uri: String = "",
     @SerialName("native_uri")
     val nativeUri: String = "",
+    @SerialName("subject_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val subjectId: Long = 0,
+    @SerialName("root_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val rootId: Long = 0,
+    @SerialName("target_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val targetId: Long = 0,
+    @SerialName("source_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val sourceId: Long = 0,
     @SerialName("source_content")
-    val sourceContent: String = ""
+    val sourceContent: String = "",
+    @SerialName("hide_reply_button")
+    val hideReplyButton: Boolean = false
 )
 
 @Serializable

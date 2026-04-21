@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.DynamicItem
@@ -52,6 +54,7 @@ fun DynamicDetailScreen(
     dynamicId: String,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> }
 ) {
@@ -80,10 +83,10 @@ fun DynamicDetailScreen(
     val likedDynamics by interactionViewModel.likedDynamics.collectAsState()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(screenTitle) },
+            AdaptiveTopAppBar(
+                title = screenTitle,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = backLabel)
@@ -131,15 +134,17 @@ fun DynamicDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .responsiveContentWidth(),
+                        .responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth()),
                     contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
                     item {
                         DynamicCardV2(
                             item = state.item,
                             onVideoClick = onVideoClick,
+                            onBangumiClick = onBangumiClick,
                             onUserClick = onUserClick,
                             onLiveClick = onLiveClick,
+                            isDetail = true,
                             gifImageLoader = gifImageLoader,
                             onCommentClick = { interactionViewModel.openCommentSheet(state.item) },
                             onRepostClick = { showRepostDialog = it },

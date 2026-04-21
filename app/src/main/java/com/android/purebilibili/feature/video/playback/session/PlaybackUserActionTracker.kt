@@ -62,6 +62,10 @@ internal object PlaybackUserActionTracker {
         }
         synchronized(lock) {
             val state = pendingActions.getOrPut(player) { MutableStateFlow(null) }
+            if (hasPlayerAlreadyReachedUserIntent(player = player, type = type)) {
+                state.value = null
+                return
+            }
             state.value = PendingPlaybackUserAction(
                 type = type,
                 requestedAtMs = nowMs,
@@ -106,6 +110,36 @@ internal object PlaybackUserActionTracker {
         synchronized(lock) {
             pendingActions[player]?.value = null
             pendingActions.remove(player)
+        }
+    }
+}
+
+internal fun hasPlayerAlreadyReachedUserIntent(
+    player: Player,
+    type: PlaybackUserActionType
+): Boolean {
+    return hasPlaybackAlreadyReachedUserIntent(
+        playbackState = player.playbackState,
+        playWhenReady = player.playWhenReady,
+        isPlaying = player.isPlaying,
+        type = type
+    )
+}
+
+internal fun hasPlaybackAlreadyReachedUserIntent(
+    playbackState: Int,
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    type: PlaybackUserActionType
+): Boolean {
+    return when (type) {
+        PlaybackUserActionType.PLAY -> {
+            isPlaying ||
+                (playWhenReady && playbackState == Player.STATE_BUFFERING)
+        }
+
+        PlaybackUserActionType.PAUSE -> {
+            !playWhenReady && !isPlaying
         }
     }
 }

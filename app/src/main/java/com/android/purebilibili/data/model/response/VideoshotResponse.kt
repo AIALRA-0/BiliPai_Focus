@@ -31,6 +31,85 @@ data class VideoshotData(
     val image: List<String> = emptyList(), // 雪碧图 URL 列表
     val index: List<Long> = emptyList()    // 每个缩略图对应的时间点（毫秒）
 ) {
+    fun resolveTimelineMs(durationMs: Long? = null): List<Long>? {
+        if (index.isEmpty()) return null
+
+        val rawTimeline = index.map { it.coerceAtLeast(0L) }
+        val lastTimelinePoint = rawTimeline.lastOrNull() ?: return null
+        val shouldConvertSeconds = durationMs != null &&
+            durationMs > 0L &&
+            lastTimelinePoint > 0L &&
+            lastTimelinePoint < durationMs / 2L
+
+        return if (shouldConvertSeconds) {
+            rawTimeline.map { it * 1000L }
+        } else {
+            rawTimeline
+        }
+    }
+
+    fun resolvePreviewFrameIndex(
+        positionMs: Long,
+        durationMs: Long? = null
+    ): Int? {
+        if (image.isEmpty()) return null
+
+        val perImage = img_x_len * img_y_len
+        if (perImage <= 0) return null
+
+        val totalFrames = image.size * perImage
+        if (totalFrames <= 0) return null
+
+        val safePositionMs = positionMs.coerceAtLeast(0L)
+        val timelineMs = resolveTimelineMs(durationMs)
+        if (timelineMs != null) {
+            var low = 0
+            var high = timelineMs.size - 1
+            var resultIndex = 0
+
+            while (low <= high) {
+                val mid = (low + high) / 2
+                if (timelineMs[mid] <= safePositionMs) {
+                    resultIndex = mid
+                    low = mid + 1
+                } else {
+                    high = mid - 1
+                }
+            }
+
+            return resultIndex.coerceIn(0, totalFrames - 1)
+        }
+
+        val safeDurationMs = durationMs?.coerceAtLeast(0L) ?: 0L
+        if (safeDurationMs <= 0L) return null
+
+        val ratio = (safePositionMs.toFloat() / safeDurationMs.toFloat()).coerceIn(0f, 1f)
+        return (ratio * (totalFrames - 1)).roundToInt().coerceIn(0, totalFrames - 1)
+    }
+
+    fun resolvePreviewAnchorPositionMs(
+        positionMs: Long,
+        durationMs: Long
+    ): Long {
+        if (durationMs <= 0L) return positionMs.coerceAtLeast(0L)
+
+        val frameIndex = resolvePreviewFrameIndex(
+            positionMs = positionMs,
+            durationMs = durationMs
+        ) ?: return positionMs.coerceAtLeast(0L)
+
+        val timelineMs = resolveTimelineMs(durationMs)
+        if (timelineMs != null && frameIndex in timelineMs.indices) {
+            return timelineMs[frameIndex].coerceAtLeast(0L)
+        }
+
+        val perImage = img_x_len * img_y_len
+        val totalFrames = image.size * perImage
+        if (totalFrames <= 0) return positionMs.coerceAtLeast(0L)
+
+        return ((durationMs * frameIndex) / totalFrames).coerceAtLeast(0L)
+    }
+
     /**
      * 根据播放位置获取对应的预览图信息
      * 
@@ -42,52 +121,22 @@ data class VideoshotData(
         if (image.isEmpty()) return null
         val perImage = img_x_len * img_y_len
         if (perImage <= 0) return null
-        
-        // 将索引统一成毫秒，若返回值明显是秒（相比总时长小很多），自动换算
-        val timelineMs: List<Long>? = when {
-            index.isEmpty() -> null
-            durationMs != null && index.lastOrNull()?.let { last -> last > 0 && last < durationMs / 2 } == true ->
-                index.map { it * 1000 }  // API 可能返回秒级时间戳
-            else -> index
-        }
-        
-        // 如果缺少时间轴数据，按进度比例估算一个帧序号
-        val targetFrameIndex = when {
-            timelineMs != null -> {
-                var low = 0
-                var high = timelineMs.size - 1
-                var resultIndex = 0
-                
-                while (low <= high) {
-                    val mid = (low + high) / 2
-                    if (timelineMs[mid] <= positionMs) {
-                        resultIndex = mid
-                        low = mid + 1
-                    } else {
-                        high = mid - 1
-                    }
-                }
-                resultIndex
-            }
-            durationMs != null && durationMs > 0 -> {
-                val totalFrames = image.size * perImage
-                if (totalFrames <= 0) return null
-                val ratio = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-                (ratio * (totalFrames - 1)).roundToInt()
-            }
-            else -> return null
-        }
-        
+
+        val targetFrameIndex = resolvePreviewFrameIndex(
+            positionMs = positionMs,
+            durationMs = durationMs
+        ) ?: return null
+
         // 计算所在的雪碧图与偏移
         val imageIndex = targetFrameIndex / perImage
         if (imageIndex >= image.size) return null
-        
+
         val localIndex = targetFrameIndex % perImage
         val row = localIndex / img_x_len
         val col = localIndex % img_x_len
         val offsetX = col * img_x_size
         val offsetY = row * img_y_size
-        
+
         return Triple(image[imageIndex], offsetX, offsetY)
     }
     
@@ -95,5 +144,9 @@ data class VideoshotData(
      * 检查数据是否有效
      */
     val isValid: Boolean
-        get() = image.isNotEmpty() && index.isNotEmpty() && img_x_size > 0 && img_y_size > 0
+        get() = image.isNotEmpty() &&
+            img_x_len > 0 &&
+            img_y_len > 0 &&
+            img_x_size > 0 &&
+            img_y_size > 0
 }

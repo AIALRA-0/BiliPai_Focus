@@ -192,6 +192,47 @@ class VideoPlaybackUseCaseQualitySwitchTest {
     }
 
     @Test
+    fun `mergeQualityOptions keeps dash-only lower tiers when api only reports current max quality`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.mergeQualityOptions(
+            apiQualities = listOf(64),
+            dashVideoIds = listOf(64, 32, 16)
+        )
+
+        assertEquals(listOf(64, 32, 16), result.mergedQualityIds)
+        assertEquals(emptyList<Int>(), result.apiOnlyHighQualities)
+    }
+
+    @Test
+    fun `buildQualitySelectionState keeps lower dash tiers under api capped guest payload`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.buildQualitySelectionState(
+            apiQualities = listOf(64),
+            dashVideoIds = listOf(64, 32, 16)
+        )
+
+        assertEquals(listOf(64, 32, 16), result.qualityIds)
+        assertEquals(listOf(64, 32, 16), result.switchableQualityIds)
+        assertEquals(listOf("720P", "480P", "360P"), result.qualityLabels)
+    }
+
+    @Test
+    fun `buildQualitySelectionState keeps dash lower tiers alongside api-only login tier`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.buildQualitySelectionState(
+            apiQualities = listOf(80, 64),
+            dashVideoIds = listOf(64, 32, 16)
+        )
+
+        assertEquals(listOf(80, 64, 32, 16), result.qualityIds)
+        assertEquals(listOf(64, 32, 16), result.switchableQualityIds)
+        assertEquals(listOf("1080P", "720P", "480P", "360P"), result.qualityLabels)
+    }
+
+    @Test
     fun `resolveAutoHighestTargetQuality caps non vip users at 1080p`() {
         val useCase = VideoPlaybackUseCase()
 
@@ -234,6 +275,21 @@ class VideoPlaybackUseCaseQualitySwitchTest {
         )
 
         assertEquals(120, result)
+    }
+
+    @Test
+    fun `resolveAutoHighestTargetQuality caps vip auto highest at hdr before 8k`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.resolveAutoHighestTargetQuality(
+            acceptQualities = listOf(127, 125, 120, 116, 80),
+            isLoggedIn = true,
+            isVip = true,
+            isHdrSupported = true,
+            isDolbyVisionSupported = false
+        )
+
+        assertEquals(125, result)
     }
 
     @Test

@@ -1,15 +1,15 @@
 package com.android.purebilibili.feature.video.playback.session
 
+import androidx.media3.common.Player
 import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
-import kotlin.math.abs
+import com.android.purebilibili.feature.video.usecase.shouldResumePlaybackAfterUserSeek
 
-private const val DEFAULT_PLAYBACK_SEEK_SETTLED_TOLERANCE = 0.01f
 private const val DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS = 500L
+internal const val SEEK_PLAYBACK_RECOVERY_DELAY_MS = 450L
 
 internal data class PlaybackSeekSessionState(
     val playbackPositionMs: Long = 0L,
     val sliderPositionMs: Long = 0L,
-    val sliderTempPositionMs: Long = 0L,
     val isSliderMoving: Boolean = false,
     val pendingSeekPositionMs: Long? = null,
     val shouldResumePlayback: Boolean? = null
@@ -42,7 +42,6 @@ internal fun syncPlaybackSeekSession(
     }
     return syncedState.copy(
         sliderPositionMs = safePlaybackPositionMs,
-        sliderTempPositionMs = safePlaybackPositionMs,
         pendingSeekPositionMs = null,
         shouldResumePlayback = null
     )
@@ -56,10 +55,24 @@ internal fun startPlaybackSeekInteraction(
     val safePositionMs = positionMs.coerceAtLeast(0L)
     return state.copy(
         sliderPositionMs = safePositionMs,
-        sliderTempPositionMs = safePositionMs,
         isSliderMoving = true,
         pendingSeekPositionMs = null,
         shouldResumePlayback = shouldResumePlayback
+    )
+}
+
+internal fun startPlaybackSeekInteraction(
+    state: PlaybackSeekSessionState,
+    player: Player,
+    positionMs: Long = state.sliderPositionMs
+): PlaybackSeekSessionState {
+    return startPlaybackSeekInteraction(
+        state = state,
+        positionMs = positionMs,
+        shouldResumePlayback = shouldResumePlaybackAfterUserSeek(
+            playWhenReadyBeforeSeek = player.playWhenReady,
+            playbackStateBeforeSeek = player.playbackState
+        )
     )
 }
 
@@ -70,7 +83,6 @@ internal fun updatePlaybackSeekInteraction(
     val safePositionMs = positionMs.coerceAtLeast(0L)
     return state.copy(
         sliderPositionMs = safePositionMs,
-        sliderTempPositionMs = safePositionMs,
         isSliderMoving = true
     )
 }
@@ -82,7 +94,6 @@ internal fun finishPlaybackSeekInteraction(
     return PlaybackSeekSessionCommitResult(
         state = state.copy(
             sliderPositionMs = committedPositionMs,
-            sliderTempPositionMs = committedPositionMs,
             isSliderMoving = false,
             pendingSeekPositionMs = committedPositionMs
         ),
@@ -97,7 +108,6 @@ internal fun cancelPlaybackSeekInteraction(
     val restoredPositionMs = state.playbackPositionMs.coerceAtLeast(0L)
     return state.copy(
         sliderPositionMs = restoredPositionMs,
-        sliderTempPositionMs = restoredPositionMs,
         isSliderMoving = false,
         pendingSeekPositionMs = null,
         shouldResumePlayback = null
@@ -116,93 +126,35 @@ internal fun shouldUsePlaybackSeekSessionPosition(
         )
 }
 
-internal data class PlaybackSeekUiState(
-    val isScrubbing: Boolean = false,
-    val dragProgress: Float = 0f,
-    val pendingSettledProgress: Float? = null
-)
-
-internal data class PlaybackSeekFinishResult(
-    val state: PlaybackSeekUiState,
-    val committedProgress: Float
-)
-
-internal fun startPlaybackSeekSession(progress: Float): PlaybackSeekUiState {
-    return PlaybackSeekUiState(
-        isScrubbing = true,
-        dragProgress = progress.coerceIn(0f, 1f),
-        pendingSettledProgress = null
-    )
-}
-
-internal fun updatePlaybackSeekSession(
-    state: PlaybackSeekUiState,
-    progress: Float
-): PlaybackSeekUiState {
-    return state.copy(
-        dragProgress = progress.coerceIn(0f, 1f)
-    )
-}
-
-internal fun finishPlaybackSeekSession(
-    state: PlaybackSeekUiState
-): PlaybackSeekFinishResult {
-    val committedProgress = state.dragProgress.coerceIn(0f, 1f)
-    return PlaybackSeekFinishResult(
-        state = state.copy(
-            isScrubbing = false,
-            dragProgress = committedProgress,
-            pendingSettledProgress = committedProgress
-        ),
-        committedProgress = committedProgress
-    )
-}
-
-internal fun cancelPlaybackSeekSession(
-    state: PlaybackSeekUiState
-): PlaybackSeekUiState {
-    return state.copy(
-        isScrubbing = false,
-        pendingSettledProgress = null
-    )
-}
-
-internal fun shouldHoldPlaybackSeekSettledProgress(
-    playbackProgress: Float,
-    pendingSettledProgress: Float?,
-    tolerance: Float = DEFAULT_PLAYBACK_SEEK_SETTLED_TOLERANCE
+internal fun shouldAttemptPlaybackRecoveryAfterSeek(
+    state: PlaybackSeekSessionState,
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int
 ): Boolean {
-    val settledProgress = pendingSettledProgress ?: return false
-    return abs(playbackProgress - settledProgress) > tolerance
+    return state.pendingSeekPositionMs != null &&
+        state.shouldResumePlayback == true &&
+        playWhenReady &&
+        !isPlaying &&
+        (
+            playbackState == Player.STATE_BUFFERING ||
+                playbackState == Player.STATE_READY ||
+                playbackState == Player.STATE_IDLE
+        )
 }
 
-internal fun settlePlaybackSeekSession(
-    state: PlaybackSeekUiState,
-    playbackProgress: Float,
-    tolerance: Float = DEFAULT_PLAYBACK_SEEK_SETTLED_TOLERANCE
-): PlaybackSeekUiState {
-    if (state.isScrubbing) return state
-    if (shouldHoldPlaybackSeekSettledProgress(playbackProgress, state.pendingSettledProgress, tolerance)) {
-        return state
-    }
-    return state.copy(
-        dragProgress = playbackProgress.coerceIn(0f, 1f),
-        pendingSettledProgress = null
-    )
-}
-
-internal fun resolvePlaybackSeekDisplayProgress(
-    playbackProgress: Float,
-    state: PlaybackSeekUiState,
-    tolerance: Float = DEFAULT_PLAYBACK_SEEK_SETTLED_TOLERANCE
-): Float {
-    return when {
-        state.isScrubbing -> state.dragProgress
-        shouldHoldPlaybackSeekSettledProgress(
-            playbackProgress = playbackProgress,
-            pendingSettledProgress = state.pendingSettledProgress,
-            tolerance = tolerance
-        ) -> state.pendingSettledProgress ?: playbackProgress
-        else -> playbackProgress
-    }.coerceIn(0f, 1f)
+internal fun shouldShowPlaybackRecoveryUiAfterSeek(
+    state: PlaybackSeekSessionState,
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int
+): Boolean {
+    return state.pendingSeekPositionMs != null &&
+        state.shouldResumePlayback == true &&
+        playWhenReady &&
+        !isPlaying &&
+        (
+            playbackState == Player.STATE_BUFFERING ||
+                playbackState == Player.STATE_READY
+        )
 }

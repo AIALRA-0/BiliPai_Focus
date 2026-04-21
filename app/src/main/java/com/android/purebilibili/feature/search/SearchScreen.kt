@@ -1,22 +1,13 @@
 // 文件路径: feature/search/SearchScreen.kt
 package com.android.purebilibili.feature.search
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -27,7 +18,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -46,6 +39,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
@@ -96,12 +91,15 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 internal fun shouldShowSearchHotSection(
     hotItemCount: Int,
@@ -134,9 +132,18 @@ internal data class SearchChromeVisualSpec(
 )
 
 internal fun resolveSearchChromeVisualSpec(
-    uiPreset: UiPreset
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): SearchChromeVisualSpec {
-    return if (uiPreset == UiPreset.MD3) {
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        SearchChromeVisualSpec(
+            inputHeightDp = 46,
+            inputCornerRadiusDp = 23,
+            actionContainerCornerRadiusDp = 18,
+            useFilledSearchAction = true,
+            suggestionContainerCornerRadiusDp = 18
+        )
+    } else if (uiPreset == UiPreset.MD3) {
         SearchChromeVisualSpec(
             inputHeightDp = 48,
             inputCornerRadiusDp = 28,
@@ -201,6 +208,23 @@ internal fun shouldApplyInitialSearchKeyword(
     return normalizedKeyword != currentQuery || !showResults
 }
 
+internal fun shouldResetSearchResultScroll(
+    searchSessionId: Long,
+    showResults: Boolean,
+    lastResetSessionId: Long
+): Boolean {
+    return showResults && searchSessionId > 0L && searchSessionId != lastResetSessionId
+}
+
+internal fun resolveSearchSubmitKeyword(
+    query: String,
+    suggestedKeyword: String
+): String {
+    val normalizedQuery = query.trim()
+    if (normalizedQuery.isNotBlank()) return normalizedQuery
+    return suggestedKeyword.trim()
+}
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
@@ -209,6 +233,7 @@ fun SearchScreen(
     initialKeyword: String = "",
     onInitialKeywordConsumed: (String) -> Unit = {},
     onBack: () -> Unit,
+    onOpenTrending: () -> Unit,
     onVideoClick: (String, Long) -> Unit,
     onUpClick: (Long) -> Unit,  //  点击UP主跳转到空间
     onBangumiClick: (Long) -> Unit, //  点击番剧/影视跳转详情
@@ -217,11 +242,15 @@ fun SearchScreen(
     onAvatarClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
-    val searchChromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val searchChromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     val state by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
+    var startupSettled by remember { mutableStateOf(false) }
     val searchLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveSearchLayoutPolicy(
             widthDp = configuration.screenWidthDp
@@ -233,8 +262,30 @@ fun SearchScreen(
 
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
-    val resultGridState = rememberLazyGridState()
-    val resultListState = rememberLazyListState()
+    val resultStateKey = remember(state.searchSessionId, state.searchType) {
+        state.searchSessionId to state.searchType
+    }
+    val resultGridState = rememberSaveable(resultStateKey, saver = LazyGridState.Saver) {
+        LazyGridState()
+    }
+    val resultListState = rememberSaveable(resultStateKey, saver = LazyListState.Saver) {
+        LazyListState()
+    }
+    var lastResetSearchSessionId by rememberSaveable { mutableLongStateOf(0L) }
+
+    LaunchedEffect(resultStateKey, state.showResults) {
+        if (!shouldResetSearchResultScroll(
+                searchSessionId = state.searchSessionId,
+                showResults = state.showResults,
+                lastResetSessionId = lastResetSearchSessionId
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        resultListState.scrollToItem(0)
+        resultGridState.scrollToItem(0)
+        lastResetSearchSessionId = state.searchSessionId
+    }
 
     // ✨ Haze State
     val hazeState = rememberRecoverableHazeState()
@@ -254,7 +305,8 @@ fun SearchScreen(
         )
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
-    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = false)
+    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = true)
+    val discoverSectionEnabled by SettingsManager.getSearchDiscoverSectionEnabled(context).collectAsState(initial = true)
     val liquidGlassEnabled by SettingsManager.getLiquidGlassEnabled(context).collectAsState(initial = true)
     val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
     val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsState(initial = true)
@@ -283,9 +335,10 @@ fun SearchScreen(
             showHomeInfoGlassBadges = showHomeInfoGlassBadges
         )
     }
-    val genericResultCardAppearance = remember(liquidGlassEnabled) {
+    val genericResultCardAppearance = remember(liquidGlassEnabled, uiPreset) {
         resolveSearchResultCardAppearance(
-            liquidGlassEnabled = liquidGlassEnabled
+            liquidGlassEnabled = liquidGlassEnabled,
+            uiPreset = uiPreset
         )
     }
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)
@@ -305,28 +358,22 @@ fun SearchScreen(
             )
         }
     }
+    val effectiveSearchMotionBudget = remember(startupSettled, searchMotionBudget) {
+        resolveEffectiveSearchMotionBudget(
+            startupSettled = startupSettled,
+            baseBudget = searchMotionBudget
+        )
+    }
     val searchHazeEnabled = shouldEnableSearchHazeSource(
-        isSearching = state.isSearching
+        isSearching = state.isSearching,
+        startupSettled = startupSettled
     )
     val effectiveCardTransitionEnabled =
-        cardTransitionEnabled && searchMotionBudget == SearchMotionBudget.FULL
+        cardTransitionEnabled && effectiveSearchMotionBudget == SearchMotionBudget.FULL
     val forceLowBudgetSearchHeaderBlur = remember(state.isSearching, isSearchResultsScrolling) {
         shouldForceLowBudgetSearchHeaderBlur(
             isSearching = state.isSearching,
             isScrollingResults = isSearchResultsScrolling
-        )
-    }
-    val showHotSectionHeader by remember(state.hotList, hotSearchEnabled) {
-        derivedStateOf {
-            shouldShowSearchHotHeader(
-                hotItemCount = state.hotList.size,
-                hotSearchEnabled = hotSearchEnabled
-            )
-        }
-    }
-    val searchHomeMotionSpec = remember(searchMotionBudget) {
-        resolveSearchHomeContentMotionSpec(
-            reducedMotion = searchMotionBudget == SearchMotionBudget.REDUCED
         )
     }
     val emptyStateCopy = remember(state.emptyStateReason, state.searchType) {
@@ -345,6 +392,22 @@ fun SearchScreen(
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("SearchScreen")
     }
 
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(140)
+        startupSettled = true
+    }
+
+    LaunchedEffect(startupSettled, state.showResults, state.query) {
+        if (shouldBootstrapSearchLandingData(
+                startupSettled = startupSettled,
+                showResults = state.showResults,
+                query = state.query
+            )
+        ) {
+            viewModel.ensureLandingBootstrap()
+        }
+    }
+
     LaunchedEffect(initialKeyword) {
         val normalizedKeyword = initialKeyword.trim()
         if (normalizedKeyword.isNotBlank()) {
@@ -361,7 +424,7 @@ fun SearchScreen(
         extraBottomPadding = 16.dp
     )
 
-    Scaffold(
+    AdaptiveScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
         //  移除 bottomBar，搜索栏现在位于顶部 Box 中
@@ -871,176 +934,47 @@ fun SearchScreen(
                     }
                 }
             } else {
-                // 判断是否使用分栏布局 (平板横屏)
                 val useSplitLayout = shouldUseSearchSplitLayout(
                     widthDp = configuration.screenWidthDp
                 )
-
-                val enterEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-                val exitEasing = CubicBezierEasing(0.32f, 0f, 0.67f, 0f)
-                val enterOffsetPx = with(density) { searchHomeMotionSpec.enterOffsetDp.dp.roundToPx() }
-                val exitOffsetPx = with(density) { searchHomeMotionSpec.exitOffsetDp.dp.roundToPx() }
-
-                AnimatedContent(
-                targetState = showHotSectionHeader,
-                    transitionSpec = {
-                        val resolvedEnterOffset = if (searchHomeMotionSpec.enterFromTop) {
-                            -enterOffsetPx
-                        } else {
-                            enterOffsetPx
+                SearchLandingContent(
+                    historyListState = historyListState,
+                    useSplitLayout = useSplitLayout,
+                    layoutPolicy = searchLayoutPolicy,
+                    contentTopPadding = contentTopPadding,
+                    bottomPadding = resultBottomPadding,
+                    hotList = state.hotList,
+                    discoverTitle = state.discoverTitle,
+                    discoverList = state.discoverList,
+                    historyList = state.historyList,
+                    hotSearchEnabled = hotSearchEnabled,
+                    discoverSectionEnabled = discoverSectionEnabled,
+                    onToggleHotSearch = {
+                        scope.launch {
+                            SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
                         }
-                        val resolvedExitOffset = if (searchHomeMotionSpec.exitTowardTop) {
-                            -exitOffsetPx
-                        } else {
-                            exitOffsetPx
-                        }
-                        val targetEnter = fadeIn(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.fadeInDurationMillis,
-                                easing = enterEasing
-                            )
-                        ) + slideInVertically(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.sizeTransformDurationMillis,
-                                easing = enterEasing
-                            ),
-                            initialOffsetY = { resolvedEnterOffset }
-                        )
-                        val initialExit = fadeOut(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.fadeOutDurationMillis,
-                                easing = exitEasing
-                            )
-                        ) + slideOutVertically(
-                            animationSpec = tween(
-                                durationMillis = searchHomeMotionSpec.fadeOutDurationMillis,
-                                easing = exitEasing
-                            ),
-                            targetOffsetY = { resolvedExitOffset }
-                        )
-                        ContentTransform(
-                            targetContentEnter = targetEnter,
-                            initialContentExit = initialExit,
-                            sizeTransform = SizeTransform(
-                                clip = false,
-                                sizeAnimationSpec = { _, _ ->
-                                    tween(
-                                        durationMillis = searchHomeMotionSpec.sizeTransformDurationMillis,
-                                        easing = enterEasing
-                                    )
-                                }
-                            )
-                        )
                     },
-                    label = "searchHomeContent"
-                ) { targetShowHotSection ->
-                    if (useSplitLayout && targetShowHotSection) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
-                        ) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .weight(searchLayoutPolicy.leftPaneWeight)
-                                    .fillMaxHeight(),
-                                contentPadding = PaddingValues(
-                                    top = contentTopPadding + 16.dp,
-                                    bottom = resultBottomPadding,
-                                    start = searchLayoutPolicy.splitOuterPaddingDp.dp,
-                                    end = searchLayoutPolicy.splitInnerGapDp.dp
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(24.dp)
-                            ) {
-                                item {
-                                    SearchHistorySection(
-                                        historyList = state.historyList,
-                                        onItemClick = {
-                                            viewModel.search(it)
-                                            keyboardController?.hide()
-                                        },
-                                        onClear = { viewModel.clearHistory() },
-                                        onDelete = { viewModel.deleteHistory(it) }
-                                    )
-                                }
-                            }
-
-                            LazyColumn(
-                                modifier = Modifier
-                                    .weight(searchLayoutPolicy.rightPaneWeight)
-                                    .fillMaxHeight(),
-                                contentPadding = PaddingValues(
-                                    top = contentTopPadding + 16.dp,
-                                    bottom = resultBottomPadding,
-                                    start = searchLayoutPolicy.splitInnerGapDp.dp,
-                                    end = searchLayoutPolicy.splitOuterPaddingDp.dp
-                                )
-                            ) {
-                                item {
-                                    SearchHotSection(
-                                        hotList = state.hotList,
-                                        hotSearchEnabled = hotSearchEnabled,
-                                        hotColumns = searchLayoutPolicy.hotSearchColumns,
-                                        onToggleHotSearch = {
-                                            scope.launch {
-                                                SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
-                                            }
-                                        },
-                                        onItemClick = {
-                                            viewModel.search(it)
-                                            keyboardController?.hide()
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .responsiveContentWidth()
-                                .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier),
-                            state = historyListState,
-                            contentPadding = PaddingValues(
-                                top = contentTopPadding + 16.dp,
-                                bottom = resultBottomPadding,
-                                start = searchLayoutPolicy.resultHorizontalPaddingDp.dp,
-                                end = searchLayoutPolicy.resultHorizontalPaddingDp.dp
+                    onToggleDiscoverSection = {
+                        scope.launch {
+                            SettingsManager.setSearchDiscoverSectionEnabled(
+                                context,
+                                !discoverSectionEnabled
                             )
-                        ) {
-                            if (targetShowHotSection) {
-                                item {
-                                    SearchHotSection(
-                                        hotList = state.hotList,
-                                        hotSearchEnabled = hotSearchEnabled,
-                                        hotColumns = searchLayoutPolicy.hotSearchColumns,
-                                        onToggleHotSearch = {
-                                            scope.launch {
-                                                SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
-                                            }
-                                        },
-                                        onItemClick = {
-                                            viewModel.search(it)
-                                            keyboardController?.hide()
-                                        }
-                                    )
-                                }
-                            }
-
-                            item {
-                                SearchHistorySection(
-                                    historyList = state.historyList,
-                                    onItemClick = {
-                                        viewModel.search(it)
-                                        keyboardController?.hide()
-                                    },
-                                    onClear = { viewModel.clearHistory() },
-                                    onDelete = { viewModel.deleteHistory(it) }
-                                )
-                            }
                         }
-                    }
-                }
+                    },
+                    onRefreshHot = viewModel::refreshHotSearch,
+                    onOpenTrending = onOpenTrending,
+                    onRefreshDiscover = viewModel::refreshDiscover,
+                    onKeywordClick = {
+                        viewModel.search(it)
+                        keyboardController?.hide()
+                    },
+                    onClearHistory = viewModel::clearHistory,
+                    onDeleteHistory = viewModel::deleteHistory,
+                    modifier = Modifier.then(
+                        if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier
+                    )
+                )
             }
 
             // ---  顶部搜索栏 (常驻顶部) ---
@@ -1055,7 +989,12 @@ fun SearchScreen(
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
                 placeholder = state.defaultSearchHint.ifBlank { "搜索视频、UP主..." },
-                reducedMotionBudget = searchMotionBudget == SearchMotionBudget.REDUCED,
+                suggestedKeyword = state.defaultSearchHint,
+                autoFocusEnabled = shouldAutoFocusSearchField(
+                    startupSettled = startupSettled,
+                    query = state.query
+                ),
+                reducedMotionBudget = effectiveSearchMotionBudget == SearchMotionBudget.REDUCED,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .then(
@@ -1074,52 +1013,19 @@ fun SearchScreen(
             
             // ---  搜索建议下拉列表 ---
             if (state.suggestions.isNotEmpty() && state.query.isNotEmpty() && !state.showResults) {
-                Surface(
+                SearchSuggestionDropdown(
+                    suggestions = state.suggestions,
+                    onSuggestionClick = { suggestion ->
+                        viewModel.search(suggestion)
+                        keyboardController?.hide()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = contentTopPadding + 4.dp)
+                        .padding(top = contentTopPadding + 6.dp)
                         .padding(horizontal = searchLayoutPolicy.resultHorizontalPaddingDp.dp)
                         .align(Alignment.TopCenter)
-                        .responsiveContentWidth(),
-                    shape = RoundedCornerShape(searchChromeSpec.suggestionContainerCornerRadiusDp.dp),
-                    shadowElevation = 8.dp,
-                    color = if (uiPreset == UiPreset.MD3) {
-                        MaterialTheme.colorScheme.surfaceContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    }
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        state.suggestions.forEachIndexed { index, suggestion ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusable()
-                                    .clickable {
-                                        viewModel.search(suggestion)
-                                        keyboardController?.hide()
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    rememberAppSearchIcon(),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = suggestion,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 15.sp
-                                )
-                            }
-                        }
-                    }
-                }
+                        .responsiveContentWidth()
+                )
             }
         }
     }
@@ -1134,13 +1040,18 @@ fun SearchTopBar(
     onSearch: (String) -> Unit,
     onClearQuery: () -> Unit,
     placeholder: String = "搜索视频、UP主...",
+    suggestedKeyword: String = "",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
+    autoFocusEnabled: Boolean = true,
     reducedMotionBudget: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val layoutSpec = remember { resolveSearchTopBarLayoutSpec() }
-    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val chromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     val backIcon = rememberAppBackIcon()
     val searchIcon = rememberAppSearchIcon()
     val clearIcon = rememberAppClearIcon()
@@ -1148,9 +1059,9 @@ fun SearchTopBar(
     var isFocused by remember { mutableStateOf(false) }
     
     //  自动聚焦并弹出键盘
-    LaunchedEffect(Unit) {
-        if (query.isEmpty()) {
-            kotlinx.coroutines.delay(100)  // 等待页面加载完成
+    LaunchedEffect(autoFocusEnabled, query) {
+        if (autoFocusEnabled && query.isEmpty()) {
+            kotlinx.coroutines.delay(60)
             focusRequester.requestFocus()
         }
     }
@@ -1170,6 +1081,13 @@ fun SearchTopBar(
     )
     val backLabel = stringResource(R.string.common_back)
     val searchLabel = stringResource(R.string.common_search)
+    val resolvedSubmitKeyword = remember(query, suggestedKeyword) {
+        resolveSearchSubmitKeyword(
+            query = query,
+            suggestedKeyword = suggestedKeyword
+        )
+    }
+    val canSubmit = resolvedSubmitKeyword.isNotBlank()
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -1209,7 +1127,9 @@ fun SearchTopBar(
                             shape = RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp)
                         )
                         .background(
-                            if (uiPreset == UiPreset.MD3) {
+                            if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+                                MiuixTheme.colorScheme.surfaceContainerHigh
+                            } else if (uiPreset == UiPreset.MD3) {
                                 MaterialTheme.colorScheme.surfaceContainerHigh
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
@@ -1218,15 +1138,6 @@ fun SearchTopBar(
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        searchIcon,
-                        null,
-                        tint = searchIconColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
                     BasicTextField(
                         value = query,
                         onValueChange = onQueryChange,
@@ -1241,7 +1152,13 @@ fun SearchTopBar(
                         singleLine = true,
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                if (canSubmit) {
+                                    onSearch(resolvedSubmitKeyword)
+                                }
+                            }
+                        ),
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (query.isEmpty()) {
@@ -1259,45 +1176,49 @@ fun SearchTopBar(
                             }
                         }
                     )
-
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = onClearQuery,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                clearIcon,
-                                null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                if (chromeSpec.useFilledSearchAction) {
-                    FilledTonalButton(
-                        onClick = { onSearch(query) },
-                        enabled = query.isNotEmpty(),
-                        shape = RoundedCornerShape(chromeSpec.actionContainerCornerRadiusDp.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text(searchLabel, fontSize = 15.sp)
-                    }
-                } else {
-                    TextButton(
-                        onClick = { onSearch(query) },
-                        enabled = query.isNotEmpty()
-                    ) {
-                        Text(
-                            searchLabel,
-                            color = if (query.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
-                            fontSize = 16.sp
+                IconButton(
+                    onClick = onClearQuery,
+                    enabled = query.isNotEmpty(),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        clearIcon,
+                        contentDescription = stringResource(R.string.common_clear),
+                        tint = if (query.isNotEmpty()) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        }
+                    )
+                }
+
+                IconButton(
+                    onClick = { onSearch(resolvedSubmitKeyword) },
+                    enabled = canSubmit,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(chromeSpec.actionContainerCornerRadiusDp.dp))
+                        .background(
+                            if (canSubmit) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                            } else {
+                                Color.Transparent
+                            }
                         )
-                    }
+                ) {
+                    Icon(
+                        searchIcon,
+                        contentDescription = searchLabel,
+                        tint = if (canSubmit) {
+                            searchIconColor
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        }
+                    )
                 }
             }
         }
@@ -1312,13 +1233,18 @@ fun HistoryChip(
     onDelete: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val historyIcon = rememberAppHistoryIcon()
     val clearIcon = rememberAppClearIcon()
     val deleteLabel = stringResource(R.string.common_delete)
-    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val chromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     Surface(
         onClick = onClick,
-        color = if (uiPreset == UiPreset.MD3) {
+        color = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            MiuixTheme.colorScheme.surfaceContainerHigh
+        } else if (uiPreset == UiPreset.MD3) {
             MaterialTheme.colorScheme.surfaceContainerHigh
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -1952,15 +1878,29 @@ private fun SearchResultCardSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     Surface(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha),
-        shape = RoundedCornerShape(12.dp),
-        tonalElevation = appearance.tonalElevationDp.dp,
-        shadowElevation = appearance.shadowElevationDp.dp,
+        color = if (isMiuix) {
+            MiuixTheme.colorScheme.surfaceContainer
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha)
+        },
+        shape = RoundedCornerShape(if (isMiuix) 18.dp else 12.dp),
+        tonalElevation = if (isMiuix) 0.dp else appearance.tonalElevationDp.dp,
+        shadowElevation = if (isMiuix) 0.dp else appearance.shadowElevationDp.dp,
         border = if (appearance.borderAlpha > 0f) {
-            androidx.compose.foundation.BorderStroke(0.8.dp, Color.White.copy(alpha = appearance.borderAlpha))
+            androidx.compose.foundation.BorderStroke(
+                0.8.dp,
+                if (isMiuix) {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+                } else {
+                    Color.White.copy(alpha = appearance.borderAlpha)
+                }
+            )
         } else {
             null
         }

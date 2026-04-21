@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.theme.LocalUiPreset
@@ -39,6 +40,19 @@ import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
+
+internal fun resolveMd3SegmentedLabelFontSizeSp(
+    optionCount: Int,
+    longestLabelLength: Int
+): Float {
+    return when {
+        optionCount >= 5 -> 12f
+        optionCount >= 4 && longestLabelLength >= 6 -> 13f
+        optionCount >= 4 -> 14f
+        longestLabelLength >= 8 -> 13f
+        else -> 15f
+    }
+}
 
 @Composable
 internal fun <T> IOSSlidingSegmentedSetting(
@@ -127,6 +141,15 @@ private fun <T> Md3SegmentedControl(
     enabled: Boolean = true,
     onSelectionChange: (T) -> Unit
 ) {
+    val longestLabelLength = remember(options) {
+        options.maxOfOrNull { it.label.length } ?: 0
+    }
+    val labelFontSize = remember(options.size, longestLabelLength) {
+        resolveMd3SegmentedLabelFontSizeSp(
+            optionCount = options.size,
+            longestLabelLength = longestLabelLength
+        ).sp
+    }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -156,12 +179,14 @@ private fun <T> Md3SegmentedControl(
                         disabledInactiveContainerColor = Color.Transparent,
                         disabledInactiveContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.45f)
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    icon = {}
                 ) {
                     Text(
                         text = option.label,
                         maxLines = 1,
-                        style = MaterialTheme.typography.labelLarge,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelLarge.copy(fontSize = labelFontSize),
                         fontWeight = FontWeight.SemiBold
                     )
                 }

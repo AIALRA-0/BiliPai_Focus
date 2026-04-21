@@ -14,7 +14,8 @@ class HomePerformancePolicyTest {
             uiPreset = UiPreset.IOS,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = false,
-            liquidGlassEnabled = true,
+            topBarLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = false,
             cardAnimationEnabled = false,
             cardTransitionEnabled = true,
             isDataSaverActive = false,
@@ -24,7 +25,9 @@ class HomePerformancePolicyTest {
 
         assertTrue(config.headerBlurEnabled)
         assertFalse(config.bottomBarBlurEnabled)
-        assertTrue(config.liquidGlassEnabled)
+        assertTrue(config.topBarLiquidGlassEnabled)
+        assertFalse(config.bottomBarLiquidGlassEnabled)
+        assertTrue(config.isAnyLiquidGlassEnabled)
         assertFalse(config.cardAnimationEnabled)
         assertTrue(config.cardTransitionEnabled)
         assertFalse(config.isDataSaverActive)
@@ -37,7 +40,8 @@ class HomePerformancePolicyTest {
             uiPreset = UiPreset.IOS,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
-            liquidGlassEnabled = true,
+            topBarLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = true,
@@ -55,7 +59,8 @@ class HomePerformancePolicyTest {
             uiPreset = UiPreset.IOS,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
-            liquidGlassEnabled = true,
+            topBarLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = false,
@@ -64,7 +69,7 @@ class HomePerformancePolicyTest {
         )
 
         assertFalse(config.isDataSaverActive)
-        assertTrue(config.liquidGlassEnabled)
+        assertTrue(config.isAnyLiquidGlassEnabled)
         assertEquals(3, config.preloadAheadCount)
     }
 
@@ -74,7 +79,8 @@ class HomePerformancePolicyTest {
             uiPreset = UiPreset.IOS,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
-            liquidGlassEnabled = true,
+            topBarLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = false,
@@ -91,7 +97,8 @@ class HomePerformancePolicyTest {
             uiPreset = UiPreset.MD3,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
-            liquidGlassEnabled = true,
+            topBarLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = false,
@@ -99,6 +106,7 @@ class HomePerformancePolicyTest {
             normalPreloadAheadCount = 5
         )
 
-        assertTrue(config.liquidGlassEnabled)
+        assertTrue(config.topBarLiquidGlassEnabled)
+        assertTrue(config.bottomBarLiquidGlassEnabled)
     }
 }

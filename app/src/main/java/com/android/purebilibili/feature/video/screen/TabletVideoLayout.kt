@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.video.screen
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -34,6 +37,7 @@ import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
@@ -73,7 +77,7 @@ fun TabletVideoLayout(
     bvid: String,
     coverUrl: String = "",
     onBack: () -> Unit,
-    onHomeClick: () -> Unit = onBack,
+    onHomeClick: () -> Unit = {},
     onUpClick: (Long) -> Unit,
     onNavigateToAudioMode: () -> Unit,
     onToggleFullscreen: () -> Unit,  // 📺 全屏切换回调
@@ -91,6 +95,8 @@ fun TabletVideoLayout(
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     showRelatedVideosSection: Boolean = true,
+    showUpBadge: Boolean = true,
+    onSearchKeywordClick: (String) -> Unit = {},
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
@@ -177,7 +183,7 @@ fun TabletVideoLayout(
                             isFullscreen = false,
                             isInPipMode = isInPipMode,
                             onToggleFullscreen = onToggleFullscreen,
-                            onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                            onQualityChange = { qid -> viewModel.changeQuality(qid) },
                             onBack = onBack,
                             onHomeClick = onHomeClick,
                             bvid = bvid,
@@ -275,7 +281,9 @@ fun TabletVideoLayout(
                         secondaryPaneModeName = nextTabletSecondaryPaneMode(secondaryPaneMode).name
                     },
                     onRelatedVideoClick = onRelatedVideoClick,
-                    showRelatedVideosSection = showRelatedVideosSection
+                    showRelatedVideosSection = showRelatedVideosSection,
+                    showUpBadge = showUpBadge,
+                    onSearchKeywordClick = onSearchKeywordClick
                 )
             }
         },
@@ -298,19 +306,36 @@ private fun TabletSecondaryContent(
     onPaneModeChange: (TabletSecondaryPaneMode) -> Unit,
     onPaneModeCycle: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    showRelatedVideosSection: Boolean
+    showRelatedVideosSection: Boolean,
+    showUpBadge: Boolean,
+    onSearchKeywordClick: (String) -> Unit
 ) {
-    val hasRelatedVideos = success.related.isNotEmpty()
-    val defaultTab = resolveTabletSecondaryDefaultTab(
-        replyCount = commentState.replyCount,
-        hasRelatedVideos = hasRelatedVideos,
-        showRelatedVideosSection = showRelatedVideosSection
+    val commentAppearance = rememberVideoCommentAppearance()
+    var selectedTab by rememberSaveable(success.info.bvid) {
+        mutableIntStateOf(
+            resolveTabletSecondaryDefaultTab(
+                replyCount = commentState.replyCount,
+                hasRelatedVideos = success.related.isNotEmpty(),
+                showRelatedVideosSection = showRelatedVideosSection
+            )
+        )
+    }
+    val pagerState = rememberPagerState(
+        initialPage = selectedTab,
+        pageCount = {
+            resolveTabletSecondaryTabs(
+                replyCount = commentState.replyCount,
+                showRelatedVideosSection = showRelatedVideosSection
+            ).size
+        }
     )
-    var selectedTab by rememberSaveable(success.info.bvid) { mutableIntStateOf(defaultTab) }
-    val tabs = resolveTabletSecondaryTabs(
-        replyCount = commentState.replyCount,
-        showRelatedVideosSection = showRelatedVideosSection
-    )
+    val subReplyState by commentViewModel.subReplyState.collectAsState()
+    val tabs = remember(commentState.replyCount, showRelatedVideosSection) {
+        resolveTabletSecondaryTabs(
+            replyCount = commentState.replyCount,
+            showRelatedVideosSection = showRelatedVideosSection
+        )
+    }
     
     // 评论图片预览状态
     var showImagePreview by remember { mutableStateOf(false) }
@@ -322,29 +347,45 @@ private fun TabletSecondaryContent(
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
-    LaunchedEffect(showRelatedVideosSection) {
-        if (!showRelatedVideosSection && selectedTab != 0) {
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(selectedTab)
+        }
+    }
+    LaunchedEffect(pagerState.currentPage) {
+        if (selectedTab != pagerState.currentPage) {
+            selectedTab = pagerState.currentPage
+        }
+    }
+    LaunchedEffect(subReplyState.visible) {
+        if (subReplyState.visible) {
             selectedTab = 0
+            if (paneMode == TabletSecondaryPaneMode.COLLAPSED) {
+                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
+            }
         }
     }
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
 
-        val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
-        if (parsedResult.bvid != null) {
-            onRelatedVideoClick(parsedResult.bvid, null)
-            return@openCommentUrl
-        }
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                onRelatedVideoClick(target.videoId, null)
+                return@openCommentUrl
+            }
 
-        if (shouldOpenCommentUrlInApp(url)) {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching {
-                context.startActivity(intent)
-            }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+            is CommentUrlNavigationTarget.Search -> {
+                onSearchKeywordClick(target.keyword)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUpClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
 
         runCatching { uriHandler.openUri(url) }
@@ -385,13 +426,11 @@ private fun TabletSecondaryContent(
             }) {
                 Text("评论")
             }
-            if (showRelatedVideosSection) {
-                TextButton(onClick = {
-                    selectedTab = 1
-                    onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
-                }) {
-                    Text("推荐")
-                }
+            TextButton(onClick = {
+                selectedTab = 1
+                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
+            }) {
+                Text("推荐")
             }
         }
         return
@@ -422,238 +461,273 @@ private fun TabletSecondaryContent(
 
         // Tab 栏
         TabRow(
-            selectedTabIndex = selectedTab,
+            selectedTabIndex = pagerState.currentPage,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
+                    selected = pagerState.currentPage == index,
+                    onClick = {
+                        scope.launch {
+                            pagerState.animateScrollToPage(index)
+                        }
+                    },
                     text = { Text(title) }
                 )
             }
         }
         
-        // 内容区域
-        when (selectedTab) {
-            0 -> {
-                // 评论列表
-                val listState = rememberLazyListState()
-                
-                // 加载更多检测
-                val shouldLoadMore by remember {
-                    derivedStateOf {
-                        val layoutInfo = listState.layoutInfo
-                        val totalItems = layoutInfo.totalItemsCount
-                        val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        totalItems > 0 && lastVisibleItemIndex >= totalItems - 3 && !commentState.isRepliesLoading
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) { page ->
+            when (page) {
+                0 -> {
+                    val listState = rememberLazyListState()
+                    val shouldLoadMore by remember {
+                        derivedStateOf {
+                            val layoutInfo = listState.layoutInfo
+                            val totalItems = layoutInfo.totalItemsCount
+                            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            totalItems > 0 && lastVisibleItemIndex >= totalItems - 3 && !commentState.isRepliesLoading
+                        }
+                    }
+                    LaunchedEffect(shouldLoadMore) {
+                        if (shouldLoadMore) commentViewModel.loadComments()
+                    }
+
+                    if (subReplyState.visible && subReplyState.rootReply != null) {
+                        VideoInlineSubReplyDetailContent(
+                            state = subReplyState,
+                            commentState = commentState,
+                            emoteMap = success.emoteMap,
+                            maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
+                            onLoadMore = { commentViewModel.loadMoreSubReplies() },
+                            onDismiss = { commentViewModel.closeSubReply() },
+                            onRootCommentClick = {
+                                viewModel.clearReplyingTo()
+                                viewModel.showCommentInputDialog()
+                            },
+                            onTimestampClick = { positionMs ->
+                                seekPlayerFromUserAction(playerState.player, positionMs)
+                            },
+                            onImagePreview = { images, index, rect, textContent ->
+                                previewImages = images
+                                previewInitialIndex = index
+                                sourceRect = rect
+                                previewTextContent = textContent
+                                showImagePreview = true
+                            },
+                            onReplyClick = { reply ->
+                                viewModel.setReplyingTo(reply)
+                                viewModel.showCommentInputDialog()
+                            },
+                            onConversationClick = commentViewModel::openSubReplyConversation,
+                            onConversationBack = commentViewModel::closeSubReplyConversation,
+                            onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
+                            onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
+                            onCommentLike = commentViewModel::likeComment,
+                            onReportComment = commentViewModel::reportComment,
+                            onUrlClick = openCommentUrl,
+                            onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(8.dp)
+                        ) {
+                            item {
+                                CommentSortFilterBar(
+                                    count = commentState.replyCount,
+                                    sortMode = commentState.sortMode,
+                                    onSortModeChange = { mode ->
+                                        commentViewModel.setSortMode(mode)
+                                        scope.launch {
+                                            com.android.purebilibili.core.store.SettingsManager
+                                                .setCommentDefaultSortMode(context, mode.apiMode)
+                                        }
+                                    }
+                                )
+                            }
+                            item {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    color = commentAppearance.composerHintBackgroundColor,
+                                    shape = RoundedCornerShape(14.dp),
+                                    onClick = {
+                                        viewModel.clearReplyingTo()
+                                        viewModel.showCommentInputDialog()
+                                    }
+                                ) {
+                                    Text(
+                                        text = "写评论，直接和 UP 主交流",
+                                        color = commentAppearance.secondaryTextColor,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                    )
+                                }
+                            }
+                            items(
+                                items = commentState.replies,
+                                key = { "reply_${it.rpid}" },
+                                contentType = { resolveReplyItemContentType(it) }
+                            ) { reply ->
+                                com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
+                                    isDissolving = reply.rpid in commentState.dissolvingIds,
+                                    onDissolveComplete = { commentViewModel.deleteComment(reply.rpid) },
+                                    cardId = "comment_${reply.rpid}",
+                                    modifier = Modifier.padding(bottom = 1.dp)
+                                ) {
+                                    ReplyItemView(
+                                        item = reply,
+                                        emoteMap = success.emoteMap,
+                                        upMid = success.info.owner.mid,
+                                        showUpFlag = commentState.showUpFlag,
+                                        isPinned = reply.rpid in commentState.pinnedReplyIds,
+                                        onClick = {},
+                                        onSubClick = { commentViewModel.openSubReply(it) },
+                                        onTimestampClick = { positionMs ->
+                                            seekPlayerFromUserAction(playerState.player, positionMs)
+                                        },
+                                        maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
+                                        onImagePreview = { images, index, rect, textContent ->
+                                            previewImages = images
+                                            previewInitialIndex = index
+                                            sourceRect = rect
+                                            previewTextContent = textContent
+                                            showImagePreview = true
+                                        },
+                                        onLikeClick = { commentViewModel.likeComment(reply.rpid) },
+                                        isLiked = reply.action == 1 || reply.rpid in commentState.likedComments,
+                                        onReplyClick = {
+                                            viewModel.setReplyingTo(reply)
+                                            viewModel.showCommentInputDialog()
+                                        },
+                                        onReportClick = { reason -> commentViewModel.reportComment(reply.rpid, reason) },
+                                        canToggleTop = shouldShowReplyTopAction(
+                                            currentMid = commentState.currentMid,
+                                            upMid = success.info.owner.mid,
+                                            item = reply
+                                        ),
+                                        onToggleTopClick = { commentViewModel.toggleTopComment(reply) },
+                                        onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
+                                            { commentViewModel.startDissolve(reply.rpid) }
+                                        } else null,
+                                        onUrlClick = openCommentUrl,
+                                        onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
+                                    )
+                                }
+                            }
+                            if (commentState.isRepliesLoading) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CupertinoActivityIndicator()
+                                    }
+                                }
+                            }
+                        }
+
+                        if (commentState.replies.isEmpty() && !commentState.isRepliesLoading) {
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .padding(horizontal = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "暂无评论",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = commentAppearance.secondaryTextColor
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "先看看相关推荐",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = commentAppearance.secondaryTextColor
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(1)
+                                    }
+                                }) {
+                                    Text("切换到相关推荐")
+                                }
+                            }
+                        }
+
+                        FloatingActionButton(
+                            onClick = { commentViewModel.toggleUpOnly() },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp),
+                            containerColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            elevation = FloatingActionButtonDefaults.elevation(8.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (commentState.upOnlyFilter) io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.CheckmarkCircle else io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "只看\nUP",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 10.sp,
+                                    lineHeight = 12.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                     }
                 }
-                LaunchedEffect(shouldLoadMore) {
-                    if (shouldLoadMore) commentViewModel.loadComments()
-                }
-                
-                Box(modifier = Modifier.fillMaxSize()) {
+
+                1 -> {
                     LazyColumn(
-                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(8.dp)
                     ) {
-                        // 排序/筛选栏
-                        item {
-                            CommentSortFilterBar(
-                                count = commentState.replyCount,
-                                sortMode = commentState.sortMode,
-                                onSortModeChange = { mode ->
-                                    commentViewModel.setSortMode(mode)
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setCommentDefaultSortMode(context, mode.apiMode)
-                                    }
-                                }
-                            )
-                        }
-                        item {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(14.dp),
-                                onClick = {
-                                    viewModel.clearReplyingTo()
-                                    viewModel.showCommentInputDialog()
-                                }
-                            ) {
-                                Text(
-                                    text = "写评论，直接和 UP 主交流",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                                )
-                            }
-                        }
-                        
-                        // 评论列表
                         items(
-                            items = commentState.replies,
-                            key = { "reply_${it.rpid}" },
-                            contentType = { resolveReplyItemContentType(it) }
-                        ) { reply ->
-                            // [新增] 使用 DissolvableVideoCard 包裹 (平板端也需要)
-                            com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
-                                isDissolving = reply.rpid in commentState.dissolvingIds,
-                                onDissolveComplete = { commentViewModel.deleteComment(reply.rpid) },
-                                cardId = "comment_${reply.rpid}",
-                                modifier = Modifier.padding(bottom = 1.dp)
-                            ) {
-                                ReplyItemView(
-                                    item = reply,
-                                    emoteMap = success.emoteMap,
-                                    upMid = success.info.owner.mid,
-                                    showUpFlag = commentState.showUpFlag,
-                                    onClick = {},
-                                    onSubClick = { commentViewModel.openSubReply(it) },
-                                    onTimestampClick = { positionMs ->
-                                        playerState.player.seekTo(positionMs)
-                                        playerState.player.play()
-                                    },
-                                    onImagePreview = { images, index, rect, textContent ->
-                                        previewImages = images
-                                        previewInitialIndex = index
-                                        sourceRect = rect
-                                        previewTextContent = textContent
-                                        showImagePreview = true
-                                    },
-                                    // [新增] 点赞按钮
-                                    onLikeClick = { commentViewModel.likeComment(reply.rpid) },
-                                    isLiked = reply.action == 1 || reply.rpid in commentState.likedComments,
-                                    onReplyClick = {
-                                        viewModel.setReplyingTo(reply)
-                                        viewModel.showCommentInputDialog()
-                                    },
-                                    // [新增] 删除按钮
-                                    onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
-                                        { commentViewModel.startDissolve(reply.rpid) }
-                                    } else null,
-                                    onUrlClick = openCommentUrl,
-                                    // [新增] 头像点击
-                                    onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
-                                )
-                            }
-                        }
-                        
-                        // 加载指示器
-                        if (commentState.isRepliesLoading) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CupertinoActivityIndicator()
+                            items = success.related,
+                            key = { "related_${it.bvid}" }
+                        ) { video ->
+                            RelatedVideoItem(
+                                video = video,
+                                isFollowed = video.owner.mid in success.followingMids,
+                                showUpBadge = showUpBadge,
+                                onClick = {
+                                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                                    val options = activity?.let {
+                                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
+                                    }
+                                    val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                                    if (video.cid > 0L) {
+                                        navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
+                                    }
+                                    onRelatedVideoClick(video.bvid, navOptions)
                                 }
-                            }
-                        }
-                    }
-
-                    if (commentState.replies.isEmpty() && !commentState.isRepliesLoading) {
-                        val relatedHint = resolveVideoCommentEmptyStateHint(
-                            hasRelatedVideos = hasRelatedVideos,
-                            showRelatedVideosSection = showRelatedVideosSection
-                        )
-                        val relatedActionLabel = resolveVideoCommentEmptyStateActionLabel(
-                            hasRelatedVideos = hasRelatedVideos,
-                            showRelatedVideosSection = showRelatedVideosSection
-                        )
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "暂无评论",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (relatedHint != null) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = relatedHint,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (relatedActionLabel != null) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                TextButton(onClick = { selectedTab = 1 }) {
-                                    Text(relatedActionLabel)
-                                }
-                            }
-                        }
-                    }
-
-                    // 🟢 [平板适配] "只看UP主" 悬浮按钮 (FAB)
-                    FloatingActionButton(
-                        onClick = { commentViewModel.toggleUpOnly() },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp), 
-                        containerColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        elevation = FloatingActionButtonDefaults.elevation(8.dp)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (commentState.upOnlyFilter) io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.CheckmarkCircle else io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "只看\nUP",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                lineHeight = 12.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
-                    }
-                }
-            }
-            1 -> if (showRelatedVideosSection) {
-                // 相关推荐列表
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp)
-                ) {
-                    items(
-                        items = success.related,
-                        key = { "related_${it.bvid}" }
-                    ) { video ->
-                        // 简单的水平布局推荐卡片
-                        RelatedVideoItem(
-                            video = video,
-                            isFollowed = video.owner.mid in success.followingMids,
-                            onClick = { 
-                                val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
-                                val options = activity?.let { 
-                                    android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
-                                }
-                                val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
-                                if (video.cid > 0L) {
-                                    navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
-                                }
-                                onRelatedVideoClick(video.bvid, navOptions) 
-                            }
-                        )
                     }
                 }
             }
@@ -762,7 +836,14 @@ private fun ScrollableVideoInfoSection(
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
                 downloadProgress = downloadProgress ?: -1f,
-                onCommentClick = { /* 平板模式不需要跳转评论 */ }
+                onCommentClick = { /* 平板模式不需要跳转评论 */ },
+                onShareClick = {
+                    ShareUtils.shareVideo(
+                        context,
+                        info.title,
+                        info.bvid
+                    )
+                }
             )
         }
 
@@ -858,7 +939,8 @@ private fun ScrollableVideoInfoSection(
                                 modifier = Modifier
                                     .width(160.dp)
                                     .clickable {
-                                        val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                                        val activity = (context as? android.app.Activity)
+                                            ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
                                         val options = activity?.let {
                                             android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
                                         }
@@ -886,7 +968,10 @@ private fun ScrollableVideoInfoSection(
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
                                             .padding(4.dp)
-                                            .background(Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                            .background(
+                                                Color.Black.copy(alpha = 0.6f),
+                                                androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                            )
                                             .padding(horizontal = 4.dp, vertical = 2.dp)
                                     ) {
                                         Text(
@@ -935,7 +1020,7 @@ private fun ScrollableVideoInfoSection(
                         )
                     }
                 }
-                // 底部留白，防止被圆角遮挡
+
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }

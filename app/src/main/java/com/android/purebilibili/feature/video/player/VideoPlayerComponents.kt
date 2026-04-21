@@ -39,6 +39,7 @@ import com.android.purebilibili.core.theme.ActionCoinDark
 import com.android.purebilibili.core.theme.ActionFavoriteDark
 import com.android.purebilibili.core.theme.ActionShareDark
 import com.android.purebilibili.core.theme.ActionCommentDark
+import com.android.purebilibili.core.ui.components.UserUpBadge
 
 //  [重构] 视频标题区域 (官方B站样式：紧凑布局)
 @Composable
@@ -203,12 +204,7 @@ fun UpInfoSection(
         // UP主名称行
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.PersonCropCircle,
-                    contentDescription = "UP主标识",
-                    tint = Color(0xFF00AEEC),
-                    modifier = Modifier.size(14.dp)
-                )
+                UserUpBadge()
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = info.owner.name,
@@ -687,13 +683,7 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // UP主头标 (纯文字，无背景)
-                        Text(
-                            text = "UP",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        UserUpBadge()
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = video.owner.name,

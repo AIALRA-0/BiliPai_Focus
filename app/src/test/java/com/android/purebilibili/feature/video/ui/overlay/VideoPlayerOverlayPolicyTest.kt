@@ -301,6 +301,8 @@ class VideoPlayerOverlayPolicyTest {
             isBuffering = true,
             isQualitySwitching = true,
             isSeekTransitionPending = true,
+            playWhenReady = true,
+            isPlaying = false,
             bandwidthEstimate = "1.8 Mbps"
         )
 
@@ -316,6 +318,8 @@ class VideoPlayerOverlayPolicyTest {
             isBuffering = true,
             isQualitySwitching = false,
             isSeekTransitionPending = true,
+            playWhenReady = true,
+            isPlaying = false,
             bandwidthEstimate = "856 kbps"
         )
 
@@ -332,6 +336,8 @@ class VideoPlayerOverlayPolicyTest {
                 isBuffering = true,
                 isQualitySwitching = false,
                 isSeekTransitionPending = false,
+                playWhenReady = true,
+                isPlaying = false,
                 bandwidthEstimate = "2.4 Mbps"
             )
         )
@@ -343,12 +349,31 @@ class VideoPlayerOverlayPolicyTest {
             isBuffering = true,
             isQualitySwitching = false,
             isSeekTransitionPending = true,
+            playWhenReady = true,
+            isPlaying = false,
             bandwidthEstimate = "  "
         )
 
         assertNotNull(state)
         assertEquals("正在缓冲...", state.primaryText)
         assertEquals("正在定位新进度...", state.secondaryText)
+    }
+
+    @Test
+    fun centerLoadingUiState_showsRecoveringPlaybackWhenSeekPendingWithoutBuffering() {
+        val state = resolveCenterLoadingUiState(
+            isBuffering = false,
+            isQualitySwitching = false,
+            isSeekTransitionPending = true,
+            playWhenReady = true,
+            isPlaying = false,
+            bandwidthEstimate = ""
+        )
+
+        assertNotNull(state)
+        assertEquals(CenterLoadingReason.SEEK_BUFFERING, state.reason)
+        assertEquals("正在恢复播放...", state.primaryText)
+        assertEquals("正在等待视频重新跟上进度...", state.secondaryText)
     }
 
     @Test
@@ -768,5 +793,43 @@ class VideoPlayerOverlayPolicyTest {
         )
 
         assertEquals(12_000L, resolved.current)
+    }
+
+    @Test
+    fun inlineControlsAutoHide_staysOffWhileSeekScrubbing() {
+        assertFalse(
+            shouldAutoHideInlineControlsAfterDelay(
+                controlsVisible = true,
+                isPlaying = true,
+                isSeekScrubbing = true
+            )
+        )
+    }
+
+    @Test
+    fun inlineControlsAutoHide_allowsPlayingIdleControlsToHide() {
+        assertTrue(
+            shouldAutoHideInlineControlsAfterDelay(
+                controlsVisible = true,
+                isPlaying = true,
+                isSeekScrubbing = false
+            )
+        )
+    }
+
+    @Test
+    fun hiddenInlineControls_cancelActiveSeekScrub() {
+        assertTrue(
+            shouldCancelSeekScrubWhenControlsHidden(
+                controlsVisible = false,
+                isSeekScrubbing = true
+            )
+        )
+        assertFalse(
+            shouldCancelSeekScrubWhenControlsHidden(
+                controlsVisible = true,
+                isSeekScrubbing = true
+            )
+        )
     }
 }

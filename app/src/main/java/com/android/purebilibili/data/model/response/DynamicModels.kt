@@ -292,6 +292,7 @@ data class EmojiInfo(
 data class DynamicMajor(
     val type: String = "", // MAJOR_TYPE_ARCHIVE, MAJOR_TYPE_DRAW, MAJOR_TYPE_LIVE_RCMD, MAJOR_TYPE_OPUS, MAJOR_TYPE_NONE
     val archive: ArchiveMajor? = null, // 视频
+    val pgc: ArchiveMajor? = null, // 番剧/影视
     val draw: DrawMajor? = null, // 图片
     val live_rcmd: LiveRcmdMajor? = null, //  直播
     val opus: OpusMajor? = null, //  [新增] 图文动态 (新版格式)
@@ -360,7 +361,11 @@ data class ArchiveMajor(
     val desc: String = "",
     val duration_text: String = "", // "10:24"
     val stat: ArchiveStat = ArchiveStat(),
-    val jump_url: String = ""
+    val jump_url: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val epid: Long = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val season_id: Long = 0
 )
 
 @Serializable
@@ -399,6 +404,7 @@ data class StatItem(
 // --- 动态类型枚举 ---
 enum class DynamicType(val apiValue: String) {
     VIDEO("DYNAMIC_TYPE_AV"),
+    PGC("DYNAMIC_TYPE_PGC"),
     DRAW("DYNAMIC_TYPE_DRAW"),
     WORD("DYNAMIC_TYPE_WORD"),
     FORWARD("DYNAMIC_TYPE_FORWARD"),

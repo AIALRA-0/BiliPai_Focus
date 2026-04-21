@@ -35,7 +35,7 @@ class SpaceViewModelMainTabStateTest {
         val success = SpaceUiState.Success(userInfo = SpaceUserInfo())
 
         assertEquals(SpaceMainTab.HOME, success.tabShellState.selectedTab)
-        assertEquals(4, success.tabShellState.tabStates.size)
+        assertEquals(6, success.tabShellState.tabStates.size)
     }
 
     @Test

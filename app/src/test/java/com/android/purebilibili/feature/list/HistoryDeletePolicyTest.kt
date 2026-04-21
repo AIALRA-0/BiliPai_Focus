@@ -112,6 +112,18 @@ class HistoryDeletePolicyTest {
     }
 
     @Test
+    fun `delete batch parallelism should stay conservative for small batches`() {
+        assertEquals(1, resolveDeleteBatchParallelism(itemCount = 1))
+        assertEquals(2, resolveDeleteBatchParallelism(itemCount = 4))
+    }
+
+    @Test
+    fun `delete batch parallelism should scale for larger batches`() {
+        assertEquals(3, resolveDeleteBatchParallelism(itemCount = 12))
+        assertEquals(4, resolveDeleteBatchParallelism(itemCount = 40))
+    }
+
+    @Test
     fun `direct batch delete should disable jiggle and collapse`() {
         assertEquals(false, shouldJiggleHistoryDeleteCards(HistoryDeleteAnimationMode.DIRECT_DELETE))
         assertEquals(false, shouldCollapseHistoryDeleteCard(HistoryDeleteAnimationMode.DIRECT_DELETE))

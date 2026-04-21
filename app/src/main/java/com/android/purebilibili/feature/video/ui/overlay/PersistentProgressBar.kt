@@ -12,8 +12,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 internal fun resolvePersistentProgressFraction(current: Long, duration: Long): Float {
-    if (duration <= 0L) return 0f
-    return (current.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    return resolveProgressFraction(
+        positionMs = current,
+        durationMs = duration
+    )
 }
 
 @Composable

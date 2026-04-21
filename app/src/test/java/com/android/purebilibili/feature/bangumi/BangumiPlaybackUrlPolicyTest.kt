@@ -4,6 +4,7 @@ import com.android.purebilibili.data.model.response.Durl
 import com.android.purebilibili.core.network.BANGUMI_PLAY_URL_PATH
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BangumiPlaybackUrlPolicyTest {
@@ -37,6 +38,42 @@ class BangumiPlaybackUrlPolicyTest {
         assertEquals("1315873", params["web_location"])
         assertEquals("1", params["try_look"])
         assertEquals("BV1TEST12345", params["bvid"])
+    }
+
+    @Test
+    fun `bangumi playurl params add wbi signature when keys available`() {
+        val params = com.android.purebilibili.data.repository.signBangumiPlayUrlParams(
+            params = mapOf(
+                "ep_id" to "1001",
+                "cid" to "2002",
+                "qn" to "120"
+            ),
+            wbiKeys = "abcdefghijklmnopqrstuvwxyz123456" to "ABCDEFGHIJKLMNOPQRSTUVWXYZ654321"
+        )
+
+        assertEquals("1001", params["ep_id"])
+        assertEquals("2002", params["cid"])
+        assertEquals("120", params["qn"])
+        assertTrue(params.containsKey("wts"))
+        assertTrue(params.containsKey("w_rid"))
+    }
+
+    @Test
+    fun `bangumi playurl params stay unsigned when wbi keys missing`() {
+        val rawParams = mapOf(
+            "ep_id" to "1001",
+            "cid" to "2002",
+            "qn" to "120"
+        )
+
+        val params = com.android.purebilibili.data.repository.signBangumiPlayUrlParams(
+            params = rawParams,
+            wbiKeys = null
+        )
+
+        assertEquals(rawParams, params)
+        assertFalse(params.containsKey("wts"))
+        assertFalse(params.containsKey("w_rid"))
     }
 
     @Test

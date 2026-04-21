@@ -4,7 +4,13 @@ import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
+import com.android.purebilibili.data.model.response.ReplyContentUrl
+import com.android.purebilibili.data.model.response.ReplyControl
 import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.data.model.response.ReplyRichText
+import com.android.purebilibili.data.model.response.ReplyRichTextNote
+import com.android.purebilibili.data.model.response.ReplyRichTextOpus
+import com.android.purebilibili.data.model.response.ReplyVote
 import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
 import com.android.purebilibili.data.model.response.ReplyPicture
@@ -169,6 +175,119 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `shouldShowReplyTopBadge uses explicit pinned and reply control flags`() {
+        assertTrue(
+            shouldShowReplyTopBadge(
+                item = ReplyItem(),
+                isPinned = true
+            )
+        )
+        assertTrue(
+            shouldShowReplyTopBadge(
+                item = ReplyItem(replyControl = ReplyControl(isUpTop = true)),
+                isPinned = false
+            )
+        )
+        assertFalse(
+            shouldShowReplyTopBadge(
+                item = ReplyItem(replyControl = ReplyControl(isUpTop = false)),
+                isPinned = false
+            )
+        )
+    }
+
+    @Test
+    fun `shouldShowReplyTopAction only allows owner on root comments`() {
+        assertTrue(
+            shouldShowReplyTopAction(
+                currentMid = 42L,
+                upMid = 42L,
+                item = ReplyItem(root = 0L)
+            )
+        )
+        assertFalse(
+            shouldShowReplyTopAction(
+                currentMid = 7L,
+                upMid = 42L,
+                item = ReplyItem(root = 0L)
+            )
+        )
+        assertFalse(
+            shouldShowReplyTopAction(
+                currentMid = 42L,
+                upMid = 42L,
+                item = ReplyItem(root = 100L)
+            )
+        )
+    }
+
+    @Test
+    fun `resolveReplyTopActionLabel reflects current top state`() {
+        assertEquals("置顶", resolveReplyTopActionLabel(isCurrentlyTop = false))
+        assertEquals("取消置顶", resolveReplyTopActionLabel(isCurrentlyTop = true))
+    }
+
+    @Test
+    fun `resolveSubReplyPreviewSummaryLabel follows pili plus wording`() {
+        assertEquals(
+            "UP主等人 共4条回复",
+            resolveSubReplyPreviewSummaryLabel(replyCount = 4, hasUpReply = true)
+        )
+        assertEquals(
+            "共2条回复",
+            resolveSubReplyPreviewSummaryLabel(replyCount = 2, hasUpReply = false)
+        )
+    }
+
+    @Test
+    fun `resolveReplyThreadCount uses the strongest available count`() {
+        assertEquals(
+            5,
+            resolveReplyThreadCount(
+                ReplyItem(
+                    count = 2,
+                    rcount = 5,
+                    replies = listOf(
+                        ReplyItem(rpid = 11),
+                        ReplyItem(rpid = 12)
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `buildReplyCommentShareText includes author message and comment url`() {
+        val text = buildReplyCommentShareText(
+            ReplyItem(
+                oid = 100L,
+                rpid = 777L,
+                member = ReplyMember(uname = "评论者"),
+                content = ReplyContent(message = "保存这条评论")
+            )
+        )
+
+        assertEquals(
+            "评论者: 保存这条评论\nhttps://www.bilibili.com/video/av100?comment_on=1&comment_root_id=777",
+            text
+        )
+    }
+
+    @Test
+    fun `resolveReplyCommentShareUrl includes secondary id for sub replies`() {
+        assertEquals(
+            "https://www.bilibili.com/video/av100?comment_on=1&comment_root_id=777&comment_secondary_id=888",
+            resolveReplyCommentShareUrl(
+                ReplyItem(
+                    oid = 100L,
+                    root = 777L,
+                    rpid = 888L
+                )
+            )
+        )
+    }
+
+    @Test
     fun `collectRenderableEmoteKeys only keeps used and mapped tokens`() {
         val emoteMap = mapOf(
             "[doge]" to "url_doge",
@@ -182,6 +301,185 @@ class ReplyComponentsPolicyTest {
         )
 
         assertEquals(setOf("[doge]", "[笑哭]"), keys)
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString links mentions and topics from content metadata`() {
+        val annotated = buildRichCommentAnnotatedString(
+            text = "你好 @测试用户 来看 #动画#",
+            atNameToMid = mapOf("测试用户" to 42L),
+            topics = setOf("动画")
+        )
+
+        assertEquals(
+            "42",
+            annotated
+                .getStringAnnotations(COMMENT_USER_TAG, 3, 8)
+                .firstOrNull()
+                ?.item
+        )
+        assertEquals(
+            "动画",
+            annotated
+                .getStringAnnotations(COMMENT_TOPIC_TAG, 11, 15)
+                .firstOrNull()
+                ?.item
+        )
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString uses server url title and app schema`() {
+        val annotated = buildRichCommentAnnotatedString(
+            text = "看看 https://b23.tv/demo",
+            richUrls = mapOf(
+                "https://b23.tv/demo" to ReplyContentUrl(
+                    title = "视频标题",
+                    appUrlSchema = "bilibili://video/BV1testtest"
+                )
+            )
+        )
+
+        assertEquals("看看 视频标题", annotated.text)
+        assertEquals(
+            "bilibili://video/BV1testtest",
+            annotated
+                .getStringAnnotations(COMMENT_URL_TAG, 3, annotated.length)
+                .firstOrNull()
+                ?.item
+        )
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString accepts server url prefix icon`() {
+        val annotated = buildRichCommentAnnotatedString(
+            text = "看看 https://b23.tv/demo",
+            richUrls = mapOf(
+                "https://b23.tv/demo" to ReplyContentUrl(
+                    title = "视频标题",
+                    appUrlSchema = "bilibili://video/BV1testtest",
+                    prefixIcon = "https://example.com/icon.png"
+                )
+            )
+        )
+
+        assertTrue(annotated.text.contains("视频标题"))
+        assertEquals(
+            "bilibili://video/BV1testtest",
+            annotated
+                .getStringAnnotations(COMMENT_URL_TAG, 3, annotated.length)
+                .firstOrNull()
+                ?.item
+        )
+    }
+
+    @Test
+    fun `resolveReplyTopicNavigationUrl builds search deep link`() {
+        assertEquals(
+            "bilibili://search?keyword=%E5%8A%A8%E7%94%BB",
+            resolveReplyTopicNavigationUrl("动画")
+        )
+    }
+
+    @Test
+    fun `resolveReplyContentUrlPrefixInlineId is stable for token`() {
+        val token = "https://b23.tv/demo"
+        assertEquals(
+            resolveReplyContentUrlPrefixInlineId(token),
+            resolveReplyContentUrlPrefixInlineId(token)
+        )
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString renders vote token with title`() {
+        val annotated = buildRichCommentAnnotatedString(
+            text = "参加 {vote:987}",
+            voteTitle = "投票标题"
+        )
+
+        assertEquals("参加 投票: 投票标题", annotated.text)
+        assertEquals(
+            "987",
+            annotated
+                .getStringAnnotations(COMMENT_VOTE_TAG, 3, annotated.length)
+                .firstOrNull()
+                ?.item
+        )
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString skips invalid timestamps above max duration`() {
+        val annotated = buildRichCommentAnnotatedString(
+            text = "看到 99:59 和 01:00",
+            maxTimestampSeconds = 120
+        )
+
+        assertTrue(
+            annotated.getStringAnnotations(COMMENT_TIMESTAMP_TAG, 0, annotated.length)
+                .none { it.item == (99 * 60L + 59L).toString() }
+        )
+        assertTrue(
+            annotated.getStringAnnotations(COMMENT_TIMESTAMP_TAG, 0, annotated.length)
+                .any { it.item == "60" }
+        )
+    }
+
+    @Test
+    fun `resolveReplyLeadingRichTextReferences prefers note click url then opus url`() {
+        assertEquals(
+            listOf(
+                ReplyLeadingRichTextReference(
+                    label = "笔记 ",
+                    navigationUrl = "https://example.com/note"
+                )
+            ),
+            resolveReplyLeadingRichTextReferences(
+                ReplyContent(
+                    richText = ReplyRichText(
+                        note = ReplyRichTextNote(clickUrl = "https://example.com/note"),
+                        opus = ReplyRichTextOpus(opusId = 112233L)
+                    )
+                )
+            )
+        )
+        assertEquals(
+            listOf(
+                ReplyLeadingRichTextReference(
+                    label = "笔记 ",
+                    navigationUrl = "https://www.bilibili.com/opus/112233"
+                )
+            ),
+            resolveReplyLeadingRichTextReferences(
+                ReplyContent(
+                    richText = ReplyRichText(
+                        opus = ReplyRichTextOpus(opusId = 112233L)
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `resolveReplyVoteDisplayText falls back to id`() {
+        assertEquals("投票: 标题", resolveReplyVoteDisplayText(1L, "标题"))
+        assertEquals("投票: 987", resolveReplyVoteDisplayText(987L, " "))
+    }
+
+    @Test
+    fun `resolveReplyLeadingRichTextReferences ignores placeholder note cvid`() {
+        assertEquals(
+            emptyList(),
+            resolveReplyLeadingRichTextReferences(
+                content = ReplyContent(),
+                noteCvidStr = "0"
+            )
+        )
+        assertEquals(
+            emptyList(),
+            resolveReplyLeadingRichTextReferences(
+                content = ReplyContent(),
+                noteCvidStr = ""
+            )
+        )
     }
 
     @Test
@@ -213,9 +511,10 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `lightweight reply mode keeps sub previews while hiding ancillary decorations`() {
+    fun `lightweight reply mode keeps identity badges and sub previews while hiding ancillary labels`() {
         assertFalse(shouldShowReplyAncillaryDecorations(lightweightMode = true))
         assertTrue(shouldShowReplyAncillaryDecorations(lightweightMode = false))
+        assertTrue(shouldShowReplyIdentityDecorations())
         assertTrue(
             shouldShowReplySubPreview(
                 hideSubPreview = false,

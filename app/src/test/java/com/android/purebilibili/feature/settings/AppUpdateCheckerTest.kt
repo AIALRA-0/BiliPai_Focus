@@ -137,6 +137,21 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `resolveEndpointCandidates should keep build config endpoint first and append focus fallback`() {
+        val primary = AppUpdateEndpointSet(
+            releasesApi = "https://api.github.com/repos/example/demo/releases",
+            repositoryBuildGradleUrl = "https://raw.githubusercontent.com/example/demo/main/app/build.gradle.kts",
+            repositoryUrl = "https://github.com/example/demo",
+            releasesPageUrl = "https://github.com/example/demo/releases"
+        )
+
+        val candidates = AppUpdateChecker.resolveEndpointCandidates(primary)
+
+        assertEquals("https://github.com/example/demo", candidates.first().repositoryUrl)
+        assertTrue(candidates.any { it.repositoryUrl == "https://github.com/AIALRA-0/BiliPai_Focus" })
+    }
+
+    @Test
     fun `parseReleaseAssets should keep apk metadata and sidecar assets`() {
         val assets = AppUpdateChecker.parseReleaseAssets(
             """

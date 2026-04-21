@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.space
 
 import com.android.purebilibili.data.model.response.FavFolder
+import com.android.purebilibili.data.model.response.SpaceAggregateTab
+import com.android.purebilibili.data.model.response.SpaceAggregateTabItem
 import com.android.purebilibili.feature.space.SpaceMainTab
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -105,7 +107,7 @@ class SpaceProfileEnhancementPolicyTest {
         val shell = buildInitialTabShellState(selectedTab = SpaceMainTab.DYNAMIC)
 
         assertEquals(SpaceMainTab.DYNAMIC, shell.selectedTab)
-        assertEquals(4, shell.tabStates.size)
+        assertEquals(6, shell.tabStates.size)
         assertFalse(shell.tabStates[SpaceMainTab.HOME]?.hasLoaded ?: true)
     }
 
@@ -124,5 +126,79 @@ class SpaceProfileEnhancementPolicyTest {
         assertEquals("notice", header.notice)
         assertEquals(1, header.createdFavorites.size)
         assertEquals(2, header.collectedFavorites.first().id)
+    }
+
+    @Test
+    fun `resolveSpaceMainTabs and contribution tabs follow tab2 payload`() {
+        val tab2 = listOf(
+            SpaceAggregateTab(title = "主页", param = "home"),
+            SpaceAggregateTab(title = "动态", param = "dynamic"),
+            SpaceAggregateTab(
+                title = "投稿",
+                param = "contribute",
+                items = listOf(
+                    SpaceAggregateTabItem(title = "视频", param = "video"),
+                    SpaceAggregateTabItem(title = "图文", param = "article"),
+                    SpaceAggregateTabItem(title = "赛季", param = "season_video", seasonId = 12L),
+                    SpaceAggregateTabItem(title = "系列", param = "series", seriesId = 34L)
+                )
+            ),
+            SpaceAggregateTab(title = "收藏", param = "favorite")
+        )
+
+        val mainTabs = resolveSpaceMainTabs(tab2)
+        val contributionTabs = resolveSpaceContributionTabs(tab2)
+
+        assertEquals(
+            listOf(SpaceMainTab.HOME, SpaceMainTab.DYNAMIC, SpaceMainTab.CONTRIBUTION, SpaceMainTab.FAVORITE),
+            mainTabs.map { it.tab }
+        )
+        assertEquals(listOf("视频", "图文", "赛季", "系列"), contributionTabs.map { it.title })
+        assertEquals(SpaceSubTab.SEASON_VIDEO, contributionTabs[2].subTab)
+        assertEquals(12L, contributionTabs[2].seasonId)
+        assertEquals(SpaceSubTab.SERIES, contributionTabs[3].subTab)
+        assertEquals(34L, contributionTabs[3].seriesId)
+    }
+
+    @Test
+    fun `resolveSpaceDisplayedMainTabs prefers home dynamic and contribution`() {
+        val tabs = listOf(
+            SpaceMainTabItem(SpaceMainTab.HOME, "主页"),
+            SpaceMainTabItem(SpaceMainTab.DYNAMIC, "动态"),
+            SpaceMainTabItem(SpaceMainTab.CONTRIBUTION, "投稿"),
+            SpaceMainTabItem(SpaceMainTab.COLLECTIONS, "合集和系列")
+        )
+
+        assertEquals(
+            listOf(SpaceMainTab.HOME, SpaceMainTab.DYNAMIC, SpaceMainTab.CONTRIBUTION),
+            resolveSpaceDisplayedMainTabs(tabs, selectedTab = SpaceMainTab.HOME).map { it.tab }
+        )
+        assertEquals(
+            listOf(
+                SpaceMainTab.HOME,
+                SpaceMainTab.DYNAMIC,
+                SpaceMainTab.CONTRIBUTION,
+                SpaceMainTab.COLLECTIONS
+            ),
+            resolveSpaceDisplayedMainTabs(tabs, selectedTab = SpaceMainTab.COLLECTIONS).map { it.tab }
+        )
+    }
+
+    @Test
+    fun `resolveDisplayedSpaceContributionTabs hides empty audio tabs`() {
+        val tabs = listOf(
+            SpaceContributionTab(id = "video", title = "视频", subTab = SpaceSubTab.VIDEO, param = "video"),
+            SpaceContributionTab(id = "article", title = "图文", subTab = SpaceSubTab.ARTICLE, param = "article"),
+            SpaceContributionTab(id = "audio", title = "音频", subTab = SpaceSubTab.AUDIO, param = "audio")
+        )
+
+        assertEquals(
+            listOf("视频", "图文"),
+            resolveDisplayedSpaceContributionTabs(tabs, totalAudios = 0).map { it.title }
+        )
+        assertEquals(
+            listOf("视频", "图文", "音频"),
+            resolveDisplayedSpaceContributionTabs(tabs, totalAudios = 3).map { it.title }
+        )
     }
 }

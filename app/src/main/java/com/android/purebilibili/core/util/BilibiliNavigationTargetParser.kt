@@ -23,6 +23,7 @@ object BilibiliNavigationTargetParser {
         "www.bilibili.com",
         "m.bilibili.com",
         "space.bilibili.com",
+        "search.bilibili.com",
         "live.bilibili.com",
         "t.bilibili.com",
         "music.bilibili.com"
@@ -98,11 +99,9 @@ object BilibiliNavigationTargetParser {
             }
 
             host == "search" -> {
-                return BilibiliNavigationTarget.Search(
-                    keyword = queryMap["keyword"]
-                        ?.takeIf { it.isNotBlank() }
-                        ?: queryMap["query"].orEmpty()
-                )
+                resolveSearchKeyword(queryMap)?.let {
+                    return BilibiliNavigationTarget.Search(keyword = it)
+                }
             }
 
             host == "live" -> {
@@ -159,6 +158,13 @@ object BilibiliNavigationTargetParser {
                 }
             }
 
+            host == "search.bilibili.com" ||
+                (host.contains("bilibili.com") && pathSegments.firstOrNull()?.equals("search", ignoreCase = true) == true) -> {
+                resolveSearchKeyword(queryMap)?.let {
+                    return BilibiliNavigationTarget.Search(keyword = it)
+                }
+            }
+
             host == "music.bilibili.com" &&
                 pathSegments.contains("music-detail") -> {
                 queryMap["music_id"]?.takeIf { it.isNotBlank() }?.let {
@@ -198,6 +204,11 @@ object BilibiliNavigationTargetParser {
         }
 
         return null
+    }
+
+    private fun resolveSearchKeyword(queryMap: Map<String, String>): String? {
+        return listOf("keyword", "query", "search", "q")
+            .firstNotNullOfOrNull { key -> queryMap[key]?.trim()?.takeIf { it.isNotEmpty() } }
     }
 
     private fun resolvePgcTarget(pathSegments: List<String>): BilibiliNavigationTarget? {

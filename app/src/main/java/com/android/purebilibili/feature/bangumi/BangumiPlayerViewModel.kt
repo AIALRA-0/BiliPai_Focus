@@ -22,6 +22,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
+internal fun resolveBangumiPlaybackAuthState(
+    hasSessionCookie: Boolean,
+    hasAccessToken: Boolean,
+    cachedIsVip: Boolean,
+    seasonUserVip: Boolean
+): Pair<Boolean, Boolean> {
+    val isLoggedIn = hasSessionCookie || hasAccessToken
+    val isVip = isLoggedIn && (cachedIsVip || seasonUserVip)
+    return isLoggedIn to isVip
+}
+
 /**
  * 番剧播放器 UI 状态
  */
@@ -37,6 +48,8 @@ sealed class BangumiPlayerState {
         val quality: Int,
         val acceptQuality: List<Int>,
         val acceptDescription: List<String>,
+        val isLoggedIn: Boolean = false,
+        val isVip: Boolean = false,
         val isLiked: Boolean = false,
         val coinCount: Int = 0
     ) : BangumiPlayerState()
@@ -111,6 +124,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
 
     //  [修复] 与详情页保持一致的追番状态缓存
     private val followStatusCache = mutableMapOf<Long, Boolean>()
+    private val followStatusValueCache = mutableMapOf<Long, Int>()
     private val followedSeasonIds = mutableSetOf<Long>()
     private val loadedFollowTypes = mutableSetOf<Int>()
     
@@ -296,6 +310,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 ensureFollowedSeasonsLoaded(followType)
             }
             val isFollowed = when {
+                followStatusValueCache.containsKey(realSeasonId) -> followStatusValueCache[realSeasonId]!! > 0
                 followStatusCache.containsKey(realSeasonId) -> followStatusCache[realSeasonId] == true
                 followedSeasonIds.contains(realSeasonId) -> true
                 else -> isBangumiFollowed(detail.userStatus)
@@ -308,7 +323,8 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 userStatus = detail.userStatus?.copy(
                     follow = if (isFollowed) 1 else 0,
                     followStatus = if (isFollowed) {
-                        maxOf(detail.userStatus?.followStatus ?: 0, 1)
+                        followStatusValueCache[realSeasonId]
+                            ?: maxOf(detail.userStatus?.followStatus ?: 0, BANGUMI_FOLLOW_STATUS_WANT)
                     } else {
                         0
                     }
@@ -316,6 +332,12 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                     follow = if (isFollowed) 1 else 0,
                     followStatus = if (isFollowed) 1 else 0
                 )
+            )
+            val (isLoggedIn, isVip) = resolveBangumiPlaybackAuthState(
+                hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty(),
+                hasAccessToken = !TokenManager.accessTokenCache.isNullOrEmpty(),
+                cachedIsVip = TokenManager.isVipCache,
+                seasonUserVip = detail.userStatus?.vip == 1
             )
 
             _uiState.value = BangumiPlayerState.Success(
@@ -326,7 +348,9 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 audioUrl = audioUrl,
                 quality = playData.quality,
                 acceptQuality = playData.acceptQuality ?: emptyList(),
-                acceptDescription = playData.acceptDescription ?: emptyList()
+                acceptDescription = playData.acceptDescription ?: emptyList(),
+                isLoggedIn = isLoggedIn,
+                isVip = isVip
             )
 
             refreshEpisodeInteractionState(
@@ -479,29 +503,59 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      */
     fun toggleFollow() {
         val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
-        val seasonId = currentState.seasonDetail.seasonId
         val isFollowing = isBangumiFollowed(currentState.seasonDetail.userStatus)
+        updateFollowStatus(
+            status = if (isFollowing) {
+                BANGUMI_FOLLOW_STATUS_UNFOLLOW
+            } else {
+                BANGUMI_FOLLOW_STATUS_WATCHING
+            }
+        )
+    }
+
+    fun updateFollowStatus(status: Int) {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        val seasonId = currentState.seasonDetail.seasonId
+        val wasFollowing = isBangumiFollowed(currentState.seasonDetail.userStatus) ||
+            followStatusCache[seasonId] == true ||
+            (followStatusValueCache[seasonId] ?: 0) > 0
         
         viewModelScope.launch {
-            val result = if (isFollowing) {
-                BangumiRepository.unfollowBangumi(seasonId)
-            } else {
-                BangumiRepository.followBangumi(seasonId)
+            val result = when {
+                status == BANGUMI_FOLLOW_STATUS_UNFOLLOW -> {
+                    BangumiRepository.unfollowBangumi(seasonId)
+                }
+                wasFollowing -> {
+                    BangumiRepository.updateBangumiFollowStatus(seasonId, status)
+                }
+                status == BANGUMI_FOLLOW_STATUS_WATCHING -> {
+                    BangumiRepository.followBangumi(seasonId)
+                }
+                else -> {
+                    val followResult = BangumiRepository.followBangumi(seasonId)
+                    if (followResult.isSuccess) {
+                        BangumiRepository.updateBangumiFollowStatus(seasonId, status)
+                    } else {
+                        Result.failure(followResult.exceptionOrNull() ?: Exception("追番失败"))
+                    }
+                }
             }
             
             if (result.isSuccess) {
                 //  [修复] 立即更新本地状态，不等待重新获取
-                val newIsFollowing = !isFollowing
+                val newIsFollowing = status != BANGUMI_FOLLOW_STATUS_UNFOLLOW
                 followStatusCache[seasonId] = newIsFollowing
                 if (newIsFollowing) {
                     followedSeasonIds.add(seasonId)
+                    followStatusValueCache[seasonId] = status
                 } else {
                     followedSeasonIds.remove(seasonId)
+                    followStatusValueCache.remove(seasonId)
                 }
                 val updatedUserStatus = currentState.seasonDetail.userStatus?.copy(
                     follow = if (newIsFollowing) 1 else 0,
                     followStatus = if (newIsFollowing) {
-                        maxOf(currentState.seasonDetail.userStatus?.followStatus ?: 0, 1)
+                        status
                     } else {
                         0
                     }
@@ -513,7 +567,13 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 _uiState.value = currentState.copy(seasonDetail = updatedDetail)
                 
                 //  显示 Toast 反馈
-                _toastEvent.send(if (isFollowing) "已取消追番" else "追番成功")
+                _toastEvent.send(
+                    if (newIsFollowing) {
+                        "已标记为${resolveBangumiFollowStatusLabel(updatedUserStatus)}"
+                    } else {
+                        "已取消追番"
+                    }
+                )
             } else {
                 _toastEvent.send("操作失败，请重试")
             }

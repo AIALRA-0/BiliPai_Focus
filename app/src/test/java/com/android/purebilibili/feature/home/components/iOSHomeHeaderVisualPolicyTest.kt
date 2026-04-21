@@ -7,9 +7,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -74,7 +76,7 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `search content export layer is enabled only while liquid glass backdrop is in motion`() {
+    fun `search content export layer stays disabled to avoid scroll flicker`() {
         val active = resolveHomeTopSearchRefractionLayerPolicy(
             renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
             hasBackdrop = true,
@@ -97,9 +99,9 @@ class iOSHomeHeaderVisualPolicyTest {
             isTransitionRunning = false
         )
 
-        assertTrue(active.captureContentLayer)
+        assertFalse(active.captureContentLayer)
         assertFalse(active.useExportedBackdrop)
-        assertTrue(active.overlayAlpha > 0f)
+        assertEquals(0f, active.overlayAlpha, 0.0001f)
         assertEquals(1f, active.visibleContentAlpha, 0.0001f)
         assertEquals(0f, active.exportTranslationMultiplier, 0.0001f)
         assertFalse(idle.captureContentLayer)
@@ -161,6 +163,26 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(48.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
         assertEquals(46.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
         assertEquals(44.dp, resolveHomeTopTabRowHeight(isTabFloating = false, uiPreset = UiPreset.MD3))
+    }
+
+    @Test
+    fun `md3 home header expands top tab row for icon plus text`() {
+        assertEquals(
+            52.dp,
+            resolveHomeTopTabRowHeight(
+                isTabFloating = false,
+                uiPreset = UiPreset.MD3,
+                labelMode = 0
+            )
+        )
+        assertEquals(
+            56.dp,
+            resolveHomeTopTabRowHeight(
+                isTabFloating = true,
+                uiPreset = UiPreset.MD3,
+                labelMode = 0
+            )
+        )
     }
 
     @Test
@@ -237,6 +259,53 @@ class iOSHomeHeaderVisualPolicyTest {
         )
         assertEquals(48f, layout.tabRowHeightPx, 0.0001f)
         assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `miuix unified search keeps blur and liquid glass render modes`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                useUnifiedPanel = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+                uiPreset = UiPreset.MD3,
+                useUnifiedPanel = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `miuix unified top tabs keep their local glass render mode and surface`() {
+        val tabColor = Color.White.copy(alpha = 0.42f)
+
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopUnifiedTabChromeRenderMode(
+                localTabChromeRenderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                useUnifiedLiquidChrome = false
+            )
+        )
+        assertEquals(
+            tabColor.copy(alpha = 0.5f),
+            resolveHomeTopUnifiedTabSurfaceColor(
+                tabContainerColor = tabColor,
+                tabOverlayAlpha = 0.5f,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                useUnifiedLiquidChrome = false
+            )
+        )
     }
 
     @Test
@@ -379,10 +448,93 @@ class iOSHomeHeaderVisualPolicyTest {
 
         assertTrue(searchShape is RoundedCornerShape)
         assertTrue(edgeShape is RoundedCornerShape)
-        assertNotEquals(CircleShape, edgeShape as Shape)
+        assertNotEquals(CircleShape, edgeShape)
         assertEquals(48.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         assertEquals(16.dp, resolveHomeTopSearchContentHorizontalPadding(UiPreset.MD3))
         assertEquals(10.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
+    }
+
+    @Test
+    fun `android native miuix home header uses denser search and edge geometry`() {
+        val searchShape = resolveHomeTopSearchContainerShape(
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+        val edgeShape = resolveHomeTopEdgeButtonShape(
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertTrue(searchShape is RoundedCornerShape)
+        assertTrue(edgeShape is RoundedCornerShape)
+        assertEquals(
+            50.dp,
+            resolveHomeTopSearchBarHeight(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            46.dp,
+            resolveHomeTopSearchPillHeight(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            14.dp,
+            resolveHomeTopSearchContentHorizontalPadding(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            8.dp,
+            resolveHomeTopSearchIconTextGap(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            7.dp,
+            resolveHomeTopEdgeControlGap(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `android native miuix home header keeps unified panel compact with softer radius`() {
+        assertEquals(
+            9.dp,
+            resolveHomeTopUnifiedPanelInnerPadding(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            18.dp,
+            resolveHomeTopUnifiedPanelCornerRadius(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            4.dp,
+            resolveHomeTopSearchToTabsSpacing(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            59.dp,
+            resolveHomeTopSearchCollapseDistance(
+                searchBarHeight = 50.dp,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
     }
 
     @Test
@@ -468,15 +620,65 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `top chrome uses plain when blur and liquid glass are disabled`() {
+    fun `top chrome uses blur when only header blur is enabled`() {
         assertEquals(
-            TopTabMaterialMode.PLAIN,
+            TopTabMaterialMode.BLUR,
             resolveHomeTopChromeMaterialMode(
                 isHeaderBlurEnabled = true,
                 isBottomBarBlurEnabled = false,
                 isLiquidGlassEnabled = false
             )
         )
+    }
+
+    @Test
+    fun `top chrome uses liquid glass when header blur is off but liquid glass remains enabled`() {
+        assertEquals(
+            TopTabMaterialMode.LIQUID_GLASS,
+            resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = false,
+                isBottomBarBlurEnabled = true,
+                isLiquidGlassEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun `top chrome uses blur when linked bottom bar blur is enabled`() {
+        assertEquals(
+            TopTabMaterialMode.BLUR,
+            resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = false,
+                isBottomBarBlurEnabled = true,
+                isLiquidGlassEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun `home top keeps md3 material shell floating with ordinary blur`() {
+        val appearance = resolveHomeTopLinkedBottomBarAppearance(
+            homeSettings = HomeSettings(),
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MATERIAL3
+        )
+
+        assertTrue(appearance.isFloating)
+        assertTrue(appearance.blurEnabled)
+        assertFalse(appearance.liquidGlassEnabled)
+    }
+
+    @Test
+    fun `home top keeps miuix shell floating without inheriting bottom liquid glass`() {
+        val appearance = resolveHomeTopLinkedBottomBarAppearance(
+            homeSettings = HomeSettings(),
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertTrue(appearance.isFloating)
+        assertTrue(appearance.blurEnabled)
+        assertFalse(appearance.liquidGlassEnabled)
     }
 
     @Test
@@ -600,6 +802,31 @@ class iOSHomeHeaderVisualPolicyTest {
             HomeTopChromeRenderMode.PLAIN,
             resolveHomeTopSearchChromeRenderMode(
                 renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                useUnifiedPanel = true
+            )
+        )
+    }
+
+    @Test
+    fun `miuix top chrome prefers blur over liquid glass when blur is enabled`() {
+        assertEquals(
+            TopTabMaterialMode.BLUR,
+            resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = true,
+                isBottomBarBlurEnabled = true,
+                isLiquidGlassEnabled = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `unified home header keeps liquid search chrome when top shell uses liquid glass`() {
+        assertEquals(
+            HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
                 uiPreset = UiPreset.MD3,
                 useUnifiedPanel = true
             )
@@ -744,9 +971,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `light mode top tab unselected color uses black like bottom bar`() {
+    fun `light mode top tab unselected color keeps softer bottom bar style contrast`() {
         assertEquals(
-            Color.Black,
+            Color.Black.copy(alpha = 0.72f),
             resolveTopTabUnselectedColor(isLightMode = true)
         )
     }

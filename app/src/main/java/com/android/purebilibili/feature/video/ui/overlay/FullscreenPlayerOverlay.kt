@@ -14,6 +14,7 @@ import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
+import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
@@ -149,12 +150,57 @@ fun FullscreenPlayerOverlay(
     var showQualityMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var keepFullscreenPlaybackAwake by remember(player) {
+        mutableStateOf(
+            player?.let {
+                shouldKeepVideoPlaybackAwake(
+                    playWhenReady = it.playWhenReady,
+                    isPlaying = it.isPlaying,
+                    playbackState = it.playbackState
+                )
+            } ?: false
+        )
+    }
     var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
     val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
     var smartOcclusionModuleState by remember { mutableStateOf(FaceOcclusionModuleState.Checking) }
     var smartOcclusionDownloadProgress by remember { mutableStateOf<Int?>(null) }
     //  共享弹幕管理器（横竖屏切换保持状态，同时可用于手势 seek 同步）
     val danmakuManager = rememberDanmakuManager()
+
+    DisposableEffect(player) {
+        val exoPlayer = player
+        if (exoPlayer == null) {
+            keepFullscreenPlaybackAwake = false
+            onDispose { }
+        } else {
+            fun updateAwakeState() {
+                keepFullscreenPlaybackAwake = shouldKeepVideoPlaybackAwake(
+                    playWhenReady = exoPlayer.playWhenReady,
+                    isPlaying = exoPlayer.isPlaying,
+                    playbackState = exoPlayer.playbackState
+                )
+            }
+            updateAwakeState()
+            val listener = object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    updateAwakeState()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    updateAwakeState()
+                }
+
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    updateAwakeState()
+                }
+            }
+            exoPlayer.addListener(listener)
+            onDispose {
+                exoPlayer.removeListener(listener)
+            }
+        }
+    }
     
     // 手势状态
     var gestureMode by remember { mutableStateOf(FullscreenGestureMode.None) }
@@ -250,9 +296,6 @@ fun FullscreenPlayerOverlay(
         //  首次进入时应用沉浸式
         applyImmersiveMode()
         
-        // 保持屏幕常亮
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        
         //  [关键修复] 生命周期观察器：返回前台时重新应用沉浸式模式
         val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
@@ -287,6 +330,20 @@ fun FullscreenPlayerOverlay(
             
             // 取消屏幕常亮
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    DisposableEffect(context, keepFullscreenPlaybackAwake) {
+        val hostWindow = (context as? Activity)?.window
+        if (keepFullscreenPlaybackAwake) {
+            hostWindow?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            hostWindow?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            if (keepFullscreenPlaybackAwake) {
+                hostWindow?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
         }
     }
     
@@ -696,7 +753,7 @@ fun FullscreenPlayerOverlay(
                         PlayerView(ctx).apply {
                             this.player = exoPlayer
                             useController = false
-                            keepScreenOn = true
+                            keepScreenOn = keepFullscreenPlaybackAwake
                             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                             resizeMode = aspectRatio.playerResizeMode
                             playerViewRef = this
@@ -704,6 +761,7 @@ fun FullscreenPlayerOverlay(
                     },
                     update = { playerView ->
                         playerView.player = exoPlayer
+                        playerView.keepScreenOn = keepFullscreenPlaybackAwake
                         playerView.resizeMode = aspectRatio.playerResizeMode
                         playerViewRef = playerView
                     },

@@ -4,7 +4,6 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +66,7 @@ private fun resolveForwardedImagePreviewState(
 fun ForwardedContent(
     orig: DynamicItem,
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit,
     onUserClick: (Long) -> Unit,
     gifImageLoader: ImageLoader
 ) {
@@ -87,9 +86,8 @@ fun ForwardedContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) // 主题自适应背景
-            .padding(12.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .padding(horizontal = 15.dp, vertical = 8.dp)
     ) {
         // 原作者
         if (author != null) {
@@ -125,11 +123,23 @@ fun ForwardedContent(
         // 原视频
         content?.major?.archive?.let { archive ->
             val playableBvid = resolveArchivePlayableBvid(archive)
-            VideoCardSmall(
+            VideoCardLarge(
                 archive = archive,
                 publishTs = author?.pub_ts ?: 0L,
                 onClick = { playableBvid?.let(onVideoClick) }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        content?.major?.pgc?.let { pgc ->
+            val bangumiTarget = resolveArchiveBangumiTarget(pgc)
+            VideoCardLarge(
+                archive = pgc,
+                publishTs = author?.pub_ts ?: 0L,
+                cornerBadgeText = "番剧",
+                onClick = { bangumiTarget?.let { onBangumiClick(it.seasonId, it.epId) } }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
         }
         
         // 原图片
@@ -143,6 +153,7 @@ fun ForwardedContent(
                     previewSourceRect = rect
                 }
             )
+            Spacer(modifier = Modifier.height(8.dp))
         }
         
         //  [新增] 原 Opus 图文动态
@@ -179,6 +190,21 @@ fun ForwardedContent(
                         previewState = state
                         previewSourceRect = rect
                     }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        content?.major?.ugc_season?.let { season ->
+            val seasonArchive = resolveUgcSeasonArchiveFallback(season)
+            val playableBvid = resolveUgcSeasonPlayableBvid(season)
+            if (seasonArchive != null) {
+                VideoCardLarge(
+                    archive = seasonArchive,
+                    publishTs = author?.pub_ts ?: 0L,
+                    isCollection = true,
+                    collectionTitle = season.title,
+                    onClick = { playableBvid?.let(onVideoClick) }
                 )
             }
         }

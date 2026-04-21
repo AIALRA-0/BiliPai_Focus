@@ -42,17 +42,28 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun selectedHomeBottomBarTap_requestsScrollToTop_insteadOfNavigate() {
+    fun selectedBottomBarTap_requestsReselect_insteadOfNavigate() {
         val action = resolveBottomBarSelectionAction(
             currentItem = BottomNavItem.HOME,
             tappedItem = BottomNavItem.HOME
         )
 
-        assertEquals(BottomBarSelectionAction.HOME_RESELECT, action)
+        assertEquals(BottomBarSelectionAction.RESELECT, action)
     }
 
     @Test
-    fun nonHomeOrNonReselectBottomBarTap_keepsNavigateAction() {
+    fun matchingHistoryBottomBarTap_alsoUsesReselectAction() {
+        assertEquals(
+            BottomBarSelectionAction.RESELECT,
+            resolveBottomBarSelectionAction(
+                currentItem = BottomNavItem.HISTORY,
+                tappedItem = BottomNavItem.HISTORY
+            )
+        )
+    }
+
+    @Test
+    fun nonReselectBottomBarTap_keepsNavigateAction() {
         assertEquals(
             BottomBarSelectionAction.NAVIGATE,
             resolveBottomBarSelectionAction(

@@ -33,6 +33,7 @@ import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.android.purebilibili.core.ui.common.copyOnClick
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
+import com.android.purebilibili.core.ui.components.UserUpBadge
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
 import com.android.purebilibili.core.util.CardPositionManager
@@ -500,22 +501,7 @@ fun UpInfoSection(
                 }
             }
         } else {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .height(34.dp)
-                    .widthIn(min = 40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "UP",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+            UserUpBadge()
         }
         
         Spacer(Modifier.width(10.dp))
@@ -558,14 +544,7 @@ fun UpInfoSection(
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop
                         )
                     } else {
-                        Icon(
-                            imageVector = CupertinoIcons.Default.PersonCropCircle,
-                            contentDescription = "UP主标识",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .padding(horizontal = 2.dp)
-                                .size(13.dp)
-                        )
+                        UserUpBadge(modifier = Modifier.padding(horizontal = 2.dp))
                     }
                     Spacer(Modifier.width(4.dp))
                 }

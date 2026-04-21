@@ -1,14 +1,14 @@
 package com.android.purebilibili.core.ui.animation
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.motion.continuityTween
+import com.android.purebilibili.core.ui.motion.gentleEnterTween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -146,28 +146,19 @@ fun Modifier.staggeredEntrance(
         launch {
             alpha.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = policy.alphaDurationMs,
-                    easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f) // Ease-out
-                )
+                animationSpec = gentleEnterTween(policy.alphaDurationMs)
             )
         }
         launch {
             translationY.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = policy.translationDurationMs,
-                    easing = CubicBezierEasing(0.18f, 0.8f, 0.2f, 1.0f) // Fast-out, slow-in
-                )
+                animationSpec = continuityTween(policy.translationDurationMs)
             )
         }
         launch {
             scale.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = policy.scaleDurationMs,
-                    easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
-                )
+                animationSpec = gentleEnterTween(policy.scaleDurationMs)
             )
         }
     }

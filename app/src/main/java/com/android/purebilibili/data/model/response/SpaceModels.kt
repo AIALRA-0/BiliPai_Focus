@@ -1,7 +1,10 @@
+@file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+
 package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 // =============== UP主空间 API 响应模型 ===============
 
@@ -85,7 +88,18 @@ data class SpaceAggregateData(
     val live: SpaceLiveRoom? = null,
     val archive: SpaceAggregateArchive? = null,
     val article: SpaceAggregateArticleSection? = null,
-    val audios: SpaceAggregateAudioSection? = null
+    val audios: SpaceAggregateAudioSection? = null,
+    @SerialName("coin_archive")
+    val coinArchive: SpaceAggregateArchive? = null,
+    @SerialName("like_archive")
+    val likeArchive: SpaceAggregateArchive? = null,
+    val season: SpaceAggregateArchive? = null,
+    @SerialName("favourite2")
+    val favourite2: SpaceAggregateFavoriteSection? = null,
+    val comic: SpaceAggregateArchive? = null,
+    @SerialName("ugc_season")
+    val ugcSeason: SpaceAggregateArchive? = null,
+    val tab2: List<SpaceAggregateTab> = emptyList()
 )
 
 @Serializable
@@ -127,15 +141,24 @@ data class SpaceAggregateRelation(
 
 @Serializable
 data class SpaceAggregateImages(
+    @JsonNames("imgUrl", "img_url")
     val imgUrl: String = "",
-    @SerialName("night_imgurl")
+    @JsonNames("night_imgurl", "night_img_url", "nightImgurl")
     val nightImgUrl: String = ""
 )
 
 @Serializable
 data class SpaceAggregateArchive(
+    @SerialName("episodic_button")
+    val episodicButton: SpaceAggregateEpisodicButton? = null,
     val count: Int = 0,
     val item: List<SpaceAggregateArchiveItem> = emptyList()
+)
+
+@Serializable
+data class SpaceAggregateEpisodicButton(
+    val text: String = "",
+    val uri: String = ""
 )
 
 @Serializable
@@ -145,11 +168,28 @@ data class SpaceAggregateArchiveItem(
     val title: String = "",
     val cover: String = "",
     val author: String = "",
+    val subtitle: String = "",
+    @SerialName("cover_icon")
+    val coverIcon: String = "",
+    val uri: String = "",
+    val param: String = "",
+    val goto: String = "",
     val length: String = "",
+    val duration: Int = 0,
     val play: Int = 0,
+    val danmaku: Int = 0,
     val reply: Int = 0,
     val ctime: Long = 0,
-    val tname: String = ""
+    val tname: String = "",
+    @SerialName("first_cid")
+    val firstCid: Long = 0,
+    @SerialName("is_pgc")
+    val isPgc: Boolean = false,
+    @SerialName("publish_time_text")
+    val publishTimeText: String = "",
+    val styles: String = "",
+    val label: String = "",
+    val badges: List<SpaceAggregateBadge> = emptyList()
 )
 
 @Serializable
@@ -162,6 +202,50 @@ data class SpaceAggregateArticleSection(
 data class SpaceAggregateAudioSection(
     val count: Int = 0,
     val item: List<SpaceAudioItem> = emptyList()
+)
+
+@Serializable
+data class SpaceAggregateFavoriteSection(
+    val count: Int = 0,
+    val item: List<SpaceAggregateFavoriteItem> = emptyList()
+)
+
+@Serializable
+data class SpaceAggregateFavoriteItem(
+    val id: Long = 0,
+    val fid: Long = 0,
+    val mid: Long = 0,
+    val title: String = "",
+    val cover: String = "",
+    val count: Int = 0,
+    @SerialName("media_id")
+    val mediaId: Long = 0,
+    @SerialName("media_count")
+    val media_count: Int = 0,
+    @SerialName("is_public")
+    val isPublic: Int = 0
+)
+
+@Serializable
+data class SpaceAggregateBadge(
+    val text: String = ""
+)
+
+@Serializable
+data class SpaceAggregateTab(
+    val title: String = "",
+    val param: String = "",
+    val items: List<SpaceAggregateTabItem> = emptyList()
+)
+
+@Serializable
+data class SpaceAggregateTabItem(
+    val title: String = "",
+    val param: String = "",
+    @SerialName("season_id")
+    val seasonId: Long = 0,
+    @SerialName("series_id")
+    val seriesId: Long = 0
 )
 
 // /x/space/wbi/arc/search UP主投稿视频列表

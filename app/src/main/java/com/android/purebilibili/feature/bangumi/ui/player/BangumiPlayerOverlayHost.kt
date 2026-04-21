@@ -7,6 +7,7 @@ import com.android.purebilibili.feature.bangumi.BangumiOverlayUnsupportedAction
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.feature.bangumi.resolveBangumiOverlayQualityLabel
 import com.android.purebilibili.feature.bangumi.resolveBangumiOverlayShareTitle
+import com.android.purebilibili.feature.bangumi.resolveBangumiOverlaySwitchableQualityIds
 import com.android.purebilibili.feature.bangumi.resolveBangumiUnsupportedOverlayActionMessage
 import com.android.purebilibili.feature.bangumi.shouldShowBangumiOverlayDislikeAction
 import com.android.purebilibili.core.util.ShareUtils
@@ -36,6 +37,8 @@ internal fun BangumiPlayerOverlayHost(
     currentQuality: Int,
     acceptQuality: List<Int>,
     acceptDescription: List<String>,
+    isLoggedIn: Boolean,
+    isVip: Boolean,
     onQualityChange: (Int) -> Unit,
     onBack: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -70,6 +73,7 @@ internal fun BangumiPlayerOverlayHost(
         acceptQuality = acceptQuality,
         acceptDescription = acceptDescription
     )
+    val switchableQualityIds = resolveBangumiOverlaySwitchableQualityIds(acceptQuality)
 
     VideoPlayerOverlay(
         player = player,
@@ -80,6 +84,8 @@ internal fun BangumiPlayerOverlayHost(
         currentQualityLabel = currentQualityLabel,
         qualityLabels = acceptDescription,
         qualityIds = acceptQuality,
+        switchableQualityIds = switchableQualityIds,
+        isLoggedIn = isLoggedIn,
         onQualitySelected = { index ->
             acceptQuality.getOrNull(index)?.let(onQualityChange)
         },
@@ -95,6 +101,7 @@ internal fun BangumiPlayerOverlayHost(
         currentQuality = currentQuality,
         currentVideoUrl = currentVideoUrl,
         currentAudioUrl = currentAudioUrl,
+        isVip = isVip,
         isLiked = isLiked,
         isCoined = coinCount > 0,
         coinCount = coinCount,
@@ -128,9 +135,7 @@ internal fun BangumiPlayerOverlayHost(
         showDislikeAction = shouldShowBangumiOverlayDislikeAction(),
         coverUrl = coverUrl,
         onReloadVideo = onReloadVideo,
-        onQualityChange = { qualityId, _ ->
-            onQualityChange(qualityId)
-        },
+        onQualityChange = onQualityChange,
         onPipClick = {},
         onCaptureScreenshot = onCaptureScreenshot,
         onAudioOnlyToggle = {

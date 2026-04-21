@@ -55,6 +55,23 @@ object FormatUtils {
         return buildSizedImageUrl(url, width = DEFAULT_IMAGE_WIDTH, height = DEFAULT_IMAGE_HEIGHT)
     }
 
+    fun resolveVideoCoverUrl(
+        url: String?,
+        useLowQuality: Boolean
+    ): String {
+        val normalized = normalizeImageUrl(url)
+        if (normalized.isEmpty()) return normalized
+        return if (useLowQuality) {
+            buildSizedImageUrl(
+                normalized,
+                width = DEFAULT_IMAGE_WIDTH,
+                height = DEFAULT_IMAGE_HEIGHT
+            )
+        } else {
+            normalized
+        }
+    }
+
     fun buildSizedImageUrl(
         url: String?,
         width: Int,

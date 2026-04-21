@@ -138,7 +138,8 @@ fun AnimationSettingsContent(
         )
     }
     val isLiquidGlassAvailable = shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)
-    val effectiveLiquidGlassEnabled = state.isLiquidGlassEnabled
+    val topBarLiquidGlassEnabled = state.topBarLiquidGlassEnabled
+    val bottomBarLiquidGlassEnabled = state.bottomBarLiquidGlassEnabled
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
@@ -233,16 +234,25 @@ fun AnimationSettingsContent(
                 Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = settingsEntranceMotionTier)) {
                     IOSGroup {
                         if (isLiquidGlassAvailable) {
-                             IOSSwitchItem(
-                                icon = CupertinoIcons.Default.Drop, 
-                                title = "液态玻璃", 
-                                subtitle = "由 miuix 全局主题统一接管的共享材质高光效果",
-                                checked = effectiveLiquidGlassEnabled,
-                                onCheckedChange = { viewModel.toggleLiquidGlass(it) },
+                            IOSSwitchItem(
+                                icon = CupertinoIcons.Default.Drop,
+                                title = "顶部栏液态玻璃",
+                                subtitle = "首页顶部导航栏的液态玻璃折射效果",
+                                checked = topBarLiquidGlassEnabled,
+                                onCheckedChange = { viewModel.toggleTopBarLiquidGlass(it) },
+                                iconTint = iOSBlue
+                            )
+                            IOSDivider()
+                            IOSSwitchItem(
+                                icon = CupertinoIcons.Default.Drop,
+                                title = "底栏液态玻璃",
+                                subtitle = "底部导航栏的液态玻璃折射效果",
+                                checked = bottomBarLiquidGlassEnabled,
+                                onCheckedChange = { viewModel.toggleBottomBarLiquidGlass(it) },
                                 iconTint = iOSBlue
                             )
                             androidx.compose.animation.AnimatedVisibility(
-                                visible = effectiveLiquidGlassEnabled,
+                                visible = topBarLiquidGlassEnabled || bottomBarLiquidGlassEnabled,
                                 enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                                 exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
                             ) {
@@ -253,7 +263,7 @@ fun AnimationSettingsContent(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "设置页不再开放通透强度和进度调参，首页与底栏统一使用共享材质配方。",
+                                        text = "顶部与底栏共用同一套液态玻璃材质配方，但开关彼此独立。",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

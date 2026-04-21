@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.feature.audio.viewmodel.MusicViewModel
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.BackwardEnd
@@ -113,14 +116,14 @@ private fun MusicDetailContent(
         }
     }
 
-    Scaffold(
+    AdaptiveScaffold(
         containerColor = Color.Black,
         topBar = {
-            TopAppBar(
-                title = {},
+            AdaptiveTopAppBar(
+                title = "",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Outlined.ChevronDown, contentDescription = "Back", tint = Color.White)
+                        Icon(rememberAppBackIcon(), contentDescription = "Back", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -307,4 +310,3 @@ fun formatTime(ms: Long): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
 }
-

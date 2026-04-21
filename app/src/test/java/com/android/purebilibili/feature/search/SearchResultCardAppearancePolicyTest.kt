@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -47,10 +48,12 @@ class SearchResultCardAppearancePolicyTest {
     @Test
     fun genericSearchResultCard_switchesBetweenGlassAndPlainStyles() {
         val glass = resolveSearchResultCardAppearance(
-            liquidGlassEnabled = true
+            liquidGlassEnabled = true,
+            uiPreset = UiPreset.IOS
         )
         val plain = resolveSearchResultCardAppearance(
-            liquidGlassEnabled = false
+            liquidGlassEnabled = false,
+            uiPreset = UiPreset.IOS
         )
 
         assertEquals(SearchResultCardSurfaceStyle.GLASS, glass.surfaceStyle)
@@ -62,5 +65,33 @@ class SearchResultCardAppearancePolicyTest {
         assertEquals(1f, plain.containerAlpha)
         assertEquals(0f, plain.borderAlpha)
         assertEquals(1, plain.shadowElevationDp)
+    }
+
+    @Test
+    fun md3SearchResultCard_usesMoreMaterialSurfaceTuningEvenWhenGlassIsEnabled() {
+        val md3Glass = resolveSearchResultCardAppearance(
+            liquidGlassEnabled = true,
+            uiPreset = UiPreset.MD3
+        )
+
+        assertEquals(SearchResultCardSurfaceStyle.GLASS, md3Glass.surfaceStyle)
+        assertEquals(0.96f, md3Glass.containerAlpha)
+        assertEquals(0f, md3Glass.borderAlpha)
+        assertEquals(1, md3Glass.tonalElevationDp)
+        assertEquals(0, md3Glass.shadowElevationDp)
+    }
+
+    @Test
+    fun md3PlainSearchResultCard_staysFlatAndMaterialWhenGlassIsDisabled() {
+        val md3Plain = resolveSearchResultCardAppearance(
+            liquidGlassEnabled = false,
+            uiPreset = UiPreset.MD3
+        )
+
+        assertEquals(SearchResultCardSurfaceStyle.PLAIN, md3Plain.surfaceStyle)
+        assertEquals(1f, md3Plain.containerAlpha)
+        assertEquals(0f, md3Plain.borderAlpha)
+        assertEquals(1, md3Plain.tonalElevationDp)
+        assertEquals(0, md3Plain.shadowElevationDp)
     }
 }

@@ -4,7 +4,6 @@ package com.android.purebilibili.feature.message
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
-import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.data.model.response.MessageFeedUnreadData
 import com.android.purebilibili.data.model.response.MessageUnreadData
 import com.android.purebilibili.data.model.response.SessionItem
@@ -48,6 +47,15 @@ private fun List<SessionItem>.sortedByPin(): List<SessionItem> =
             .thenByDescending { it.session_ts }
     )
 
+private fun resolveSessionEndTs(sessionTs: Long): Long {
+    if (sessionTs <= 0L) return 0L
+    return when {
+        sessionTs >= 1_000_000_000_000_000L -> sessionTs
+        sessionTs >= 1_000_000_000_000L -> sessionTs * 1_000L
+        else -> sessionTs * 1_000_000L
+    }
+}
+
 class InboxViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow(InboxUiState())
@@ -55,10 +63,6 @@ class InboxViewModel : ViewModel() {
     
     // 用户信息缓存 (跨刷新保持)
     private val userCache = mutableMapOf<Long, UserBasicInfo>()
-    
-    // WBI keys  缓存
-    private var cachedImgKey: String = ""
-    private var cachedSubKey: String = ""
     
     init {
         loadSessions()
@@ -77,6 +81,7 @@ class InboxViewModel : ViewModel() {
             // 初始加载，endTs = 0
             val sessionsResult = MessageRepository.getSessions(
                 sessionType = 4, // 4=所有消息 (包含企业号自动回复)
+                size = 100,
                 endTs = 0
             )
             
@@ -94,24 +99,13 @@ class InboxViewModel : ViewModel() {
                     
                     //  计算下一次加载的游标
                     val lastSession = sessions.lastOrNull()
-                    val nextEndTs = if (lastSession != null) {
-                        // B站 API 需要微秒级时间戳作为游标
-                        // session_ts 是秒级，或者已经是毫秒级？
-                        // 通常 API 返回的是秒 (10位) 或者 毫秒 (13位)
-                        // fetch_session_msgs 使用的是 end_seqno
-                        // get_sessions 使用的是 session_ts
-                        // 根据经验，B站 API 的 end_ts 通常是 session_time * 1000000 (微秒)
-                        // 或者直接取列表最后一条的 session_ts (如果已经是长整型)
-                        lastSession.session_ts * 1000000L
-                    } else {
-                        0L
-                    }
+                    val nextEndTs = resolveSessionEndTs(lastSession?.session_ts ?: 0L)
                     
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         sessions = sessions.sortedByPin(),
                         hasMore = data.has_more == 1,
-                        userInfoMap = userCache.toMap(),
+                        userInfoMap = primeSessionUserCache(sessions).toMap(),
                         endTs = nextEndTs
                     )
                     
@@ -129,42 +123,16 @@ class InboxViewModel : ViewModel() {
     }
     
     /**
-     * 获取 WBI keys (从 nav 接口)
-     */
-    private suspend fun ensureWbiKeys(): Boolean = withContext(Dispatchers.IO) {
-        if (cachedImgKey.isNotEmpty() && cachedSubKey.isNotEmpty()) {
-            return@withContext true
-        }
-        
-        try {
-            val navResp = NetworkModule.api.getNavInfo()
-            val wbiImg = navResp.data?.wbi_img ?: return@withContext false
-            cachedImgKey = wbiImg.img_url.substringAfterLast("/").substringBefore(".")
-            cachedSubKey = wbiImg.sub_url.substringAfterLast("/").substringBefore(".")
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("InboxVM", "ensureWbiKeys error: ${e.message}")
-            false
-        }
-    }
-    
-    /**
      * 异步批量加载用户信息
      */
     private fun loadUserInfos(mids: List<Long>) {
         viewModelScope.launch {
-            // 确保有 WBI keys
-            if (!ensureWbiKeys()) {
-                android.util.Log.e("InboxVM", "Failed to get WBI keys, cannot fetch user info")
-                return@launch
-            }
-            
             // 仅拉取缺失或缓存不完整的用户，避免空值缓存导致后续页面显示缺失
             val toFetch = mids
                 .distinct()
                 .filter { InboxUserInfoResolver.shouldFetchUserInfo(it, userCache) }
             
-            toFetch.forEach { mid ->
+            toFetch.take(24).forEach { mid ->
                 launch {
                     val merged = InboxUserInfoResolver.mergeFetchedUserInfo(
                         existing = userCache[mid],
@@ -186,21 +154,16 @@ class InboxViewModel : ViewModel() {
      */
     private suspend fun fetchUserInfo(mid: Long): UserBasicInfo? = withContext(Dispatchers.IO) {
         try {
-            // WBI签名
-            val params = WbiUtils.sign(
-                mapOf("mid" to mid.toString()),
-                cachedImgKey,
-                cachedSubKey
-            )
-            val response = NetworkModule.spaceApi.getSpaceInfo(params)
+            val response = NetworkModule.api.getUserCard(mid = mid, photo = true)
             
-            if (response.code == 0 && response.data != null) {
+            val card = response.data?.card
+            if (response.code == 0 && card != null) {
                 InboxUserInfoResolver.mergeFetchedUserInfo(
                     existing = null,
                     fetched = UserBasicInfo(
-                        mid = response.data.mid,
-                        name = response.data.name,
-                        face = response.data.face
+                        mid = card.mid.toLongOrNull() ?: mid,
+                        name = card.name,
+                        face = card.face
                     )
                 )
             } else {
@@ -219,15 +182,15 @@ class InboxViewModel : ViewModel() {
     fun loadMoreSessions() {
         if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
 
-        val nextPage = _uiState.value.page + 1
-
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingMore = true)
 
+            val currentState = _uiState.value
             MessageRepository.getSessions(
                 sessionType = 4, // 4=所有消息
-                page = nextPage, // 使用下一页
-                endTs = 0L // [关键] 禁用时间游标，仅使用页码
+                size = 100,
+                page = 1,
+                endTs = currentState.endTs
             ).fold(
                 onSuccess = { data ->
                     val newSessions = data.session_list ?: emptyList()
@@ -238,22 +201,29 @@ class InboxViewModel : ViewModel() {
                         "${it.talker_id}_${it.session_type}" !in existingKeys
                     }
                     
-                    val allSessions = (_uiState.value.sessions + filteredNewSessions).sortedByPin()
-                    
-                    // 计算更新后的 cursor (虽然不再用于请求，但可以保留在状态中作为参考，或者直接置0)
-                    val nextEndTs = 0L
-                    
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingMore = false,
-                        sessions = allSessions,
-                        hasMore = data.has_more == 1 && filteredNewSessions.isNotEmpty(),
-                        page = nextPage, // Update page
-                        userInfoMap = userCache.toMap(),
-                        endTs = nextEndTs
+                    val allSessions = (_uiState.value.sessions + filteredNewSessions)
+                        .distinctBy { "${it.talker_id}_${it.session_type}" }
+                        .sortedByPin()
+                    val nextEndTs = resolveSessionEndTs(
+                        (filteredNewSessions.lastOrNull() ?: newSessions.lastOrNull())?.session_ts ?: 0L
                     )
+                    
+                    val cursorFetchAddedNewItems = filteredNewSessions.isNotEmpty()
+                    if (!cursorFetchAddedNewItems && currentState.page >= 1) {
+                        loadMoreSessionsByPageFallback(currentState.page + 1)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingMore = false,
+                            sessions = allSessions,
+                            hasMore = data.has_more == 1 && nextEndTs > 0L,
+                            page = currentState.page + 1,
+                            userInfoMap = primeSessionUserCache(filteredNewSessions).toMap(),
+                            endTs = nextEndTs
+                        )
 
-                    // 异步加载用户信息
-                    loadUserInfos(filteredNewSessions.map { it.talker_id })
+                        // 异步加载用户信息
+                        loadUserInfos(filteredNewSessions.map { it.talker_id })
+                    }
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(isLoadingMore = false)
@@ -274,6 +244,7 @@ class InboxViewModel : ViewModel() {
             // 刷新时重置游标
             val sessionsResult = MessageRepository.getSessions(
                 sessionType = 4, // 4=所有消息
+                size = 100,
                 endTs = 0
             )
             
@@ -291,17 +262,13 @@ class InboxViewModel : ViewModel() {
                     
                     // 计算 cursor
                     val lastSession = sessions.lastOrNull()
-                    val nextEndTs = if (lastSession != null) {
-                        lastSession.session_ts * 1000000L
-                    } else {
-                        0L
-                    }
+                    val nextEndTs = resolveSessionEndTs(lastSession?.session_ts ?: 0L)
                     
                     _uiState.value = _uiState.value.copy(
                         isRefreshing = false,
                         sessions = sessions.sortedByPin(),
                         hasMore = data.has_more == 1,
-                        userInfoMap = userCache.toMap(),
+                        userInfoMap = primeSessionUserCache(sessions).toMap(),
                         endTs = nextEndTs
                     )
                     
@@ -367,5 +334,59 @@ class InboxViewModel : ViewModel() {
      */
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    private fun primeSessionUserCache(sessions: List<SessionItem>): Map<Long, UserBasicInfo> {
+        sessions.forEach { session ->
+            val accountInfo = session.account_info ?: return@forEach
+            val merged = InboxUserInfoResolver.mergeFetchedUserInfo(
+                existing = userCache[session.talker_id],
+                fetched = UserBasicInfo(
+                    mid = session.talker_id,
+                    name = accountInfo.name,
+                    face = accountInfo.avatarUrl
+                )
+            ) ?: return@forEach
+            userCache[session.talker_id] = merged
+        }
+        return userCache
+    }
+
+    private fun loadMoreSessionsByPageFallback(nextPage: Int) {
+        viewModelScope.launch {
+            MessageRepository.getSessions(
+                sessionType = 4,
+                size = 100,
+                page = nextPage,
+                endTs = 0L
+            ).fold(
+                onSuccess = { data ->
+                    val newSessions = data.session_list.orEmpty()
+                    val existingKeys = _uiState.value.sessions
+                        .map { "${it.talker_id}_${it.session_type}" }
+                        .toSet()
+                    val filteredNewSessions = newSessions.filter {
+                        "${it.talker_id}_${it.session_type}" !in existingKeys
+                    }
+                    val allSessions = (_uiState.value.sessions + filteredNewSessions)
+                        .distinctBy { "${it.talker_id}_${it.session_type}" }
+                        .sortedByPin()
+                    val nextEndTs = resolveSessionEndTs(newSessions.lastOrNull()?.session_ts ?: 0L)
+
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMore = false,
+                        sessions = allSessions,
+                        hasMore = data.has_more == 1 || filteredNewSessions.isNotEmpty(),
+                        page = nextPage,
+                        userInfoMap = primeSessionUserCache(filteredNewSessions).toMap(),
+                        endTs = nextEndTs
+                    )
+                    loadUserInfos(filteredNewSessions.map { it.talker_id })
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                }
+            )
+        }
     }
 }

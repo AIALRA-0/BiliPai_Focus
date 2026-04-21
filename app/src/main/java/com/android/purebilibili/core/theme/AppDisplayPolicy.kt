@@ -3,7 +3,10 @@ package com.android.purebilibili.core.theme
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSpecified
 import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.theme.TextStyles
 
 private const val DISPLAY_NARROW_WIDTH_THRESHOLD_DP = 360
 private const val DISPLAY_DPI_OVERRIDE_PERCENT_MIN = 85
@@ -119,10 +122,14 @@ fun buildDisplayMetricsSnapshot(
 
 private fun TextStyle.scaled(multiplier: Float): TextStyle {
     return copy(
-        fontSize = fontSize * multiplier,
-        lineHeight = lineHeight * multiplier,
-        letterSpacing = letterSpacing * multiplier
+        fontSize = fontSize.scaled(multiplier),
+        lineHeight = lineHeight.scaled(multiplier),
+        letterSpacing = letterSpacing.scaled(multiplier)
     )
+}
+
+private fun TextUnit.scaled(multiplier: Float): TextUnit {
+    return if (isSpecified) this * multiplier else this
 }
 
 fun Typography.scaled(multiplier: Float): Typography {
@@ -143,5 +150,25 @@ fun Typography.scaled(multiplier: Float): Typography {
         labelLarge = labelLarge.scaled(multiplier),
         labelMedium = labelMedium.scaled(multiplier),
         labelSmall = labelSmall.scaled(multiplier)
+    )
+}
+
+fun TextStyles.scaled(multiplier: Float): TextStyles {
+    if (multiplier == 1f) return this
+    return copy(
+        main = main.scaled(multiplier),
+        paragraph = paragraph.scaled(multiplier),
+        body1 = body1.scaled(multiplier),
+        body2 = body2.scaled(multiplier),
+        button = button.scaled(multiplier),
+        footnote1 = footnote1.scaled(multiplier),
+        footnote2 = footnote2.scaled(multiplier),
+        headline1 = headline1.scaled(multiplier),
+        headline2 = headline2.scaled(multiplier),
+        subtitle = subtitle.scaled(multiplier),
+        title1 = title1.scaled(multiplier),
+        title2 = title2.scaled(multiplier),
+        title3 = title3.scaled(multiplier),
+        title4 = title4.scaled(multiplier)
     )
 }

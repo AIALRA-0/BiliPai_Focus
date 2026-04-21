@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -40,6 +41,8 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.store.TokenManager
@@ -62,10 +65,10 @@ fun PlaybackSettingsScreen(
     val state by viewModel.state.collectAsState()
     val screenTitle = stringResource(R.string.playback_settings_title)
     val backLabel = stringResource(R.string.common_back)
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(screenTitle, fontWeight = FontWeight.SemiBold) },
+            AdaptiveTopAppBar(
+                title = screenTitle,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = backLabel)
@@ -95,6 +98,8 @@ fun PlaybackSettingsContent(
     state: SettingsUiState,
     modifier: Modifier = Modifier
 ) {
+    val listState = rememberLazyListState()
+    val focusRequest by SettingsSearchFocusController.request.collectAsState()
     val context = LocalContext.current
     val warningTint = rememberAdaptiveSemanticIconTint(iOSOrange)
     val windowSizeClass = LocalWindowSizeClass.current
@@ -108,6 +113,13 @@ fun PlaybackSettingsContent(
     }
     val effectiveMotionTier = remember(deviceUiProfile.motionTier) {
         resolveSettingsEntranceMotionTier(deviceUiProfile.motionTier)
+    }
+    LaunchedEffect(focusRequest?.token) {
+        val request = focusRequest ?: return@LaunchedEffect
+        if (request.target != SettingsSearchTarget.PLAYBACK) return@LaunchedEffect
+        val index = resolvePlaybackSettingsScrollIndex(request.focusId) ?: return@LaunchedEffect
+        listState.animateScrollToItem(index)
+        SettingsSearchFocusController.clear(request.token)
     }
 
     LaunchedEffect(Unit) {
@@ -212,6 +224,7 @@ fun PlaybackSettingsContent(
     }
 
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = WindowInsets.navigationBars.asPaddingValues()
     ) {
@@ -1287,7 +1300,7 @@ fun PlaybackSettingsContent(
                             icon = CupertinoIcons.Default.Sparkles,
                             title = "自动最高画质",
                             subtitle = if (autoHighestQualityEnabled) {
-                                "已开启，始终请求账号与设备可用的最高画质"
+                                "已开启，优先请求账号与设备可稳播的最高画质（最高到 4K HDR）"
                             } else {
                                 "全局开关，开启后覆盖下方无线网络和流量默认画质"
                             },
@@ -1396,6 +1409,10 @@ fun PlaybackSettingsContent(
                         .getDataSaverMode(context).collectAsState(
                             initial = com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY
                         )
+                    val homeSettings by com.android.purebilibili.core.store.SettingsManager
+                        .getHomeSettings(context).collectAsState(
+                            initial = com.android.purebilibili.core.store.HomeSettings()
+                        )
                     val dataSaverModeOptions = listOf(
                         PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.OFF, "关闭"),
                         PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY, "仅移动数据"),
@@ -1415,6 +1432,26 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
+
+                        IOSDivider()
+
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Photo,
+                            title = "省流量时降低首页封面清晰度",
+                            subtitle = if (homeSettings.lowQualityHomeCoverInDataSaver) {
+                                "开启后仅在省流量模式生效时加载低清晰度首页封面"
+                            } else {
+                                "默认始终加载高清首页封面"
+                            },
+                            checked = homeSettings.lowQualityHomeCoverInDataSaver,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setLowQualityHomeCoverInDataSaver(context, enabled)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
                         
                         //  功能说明
                         IOSDivider()
@@ -1432,7 +1469,7 @@ fun PlaybackSettingsContent(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "开启后将自动降低封面图质量、禁用预加载、限制视频最高480P",
+                                "省流量模式会禁用预加载、限制视频最高480P；首页封面是否降清晰度由上方开关决定。",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 lineHeight = 16.sp

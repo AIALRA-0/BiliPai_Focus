@@ -6,10 +6,14 @@ import com.android.purebilibili.data.model.response.SpaceAggregateArticleSection
 import com.android.purebilibili.data.model.response.SpaceAggregateAudioSection
 import com.android.purebilibili.data.model.response.SpaceAggregateCard
 import com.android.purebilibili.data.model.response.SpaceAggregateData
+import com.android.purebilibili.data.model.response.SpaceAggregateFavoriteItem
+import com.android.purebilibili.data.model.response.SpaceAggregateFavoriteSection
 import com.android.purebilibili.data.model.response.SpaceAggregateImages
 import com.android.purebilibili.data.model.response.SpaceAggregateLevelInfo
 import com.android.purebilibili.data.model.response.SpaceAggregateLikes
 import com.android.purebilibili.data.model.response.SpaceAggregateRelation
+import com.android.purebilibili.data.model.response.SpaceAggregateTab
+import com.android.purebilibili.data.model.response.SpaceAggregateTabItem
 import com.android.purebilibili.data.model.response.SpaceArticleAuthor
 import com.android.purebilibili.data.model.response.SpaceArticleCategory
 import com.android.purebilibili.data.model.response.SpaceArticleItem
@@ -109,6 +113,74 @@ class SpaceAggregatedModelMappingTest {
                             duration = 189
                         )
                     )
+                ),
+                favourite2 = SpaceAggregateFavoriteSection(
+                    count = 1,
+                    item = listOf(
+                        SpaceAggregateFavoriteItem(
+                            id = 12L,
+                            mediaId = 12L,
+                            title = "收藏夹",
+                            count = 18,
+                            media_count = 18
+                        )
+                    )
+                ),
+                coinArchive = SpaceAggregateArchive(
+                    count = 1,
+                    item = listOf(
+                        SpaceAggregateArchiveItem(
+                            aid = 2001L,
+                            bvid = "BVcoin1",
+                            title = "最近投币",
+                            cover = "https://i0.hdslb.com/bfs/archive/c.jpg"
+                        )
+                    )
+                ),
+                likeArchive = SpaceAggregateArchive(
+                    count = 1,
+                    item = listOf(
+                        SpaceAggregateArchiveItem(
+                            aid = 2002L,
+                            bvid = "BVlike1",
+                            title = "最近点赞",
+                            cover = "https://i0.hdslb.com/bfs/archive/d.jpg"
+                        )
+                    )
+                ),
+                season = SpaceAggregateArchive(
+                    count = 1,
+                    item = listOf(
+                        SpaceAggregateArchiveItem(
+                            title = "追番预览",
+                            cover = "https://i0.hdslb.com/bfs/bangumi/a.jpg",
+                            goto = "bangumi",
+                            param = "5566"
+                        )
+                    )
+                ),
+                comic = SpaceAggregateArchive(
+                    count = 1,
+                    item = listOf(
+                        SpaceAggregateArchiveItem(
+                            title = "漫画预览",
+                            cover = "https://i0.hdslb.com/bfs/manga/a.jpg",
+                            param = "7788"
+                        )
+                    )
+                ),
+                tab2 = listOf(
+                    SpaceAggregateTab(title = "主页", param = "home"),
+                    SpaceAggregateTab(title = "动态", param = "dynamic"),
+                    SpaceAggregateTab(
+                        title = "投稿",
+                        param = "contribute",
+                        items = listOf(
+                            SpaceAggregateTabItem(title = "视频", param = "video"),
+                            SpaceAggregateTabItem(title = "图文", param = "article"),
+                            SpaceAggregateTabItem(title = "赛季合集", param = "season_video", seasonId = 88L)
+                        )
+                    )
                 )
             )
         )
@@ -125,8 +197,16 @@ class SpaceAggregatedModelMappingTest {
         assertEquals(2, seed.totalVideos)
         assertEquals("一篇专栏", seed.articles.single().title)
         assertEquals("一段音频", seed.audios.single().title)
+        assertEquals("收藏夹", seed.homeFavoriteFolders.single().title)
+        assertEquals("BVcoin1", seed.homeCoinVideos.single().bvid)
+        assertEquals("BVlike1", seed.homeLikeVideos.single().bvid)
+        assertEquals("5566", seed.homeBangumiItems.single().param)
+        assertEquals("7788", seed.homeComicItems.single().param)
         assertEquals(SpaceMainTab.CONTRIBUTION, seed.defaultMainTab)
         assertEquals(SpaceSubTab.VIDEO, seed.defaultSubTab)
+        assertEquals(listOf("主页", "动态", "投稿"), seed.mainTabs.map { it.title })
+        assertEquals(listOf("视频", "图文", "赛季合集"), seed.contributionTabs.map { it.title })
+        assertEquals(88L, seed.contributionTabs.last().seasonId)
     }
 
     @Test

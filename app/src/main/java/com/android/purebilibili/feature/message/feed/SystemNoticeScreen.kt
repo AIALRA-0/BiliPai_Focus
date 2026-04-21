@@ -8,26 +8,31 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.SystemNoticeItem
 import com.android.purebilibili.data.repository.MessageRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,19 +128,20 @@ class SystemNoticeViewModel : ViewModel() {
 @Composable
 fun SystemNoticeScreen(
     onBack: () -> Unit,
+    onOpenLink: (String) -> Unit,
     viewModel: SystemNoticeViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
+            AdaptiveTopAppBar(
+                title = "系统通知",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
-                },
-                title = { Text("系统通知") }
+                }
             )
         }
     ) { paddingValues ->
@@ -168,6 +174,7 @@ fun SystemNoticeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(uiState.items, key = { it.id }) { item ->
+                            val annotatedContent = rememberSystemNoticeAnnotatedContent(item.content)
                             MessageFeedCard(modifier = Modifier.fillMaxWidth()) {
                                 Box(modifier = Modifier.padding(14.dp)) {
                                     Text(
@@ -175,11 +182,19 @@ fun SystemNoticeScreen(
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.Medium
                                     )
-                                    Text(
-                                        text = item.content,
+                                    ClickableText(
+                                        text = annotatedContent,
                                         modifier = Modifier.padding(top = 30.dp, end = 48.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
+                                        onClick = { offset ->
+                                            annotatedContent
+                                                .getStringAnnotations(tag = "link", start = offset, end = offset)
+                                                .firstOrNull()
+                                                ?.item
+                                                ?.let(onOpenLink)
+                                        }
                                     )
                                     Text(
                                         text = item.timeAt,
@@ -201,6 +216,44 @@ fun SystemNoticeScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+private val systemNoticeLinkRegex = Regex(
+    "(https?://[^\\s]+|www\\.[^\\s]+|BV[a-zA-Z0-9]{10}|av\\d+)",
+    setOf(RegexOption.IGNORE_CASE)
+)
+
+@Composable
+private fun rememberSystemNoticeAnnotatedContent(content: String): AnnotatedString {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    return remember(content, primaryColor) {
+        buildAnnotatedString {
+            var lastIndex = 0
+            systemNoticeLinkRegex.findAll(content).forEach { match ->
+                if (match.range.first > lastIndex) {
+                    append(content.substring(lastIndex, match.range.first))
+                }
+
+                val rawLink = match.value
+                val normalizedLink = if (rawLink.startsWith("www.", ignoreCase = true)) {
+                    "https://$rawLink"
+                } else {
+                    rawLink
+                }
+
+                pushStringAnnotation(tag = "link", annotation = normalizedLink)
+                withStyle(SpanStyle(color = primaryColor)) {
+                    append(rawLink)
+                }
+                pop()
+                lastIndex = match.range.last + 1
+            }
+
+            if (lastIndex < content.length) {
+                append(content.substring(lastIndex))
             }
         }
     }

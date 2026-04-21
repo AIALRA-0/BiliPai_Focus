@@ -430,6 +430,8 @@ fun BangumiPlayerScreen(
                     currentQuality = successState?.quality ?: 0,
                     acceptQuality = successState?.acceptQuality ?: emptyList(),
                     acceptDescription = successState?.acceptDescription ?: emptyList(),
+                    isLoggedIn = successState?.isLoggedIn == true,
+                    isVip = successState?.isVip == true,
                     onQualityChange = { viewModel.changeQuality(it) },
                     onBack = if (isFullscreenMode) { { toggleOrientation() } } else onBack,
                     onToggleFullscreen = { toggleOrientation() },
@@ -536,7 +538,7 @@ fun BangumiPlayerScreen(
                                 detail = state.seasonDetail,
                                 currentEpisode = state.currentEpisode,
                                 onEpisodeClick = { viewModel.switchEpisode(it) },
-                                onFollowClick = { viewModel.toggleFollow() }
+                                onFollowStatusSelect = { viewModel.updateFollowStatus(it) }
                             )
                         }
                     }

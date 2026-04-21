@@ -20,6 +20,8 @@ import com.android.purebilibili.core.plugin.json.JsonPluginManager
 import com.android.purebilibili.core.plugin.json.JsonRulePlugin
 import com.android.purebilibili.core.plugin.json.Rule
 import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -37,10 +39,10 @@ fun JsonPluginEditorScreen(
     var description by remember { mutableStateOf(plugin.description) }
     var rules by remember { mutableStateOf(plugin.rules.toMutableList()) }
     
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("编辑 JSON 插件") },
+            AdaptiveTopAppBar(
+                title = "编辑 JSON 插件",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), null)

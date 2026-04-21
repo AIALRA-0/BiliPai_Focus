@@ -16,6 +16,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.QueryMap
@@ -28,6 +29,86 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 internal const val BANGUMI_PLAY_URL_PATH = "pgc/player/web/v2/playurl"
+
+private class AppSessionCookieJar : okhttp3.CookieJar {
+    private val cookieLock = Any()
+    private val cookieStore = mutableMapOf<String, MutableList<okhttp3.Cookie>>()
+
+    override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
+        val host = url.host
+        synchronized(cookieLock) {
+            val existingCookies = cookieStore.getOrPut(host) { mutableListOf() }
+            cookies.forEach { newCookie ->
+                existingCookies.removeAll { it.name == newCookie.name }
+                existingCookies.add(newCookie)
+                com.android.purebilibili.core.util.Logger.d("CookieJar", " Saved cookie: ${newCookie.name} for $host")
+            }
+        }
+    }
+
+    override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> {
+        val cookies = mutableListOf<okhttp3.Cookie>()
+
+        synchronized(cookieLock) {
+            cookieStore[url.host]?.let { cookies.addAll(it) }
+        }
+
+        var buvid3 = TokenManager.buvid3Cache
+        if (buvid3.isNullOrEmpty()) {
+            buvid3 = UUID.randomUUID().toString() + "infoc"
+            TokenManager.buvid3Cache = buvid3
+        }
+        if (cookies.none { it.name == "buvid3" }) {
+            cookies.add(
+                okhttp3.Cookie.Builder()
+                    .domain(url.host)
+                    .name("buvid3")
+                    .value(buvid3)
+                    .build()
+            )
+        }
+
+        val biliBiliDomain = if (url.host.endsWith("bilibili.com")) "bilibili.com" else url.host
+        val sessData = TokenManager.sessDataCache
+        if (!sessData.isNullOrEmpty()) {
+            cookies.removeAll { it.name == "SESSDATA" }
+            cookies.add(
+                okhttp3.Cookie.Builder()
+                    .domain(biliBiliDomain)
+                    .name("SESSDATA")
+                    .value(sessData)
+                    .build()
+            )
+        }
+
+        val biliJct = TokenManager.csrfCache
+        if (!biliJct.isNullOrEmpty()) {
+            cookies.removeAll { it.name == "bili_jct" }
+            cookies.add(
+                okhttp3.Cookie.Builder()
+                    .domain(biliBiliDomain)
+                    .name("bili_jct")
+                    .value(biliJct)
+                    .build()
+            )
+        }
+
+        if (url.encodedPath.contains("playurl") || url.encodedPath.contains("pgc/view")) {
+            com.android.purebilibili.core.util.Logger.d(
+                "CookieJar",
+                " ${url.encodedPath} request: domain=$biliBiliDomain, hasSess=${!sessData.isNullOrEmpty()}, hasCsrf=${!biliJct.isNullOrEmpty()}"
+            )
+        }
+
+        return cookies
+    }
+
+    fun clear() {
+        synchronized(cookieLock) {
+            cookieStore.clear()
+        }
+    }
+}
 
 /**
  * Bilibili 主 API 接口
@@ -181,7 +262,9 @@ interface BilibiliApi {
     @GET("https://api.live.bilibili.com/xlive/web-ucenter/user/following")
     suspend fun getFollowedLive(
         @Query("page") page: Int = 1,
-        @Query("page_size") pageSize: Int = 30
+        @Query("page_size") pageSize: Int = 30,
+        @Query("ignoreRecord") ignoreRecord: Int = 1,
+        @Query("hit_ab") hitAb: Boolean = true
     ): FollowedLiveResponse
     
     //  [新增] 获取直播分区列表
@@ -209,6 +292,16 @@ interface BilibiliApi {
     suspend fun getLiveRoomDetail(
         @Query("room_id") roomId: Long
     ): LiveRoomDetailResponse
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getH5InfoByRoom")
+    suspend fun getLiveRoomH5Info(
+        @Query("room_id") roomId: Long
+    ): ResponseBody
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory")
+    suspend fun getLiveDanmakuHistory(
+        @Query("roomid") roomId: Long
+    ): ResponseBody
     
     //  [新增] 获取直播弹幕 WebSocket 信息
     @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
@@ -238,7 +331,8 @@ interface BilibiliApi {
         @Query("codec") codec: String = "0,1",        // 0=avc, 1=hevc
         @Query("qn") quality: Int = 150,              // 150=高清
         @Query("platform") platform: String = "web",
-        @Query("ptype") ptype: Int = 8
+        @Query("ptype") ptype: Int = 8,
+        @Query("only_audio") onlyAudio: Int? = null
     ): LivePlayUrlResponse
     
     //  [新增] 旧版直播流 API - 可靠返回 quality_description 画质列表
@@ -282,6 +376,21 @@ interface BilibiliApi {
         @Query("platform") platform: String = "pc",
         @Query("room_id") roomId: Long
     ): com.android.purebilibili.data.model.response.LiveEmoticonRootResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://api.live.bilibili.com/liveact/shield_user")
+    suspend fun shieldLiveUser(
+        @retrofit2.http.Field("uid") uid: Long,
+        @retrofit2.http.Field("roomid") roomId: Long,
+        @retrofit2.http.Field("type") type: Int,
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Field("csrf_token") csrfToken: String
+    ): SimpleApiResponse
+
+    @GET("https://api.live.bilibili.com/av/v1/SuperChat/getMessageList")
+    suspend fun getLiveSuperChatMessages(
+        @Query("room_id") roomId: Long
+    ): ResponseBody
 
 
     // ==================== 视频播放模块 ====================
@@ -425,6 +534,8 @@ interface BilibiliApi {
         @retrofit2.http.Field("fontsize") fontsize: Int = 25,  // 字号: 18小/25中/36大
         @retrofit2.http.Field("mode") mode: Int = 1,           // 模式: 1滚动/4底部/5顶部
         @retrofit2.http.Field("pool") pool: Int = 0,           // 弹幕池: 0普通/1字幕/2特殊
+        @retrofit2.http.Field("colorful") colorful: Int? = null, // 60001=大会员渐变彩色
+        @retrofit2.http.Field("checkbox_type") checkboxType: Int? = null, // 1=关注/鼓励弹幕
         @retrofit2.http.Field("plat") plat: Int = 1,           // 平台: 1=web
         @retrofit2.http.Field("csrf") csrf: String
     ): SendDanmakuResponse
@@ -513,6 +624,7 @@ interface BilibiliApi {
         @retrofit2.http.Field("root") root: Long? = null,
         @retrofit2.http.Field("parent") parent: Long? = null,
         @retrofit2.http.Field("pictures") pictures: String? = null,
+        @retrofit2.http.Field("sync_to_dynamic") syncToDynamic: Int? = null,
         @retrofit2.http.Field("csrf") csrf: String
     ): AddReplyResponse
 
@@ -571,6 +683,16 @@ interface BilibiliApi {
         @retrofit2.http.Field("oid") oid: Long,
         @retrofit2.http.Field("type") type: Int = 1,
         @retrofit2.http.Field("rpid") rpid: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/v2/reply/top")
+    suspend fun setReplyTop(
+        @retrofit2.http.Field("oid") oid: Long,
+        @retrofit2.http.Field("type") type: Int = 1,
+        @retrofit2.http.Field("rpid") rpid: Long,
+        @retrofit2.http.Field("action") action: Int,
         @retrofit2.http.Field("csrf") csrf: String
     ): SimpleApiResponse
     
@@ -761,31 +883,76 @@ interface SearchApi {
     @GET("x/web-interface/search/square")
     suspend fun getHotSearch(@Query("limit") limit: Int = 10): HotSearchResponse
 
+    @GET("https://s.search.bilibili.com/main/hotword")
+    suspend fun getTrendingList(
+        @Query("limit") limit: Int = 30
+    ): com.android.purebilibili.data.model.response.SearchTrendingResponse
+
+    @GET("https://app.bilibili.com/x/v2/search/recommend")
+    suspend fun getSearchRecommend(
+        @Query("build") build: Int = 8430300,
+        @Query("channel") channel: String = "master",
+        @Query("version") version: String = "8.43.0",
+        @Query("c_locale") cLocale: String = "zh_CN",
+        @Query("mobi_app") mobiApp: String = "android",
+        @Query("platform") platform: String = "android",
+        @Query("s_locale") sLocale: String = "zh_CN",
+        @Query("from") from: Int = 2
+    ): com.android.purebilibili.data.model.response.SearchRecommendResponse
+
     //  综合搜索 (不支持排序)
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/search/all/v2")
     suspend fun searchAll(@QueryMap params: Map<String, String>): SearchResponse
     
     //  [修复] 分类搜索 - 支持排序和时长筛选
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun search(@QueryMap params: Map<String, String>): SearchTypeResponse
     
     //  [新增] UP主搜索 - 专用解析
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchUp(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SearchUpResponse
     
     //  [新增] 番剧搜索 - search_type=media_bangumi
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchBangumi(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.BangumiSearchResponse
 
     //  [新增] 影视搜索 - search_type=media_ft
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchMediaFt(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.BangumiSearchResponse
     
     //  [新增] 直播搜索 - search_type=live_room
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchLive(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.LiveRoomSearchResponse
 
     //  [新增] 专栏搜索 - search_type=article
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchArticle(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SearchArticleResponse
     
@@ -794,7 +961,7 @@ interface SearchApi {
     suspend fun getSearchSuggest(
         @Query("term") term: String,
         @Query("main_ver") mainVer: String = "v1",
-        @Query("highlight") highlight: Int = 0
+        @Query("highlight") highlight: String = term
     ): SearchSuggestResponse
 }
 
@@ -1066,6 +1233,15 @@ interface BangumiApi {
     @retrofit2.http.POST("pgc/web/follow/del")
     suspend fun unfollowBangumi(
         @retrofit2.http.Field("season_id") seasonId: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): com.android.purebilibili.data.model.response.SimpleApiResponse
+
+    // 更新追番/追剧状态：1=想看, 2=在看, 3=看过
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("pgc/web/follow/status/update")
+    suspend fun updateBangumiFollowStatus(
+        @retrofit2.http.Field("season_id") seasonId: Long,
+        @retrofit2.http.Field("status") status: Int,
         @retrofit2.http.Field("csrf") csrf: String
     ): com.android.purebilibili.data.model.response.SimpleApiResponse
     
@@ -1353,9 +1529,14 @@ interface MessageApi {
 
 object NetworkModule {
     internal var appContext: Context? = null
+    private val appSessionCookieJar = AppSessionCookieJar()
 
     fun init(context: Context) {
         appContext = context.applicationContext
+    }
+
+    fun clearRuntimeCookies() {
+        appSessionCookieJar.clear()
     }
 
     private val json = Json {
@@ -1414,8 +1595,6 @@ object NetworkModule {
                 .hostnameVerifier { _, _ -> true }
         }
         
-        val cookieLock = Any()
-        
         builder
             //  [Fix] 自定义 DNS 实现，绕过 OkHttp 可能被混淆内部类的问题，并添加日志
             .dns(object : okhttp3.Dns {
@@ -1441,79 +1620,7 @@ object NetworkModule {
                 }
             }})
             //  [关键] 添加 CookieJar 自动管理 Cookie（参考 PiliPala）
-            .cookieJar(object : okhttp3.CookieJar {
-                private val cookieStore = mutableMapOf<String, MutableList<okhttp3.Cookie>>()
-                
-                override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
-                    val host = url.host
-                    synchronized(cookieLock) {
-                        val existingCookies = cookieStore.getOrPut(host) { mutableListOf() }
-                        cookies.forEach { newCookie ->
-                            // 移除同名旧 cookie，添加新 cookie
-                            existingCookies.removeAll { it.name == newCookie.name }
-                            existingCookies.add(newCookie)
-                            com.android.purebilibili.core.util.Logger.d("CookieJar", " Saved cookie: ${newCookie.name} for $host")
-                        }
-                    }
-                }
-                
-                override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> {
-                    val cookies = mutableListOf<okhttp3.Cookie>()
-                    
-                    // 加载存储的 cookies
-                    synchronized(cookieLock) {
-                        cookieStore[url.host]?.let { cookies.addAll(it) }
-                    }
-                    
-                    //  确保 buvid3 存在
-                    var buvid3 = TokenManager.buvid3Cache
-                    if (buvid3.isNullOrEmpty()) {
-                        buvid3 = UUID.randomUUID().toString() + "infoc"
-                        TokenManager.buvid3Cache = buvid3
-                    }
-                    if (cookies.none { it.name == "buvid3" }) {
-                        cookies.add(okhttp3.Cookie.Builder()
-                            .domain(url.host)
-                            .name("buvid3")
-                            .value(buvid3)
-                            .build())
-                    }
-                    
-                    //  [修复] 使用 bilibili.com 域名，确保 Cookie 在所有子域名生效
-                    // OkHttp 会自动处理子域名匹配（不需要前导点）
-                    val biliBiliDomain = if (url.host.endsWith("bilibili.com")) "bilibili.com" else url.host
-                    
-                    //  如果有 SESSDATA，添加它
-                    val sessData = TokenManager.sessDataCache
-                    if (!sessData.isNullOrEmpty() && cookies.none { it.name == "SESSDATA" }) {
-                        cookies.add(okhttp3.Cookie.Builder()
-                            .domain(biliBiliDomain)
-                            .name("SESSDATA")
-                            .value(sessData)
-                            .build())
-                    }
-                    
-                    //  [新增] 添加 bili_jct (CSRF Token) - VIP 画质验证可能需要
-                    val biliJct = TokenManager.csrfCache
-                    if (!biliJct.isNullOrEmpty() && cookies.none { it.name == "bili_jct" }) {
-                        cookies.add(okhttp3.Cookie.Builder()
-                            .domain(biliBiliDomain)
-                            .name("bili_jct")
-                            .value(biliJct)
-                            .build())
-                    }
-                    
-                    //  [调试] 输出 Cookie 信息以便排查 VIP 画质问题
-                    if (url.encodedPath.contains("playurl") || url.encodedPath.contains("pgc/view")) {
-                        com.android.purebilibili.core.util.Logger.d(
-                            "CookieJar",
-                            " ${url.encodedPath} request: domain=$biliBiliDomain, hasSess=${!sessData.isNullOrEmpty()}, hasCsrf=${!biliJct.isNullOrEmpty()}"
-                        )
-                    }
-                    
-                    return cookies
-                }
-            })
+            .cookieJar(appSessionCookieJar)
             .addInterceptor { chain ->
                 val original = chain.request()
                 val url = original.url

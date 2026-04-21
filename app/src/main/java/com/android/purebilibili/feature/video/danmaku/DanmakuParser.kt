@@ -105,7 +105,10 @@ object DanmakuParser {
         return WeightedTextData().apply {
             this.danmakuId = elem.id
             this.userHash = elem.midHash
-            this.text = elem.content
+            this.text = formatDanmakuTextWithCount(
+                content = elem.content,
+                duplicateCount = elem.count
+            )
             this.showAtTime = elem.progress.toLong()
             this.layerType = layerType
             this.textColor = colorWithAlpha
@@ -113,6 +116,10 @@ object DanmakuParser {
             // 填充 Bilibili 特有属性
             this.weight = elem.weight
             this.pool = elem.pool
+            this.likeCount = elem.like
+            this.isVipGradualColor = elem.colorful == DanmakuProto.DmColorfulTypeVipGradualColor
+            this.duplicateCount = elem.count
+            this.isSelf = elem.isSelf
         }
     }
     
@@ -224,6 +231,17 @@ object DanmakuParser {
             return null
         }
     }
+
+    private fun formatDanmakuTextWithCount(
+        content: String,
+        duplicateCount: Int
+    ): String {
+        return if (duplicateCount > 1) {
+            "$content x$duplicateCount"
+        } else {
+            content
+        }
+    }
     
     /**
      * 从属性字符串创建 TextData
@@ -273,4 +291,3 @@ object DanmakuParser {
         else -> LAYER_TYPE_SCROLL
     }
 }
-

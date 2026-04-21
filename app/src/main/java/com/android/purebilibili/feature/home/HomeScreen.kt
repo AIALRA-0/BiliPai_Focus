@@ -49,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.settings.GITHUB_URL
@@ -79,6 +80,9 @@ import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeig
 import com.android.purebilibili.feature.home.policy.BottomBarVisibilityIntent
 import com.android.purebilibili.feature.home.policy.HomeBottomBarScrollState
 import com.android.purebilibili.feature.home.policy.reduceHomePreScroll
+import com.android.purebilibili.feature.home.policy.resolveHomeHeaderTransitionRunning
+import com.android.purebilibili.feature.home.policy.resolveHomeHeaderSettleTransition
+import com.android.purebilibili.feature.home.policy.shouldHandleHomeVerticalPreScroll
 import com.android.purebilibili.feature.home.policy.reduceHomeBottomBarListScroll
 import com.android.purebilibili.feature.home.policy.resolveHomeBottomBarBaseVisibility
 import com.android.purebilibili.feature.home.policy.resolveHomeHeaderOffsetForSettledPage
@@ -551,9 +555,15 @@ fun HomeScreen(
     val baseCardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
     val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled &&
         !predictiveStableBackRouteMotionEnabled // 预测返回稳定路由模式下禁用首页共享元素，避免叠层滞留
-    val baseIsLiquidGlassEnabled = remember(homeSettings.isLiquidGlassEnabled, uiPreset) {
+    val baseTopBarLiquidGlassEnabled = remember(homeSettings.isTopBarLiquidGlassEnabled, uiPreset) {
         resolveEffectiveLiquidGlassEnabled(
-            requestedEnabled = homeSettings.isLiquidGlassEnabled,
+            requestedEnabled = homeSettings.isTopBarLiquidGlassEnabled,
+            uiPreset = uiPreset
+        )
+    }
+    val baseBottomBarLiquidGlassEnabled = remember(homeSettings.isBottomBarLiquidGlassEnabled, uiPreset) {
+        resolveEffectiveLiquidGlassEnabled(
+            requestedEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
             uiPreset = uiPreset
         )
     }
@@ -563,7 +573,8 @@ fun HomeScreen(
     val homePerformanceConfig = remember(
         baseIsHeaderBlurEnabled,
         baseIsBottomBarBlurEnabled,
-        baseIsLiquidGlassEnabled,
+        baseTopBarLiquidGlassEnabled,
+        baseBottomBarLiquidGlassEnabled,
         baseCardAnimationEnabled,
         baseCardTransitionEnabled,
         baseIsDataSaverActive
@@ -572,7 +583,8 @@ fun HomeScreen(
             uiPreset = uiPreset,
             headerBlurEnabled = baseIsHeaderBlurEnabled,
             bottomBarBlurEnabled = baseIsBottomBarBlurEnabled,
-            liquidGlassEnabled = baseIsLiquidGlassEnabled,
+            topBarLiquidGlassEnabled = baseTopBarLiquidGlassEnabled,
+            bottomBarLiquidGlassEnabled = baseBottomBarLiquidGlassEnabled,
             cardAnimationEnabled = baseCardAnimationEnabled,
             cardTransitionEnabled = baseCardTransitionEnabled,
             isDataSaverActive = baseIsDataSaverActive,
@@ -583,7 +595,9 @@ fun HomeScreen(
     val isBottomBarBlurEnabled = homePerformanceConfig.bottomBarBlurEnabled
     val cardAnimationEnabled = homePerformanceConfig.cardAnimationEnabled
     val cardTransitionEnabled = homePerformanceConfig.cardTransitionEnabled
-    val isLiquidGlassEnabled = homePerformanceConfig.liquidGlassEnabled
+    val isTopBarLiquidGlassEnabled = homePerformanceConfig.topBarLiquidGlassEnabled
+    val isBottomBarLiquidGlassEnabled = homePerformanceConfig.bottomBarLiquidGlassEnabled
+    val isLiquidGlassEnabled = homePerformanceConfig.isAnyLiquidGlassEnabled
     val isDataSaverActive = homePerformanceConfig.isDataSaverActive
     val preloadAheadCount = homePerformanceConfig.preloadAheadCount
 
@@ -900,26 +914,28 @@ fun HomeScreen(
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
     var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
+    var areTopTabsManuallyCollapsed by rememberSaveable { mutableStateOf(false) }
     
     // Constants
-    val topTabStyle = remember(isBottomBarFloating, isBottomBarBlurEnabled, isLiquidGlassEnabled) {
+    val topTabStyle = remember(isBottomBarFloating, isHeaderBlurEnabled, isTopBarLiquidGlassEnabled) {
         resolveTopTabStyle(
             isBottomBarFloating = isBottomBarFloating,
-            isBottomBarBlurEnabled = isBottomBarBlurEnabled,
-            isLiquidGlassEnabled = isLiquidGlassEnabled
+            isBottomBarBlurEnabled = isHeaderBlurEnabled,
+            isLiquidGlassEnabled = isTopBarLiquidGlassEnabled
         )
     }
-    val topChromeMaterialMode = remember(isHeaderBlurEnabled, isBottomBarBlurEnabled, isLiquidGlassEnabled) {
+    val topChromeMaterialMode = remember(isHeaderBlurEnabled, isTopBarLiquidGlassEnabled) {
         resolveHomeTopChromeMaterialMode(
             isHeaderBlurEnabled = isHeaderBlurEnabled,
-            isBottomBarBlurEnabled = isBottomBarBlurEnabled,
-            isLiquidGlassEnabled = isLiquidGlassEnabled
+            isBottomBarBlurEnabled = false,
+            isLiquidGlassEnabled = isTopBarLiquidGlassEnabled
         )
     }
     val searchBarHeightDp = resolveHomeTopSearchBarHeight(uiPreset)
     val tabRowHeightDp = resolveHomeTopTabRowHeight(
         isTabFloating = topTabStyle.floating,
-        uiPreset = uiPreset
+        uiPreset = uiPreset,
+        labelMode = homeSettings.topTabLabelMode
     )
     val searchCollapseDistanceDp = resolveHomeTopSearchCollapseDistance(
         searchBarHeight = searchBarHeightDp,
@@ -957,6 +973,14 @@ fun HomeScreen(
     // [Feature] Sticky Header Options
     // If true, header will shrink but stay visible. If false, it scrolls away.
     val isHeaderCollapseEnabled = homeSettings.isHeaderCollapseEnabled // Enable shrinking based on settings
+    val areTopTabsAutoCollapsed by remember(headerOffsetHeightPx, isHeaderCollapseEnabled) {
+        derivedStateOf {
+            resolveHomeTopTabsAutoCollapsed(
+                currentHeaderOffsetPx = headerOffsetHeightPx,
+                isHeaderCollapseEnabled = isHeaderCollapseEnabled
+            )
+        }
+    }
     
     // [Feature] Bottom Bar Auto-Hide (based on scroll hide mode)
     val isBottomBarAutoHideEnabled = bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE
@@ -1073,7 +1097,7 @@ fun HomeScreen(
 
     //  Scaffold 内容封装 (用于 Panel 左右布局复用)
     val scaffoldLayout: @Composable () -> Unit = {
-        Scaffold(
+        AdaptiveScaffold(
                 modifier = Modifier
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection),
@@ -1329,11 +1353,13 @@ fun HomeScreen(
                                      cardTransitionEnabled = cardTransitionEnabled,
                                      smartVisualGuardEnabled = false,
                                      isDataSaverActive = isDataSaverActive,
+                                     preferLowQualityCover = homeSettings.lowQualityHomeCoverInDataSaver,
                                      compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      showCoverGlassBadges = homeSettings.showHomeCoverGlassBadges,
                                      showInfoGlassBadges = homeSettings.showHomeInfoGlassBadges,
                                      followLoadMoreArmed = category != HomeCategory.FOLLOW || state.followLoadMoreArmed,
                                      onFollowScrollInteraction = onFollowScrollInteraction,
+                                     showUpBadges = homeSettings.showHomeUpBadges,
                                      oldContentAnchorBvid = if (shouldShowRecommendOldContentDivider(
                                              currentCategory = category,
                                              refreshNewItemsKey = state.refreshNewItemsKey,
@@ -1398,9 +1424,13 @@ fun HomeScreen(
             isProgrammaticPageSwitchInProgress = programmaticPageSwitchInProgress,
             isFeedScrolling = isFeedScrollInProgress
         )
-        val isHeaderTransitionRunning by remember(pagerState) {
+        val isHeaderTransitionRunning by remember(pagerState, isFeedScrollInProgress) {
             derivedStateOf {
-                kotlin.math.abs(headerOffsetHeightPx) > 0.5f || pagerState.isScrollInProgress
+                resolveHomeHeaderTransitionRunning(
+                    isFeedScrolling = isFeedScrollInProgress,
+                    isPagerScrolling = pagerState.isScrollInProgress,
+                    isHeaderSettleAnimating = false
+                )
             }
         }
         TrackJankStateFlag(
@@ -1486,6 +1516,16 @@ fun HomeScreen(
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
                 isReturningFromDetail = CardPositionManager.isReturningFromDetail
             ),
+            topTabsCollapsed = if (isHeaderCollapseEnabled) {
+                areTopTabsAutoCollapsed
+            } else {
+                areTopTabsManuallyCollapsed
+            },
+            onTopTabsCollapsedChange = { collapsed ->
+                if (!isHeaderCollapseEnabled) {
+                    areTopTabsManuallyCollapsed = collapsed
+                }
+            },
             motionTier = deviceUiProfile.motionTier,
             isScrolling = isFeedScrollInProgress,
             isTransitionRunning = isHeaderTransitionRunning,

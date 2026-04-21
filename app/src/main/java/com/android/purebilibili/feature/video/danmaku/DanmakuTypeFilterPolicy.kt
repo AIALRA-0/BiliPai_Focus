@@ -14,6 +14,7 @@ fun shouldDisplayStandardDanmaku(
     danmakuType: Int,
     color: Int,
     settings: DanmakuTypeFilterSettings,
+    isVipGradualColor: Boolean = false,
 ): Boolean {
     val typeAllowed = when (danmakuType) {
         4 -> settings.allowBottom
@@ -24,7 +25,7 @@ fun shouldDisplayStandardDanmaku(
         return false
     }
 
-    if (!settings.allowColorful && isColorfulDanmaku(color)) {
+    if (!settings.allowColorful && isColorfulDanmaku(color, isVipGradualColor)) {
         return false
     }
 
@@ -59,7 +60,8 @@ internal fun shouldDisplayMergedAdvancedDanmaku(
     return true
 }
 
-fun isColorfulDanmaku(color: Int): Boolean {
+fun isColorfulDanmaku(color: Int, isVipGradualColor: Boolean = false): Boolean {
+    if (isVipGradualColor) return true
     val rgb = color and DANMAKU_WHITE_RGB
     return rgb != DANMAKU_WHITE_RGB
 }

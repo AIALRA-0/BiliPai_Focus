@@ -45,17 +45,27 @@ internal fun resolveGestureSeekableDurationMs(
     }
 }
 
+internal fun shouldKeepVideoPlaybackAwake(
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int
+): Boolean {
+    if (!playWhenReady) return false
+    if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) return false
+    return isPlaying || playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY
+}
+
 internal fun resolveVideoPlayerBottomGestureExclusionHeightDp(
     controlBarBottomPaddingDp: Int,
     progressSpacingDp: Int,
-    progressTouchHeightDp: Int,
+    progressContainerHeightDp: Int,
     controlRowHeightDp: Int,
     extraBufferDp: Int = PLAYER_DRAG_GESTURE_BOTTOM_EXCLUSION_BUFFER_DP
 ): Int {
     return (
         controlBarBottomPaddingDp +
             progressSpacingDp +
-            progressTouchHeightDp +
+            progressContainerHeightDp +
             controlRowHeightDp +
             extraBufferDp
         ).coerceAtLeast(0)
@@ -157,6 +167,24 @@ internal fun shouldLockLongPressSpeedBySwipe(
         !alreadyLocked &&
         thresholdPx > 0f &&
         totalDragDistanceY <= -thresholdPx
+}
+
+internal fun shouldConsumeExclusiveLongPressSpeedDrag(
+    isLongPressing: Boolean,
+    longPressSpeedLocked: Boolean
+): Boolean {
+    return isLongPressing && !longPressSpeedLocked
+}
+
+internal fun shouldReapplyLockedLongPressSpeed(
+    longPressSpeedLocked: Boolean,
+    isLongPressing: Boolean,
+    observedPlaybackSpeed: Float,
+    lockedLongPressSpeed: Float
+): Boolean {
+    return longPressSpeedLocked &&
+        !isLongPressing &&
+        abs(observedPlaybackSpeed - lockedLongPressSpeed) > 0.001f
 }
 
 internal fun shouldRestorePlaybackParametersAfterLongPressRelease(
@@ -267,6 +295,32 @@ internal fun shouldAllowPlaybackStateAutoFullscreen(
     smallestScreenWidthDp: Int
 ): Boolean {
     return smallestScreenWidthDp < 600
+}
+
+internal fun shouldToggleAutoFullscreenForPlaybackEvent(
+    autoEnterFullscreenEnabled: Boolean,
+    autoExitFullscreenEnabled: Boolean,
+    allowPlaybackStateAutoFullscreen: Boolean,
+    playbackState: Int,
+    playWhenReady: Boolean,
+    hasAutoEnteredFullscreen: Boolean,
+    isFullscreen: Boolean,
+    previousPlayWhenReady: Boolean = playWhenReady
+): Boolean {
+    if (!allowPlaybackStateAutoFullscreen) return false
+
+    val shouldEnterFullscreen =
+        autoEnterFullscreenEnabled &&
+            playbackState == Player.STATE_READY &&
+            playWhenReady &&
+            !hasAutoEnteredFullscreen &&
+            !isFullscreen &&
+            (!previousPlayWhenReady || playbackState == Player.STATE_READY)
+    if (shouldEnterFullscreen) return true
+
+    return autoExitFullscreenEnabled &&
+        playbackState == Player.STATE_ENDED &&
+        isFullscreen
 }
 
 internal fun resolveGestureIndicatorLabel(mode: VideoGestureMode): String {
@@ -458,6 +512,25 @@ internal fun shouldShowCoverImage(
         !hasStartedSmoothReveal
 }
 
+internal data class VideoPlayerCoverBootstrapState(
+    val isFirstFrameRendered: Boolean,
+    val hasStartedSmoothReveal: Boolean
+)
+
+internal fun resolveVideoPlayerCoverBootstrapState(
+    forceCoverDuringReturnAnimation: Boolean,
+    shouldKeepCoverForManualStart: Boolean,
+    hasPersistedRenderedFirstFrame: Boolean
+): VideoPlayerCoverBootstrapState {
+    val shouldReuseRenderedFrame = !forceCoverDuringReturnAnimation &&
+        !shouldKeepCoverForManualStart &&
+        hasPersistedRenderedFirstFrame
+    return VideoPlayerCoverBootstrapState(
+        isFirstFrameRendered = shouldReuseRenderedFrame,
+        hasStartedSmoothReveal = shouldReuseRenderedFrame
+    )
+}
+
 internal fun shouldStartSmoothCoverReveal(
     isFirstFrameRendered: Boolean,
     forceCoverDuringReturnAnimation: Boolean,
@@ -489,9 +562,11 @@ internal fun shouldEnableManualStartCoverOverlay(
 
 internal fun shouldFillPlayerViewportForManualStartCover(
     shouldKeepCoverForManualStart: Boolean,
-    forceCoverDuringReturnAnimation: Boolean
+    forceCoverDuringReturnAnimation: Boolean,
+    isVerticalVideo: Boolean = false
 ): Boolean {
-    return shouldKeepCoverForManualStart && !forceCoverDuringReturnAnimation
+    if (forceCoverDuringReturnAnimation) return false
+    return shouldKeepCoverForManualStart || isVerticalVideo
 }
 
 internal enum class ManualStartPlayButtonAnchor {
@@ -610,12 +685,17 @@ internal fun shouldEnableCoverImageCrossfade(
 
 internal fun resolvePreferredVideoCoverUrl(
     entryCoverUrl: String,
-    detailCoverUrl: String
+    detailCoverUrl: String,
+    preferDetailCoverUrl: Boolean = false
 ): String {
+    val normalizedDetailCoverUrl = detailCoverUrl.trim()
+    if (preferDetailCoverUrl && normalizedDetailCoverUrl.isNotEmpty()) {
+        return normalizedDetailCoverUrl
+    }
+
     val normalizedEntryCoverUrl = entryCoverUrl.trim()
     if (normalizedEntryCoverUrl.isNotEmpty()) return normalizedEntryCoverUrl
 
-    val normalizedDetailCoverUrl = detailCoverUrl.trim()
     if (normalizedDetailCoverUrl.isNotEmpty()) return normalizedDetailCoverUrl
 
     return ""
@@ -660,13 +740,15 @@ internal fun shouldAutoHidePlayerChromeOnPlaybackStart(
     hasAutoHiddenForCurrentVideo: Boolean,
     isPlaying: Boolean,
     isFirstFrameRendered: Boolean,
-    forceCoverDuringReturnAnimation: Boolean
+    forceCoverDuringReturnAnimation: Boolean,
+    isSeekScrubbing: Boolean
 ): Boolean {
     return showControls &&
         !hasAutoHiddenForCurrentVideo &&
         isPlaying &&
         isFirstFrameRendered &&
-        !forceCoverDuringReturnAnimation
+        !forceCoverDuringReturnAnimation &&
+        !isSeekScrubbing
 }
 
 internal fun shouldRebindPlayerSurfaceOnForeground(

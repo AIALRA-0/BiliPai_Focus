@@ -31,6 +31,14 @@ class DynamicInteractionPolicyTest {
     }
 
     @Test
+    fun `video tab excludes pgc dynamics after server side tab parity change`() {
+        val item = DynamicItem(type = "DYNAMIC_TYPE_PGC")
+
+        assertFalse(shouldIncludeDynamicItemInVideoTab(item))
+        assertTrue(shouldIncludeDynamicItemInPgcTab(item))
+    }
+
+    @Test
     fun `video tab excludes word dynamics`() {
         val item = DynamicItem(type = "DYNAMIC_TYPE_WORD")
 
@@ -183,6 +191,32 @@ class DynamicInteractionPolicyTest {
 
         val videoAction = assertIs<DynamicCardPrimaryAction.OpenVideo>(action)
         assertEquals("BV1xx411c7mD", videoAction.bvid)
+    }
+
+    @Test
+    fun `resolve primary action supports pgc dynamic major`() {
+        val item = DynamicItem(
+            type = "DYNAMIC_TYPE_PGC",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_PGC",
+                        pgc = ArchiveMajor(
+                            bvid = "BV1pgc123456",
+                            aid = "11223344",
+                            epid = 987654L,
+                            season_id = 123456L
+                        )
+                    )
+                )
+            )
+        )
+
+        val action = resolveDynamicCardPrimaryAction(item)
+
+        val bangumiAction = assertIs<DynamicCardPrimaryAction.OpenBangumi>(action)
+        assertEquals(123456L, bangumiAction.seasonId)
+        assertEquals(987654L, bangumiAction.epId)
     }
 
     @Test

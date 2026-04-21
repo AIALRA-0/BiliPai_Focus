@@ -10,6 +10,28 @@ import kotlin.test.assertTrue
 class VisualEffectTogglePolicyTest {
 
     @Test
+    fun `enabling top bar blur disables top liquid glass`() {
+        val result = resolveTopBarBlurToggleState(
+            enableHeaderBlur = true,
+            currentLiquidGlassEnabled = true
+        )
+
+        assertTrue(result.headerBlurEnabled)
+        assertFalse(result.liquidGlassEnabled)
+    }
+
+    @Test
+    fun `enabling top liquid glass disables header blur`() {
+        val result = resolveTopBarLiquidGlassToggleState(
+            enableLiquidGlass = true,
+            currentHeaderBlurEnabled = true
+        )
+
+        assertTrue(result.liquidGlassEnabled)
+        assertFalse(result.headerBlurEnabled)
+    }
+
+    @Test
     fun `enabling bottom bar blur disables liquid glass`() {
         val result = resolveBottomBarBlurToggleState(
             enableBottomBarBlur = true,

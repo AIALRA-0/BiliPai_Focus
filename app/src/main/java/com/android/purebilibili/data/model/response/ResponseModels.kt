@@ -14,6 +14,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -58,7 +59,9 @@ data class ReplyData(
     //  [新增] UP主信息（包含 UP 置顶评论）
     val upper: ReplyUpper? = null,
     //  [新增] 评论输入控制（占位文案/图片上传开关）
-    val control: ReplyPageControl? = null
+    val control: ReplyPageControl? = null,
+    @SerialName("grpc_next_offset")
+    val grpcNextOffset: String = ""
 ) {
     //  统一获取总评论数
     fun getAllCount(): Int = when {
@@ -175,7 +178,14 @@ data class ReplyItem(
     
     // [新增] 评论控制信息（IP属地等）
     @SerialName("reply_control")
-    val replyControl: ReplyControl? = null
+    val replyControl: ReplyControl? = null,
+
+    // 二级评论对话归属，用于“查看对话”筛选同一段回复链。
+    val parent: Long = 0,
+    val dialog: Long = 0,
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("note_cvid_str")
+    val noteCvidStr: String = ""
 )
 
 //  UP主操作信息
@@ -497,8 +507,67 @@ data class ReplyContent(
     val message: String = "",
     val device: String? = "",
     val emote: Map<String, ReplyEmote>? = null,
+    val vote: ReplyVote? = null,
+    @SerialName("rich_text")
+    val richText: ReplyRichText = ReplyRichText(),
+    val urls: Map<String, ReplyContentUrl> = emptyMap(),
+    val topics: Map<String, JsonElement> = emptyMap(),
+    @SerialName("at_name_to_mid")
+    val atNameToMid: Map<String, @Serializable(with = FlexibleLongSerializer::class) Long> = emptyMap(),
     //  评论图片
     val pictures: List<ReplyPicture>? = null
+)
+
+@Serializable
+data class ReplyVote(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val id: Long = 0,
+    @Serializable(with = FlexibleStringSerializer::class)
+    val title: String = "",
+    @Serializable(with = FlexibleLongSerializer::class)
+    val count: Long = 0
+)
+
+@Serializable
+data class ReplyRichText(
+    val note: ReplyRichTextNote? = null,
+    val opus: ReplyRichTextOpus? = null
+)
+
+@Serializable
+data class ReplyRichTextNote(
+    @Serializable(with = FlexibleStringSerializer::class)
+    val summary: String = "",
+    val images: List<String> = emptyList(),
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("click_url")
+    val clickUrl: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("last_mtime_text")
+    val lastMtimeText: String = ""
+)
+
+@Serializable
+data class ReplyRichTextOpus(
+    @Serializable(with = FlexibleLongSerializer::class)
+    @SerialName("opus_id")
+    val opusId: Long = 0,
+    @Serializable(with = FlexibleLongSerializer::class)
+    val oid: Long = 0
+)
+
+@Serializable
+data class ReplyContentUrl(
+    @Serializable(with = FlexibleStringSerializer::class)
+    val title: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val url: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("app_url_schema")
+    val appUrlSchema: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("prefix_icon")
+    val prefixIcon: String = ""
 )
 
 //  评论图片
@@ -553,5 +622,11 @@ data class UploadCommentImageData(
 // [新增] 评论控制信息（IP属地等）
 @Serializable
 data class ReplyControl(
-    val location: String = ""  // IP 属地，如 "IP属地：北京"
+    val location: String = "",  // IP 属地，如 "IP属地：北京"
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("is_up_top")
+    val isUpTop: Boolean = false,
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("up_reply")
+    val upReply: Boolean = false
 )

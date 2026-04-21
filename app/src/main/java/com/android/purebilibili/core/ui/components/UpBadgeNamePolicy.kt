@@ -25,3 +25,7 @@ internal fun shouldRenderUpBadgeTrailingSlot(
 ): Boolean {
     return hasTrailingContent || reserveTrailingSlot
 }
+
+internal fun shouldRenderUserUpBadge(showUpBadge: Boolean): Boolean {
+    return showUpBadge
+}

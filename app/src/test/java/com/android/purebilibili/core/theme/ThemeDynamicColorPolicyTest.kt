@@ -4,7 +4,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.feature.settings.AppThemeMode
 import kotlin.test.Test
+import kotlin.test.assertNotEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 class ThemeDynamicColorPolicyTest {
@@ -82,5 +84,57 @@ class ThemeDynamicColorPolicyTest {
         assertEquals(Color.Black, result.surface)
         assertEquals(Color(0xFF050505), result.surfaceVariant)
         assertEquals(Color(0xFF090909), result.surfaceContainer)
+    }
+
+    @Test
+    fun `static md3 light scheme derives distinct secondary and tertiary roles from source color`() {
+        val scheme = createStaticMd3ColorScheme(
+            primaryColor = Color(0xFF6750A4),
+            darkTheme = false,
+            amoledDarkTheme = false
+        )
+
+        assertNotEquals(scheme.primary, scheme.secondary)
+        assertNotEquals(scheme.primary, scheme.tertiary)
+        assertNotEquals(scheme.primaryContainer, scheme.secondaryContainer)
+        assertNotEquals(scheme.primaryContainer, scheme.tertiaryContainer)
+        assertTrue(calculateContrastRatio(scheme.onPrimaryContainer, scheme.primaryContainer) >= 4.5f)
+        assertTrue(calculateContrastRatio(scheme.onSecondaryContainer, scheme.secondaryContainer) >= 4.5f)
+        assertTrue(calculateContrastRatio(scheme.onTertiaryContainer, scheme.tertiaryContainer) >= 4.5f)
+    }
+
+    @Test
+    fun `static md3 surfaces should respond to different source colors instead of staying fixed`() {
+        val blueScheme = createStaticMd3ColorScheme(
+            primaryColor = Color(0xFF007AFF),
+            darkTheme = false,
+            amoledDarkTheme = false
+        )
+        val orangeScheme = createStaticMd3ColorScheme(
+            primaryColor = Color(0xFFFF5722),
+            darkTheme = false,
+            amoledDarkTheme = false
+        )
+
+        assertNotEquals(blueScheme.background, orangeScheme.background)
+        assertNotEquals(blueScheme.surfaceVariant, orangeScheme.surfaceVariant)
+        assertNotEquals(blueScheme.outlineVariant, orangeScheme.outlineVariant)
+    }
+
+    @Test
+    fun `static md3 dark scheme keeps readable accents and source tinted surfaces`() {
+        val scheme = createStaticMd3ColorScheme(
+            primaryColor = Color(0xFF34C759),
+            darkTheme = true,
+            amoledDarkTheme = false
+        )
+
+        assertNotEquals(scheme.primary, scheme.secondary)
+        assertNotEquals(scheme.primary, scheme.tertiary)
+        assertTrue(calculateContrastRatio(scheme.onPrimary, scheme.primary) >= 4.5f)
+        assertTrue(calculateContrastRatio(scheme.onSecondary, scheme.secondary) >= 4.5f)
+        assertTrue(calculateContrastRatio(scheme.onTertiary, scheme.tertiary) >= 4.5f)
+        assertNotEquals(Color(0xFF121212), scheme.background)
+        assertNotEquals(Color(0xFF1E1E1E), scheme.surface)
     }
 }

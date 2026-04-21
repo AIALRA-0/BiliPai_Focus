@@ -56,6 +56,13 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByUpBadgeKeyword_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("UP主标识")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
     fun queryByMd3Alias_hitsAppearanceEntry() {
         val results = resolveSettingsSearchResults("md3")
 
@@ -67,5 +74,51 @@ class SettingsSearchPolicyTest {
         val results = resolveSettingsSearchResults("waiguan")
 
         assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
+    fun queryByPredictiveBack_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("预测性返回")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
+    fun queryByPictureInPicture_hitsPlaybackEntry() {
+        val results = resolveSettingsSearchResults("画中画")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.PLAYBACK })
+    }
+
+    @Test
+    fun queryByAutoRotate_hitsPlaybackEntry() {
+        val results = resolveSettingsSearchResults("自动横竖屏")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.PLAYBACK })
+    }
+
+    @Test
+    fun queryByAutoCheckUpdate_hitsCheckUpdateEntry() {
+        val results = resolveSettingsSearchResults("自动检查更新")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.CHECK_UPDATE })
+    }
+
+    @Test
+    fun queryByBottomBar_surfacesTopTabDiscoverabilityInSubtitle() {
+        val result = resolveSettingsSearchResults("底栏").firstOrNull {
+            it.target == SettingsSearchTarget.BOTTOM_BAR && it.title == "底栏设置"
+        }
+
+        assertEquals("自定义底栏和顶部标签", result?.subtitle)
+    }
+
+    @Test
+    fun queryByAutoCollapse_hitsTopTabManagementEntry() {
+        val result = resolveSettingsSearchResults("自动收缩").firstOrNull {
+            it.target == SettingsSearchTarget.BOTTOM_BAR && it.title == "顶部标签管理"
+        }
+
+        assertEquals("显示/隐藏、排序、自动收缩", result?.subtitle)
     }
 }

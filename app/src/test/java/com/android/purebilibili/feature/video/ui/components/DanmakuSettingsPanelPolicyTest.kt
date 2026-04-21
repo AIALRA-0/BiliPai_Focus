@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
@@ -42,6 +44,10 @@ class DanmakuSettingsPanelPolicyTest {
         )
         assertEquals(0, policy.bottomPaddingDp)
         assertEquals(480, policy.maxHeightDp)
+        assertEquals(
+            DanmakuSettingsPanelAnchor.End,
+            policy.anchor
+        )
     }
 
     @Test
@@ -84,6 +90,41 @@ class DanmakuSettingsPanelPolicyTest {
         )
         assertEquals(640, policy.maxWidthDp)
         assertEquals(0, policy.bottomPaddingDp)
+        assertEquals(DanmakuSettingsPanelAnchor.Center, policy.anchor)
+    }
+
+    @Test
+    fun portraitPanelKeepsBottomAnchor() {
+        val policy = resolveDanmakuSettingsPanelLayoutPolicy(
+            isFullscreen = false,
+            screenWidthDp = 411,
+            screenHeightDp = 915
+        )
+
+        assertEquals(DanmakuSettingsPanelAnchor.Bottom, policy.anchor)
+    }
+
+    @Test
+    fun fullscreenPanelSurfaceColors_followDarkThemeTokens() {
+        val colors = resolveDanmakuSettingsPanelSurfaceColors(
+            colorScheme = darkColorScheme()
+        )
+
+        assertTrue(colors.panelColor.alpha > 0.9f)
+        assertTrue(colors.itemColor.alpha < colors.panelColor.alpha)
+        assertTrue(colors.titleColor.alpha > colors.supportingColor.alpha)
+    }
+
+    @Test
+    fun fullscreenPanelSurfaceColors_followLightThemeTokens() {
+        val colors = resolveDanmakuSettingsPanelSurfaceColors(
+            colorScheme = lightColorScheme()
+        )
+
+        assertTrue(colors.panelColor.alpha > 0.9f)
+        assertTrue(colors.panelColor.red > 0.85f)
+        assertTrue(colors.titleColor.alpha > colors.supportingColor.alpha)
+        assertTrue(colors.sliderInactiveTickColor.alpha < colors.sliderActiveTickColor.alpha)
     }
 
     @Test

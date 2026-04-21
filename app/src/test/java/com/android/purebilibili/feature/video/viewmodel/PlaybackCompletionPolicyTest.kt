@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import androidx.media3.common.Player
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
@@ -151,5 +152,25 @@ class PlaybackCompletionPolicyTest {
                 playMode = PlayMode.SEQUENTIAL
             )
         )
+    }
+
+    @Test
+    fun `repeat one maps to exoplayer repeat one mode`() {
+        assertEquals(
+            Player.REPEAT_MODE_ONE,
+            resolvePlaybackCompletionRepeatMode(PlaybackCompletionBehavior.REPEAT_ONE)
+        )
+    }
+
+    @Test
+    fun `non repeat one completion modes keep exoplayer repeat off`() {
+        listOf(
+            PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
+            PlaybackCompletionBehavior.STOP_AFTER_CURRENT,
+            PlaybackCompletionBehavior.PLAY_IN_ORDER,
+            PlaybackCompletionBehavior.LOOP_PLAYLIST
+        ).forEach { behavior ->
+            assertEquals(Player.REPEAT_MODE_OFF, resolvePlaybackCompletionRepeatMode(behavior))
+        }
     }
 }

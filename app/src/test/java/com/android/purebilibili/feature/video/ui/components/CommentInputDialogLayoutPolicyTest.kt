@@ -33,4 +33,10 @@ class CommentInputDialogLayoutPolicyTest {
         assertTrue(landscapePolicy.inputBoxMaxHeightDp < portraitPolicy.inputBoxMaxHeightDp)
         assertTrue(landscapePolicy.emojiPanelHeightDp < portraitPolicy.emojiPanelHeightDp)
     }
+
+    @Test
+    fun progressInsertText_wrapsFormattedPlaybackTimeWithSpaces() {
+        assertEquals(" 01:05 ", resolveCommentProgressInsertText(65_000L))
+        assertEquals(" 00:00 ", resolveCommentProgressInsertText(-1L))
+    }
 }

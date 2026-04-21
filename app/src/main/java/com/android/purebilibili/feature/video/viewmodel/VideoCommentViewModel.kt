@@ -55,6 +55,8 @@ data class CommentUiState(
     val canUploadImage: Boolean = true,
     val canInputComment: Boolean = true,
     val showUpFlag: Boolean = false,
+    val pinnedReplyIds: Set<Long> = emptySet(),
+    val grpcNextOffset: String? = null,
     // [新增] 评论反诈检测状态
     val isDetectingFraud: Boolean = false,
     val fraudDetectResult: CommentFraudStatus? = null,
@@ -66,11 +68,17 @@ data class SubReplyUiState(
     val visible: Boolean = false,
     val rootReply: ReplyItem? = null,
     val items: List<ReplyItem> = emptyList(),
+    val baseItems: List<ReplyItem> = emptyList(),
     val isLoading: Boolean = false,
     val page: Int = 1,
+    val basePage: Int = 1,
     val isEnd: Boolean = false,
+    val baseIsEnd: Boolean = false,
     val error: String? = null,
     val upMid: Long = 0,
+    val grpcNextOffset: String? = null,
+    val baseGrpcNextOffset: String? = null,
+    val conversationAnchor: ReplyItem? = null,
     // [新增] 消散动画状态
     val dissolvingIds: Set<Long> = emptySet()
 )
@@ -198,7 +206,8 @@ class VideoCommentViewModel : ViewModel() {
                 aid = currentAid, 
                 page = pageToLoad, 
                 ps = 20,
-                mode = currentState.sortMode.apiMode
+                mode = currentState.sortMode.apiMode,
+                paginationOffset = currentState.grpcNextOffset
             )
 
             result.onSuccess { data ->
@@ -209,6 +218,11 @@ class VideoCommentViewModel : ViewModel() {
                 // 第一页时先合并置顶和热评
                 val topReplies = if (pageToLoad == 1) data.collectTopReplies() else emptyList()
                 val hotReplies = if (pageToLoad == 1) data.hots ?: emptyList() else emptyList()
+                val pinnedReplyIds = if (pageToLoad == 1) {
+                    topReplies.mapTo(mutableSetOf()) { it.rpid }
+                } else {
+                    current.pinnedReplyIds
+                }
                 
                 // 合并到原始列表（置顶 -> 热评 -> 普通评论）
                 val combinedReplies = if (pageToLoad == 1) {
@@ -253,7 +267,9 @@ class VideoCommentViewModel : ViewModel() {
                     childInputHint = data.control?.childInputText?.takeIf { it.isNotBlank() } ?: current.childInputHint,
                     canUploadImage = data.control?.canUploadPicture ?: current.canUploadImage,
                     canInputComment = data.control?.inputDisable?.not() ?: current.canInputComment,
-                    showUpFlag = data.config?.showUpFlag ?: current.showUpFlag
+                    showUpFlag = data.config?.showUpFlag ?: current.showUpFlag,
+                    pinnedReplyIds = pinnedReplyIds,
+                    grpcNextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() }
                 )
             }.onFailure { e ->
                 android.util.Log.e("CommentVM", " loadComments error: ${e.message}")
@@ -288,23 +304,79 @@ class VideoCommentViewModel : ViewModel() {
         if (state.isLoading || state.isEnd || state.rootReply == null) return
         val nextPage = state.page + 1
         _subReplyState.value = state.copy(isLoading = true)
-        loadSubReplies(state.rootReply.oid, state.rootReply.rpid, nextPage)
+        val anchor = state.conversationAnchor
+        if (anchor != null) {
+            loadConversationReplies(anchor, nextPage)
+        } else {
+            loadSubReplies(state.rootReply.oid, state.rootReply.rpid, nextPage)
+        }
+    }
+
+    fun openSubReplyConversation(anchorReply: ReplyItem) {
+        val current = _subReplyState.value
+        val rootReply = current.rootReply ?: return
+        val baseItems = current.baseItems.ifEmpty { current.items }
+        val localConversationItems = resolveLocalConversationItems(
+            anchorReply = anchorReply,
+            subReplies = baseItems
+        )
+        _subReplyState.value = current.copy(
+            items = localConversationItems,
+            baseItems = baseItems,
+            basePage = current.page,
+            baseIsEnd = current.isEnd,
+            baseGrpcNextOffset = current.grpcNextOffset,
+            conversationAnchor = anchorReply,
+            page = 1,
+            isEnd = false,
+            isLoading = true,
+            error = null,
+            grpcNextOffset = null
+        )
+        loadConversationReplies(anchorReply, page = 1, rootReply = rootReply)
+    }
+
+    fun closeSubReplyConversation() {
+        val current = _subReplyState.value
+        if (current.conversationAnchor == null) return
+        _subReplyState.value = current.copy(
+            items = current.baseItems,
+            page = current.basePage,
+            isEnd = current.baseIsEnd,
+            grpcNextOffset = current.baseGrpcNextOffset,
+            conversationAnchor = null,
+            isLoading = false,
+            error = null
+        )
     }
 
     private fun loadSubReplies(oid: Long, rootId: Long, page: Int) {
         viewModelScope.launch {
-            val result = CommentRepository.getSubComments(oid, rootId, page)
+            val result = CommentRepository.getSubCommentsForSubject(
+                oid = oid,
+                type = 1,
+                rootId = rootId,
+                page = page,
+                paginationOffset = _subReplyState.value.grpcNextOffset
+            )
             result.onSuccess { data ->
                 val current = _subReplyState.value
                 val newItems = data.replies ?: emptyList()
                 val isEnd = data.cursor.isEnd || newItems.isEmpty()
+                val updatedItems = if (page == 1) newItems else (current.items + newItems).distinctBy { it.rpid }
+                val nextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() }
 
                 _subReplyState.value = current.copy(
-                    items = if (page == 1) newItems else (current.items + newItems).distinctBy { it.rpid },
+                    items = updatedItems,
+                    baseItems = updatedItems,
                     isLoading = false,
                     page = page,
+                    basePage = page,
                     isEnd = isEnd,
-                    error = null
+                    baseIsEnd = isEnd,
+                    error = null,
+                    grpcNextOffset = nextOffset,
+                    baseGrpcNextOffset = nextOffset
                 )
             }.onFailure {
                 _subReplyState.value = _subReplyState.value.copy(
@@ -313,6 +385,88 @@ class VideoCommentViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    private fun loadConversationReplies(
+        anchorReply: ReplyItem,
+        page: Int,
+        rootReply: ReplyItem? = _subReplyState.value.rootReply
+    ) {
+        val root = rootReply ?: return
+        val dialogId = resolveConversationDialogId(anchorReply)
+        if (dialogId <= 0L) {
+            _subReplyState.value = _subReplyState.value.copy(isLoading = false, isEnd = true)
+            return
+        }
+        viewModelScope.launch {
+            val result = CommentRepository.getDialogCommentsForSubject(
+                oid = root.oid,
+                type = 1,
+                rootId = root.rpid,
+                dialogId = dialogId,
+                page = page,
+                paginationOffset = _subReplyState.value.grpcNextOffset
+            )
+            result.onSuccess { data ->
+                val current = _subReplyState.value
+                val newItems = data.replies.orEmpty()
+                val nextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() }
+                val updatedItems = if (page == 1) {
+                    newItems
+                } else {
+                    (current.items + newItems).distinctBy { it.rpid }
+                }
+                _subReplyState.value = current.copy(
+                    items = updatedItems.ifEmpty {
+                        resolveLocalConversationItems(anchorReply, current.baseItems)
+                    },
+                    isLoading = false,
+                    page = page,
+                    isEnd = data.cursor.isEnd || newItems.isEmpty() || nextOffset == null,
+                    error = null,
+                    grpcNextOffset = nextOffset
+                )
+            }.onFailure { error ->
+                val current = _subReplyState.value
+                _subReplyState.value = current.copy(
+                    items = current.items.ifEmpty {
+                        resolveLocalConversationItems(anchorReply, current.baseItems)
+                    },
+                    isLoading = false,
+                    isEnd = true,
+                    error = error.message
+                )
+            }
+        }
+    }
+
+    private fun resolveConversationDialogId(anchorReply: ReplyItem): Long {
+        return when {
+            anchorReply.dialog > 0L -> anchorReply.dialog
+            anchorReply.parent > 0L -> anchorReply.parent
+            else -> anchorReply.rpid
+        }
+    }
+
+    private fun resolveLocalConversationItems(
+        anchorReply: ReplyItem,
+        subReplies: List<ReplyItem>
+    ): List<ReplyItem> {
+        val dialogId = anchorReply.dialog
+        val parentId = anchorReply.parent
+        val anchorId = anchorReply.rpid
+        return subReplies.filter { candidate ->
+            candidate.rpid == anchorId ||
+                (dialogId > 0 && (
+                    candidate.dialog == dialogId ||
+                        candidate.rpid == dialogId ||
+                        candidate.parent == dialogId
+                    )) ||
+                (parentId > 0 && (
+                    candidate.rpid == parentId ||
+                        candidate.parent == parentId
+                    ))
+        }.ifEmpty { listOf(anchorReply) }.distinctBy { it.rpid }
     }
     
     // --- [新增] 评论交互逻辑 ---
@@ -401,7 +555,8 @@ class VideoCommentViewModel : ViewModel() {
                                 items = emptyList(),
                                 page = 1,
                                 isEnd = false,
-                                isLoading = true
+                                isLoading = true,
+                                grpcNextOffset = null
                             )
                             loadSubReplies(root.oid, root.rpid, 1)
                         }
@@ -469,6 +624,57 @@ class VideoCommentViewModel : ViewModel() {
     
     fun reportComment(rpid: Long, reason: Int, content: String = "") {
         viewModelScope.launch { CommentRepository.reportComment(currentAid, rpid, reason, content) }
+    }
+
+    fun reloadCommentsFromStart() {
+        val current = _commentState.value
+        allReplies = emptyList()
+        _commentState.value = current.copy(
+            replies = emptyList(),
+            isRepliesLoading = false,
+            repliesError = null,
+            isRepliesEnd = false,
+            nextPage = 1,
+            grpcNextOffset = null
+        )
+        loadComments()
+    }
+
+    fun onExternalCommentSent(aid: Long, newReply: ReplyItem?) {
+        if (currentAid != aid) return
+        if (newReply == null) {
+            reloadCommentsFromStart()
+            return
+        }
+        val current = _commentState.value
+        allReplies = (listOf(newReply) + allReplies).distinctBy { it.rpid }
+        val visibleReplies = if (current.upOnlyFilter && current.upMid > 0) {
+            allReplies.filter { it.mid == current.upMid }
+        } else {
+            allReplies
+        }
+        _commentState.value = current.copy(
+            replies = visibleReplies,
+            replyCount = (current.replyCount + 1).coerceAtLeast(visibleReplies.size),
+            repliesError = null
+        )
+    }
+
+    fun toggleTopComment(reply: ReplyItem) {
+        if (currentAid <= 0L || reply.rpid <= 0L) return
+        val current = _commentState.value
+        val isCurrentlyTop = reply.rpid in current.pinnedReplyIds || reply.replyControl?.isUpTop == true
+        viewModelScope.launch {
+            CommentRepository.setCommentTop(
+                aid = currentAid,
+                rpid = reply.rpid,
+                isCurrentlyTop = isCurrentlyTop
+            ).onSuccess {
+                reloadCommentsFromStart()
+            }.onFailure { error ->
+                android.util.Log.e("CommentVM", "toggleTopComment failed: ${error.message}")
+            }
+        }
     }
 
     // --- [新增] 评论反诈检测 ---

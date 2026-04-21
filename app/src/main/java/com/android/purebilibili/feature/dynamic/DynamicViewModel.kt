@@ -827,6 +827,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         userPrefs.edit()
             .putInt(KEY_SELECTED_TAB, resolvedTab)
             .apply()
+        if (_selectedUserId.value == null) {
+            DynamicRepository.resetPagination(DynamicFeedScope.DYNAMIC_SCREEN)
+            loadDynamicFeed(refresh = true)
+        }
     }
     
     /**
@@ -873,9 +877,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 return
             }
 
+            val requestType = resolveDynamicFeedRequestType(_selectedTab.value)
             val result = DynamicRepository.getDynamicFeed(
                 refresh = refresh,
-                scope = DynamicFeedScope.DYNAMIC_SCREEN
+                scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                type = requestType
             )
 
             result.fold(
@@ -887,9 +893,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         incrementalRefreshEnabled = incrementalTimelineRefreshEnabled,
                         hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
                     )
-                    val hydratedState = hydrateFocusedTimelineIfNeeded(successState)
-                    _uiState.value = hydratedState
-                    saveDynamicCache(hydratedState.items)
+                    val nextState = if (shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
+                        successState
+                    } else {
+                        hydrateFocusedTimelineIfNeeded(successState)
+                    }
+                    _uiState.value = nextState
+                    if (!shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
+                        saveDynamicCache(nextState.items)
+                    }
                     rebuildFollowedUsers()
                 },
                 onFailure = { error ->
@@ -929,7 +941,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 scope = DynamicFeedScope.DYNAMIC_SCREEN
             ).getOrElse {
                 return hydratedState.copy(
-                    hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+                    hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
+                    sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
                 )
             }
             if (extraItems.isEmpty()) break
@@ -940,13 +953,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     incoming = extraItems,
                     keySelector = ::dynamicFeedItemKey
                 ),
-                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
+                sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
             )
             extraPagesFetched += 1
         }
 
         return hydratedState.copy(
-            hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+            hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
+            sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
         )
     }
     
@@ -956,7 +971,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
     
     fun loadMore() {
-        if (!_uiState.value.hasMore || _uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked) return
+        if (!_uiState.value.sourceHasMore || _uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked) return
         loadDynamicFeed(refresh = false)
     }
 
@@ -1339,7 +1354,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_HIDDEN_USERS = "dynamic_hidden_users"
         private const val KEY_DISPLAY_MODE = "dynamic_display_mode"
         private const val KEY_SELECTED_TAB = "dynamic_selected_tab"
-        private const val DYNAMIC_TOP_TAB_COUNT = 2
+        private const val DYNAMIC_TOP_TAB_COUNT = 5
         private const val MAX_CACHE_ITEMS = 100
         private const val FULL_FOLLOWINGS_PAGE_LIMIT = Int.MAX_VALUE
     }
@@ -1369,6 +1384,7 @@ data class DynamicUiState(
     val userIsLoading: Boolean = false,
     val userError: String? = null,
     val hasMore: Boolean = true,
+    val sourceHasMore: Boolean = true,
     val hasUserMore: Boolean = true, //  [新增] UP主动态是否有更多
     val incrementalRefreshBoundaryKey: String? = null,
     val incrementalPrependedCount: Int = 0,

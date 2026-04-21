@@ -1149,7 +1149,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 🎯 标记通过导航离开（在返回按钮点击时调用）
      *  [修复] 在默认模式和画中画模式下立即暂停播放，解决生命周期时序问题
      */
-    fun markLeavingByNavigation(expectedBvid: String? = null) {
+    fun markLeavingByNavigation(expectedBvid: String? = null, forceStop: Boolean = false) {
         if (!shouldHandleNavigationLeaveForBvid(expectedBvid = expectedBvid, currentBvid = currentBvid)) {
             Logger.d(
                 TAG,
@@ -1165,7 +1165,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 画中画模式说明："切到桌面进入系统画中画"，返回主页时应停止
         val mode = getCurrentMode()
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
-        if (shouldClearPlaybackNotificationOnNavigationExit(mode, stopPlaybackOnExit)) {
+        if (forceStop || shouldClearPlaybackNotificationOnNavigationExit(mode, stopPlaybackOnExit)) {
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
             _externalPlayer?.let { player ->
@@ -2050,9 +2050,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
 
         val compactActionOrder = resolveExternalTransportActionOrder()
-        val style = androidx.media.app.NotificationCompat.MediaStyle()
-            .setMediaSession(mediaSession?.sessionCompatToken)
-            .setShowActionsInCompactView(0, 1, 2)
+        val style = mediaSession?.let { session ->
+            androidx.media3.session.MediaStyleNotificationHelper.MediaStyle(session)
+                .setShowActionsInCompactView(0, 1, 2)
+        }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(
@@ -2064,13 +2065,15 @@ class MiniPlayerManager private constructor(private val context: Context) :
             .setContentTitle(title)
             .setContentText(artist)
             .setLargeIcon(effectiveArtworkBitmap)
-            .setStyle(style)
             .setColor(THEME_COLOR)
             .setColorized(true)
             .setOngoing(notificationIsPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setContentIntent(mediaSession?.sessionActivity)
+            .apply {
+                style?.let(::setStyle)
+            }
         
         // 🎯 [修复] 确保点击通知本体也能正确跳转（覆盖 setContentIntent 作为双重保障）
         val intent = Intent(context, com.android.purebilibili.MainActivity::class.java).apply {

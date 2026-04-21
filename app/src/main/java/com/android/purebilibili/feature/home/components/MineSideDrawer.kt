@@ -37,6 +37,7 @@ import com.android.purebilibili.core.ui.rememberAppInboxIcon
 import com.android.purebilibili.core.ui.rememberAppLogoutIcon
 import com.android.purebilibili.core.ui.rememberAppTvIcon
 import com.android.purebilibili.core.ui.components.IOSClickableItem
+import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.home.UserState
 import dev.chrisbanes.haze.HazeState
@@ -266,26 +267,13 @@ fun MineSideDrawer(
                         
                         if (user.isLogin) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 // 等级徽章
                                 if (user.level > 0) {
-                                    Surface(
-                                        color = when (user.level) {
-                                            6 -> Color(0xFFFF6B9D) // LV6 粉色
-                                            5 -> Color(0xFFFF8A65) // LV5 橙色
-                                            4 -> Color(0xFFFFB74D) // LV4 黄色
-                                            else -> MaterialTheme.colorScheme.primary
-                                        },
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "LV${user.level}",
-                                            color = Color.White,
-                                            fontSize = layoutPolicy.badgeFontSp.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                        )
-                                    }
+                                    UserLevelBadge(level = user.level)
                                 }
                                 
                                 // VIP 徽章

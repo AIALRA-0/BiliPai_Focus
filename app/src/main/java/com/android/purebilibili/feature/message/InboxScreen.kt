@@ -9,25 +9,34 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.SessionItem
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,28 +47,24 @@ fun InboxScreen(
     viewModel: InboxViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
-    Scaffold(
+    var lastAutoLoadEndTs by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(uiState.sessions.firstOrNull()?.talker_id, uiState.isRefreshing, uiState.isLoading) {
+        if (uiState.isRefreshing || uiState.isLoading) {
+            lastAutoLoadEndTs = 0L
+        }
+    }
+
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
+            AdaptiveTopAppBar(
+                title = "消息",
+                subtitle = uiState.unreadData?.let { unread ->
+                    totalPrivateUnreadCount(unread).takeIf { it > 0 }?.let { "私信 $it 条未读" }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                title = { 
-                    Column {
-                        Text("消息")
-                        uiState.unreadData?.let { unread ->
-                            val total = totalPrivateUnreadCount(unread)
-                            if (total > 0) {
-                                Text(
-                                    text = "私信 ${total} 条未读",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 }
             )
@@ -115,7 +120,18 @@ fun InboxScreen(
                                 items = uiState.sessions,
                                 key = { "${it.talker_id}_${it.session_type}" }
                             ) { session ->
-                                // 优先使用缓存的用户信息
+                                if (
+                                    uiState.hasMore &&
+                                    uiState.endTs > 0L &&
+                                    uiState.endTs != lastAutoLoadEndTs &&
+                                    session == uiState.sessions.lastOrNull() &&
+                                    !uiState.isLoadingMore
+                                ) {
+                                    LaunchedEffect(session.talker_id, session.session_type, uiState.endTs) {
+                                        lastAutoLoadEndTs = uiState.endTs
+                                        viewModel.loadMoreSessions()
+                                    }
+                                }
                                 val userInfo = uiState.userInfoMap[session.talker_id]
                                 SessionListItem(
                                     session = session,
@@ -131,8 +147,7 @@ fun InboxScreen(
                                     onToggleTop = { viewModel.toggleTop(session) }
                                 )
                             }
-                            
-                            // 加载更多按钮
+
                             if (uiState.hasMore) {
                                 item {
                                     Box(
@@ -211,12 +226,23 @@ private fun MessageCenterShortcutCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     Surface(
         modifier = modifier
-            .height(96.dp)
+            .height(if (isMiuix) 88.dp else 96.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        shape = RoundedCornerShape(if (isMiuix) 18.dp else 20.dp),
+        color = if (isMiuix) MiuixTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = if (isMiuix) {
+            androidx.compose.foundation.BorderStroke(
+                0.8.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+            )
+        } else {
+            null
+        }
     ) {
         Column(
             modifier = Modifier
@@ -297,13 +323,16 @@ private fun MessageUnreadBadge(
 @Composable
 fun SessionListItem(
     session: SessionItem,
-    userInfo: UserBasicInfo? = null,  //  [新增] 从缓存获取的用户信息
+    userInfo: UserBasicInfo? = null,
     onClick: () -> Unit,
     onRemove: () -> Unit,
     onToggleTop: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
+
     val displayName = InboxUserInfoResolver.resolveDisplayName(
         cached = userInfo,
         session = session
@@ -312,22 +341,26 @@ fun SessionListItem(
         cached = userInfo,
         session = session
     )
-    
-    Row(
+
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .then(
-                if (session.top_ts > 0) {
-                    Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                } else {
-                    Modifier
-                }
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = if (isMiuix) 12.dp else 0.dp, vertical = if (isMiuix) 3.dp else 0.dp),
+        shape = RoundedCornerShape(if (isMiuix) 16.dp else 0.dp),
+        color = when {
+            isMiuix && session.top_ts > 0 -> MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+            isMiuix -> MiuixTheme.colorScheme.surfaceContainer
+            session.top_ts > 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            else -> Color.Transparent
+        }
+    ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = if (isMiuix) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 头像
         Box {
             AsyncImage(
                 model = displayAvatar,
@@ -338,8 +371,7 @@ fun SessionListItem(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = ContentScale.Crop
             )
-            
-            // 未读角标 - 优化样式
+
             if (session.unread_count > 0) {
                 val badgeText = when {
                     session.unread_count > 99 -> "99+"
@@ -353,13 +385,10 @@ fun SessionListItem(
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.width(12.dp))
-        
-        // 用户名和消息预览
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
+
+        Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = displayName,
@@ -369,8 +398,7 @@ fun SessionListItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                
-                // 置顶标记
+
                 if (session.top_ts > 0) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
@@ -386,10 +414,9 @@ fun SessionListItem(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(4.dp))
-            
-            // 消息预览
+
             Text(
                 text = MessagePreviewParser.parseSessionPreview(
                     content = session.last_msg?.content,
@@ -401,19 +428,16 @@ fun SessionListItem(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        
+
         Spacer(modifier = Modifier.width(8.dp))
-        
-        // 时间和菜单
-        Column(
-            horizontalAlignment = Alignment.End
-        ) {
+
+        Column(horizontalAlignment = Alignment.End) {
             Text(
                 text = formatTime(session.last_msg?.timestamp ?: 0),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             Box {
                 IconButton(
                     onClick = { showMenu = true },
@@ -426,7 +450,7 @@ fun SessionListItem(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
@@ -449,18 +473,16 @@ fun SessionListItem(
             }
         }
     }
+    }
 }
 
-/**
- * 格式化时间
- */
 private fun formatTime(timestamp: Long): String {
     if (timestamp == 0L) return ""
-    
+
     val now = System.currentTimeMillis()
     val msgTime = timestamp * 1000
     val diff = now - msgTime
-    
+
     return when {
         diff < 60_000 -> "刚刚"
         diff < 3600_000 -> "${diff / 60_000}分钟前"

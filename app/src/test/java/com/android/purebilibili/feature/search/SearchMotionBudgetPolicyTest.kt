@@ -54,7 +54,8 @@ class SearchMotionBudgetPolicyTest {
         assertEquals(SearchMotionBudget.FULL, budget)
         assertTrue(
             shouldEnableSearchHazeSource(
-                isSearching = false
+                isSearching = false,
+                startupSettled = true
             )
         )
     }
@@ -63,7 +64,79 @@ class SearchMotionBudgetPolicyTest {
     fun activeSearchRequest_disablesHazeSource() {
         assertFalse(
             shouldEnableSearchHazeSource(
-                isSearching = true
+                isSearching = true,
+                startupSettled = true
+            )
+        )
+    }
+
+    @Test
+    fun startupPending_forcesReducedMotionAndDisablesHaze() {
+        assertEquals(
+            SearchMotionBudget.REDUCED,
+            resolveEffectiveSearchMotionBudget(
+                startupSettled = false,
+                baseBudget = SearchMotionBudget.FULL
+            )
+        )
+        assertFalse(
+            shouldEnableSearchHazeSource(
+                isSearching = false,
+                startupSettled = false
+            )
+        )
+    }
+
+    @Test
+    fun landingBootstrap_onlyRunsAfterStartupSettlesOnEmptyLandingState() {
+        assertFalse(
+            shouldBootstrapSearchLandingData(
+                startupSettled = false,
+                showResults = false,
+                query = ""
+            )
+        )
+        assertFalse(
+            shouldBootstrapSearchLandingData(
+                startupSettled = true,
+                showResults = true,
+                query = ""
+            )
+        )
+        assertFalse(
+            shouldBootstrapSearchLandingData(
+                startupSettled = true,
+                showResults = false,
+                query = "test"
+            )
+        )
+        assertTrue(
+            shouldBootstrapSearchLandingData(
+                startupSettled = true,
+                showResults = false,
+                query = ""
+            )
+        )
+    }
+
+    @Test
+    fun autoFocus_waitsUntilStartupSettles() {
+        assertFalse(
+            shouldAutoFocusSearchField(
+                startupSettled = false,
+                query = ""
+            )
+        )
+        assertFalse(
+            shouldAutoFocusSearchField(
+                startupSettled = true,
+                query = "abc"
+            )
+        )
+        assertTrue(
+            shouldAutoFocusSearchField(
+                startupSettled = true,
+                query = ""
             )
         )
     }
@@ -84,6 +157,28 @@ class SearchMotionBudgetPolicyTest {
             shouldForceLowBudgetSearchHeaderBlur(
                 isSearching = true,
                 isScrollingResults = false
+            )
+        )
+    }
+
+    @Test
+    fun newSearchSession_resetsResultScroll() {
+        assertTrue(
+            shouldResetSearchResultScroll(
+                searchSessionId = 3L,
+                showResults = true,
+                lastResetSessionId = 2L
+            )
+        )
+    }
+
+    @Test
+    fun restoredSearchScreen_doesNotResetExistingResultScroll() {
+        assertFalse(
+            shouldResetSearchResultScroll(
+                searchSessionId = 3L,
+                showResults = true,
+                lastResetSessionId = 3L
             )
         )
     }

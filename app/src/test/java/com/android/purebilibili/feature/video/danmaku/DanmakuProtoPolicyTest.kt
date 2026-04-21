@@ -42,6 +42,44 @@ class DanmakuProtoPolicyTest {
         assertEquals(9_999L, reply.count)
     }
 
+    @Test
+    fun parseDmSegMobileReply_readsPiliPlusExtendedElemFields() {
+        val elem = buildList<Byte> {
+            addFieldVarint(fieldNumber = 1, value = 123L)
+            addFieldVarint(fieldNumber = 2, value = 4567L)
+            addFieldVarint(fieldNumber = 3, value = 1L)
+            addFieldVarint(fieldNumber = 4, value = 25L)
+            addFieldVarint(fieldNumber = 5, value = 0xFFFFFFL)
+            addFieldBytes(fieldNumber = 6, value = "hash".encodeToByteArray())
+            addFieldBytes(fieldNumber = 7, value = "关注弹幕".encodeToByteArray())
+            addFieldVarint(fieldNumber = 9, value = 8L)
+            addFieldVarint(fieldNumber = 11, value = 0L)
+            addFieldVarint(fieldNumber = 15, value = 12L)
+            addFieldVarint(
+                fieldNumber = 24,
+                value = DanmakuProto.DmColorfulTypeVipGradualColor.toLong()
+            )
+            addFieldVarint(fieldNumber = 28, value = 3L)
+            addFieldVarint(fieldNumber = 29, value = 1L)
+        }.toByteArray()
+        val payload = buildList<Byte> {
+            addFieldBytes(fieldNumber = 1, value = elem)
+        }.toByteArray()
+
+        val parsed = DanmakuProto.parse(payload)
+
+        assertEquals(1, parsed.size)
+        val item = parsed.first()
+        assertEquals(123L, item.id)
+        assertEquals(4567, item.progress)
+        assertEquals("关注弹幕", item.content)
+        assertEquals(8, item.weight)
+        assertEquals(12L, item.like)
+        assertEquals(DanmakuProto.DmColorfulTypeVipGradualColor, item.colorful)
+        assertEquals(3, item.count)
+        assertEquals(true, item.isSelf)
+    }
+
     private fun encodeDmWebViewReply(
         dmSgeFieldNumber: Int,
         pageSize: Long,

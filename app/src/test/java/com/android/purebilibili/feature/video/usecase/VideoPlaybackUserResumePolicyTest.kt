@@ -9,17 +9,16 @@ import kotlin.test.Test
 class VideoPlaybackUserResumePolicyTest {
 
     @Test
-    fun `playPlayerFromUserAction performs compatibility seek before resuming paused ready playback`() {
+    fun `playPlayerFromUserAction resumes paused ready playback without compatibility seek`() {
         val player = mockk<Player>(relaxed = true)
         every { player.playbackState } returns Player.STATE_READY
         every { player.mediaItemCount } returns 1
-        every { player.currentPosition } returns 42_000L
         every { player.isPlaying } returns false
         every { player.playWhenReady } returns false
 
         playPlayerFromUserAction(player)
 
-        verify(exactly = 1) { player.seekTo(42_000L) }
+        verify(exactly = 0) { player.seekTo(any()) }
         verify(exactly = 1) { player.play() }
     }
 
@@ -36,5 +35,31 @@ class VideoPlaybackUserResumePolicyTest {
 
         verify(exactly = 1) { player.seekTo(0L) }
         verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `applyPlaybackIntentAfterSourceChange replays source swaps when autoplay should continue`() {
+        val player = mockk<Player>(relaxed = true)
+
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = true
+        )
+
+        verify(exactly = 1) { player.playWhenReady = true }
+        verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `applyPlaybackIntentAfterSourceChange keeps paused transitions paused`() {
+        val player = mockk<Player>(relaxed = true)
+
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = false
+        )
+
+        verify(exactly = 1) { player.playWhenReady = false }
+        verify(exactly = 0) { player.play() }
     }
 }

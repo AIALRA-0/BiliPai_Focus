@@ -10,7 +10,7 @@ internal enum class TopLevelNavigationAction {
 
 internal enum class BottomBarSelectionAction {
     NAVIGATE,
-    HOME_RESELECT
+    RESELECT
 }
 
 internal fun resolveTopLevelNavigationAction(
@@ -33,8 +33,8 @@ internal fun resolveBottomBarSelectionAction(
     currentItem: BottomNavItem,
     tappedItem: BottomNavItem
 ): BottomBarSelectionAction {
-    return if (currentItem == BottomNavItem.HOME && tappedItem == BottomNavItem.HOME) {
-        BottomBarSelectionAction.HOME_RESELECT
+    return if (currentItem == tappedItem) {
+        BottomBarSelectionAction.RESELECT
     } else {
         BottomBarSelectionAction.NAVIGATE
     }

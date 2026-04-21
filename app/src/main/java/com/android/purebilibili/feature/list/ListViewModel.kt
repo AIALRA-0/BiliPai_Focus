@@ -4,11 +4,19 @@ package com.android.purebilibili.feature.list
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 // 通用的 UI 状态
 data class ListUiState(
@@ -282,70 +290,67 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
             }
         }
 
-        viewModelScope.launch {
+        AppScope.ioScope.launch {
             try {
                 val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
                 if (csrf.isBlank()) {
-                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                    android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    withContext(Dispatchers.Main.immediate) {
+                        restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                        android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                     return@launch
                 }
 
                 val targetEntries = targetKeys.mapNotNull { key ->
                     snapshotRenderMap[key]?.let { key to it }
                 }
-                val successKeys = mutableSetOf<String>()
-                targetEntries.forEachIndexed { index, (key, item) ->
-                    val kid = resolveHistoryDeleteKid(item)
-                    if (!kid.isNullOrBlank()) {
-                        val result = deleteHistoryItemWithRetry(kid = kid, csrf = csrf)
-                        if (result.isSuccess) {
-                            successKeys += key
-                        }
-                    }
-                    if (index < targetEntries.lastIndex) {
-                        kotlinx.coroutines.delay(HISTORY_DELETE_INTERVAL_MS)
-                    }
-                }
+                val successKeys = deleteHistoryItemsInBackground(
+                    targetEntries = targetEntries,
+                    csrf = csrf
+                )
 
-                if (successKeys.size == targetEntries.size) {
-                    val count = successKeys.size
-                    android.widget.Toast.makeText(
-                        getApplication(),
-                        if (count == 1) "已删除历史记录" else "已删除 $count 条历史记录",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    val restoredItems = snapshotItems.filter { video ->
-                        val key = resolveHistoryRenderKeyFromSnapshot(video, snapshotRenderMap)
-                        key !in successKeys
-                    }
-                    val restoredRenderMap = HashMap(snapshotRenderMap).apply {
-                        keys.removeAll(successKeys)
-                    }
-                    val restoredBvidMap = HashMap(snapshotBvidMap).apply {
-                        entries.removeAll { (_, value) ->
-                            resolveHistoryRenderKey(value) in successKeys
+                withContext(Dispatchers.Main.immediate) {
+                    if (successKeys.size == targetEntries.size) {
+                        val count = successKeys.size
+                        android.widget.Toast.makeText(
+                            getApplication(),
+                            if (count == 1) "已删除历史记录" else "已删除 $count 条历史记录",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        val restoredItems = snapshotItems.filter { video ->
+                            val key = resolveHistoryRenderKeyFromSnapshot(video, snapshotRenderMap)
+                            key !in successKeys
                         }
+                        val restoredRenderMap = HashMap(snapshotRenderMap).apply {
+                            keys.removeAll(successKeys)
+                        }
+                        val restoredBvidMap = HashMap(snapshotBvidMap).apply {
+                            entries.removeAll { (_, value) ->
+                                resolveHistoryRenderKey(value) in successKeys
+                            }
+                        }
+                        _uiState.value = _uiState.value.copy(items = restoredItems)
+                        _historyItemsByRenderKey.clear()
+                        _historyItemsByRenderKey.putAll(restoredRenderMap)
+                        _historyItemsMap.clear()
+                        _historyItemsMap.putAll(restoredBvidMap)
+                        android.widget.Toast.makeText(
+                            getApplication(),
+                            "批量删除完成：成功 ${successKeys.size} / ${targetEntries.size}",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
                     }
-                    _uiState.value = _uiState.value.copy(items = restoredItems)
-                    _historyItemsByRenderKey.clear()
-                    _historyItemsByRenderKey.putAll(restoredRenderMap)
-                    _historyItemsMap.clear()
-                    _historyItemsMap.putAll(restoredBvidMap)
-                    android.widget.Toast.makeText(
-                        getApplication(),
-                        "批量删除完成：成功 ${successKeys.size} / ${targetEntries.size}",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
                 }
             } catch (e: Exception) {
-                restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                android.widget.Toast.makeText(
-                    getApplication(),
-                    "删除历史失败: ${e.message ?: "请稍后重试"}",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+                withContext(Dispatchers.Main.immediate) {
+                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "删除历史失败: ${e.message ?: "请稍后重试"}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
             }
         }
     }
@@ -424,6 +429,26 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         }
     }
 
+    private suspend fun deleteHistoryItemsInBackground(
+        targetEntries: List<Pair<String, com.android.purebilibili.data.model.response.HistoryItem>>,
+        csrf: String
+    ): Set<String> = supervisorScope {
+        val semaphore = Semaphore(resolveDeleteBatchParallelism(targetEntries.size))
+        targetEntries.map { (key, item) ->
+            async {
+                val kid = resolveHistoryDeleteKid(item).orEmpty()
+                if (kid.isBlank()) return@async null
+                semaphore.withPermit {
+                    if (deleteHistoryItemWithRetry(kid = kid, csrf = csrf).isSuccess) {
+                        key
+                    } else {
+                        null
+                    }
+                }
+            }
+        }.awaitAll().filterNotNull().toSet()
+    }
+
     private fun cacheHistoryItems(historyItems: List<com.android.purebilibili.data.model.response.HistoryItem>) {
         historyItems.forEach { item ->
             _historyItemsMap[resolveHistoryLookupKey(item)] = item
@@ -480,7 +505,6 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     companion object {
         private const val HISTORY_DELETE_MAX_ATTEMPTS = 3
         private const val HISTORY_DELETE_RETRY_BASE_DELAY_MS = 300L
-        private const val HISTORY_DELETE_INTERVAL_MS = 150L
     }
 }
 

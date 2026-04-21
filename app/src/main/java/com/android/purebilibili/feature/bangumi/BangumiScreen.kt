@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.theme.iOSYellow
 import com.android.purebilibili.core.util.FormatUtils
@@ -46,6 +47,9 @@ import com.android.purebilibili.data.model.response.BangumiFilter
 import com.android.purebilibili.data.model.response.BangumiItem
 import com.android.purebilibili.data.model.response.BangumiSearchItem
 import com.android.purebilibili.data.model.response.BangumiType
+import com.android.purebilibili.data.model.response.FollowBangumiItem
+import com.android.purebilibili.data.model.response.TimelineDay
+import com.android.purebilibili.data.model.response.TimelineEpisode
 // [重构] 使用提取的可复用组件
 import com.android.purebilibili.feature.bangumi.ui.components.BangumiModeTabs
 import com.android.purebilibili.feature.bangumi.ui.components.BangumiFilterPanel
@@ -119,7 +123,7 @@ fun BangumiScreen(
         }
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         topBar = {
             if (showSearchBar) {
@@ -204,10 +208,17 @@ fun BangumiScreen(
             // 内容区域
             when (displayMode) {
                 BangumiDisplayMode.LIST -> {
-                    BangumiListContent(
+                    BangumiPiliPlusHomeContent(
                         listState = listState,
+                        timelineState = timelineState,
+                        myFollowState = myFollowState,
+                        selectedType = selectedType,
+                        myFollowType = myFollowType,
                         onRetry = { viewModel.loadBangumiList() },
+                        onRetryTimeline = { viewModel.loadTimeline() },
+                        onRetryMyFollow = { viewModel.loadMyFollowBangumi(myFollowType) },
                         onLoadMore = { viewModel.loadMore() },
+                        onOpenMyFollow = { viewModel.openMyFollowEntry() },
                         onItemClick = onBangumiClick
                     )
                 }
@@ -237,6 +248,516 @@ fun BangumiScreen(
                         onItemClick = onBangumiClick
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * PiliPlus 风格番剧首页：最近追番/追剧、时间表、推荐索引在同一信息流中展示。
+ */
+@Composable
+private fun BangumiPiliPlusHomeContent(
+    listState: BangumiListState,
+    timelineState: TimelineState,
+    myFollowState: MyFollowState,
+    selectedType: Int,
+    myFollowType: Int,
+    onRetry: () -> Unit,
+    onRetryTimeline: () -> Unit,
+    onRetryMyFollow: () -> Unit,
+    onLoadMore: () -> Unit,
+    onOpenMyFollow: () -> Unit,
+    onItemClick: (Long) -> Unit
+) {
+    val gridState = rememberLazyGridState()
+    val hasMore = (listState as? BangumiListState.Success)?.hasMore == true
+
+    LaunchedEffect(gridState, hasMore) {
+        snapshotFlow {
+            val layoutInfo = gridState.layoutInfo
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleItem >= layoutInfo.totalItemsCount - 6
+        }.collect { shouldLoad ->
+            if (shouldLoad && hasMore) {
+                onLoadMore()
+            }
+        }
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 106.dp),
+        state = gridState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 12.dp,
+            top = 12.dp,
+            end = 12.dp,
+            bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        ),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        val shouldShowFollowSection = (myFollowState as? MyFollowState.Error)?.message != "未登录"
+        if (shouldShowFollowSection) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BangumiHomeSectionHeader(
+                    title = if (myFollowType == MY_FOLLOW_TYPE_BANGUMI) "最近追番" else "最近追剧",
+                    actionText = "查看全部",
+                    onAction = onOpenMyFollow
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BangumiFollowPreviewSection(
+                    state = myFollowState,
+                    onRetry = onRetryMyFollow,
+                    onOpenMyFollow = onOpenMyFollow,
+                    onItemClick = onItemClick
+                )
+            }
+        }
+
+        if (selectedType == BangumiType.ANIME.value || selectedType == BangumiType.GUOCHUANG.value) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BangumiHomeSectionHeader(
+                    title = "追番时间表",
+                    actionText = "刷新",
+                    onAction = onRetryTimeline
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BangumiTimelinePreviewSection(
+                    state = timelineState,
+                    onRetry = onRetryTimeline,
+                    onItemClick = onItemClick
+                )
+            }
+        }
+
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            BangumiHomeSectionHeader(title = "推荐")
+        }
+
+        when (listState) {
+            is BangumiListState.Loading -> {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HomeLoadingStrip(minHeight = 180.dp)
+                }
+            }
+            is BangumiListState.Error -> {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HomeErrorStrip(
+                        message = listState.message,
+                        onRetry = onRetry
+                    )
+                }
+            }
+            is BangumiListState.Success -> {
+                if (listState.items.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            text = "暂无推荐内容",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                    items(
+                        items = listState.items,
+                        key = { it.seasonId }
+                    ) { item ->
+                        BangumiCard(
+                            item = item,
+                            onClick = { onItemClick(item.seasonId) }
+                        )
+                    }
+                    if (listState.hasMore) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            HomeLoadingStrip(minHeight = 56.dp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BangumiHomeSectionHeader(
+    title: String,
+    actionText: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (actionText != null && onAction != null) {
+            TextButton(
+                onClick = onAction,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(actionText, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BangumiFollowPreviewSection(
+    state: MyFollowState,
+    onRetry: () -> Unit,
+    onOpenMyFollow: () -> Unit,
+    onItemClick: (Long) -> Unit
+) {
+    when (state) {
+        is MyFollowState.Loading -> HomeLoadingStrip(minHeight = 150.dp)
+        is MyFollowState.Error -> HomeErrorStrip(
+            message = state.message,
+            onRetry = onRetry,
+            minHeight = 120.dp
+        )
+        is MyFollowState.Success -> {
+            if (state.items.isEmpty()) {
+                Surface(
+                    onClick = onOpenMyFollow,
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 1.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 96.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "还没有追番追剧",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            } else {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(end = 4.dp)
+                ) {
+                    items(
+                        items = state.items.take(12),
+                        key = { it.seasonId }
+                    ) { item ->
+                        FollowBangumiHomeCard(
+                            item = item,
+                            onClick = { onItemClick(item.seasonId) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FollowBangumiHomeCard(
+    item: FollowBangumiItem,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(110.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.75f)
+                .clip(RoundedCornerShape(8.dp))
+        ) {
+            AsyncImage(
+                model = FormatUtils.fixImageUrl(item.cover),
+                contentDescription = item.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                            startY = 90f
+                        )
+                    )
+            )
+            val bottomText = item.progress.ifBlank {
+                item.newEp?.indexShow.orEmpty()
+            }
+            if (bottomText.isNotBlank()) {
+                Text(
+                    text = bottomText,
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(7.dp)
+                )
+            }
+            if (item.badge.isNotBlank()) {
+                BangumiHomeBadge(
+                    text = item.badge,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(5.dp)
+                )
+            }
+        }
+        Text(
+            text = item.title,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun BangumiTimelinePreviewSection(
+    state: TimelineState,
+    onRetry: () -> Unit,
+    onItemClick: (Long) -> Unit
+) {
+    when (state) {
+        is TimelineState.Loading -> HomeLoadingStrip(minHeight = 170.dp)
+        is TimelineState.Error -> HomeErrorStrip(
+            message = state.message,
+            onRetry = onRetry,
+            minHeight = 130.dp
+        )
+        is TimelineState.Success -> {
+            val visibleDays = state.days.filter { !it.episodes.isNullOrEmpty() }
+            if (visibleDays.isEmpty()) {
+                Text(
+                    text = "今天暂无更新",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 24.dp),
+                    fontSize = 14.sp
+                )
+                return
+            }
+            var selectedIndex by remember(visibleDays) {
+                mutableIntStateOf(visibleDays.indexOfFirst { it.isToday == 1 }.coerceAtLeast(0))
+            }
+            val selectedDay = visibleDays.getOrNull(selectedIndex) ?: visibleDays.first()
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(visibleDays.size) { index ->
+                        val day = visibleDays[index]
+                        val selected = index == selectedIndex
+                        Surface(
+                            onClick = { selectedIndex = index },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        ) {
+                            Text(
+                                text = buildTimelineDayLabel(day),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                fontSize = 13.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(
+                        items = selectedDay.episodes.orEmpty(),
+                        key = { it.episodeId }
+                    ) { episode ->
+                        TimelineEpisodeHomeCard(
+                            episode = episode,
+                            onClick = { onItemClick(episode.seasonId) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun buildTimelineDayLabel(day: TimelineDay): String {
+    if (day.isToday == 1) return "今天"
+    val week = when (day.dayOfWeek) {
+        1 -> "周一"
+        2 -> "周二"
+        3 -> "周三"
+        4 -> "周四"
+        5 -> "周五"
+        6 -> "周六"
+        7 -> "周日"
+        else -> day.date.takeLast(5)
+    }
+    return "${day.date.takeLast(5)} $week"
+}
+
+@Composable
+private fun TimelineEpisodeHomeCard(
+    episode: TimelineEpisode,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(112.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.75f)
+                .clip(RoundedCornerShape(8.dp))
+        ) {
+            AsyncImage(
+                model = FormatUtils.fixImageUrl(episode.cover),
+                contentDescription = episode.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                            startY = 90f
+                        )
+                    )
+            )
+            val updateLabel = episode.pubIndex.ifBlank { episode.pubTime }
+            if (updateLabel.isNotBlank()) {
+                Text(
+                    text = updateLabel,
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(7.dp)
+                )
+            }
+            if (episode.follow == 1) {
+                BangumiHomeBadge(
+                    text = "已追",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(5.dp)
+                )
+            }
+        }
+        Text(
+            text = episode.title,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun BangumiHomeBadge(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary,
+        shape = RoundedCornerShape(4.dp)
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun HomeLoadingStrip(
+    minHeight: androidx.compose.ui.unit.Dp
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = minHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 2.dp
+        )
+    }
+}
+
+@Composable
+private fun HomeErrorStrip(
+    message: String,
+    onRetry: () -> Unit,
+    minHeight: androidx.compose.ui.unit.Dp = 150.dp
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = minHeight)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onRetry) {
+                Text("重试")
             }
         }
     }

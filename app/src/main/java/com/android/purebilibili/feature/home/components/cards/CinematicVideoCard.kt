@@ -101,6 +101,8 @@ fun CinematicVideoCard(
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false,
     isDataSaverActive: Boolean = false,
+    preferLowQualityCover: Boolean = false,
+    showUpBadge: Boolean = true,
     onDismiss: (() -> Unit)? = null,
     onWatchLater: (() -> Unit)? = null,
     onClick: (String, Long) -> Unit
@@ -113,8 +115,12 @@ fun CinematicVideoCard(
 
     var showDismissMenu by remember { mutableStateOf(false) }
 
-    val coverUrl = remember(video.bvid) {
-        FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
+    val useLowQualityCover = isDataSaverActive && preferLowQualityCover
+    val coverUrl = remember(video.bvid, useLowQualityCover) {
+        FormatUtils.resolveVideoCoverUrl(
+            if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic,
+            useLowQuality = useLowQualityCover
+        )
     }
 
     // 记录位置
@@ -338,6 +344,7 @@ fun CinematicVideoCard(
                          nameColor = Color.White.copy(alpha = 0.9f),
                          badgeTextColor = Color.White.copy(alpha = 0.92f),
                          badgeBorderColor = Color.White.copy(alpha = 0.45f),
+                         showUpBadge = showUpBadge,
                          modifier = upNameModifier
                      )
                      

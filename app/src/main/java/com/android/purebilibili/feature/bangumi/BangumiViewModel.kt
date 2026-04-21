@@ -136,6 +136,7 @@ class BangumiViewModel : ViewModel() {
     // 由于 B站 PGC API 返回的 userStatus.follow 不可靠，我们使用本地缓存来覆盖
     // Key: seasonId, Value: 是否追番
     private val followStatusCache = mutableMapOf<Long, Boolean>()
+    private val followStatusValueCache = mutableMapOf<Long, Int>()
     
     //  [修复] 预加载的已追番 seasonId 集合（从"我的追番"API 获取）
     private val followedSeasonIds = mutableSetOf<Long>()
@@ -143,8 +144,20 @@ class BangumiViewModel : ViewModel() {
     
     init {
         loadBangumiList()
+        loadHomeFeed()
         //  预加载用户的追番列表以获取正确的追番状态
         preloadFollowedSeasons()
+    }
+
+    fun loadHomeFeed() {
+        val shouldShowTimeline = _selectedType.value == BangumiType.ANIME.value ||
+            _selectedType.value == BangumiType.GUOCHUANG.value
+        if (shouldShowTimeline && _timelineState.value is TimelineState.Loading) {
+            loadTimeline(timelineTypeForSelectedType(_selectedType.value))
+        }
+        if (_myFollowState.value is MyFollowState.Loading) {
+            loadMyFollowBangumi(type = _myFollowType.value)
+        }
     }
     
     /**
@@ -221,7 +234,11 @@ class BangumiViewModel : ViewModel() {
             _myFollowType.value = defaultMyFollowTypeForSeasonType(type)
             currentPage = 1
             loadBangumiList()
-            if (_displayMode.value == BangumiDisplayMode.TIMELINE) {
+            loadMyFollowBangumi(type = _myFollowType.value)
+            val shouldReloadTimeline = type == BangumiType.ANIME.value ||
+                type == BangumiType.GUOCHUANG.value ||
+                _displayMode.value == BangumiDisplayMode.TIMELINE
+            if (shouldReloadTimeline) {
                 loadTimeline(timelineTypeForSelectedType(type))
             }
         }
@@ -378,6 +395,9 @@ class BangumiViewModel : ViewModel() {
                     // 2. 预加载的追番列表（从"我的追番"API 获取）
                     // 3. API 返回的 userStatus.follow
                     val isFollowed = when {
+                        followStatusValueCache.containsKey(realSeasonId) -> {
+                            followStatusValueCache[realSeasonId]!! > 0
+                        }
                         followStatusCache.containsKey(realSeasonId) -> {
                             android.util.Log.d("BangumiVM", "📌 使用本地缓存状态: ${followStatusCache[realSeasonId]}")
                             followStatusCache[realSeasonId]!!
@@ -395,7 +415,8 @@ class BangumiViewModel : ViewModel() {
                         userStatus = detail.userStatus?.copy(
                             follow = if (isFollowed) 1 else 0,
                             followStatus = if (isFollowed) {
-                                maxOf(detail.userStatus?.followStatus ?: 0, 1)
+                                followStatusValueCache[realSeasonId]
+                                    ?: maxOf(detail.userStatus?.followStatus ?: 0, BANGUMI_FOLLOW_STATUS_WANT)
                             } else {
                                 0
                             }
@@ -419,29 +440,74 @@ class BangumiViewModel : ViewModel() {
      * UI 层已经做了乐观更新，只有失败时才需要刷新以恢复正确状态
      */
     fun toggleFollow(seasonId: Long, isFollowing: Boolean) {
+        val targetStatus = if (isFollowing) {
+            BANGUMI_FOLLOW_STATUS_UNFOLLOW
+        } else {
+            BANGUMI_FOLLOW_STATUS_WATCHING
+        }
+        updateFollowStatus(seasonId, targetStatus)
+    }
+
+    fun updateFollowStatus(seasonId: Long, status: Int) {
         viewModelScope.launch {
-            val result = if (isFollowing) {
-                BangumiRepository.unfollowBangumi(seasonId)
-            } else {
-                BangumiRepository.followBangumi(seasonId)
+            val currentDetail = (_detailState.value as? BangumiDetailState.Success)?.detail
+                ?.takeIf { it.seasonId == seasonId }
+            val wasFollowing = isBangumiFollowed(currentDetail?.userStatus) ||
+                followStatusCache[seasonId] == true ||
+                (followStatusValueCache[seasonId] ?: 0) > 0
+
+            val result = when {
+                status == BANGUMI_FOLLOW_STATUS_UNFOLLOW -> {
+                    BangumiRepository.unfollowBangumi(seasonId)
+                }
+                wasFollowing -> {
+                    BangumiRepository.updateBangumiFollowStatus(seasonId, status)
+                }
+                status == BANGUMI_FOLLOW_STATUS_WATCHING -> {
+                    BangumiRepository.followBangumi(seasonId)
+                }
+                else -> {
+                    val followResult = BangumiRepository.followBangumi(seasonId)
+                    if (followResult.isSuccess) {
+                        BangumiRepository.updateBangumiFollowStatus(seasonId, status)
+                    } else {
+                        Result.failure(followResult.exceptionOrNull() ?: Exception("追番失败"))
+                    }
+                }
             }
             
             result.fold(
                 onSuccess = {
                     //  [修复] 成功后更新本地缓存和预加载列表
-                    val newFollowStatus = !isFollowing
-                    followStatusCache[seasonId] = newFollowStatus
-                    if (newFollowStatus) {
+                    val isNowFollowing = status != BANGUMI_FOLLOW_STATUS_UNFOLLOW
+                    followStatusCache[seasonId] = isNowFollowing
+                    if (isNowFollowing) {
                         followedSeasonIds.add(seasonId)
+                        followStatusValueCache[seasonId] = status
                     } else {
                         followedSeasonIds.remove(seasonId)
+                        followStatusValueCache.remove(seasonId)
                     }
-                    android.util.Log.d("BangumiVM", " ${if (isFollowing) "取消追番" else "追番"}成功，状态更新为: $newFollowStatus")
+                    val currentState = _detailState.value as? BangumiDetailState.Success
+                    if (currentState?.detail?.seasonId == seasonId) {
+                        val updatedUserStatus = currentState.detail.userStatus?.copy(
+                            follow = if (isNowFollowing) 1 else 0,
+                            followStatus = if (isNowFollowing) status else 0
+                        ) ?: UserStatus(
+                            follow = if (isNowFollowing) 1 else 0,
+                            followStatus = if (isNowFollowing) status else 0
+                        )
+                        _detailState.value = BangumiDetailState.Success(
+                            currentState.detail.copy(userStatus = updatedUserStatus)
+                        )
+                    }
+                    android.util.Log.d("BangumiVM", "追番状态更新成功: seasonId=$seasonId, status=$status")
                 },
                 onFailure = { error ->
                     android.util.Log.e("BangumiVM", "Toggle follow failed: ${error.message}")
                     //  失败时清除缓存并重新加载详情，恢复正确状态
                     followStatusCache.remove(seasonId)
+                    followStatusValueCache.remove(seasonId)
                     loadSeasonDetail(seasonId)
                 }
             )

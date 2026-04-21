@@ -18,8 +18,31 @@ internal fun resolveSearchMotionBudget(
 }
 
 internal fun shouldEnableSearchHazeSource(
-    isSearching: Boolean
-): Boolean = !isSearching
+    isSearching: Boolean,
+    startupSettled: Boolean = true
+): Boolean = startupSettled && !isSearching
+
+internal fun resolveEffectiveSearchMotionBudget(
+    startupSettled: Boolean,
+    baseBudget: SearchMotionBudget
+): SearchMotionBudget {
+    return if (startupSettled) baseBudget else SearchMotionBudget.REDUCED
+}
+
+internal fun shouldBootstrapSearchLandingData(
+    startupSettled: Boolean,
+    showResults: Boolean,
+    query: String
+): Boolean {
+    return startupSettled && !showResults && query.isBlank()
+}
+
+internal fun shouldAutoFocusSearchField(
+    startupSettled: Boolean,
+    query: String
+): Boolean {
+    return startupSettled && query.isBlank()
+}
 
 internal fun shouldForceLowBudgetSearchHeaderBlur(
     isSearching: Boolean,

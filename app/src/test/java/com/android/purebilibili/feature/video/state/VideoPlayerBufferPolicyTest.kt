@@ -12,18 +12,18 @@ class VideoPlayerBufferPolicyTest {
 
         assertEquals(10000, policy.minBufferMs)
         assertEquals(40000, policy.maxBufferMs)
-        assertEquals(900, policy.bufferForPlaybackMs)
-        assertEquals(1800, policy.bufferForPlaybackAfterRebufferMs)
+        assertEquals(700, policy.bufferForPlaybackMs)
+        assertEquals(1400, policy.bufferForPlaybackAfterRebufferMs)
     }
 
     @Test
-    fun mobilePolicyShouldKeepConservativeBuffering() {
+    fun mobilePolicyShouldUseFasterStartupWhileKeepingRebufferSafetyMargin() {
         val policy = resolvePlayerBufferPolicy(isOnWifi = false)
 
-        assertEquals(15000, policy.minBufferMs)
-        assertEquals(50000, policy.maxBufferMs)
-        assertEquals(1600, policy.bufferForPlaybackMs)
-        assertEquals(3000, policy.bufferForPlaybackAfterRebufferMs)
+        assertEquals(12000, policy.minBufferMs)
+        assertEquals(45000, policy.maxBufferMs)
+        assertEquals(1000, policy.bufferForPlaybackMs)
+        assertEquals(2200, policy.bufferForPlaybackAfterRebufferMs)
         assertTrue(policy.bufferForPlaybackAfterRebufferMs >= policy.bufferForPlaybackMs)
     }
 }

@@ -91,6 +91,56 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun detachedCommentThreadHost_isPhoneOnly() {
+        assertTrue(
+            shouldShowDetachedVideoCommentThreadHost(
+                useTabletLayout = false
+            )
+        )
+        assertFalse(
+            shouldShowDetachedVideoCommentThreadHost(
+                useTabletLayout = true
+            )
+        )
+    }
+
+    @Test
+    fun systemMultiWindowFullscreenPolicy_restoresMainWindowBeforeEnteringFullscreen() {
+        assertTrue(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = true,
+                isInPictureInPictureMode = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertFalse(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = false,
+                isInPictureInPictureMode = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertFalse(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = true,
+                isInPictureInPictureMode = true,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertFalse(
+            shouldRestoreMainWindowBeforeEnteringFullscreen(
+                isInMultiWindowMode = true,
+                isInPictureInPictureMode = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
     fun sharedCoverTransition_requiresSwitchAndBothScopes() {
         assertTrue(
             shouldEnableVideoCoverSharedTransition(
@@ -227,6 +277,28 @@ class VideoDetailLayoutModePolicyTest {
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false,
                 manualFullscreenRequested = true
+            )
+        )
+    }
+
+    @Test
+    fun manualFullscreenRequestReleasePolicy_clearsRequestAfterLeavingObservedFullscreen() {
+        assertFalse(
+            shouldKeepManualFullscreenRequest(
+                manualFullscreenRequested = true,
+                hasEnteredFullscreenDuringRequest = true,
+                isFullscreenMode = false
+            )
+        )
+    }
+
+    @Test
+    fun manualFullscreenRequestReleasePolicy_keepsRequestWhileEnteringFullscreen() {
+        assertTrue(
+            shouldKeepManualFullscreenRequest(
+                manualFullscreenRequested = true,
+                hasEnteredFullscreenDuringRequest = false,
+                isFullscreenMode = false
             )
         )
     }

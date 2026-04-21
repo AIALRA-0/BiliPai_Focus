@@ -4,8 +4,21 @@ import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 
-internal fun resolveDynamicListTopPaddingExtraDp(isHorizontalMode: Boolean): Int {
-    return if (isHorizontalMode) 168 else 100
+internal const val DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE = 8
+
+internal fun resolveDynamicListTopPaddingExtraDp(
+    isHorizontalMode: Boolean,
+    isHorizontalUserListCollapsed: Boolean = false
+): Int {
+    return if (isHorizontalMode && !isHorizontalUserListCollapsed) 168 else 100
+}
+
+internal fun shouldCollapseDynamicHorizontalUserList(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    topTolerancePx: Int = 8
+): Boolean {
+    return firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > topTolerancePx
 }
 
 internal fun resolveDynamicSelectedUserIdAfterClick(
@@ -16,12 +29,45 @@ internal fun resolveDynamicSelectedUserIdAfterClick(
     return if (selectedUserId == clickedUserId) null else clickedUserId
 }
 
+internal fun shouldUseSelectedUserDynamicFeed(
+    selectedTab: Int,
+    selectedUserId: Long?
+): Boolean {
+    return selectedTab == 4 && selectedUserId != null
+}
+
+internal fun resolveDynamicTabAfterUserSelection(
+    selectedUserId: Long?,
+    clickedUserId: Long?,
+    currentTab: Int
+): Int {
+    val nextUserId = resolveDynamicSelectedUserIdAfterClick(selectedUserId, clickedUserId)
+    return when {
+        nextUserId != null -> 4
+        currentTab == 4 -> 0
+        else -> currentTab
+    }
+}
+
 internal fun resolveDynamicSelectedTab(
     savedTab: Int?,
     tabCount: Int
 ): Int {
     if (tabCount <= 0) return 0
     return savedTab?.takeIf { it in 0 until tabCount } ?: 0
+}
+
+internal fun resolveDynamicFeedRequestType(selectedTab: Int): String {
+    return when (selectedTab) {
+        1 -> "video"
+        2 -> "pgc"
+        3 -> "article"
+        else -> "all"
+    }
+}
+
+internal fun shouldUseServerFilteredDynamicFeed(selectedTab: Int): Boolean {
+    return selectedTab in 1..3
 }
 
 internal fun resolveHorizontalUserListVerticalPaddingDp(): Int {
@@ -55,10 +101,12 @@ internal fun shouldLoadMoreDynamicFeed(
     visibleItemCount: Int,
     isLoading: Boolean,
     hasMore: Boolean,
+    minimumVisibleItemCountBeforePause: Int = 0,
     preloadThreshold: Int = 3
 ): Boolean {
     if (visibleItemCount <= 0) return false
     if (isLoading || !hasMore) return false
+    if (visibleItemCount < minimumVisibleItemCountBeforePause.coerceAtLeast(0)) return true
     if (totalItems <= 0) return false
     return lastVisibleItemIndex >= totalItems - preloadThreshold.coerceAtLeast(1)
 }
@@ -164,6 +212,7 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         error = null,
         errorSource = DynamicFeedErrorSource.NONE,
         hasMore = hasMore,
+        sourceHasMore = hasMore,
         incrementalRefreshBoundaryKey = boundary.boundaryKey,
         incrementalPrependedCount = boundary.prependedCount
     )

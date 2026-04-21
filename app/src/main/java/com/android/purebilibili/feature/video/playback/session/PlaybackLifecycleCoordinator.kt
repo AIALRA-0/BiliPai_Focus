@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.playback.session
 
+import androidx.media3.common.Player
 import com.android.purebilibili.feature.video.state.shouldRestorePlayerVolumeOnResume
 import com.android.purebilibili.feature.video.state.shouldResumeAfterLifecyclePause
 
@@ -64,6 +65,12 @@ internal fun resolvePlaybackResumeDecision(
     }
 
     val shouldResumePlayback = hasTransientResumeIntent ||
+        shouldKickPlaybackOnForegroundResume(
+            playWhenReady = playWhenReady,
+            isPlaying = isPlaying,
+            playbackState = playbackState,
+            shouldEnsureAudibleOnForeground = shouldEnsureAudibleOnForeground
+        ) ||
         shouldResumeAfterLifecyclePause(
             wasPlaybackActive = wasPlaybackActive,
             isPlaying = isPlaying,
@@ -78,4 +85,16 @@ internal fun resolvePlaybackResumeDecision(
             shouldEnsureAudible = shouldEnsureAudibleOnForeground
         )
     )
+}
+
+internal fun shouldKickPlaybackOnForegroundResume(
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int,
+    shouldEnsureAudibleOnForeground: Boolean
+): Boolean {
+    return shouldEnsureAudibleOnForeground &&
+        playWhenReady &&
+        !isPlaying &&
+        playbackState == Player.STATE_BUFFERING
 }

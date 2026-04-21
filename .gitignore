@@ -13,6 +13,7 @@
 /build
 /captures
 .externalNativeBuild
+.external/KernelSU/
 .cxx
 local.properties
 
@@ -91,3 +92,4 @@ docs/*
 !docs/releases/*.md
 !docs/wiki/
 !docs/wiki/*.md
+.omx/

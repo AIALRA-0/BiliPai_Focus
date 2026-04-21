@@ -33,6 +33,10 @@ import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
@@ -42,6 +46,7 @@ import com.android.purebilibili.feature.dynamic.resolveDynamicCardContentPadding
 import com.android.purebilibili.feature.dynamic.resolveDynamicCardOuterPadding
 import com.android.purebilibili.data.model.response.DynamicStatModule
 import com.android.purebilibili.data.model.response.DynamicType
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  *  动态卡片V2 - 官方风格
@@ -50,9 +55,11 @@ import com.android.purebilibili.data.model.response.DynamicType
 fun DynamicCardV2(
     item: DynamicItem,
     onVideoClick: (String) -> Unit,
+    onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> },
     onDynamicDetailClick: ((dynamicId: String) -> Unit)? = null,
+    isDetail: Boolean = false,
     gifImageLoader: ImageLoader,
     //  [新增] 评论/转发/点赞回调
     onCommentClick: (dynamicId: String) -> Unit = {},
@@ -73,29 +80,27 @@ fun DynamicCardV2(
         }
     }
 
-    //  [优化] 卡片式设计：圆角 + 微阴影 + 更好的间距
-    //  [优化] 使用 GlassCard 替换 Surface
-    GlassCard(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = resolveDynamicCardOuterPadding(), vertical = 6.dp)
+            .padding(horizontal = resolveDynamicCardOuterPadding())
             .clickable(enabled = isPrimaryClickEnabled) {
                 dispatchDynamicCardPrimaryAction(
                     action = cardClickAction,
                     onVideoClick = onVideoClick,
+                    onBangumiClick = onBangumiClick,
                     onDynamicDetailClick = onDynamicDetailClick,
                     onUserClick = onUserClick,
                     onLiveClick = onLiveClick
                 )
-            },
-        backgroundColor = MaterialTheme.colorScheme.surface, // 纯白背景，减少割裂感
-        shape = RoundedCornerShape(20.dp) // 更大的圆角
+            }
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(resolveDynamicCardContentPadding())  // 卡片内部间距
-    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = resolveDynamicCardContentPadding())
+                .padding(top = 12.dp, bottom = if (isDetail) 0.dp else 10.dp)
+        ) {
         //  [新增] 更多菜单状态
         var showMoreMenu by remember { mutableStateOf(false) }
         val context = LocalContext.current
@@ -120,6 +125,7 @@ fun DynamicCardV2(
                             dispatchDynamicCardPrimaryAction(
                                 action = DynamicCardPrimaryAction.OpenUser(author.mid),
                                 onVideoClick = onVideoClick,
+                                onBangumiClick = onBangumiClick,
                                 onDynamicDetailClick = onDynamicDetailClick,
                                 onUserClick = onUserClick,
                                 onLiveClick = onLiveClick
@@ -225,6 +231,21 @@ fun DynamicCardV2(
                         ?: onDynamicDetailClick?.invoke(item.id_str)
                 },
                 transitionName = "video-${archive.bvid}" // [新增] 共享元素过渡名称
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        content?.major?.pgc?.let { pgc ->
+            val bangumiTarget = resolveArchiveBangumiTarget(pgc)
+            VideoCardLarge(
+                archive = pgc,
+                publishTs = author?.pub_ts ?: 0L,
+                cornerBadgeText = "番剧",
+                onClick = {
+                    bangumiTarget?.let { onBangumiClick(it.seasonId, it.epId) }
+                        ?: onDynamicDetailClick?.invoke(item.id_str)
+                },
+                transitionName = "video-${pgc.bvid.ifBlank { item.id_str }}"
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -377,6 +398,7 @@ fun DynamicCardV2(
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),
                         onVideoClick = onVideoClick,
+                        onBangumiClick = onBangumiClick,
                         onDynamicDetailClick = onDynamicDetailClick,
                         onUserClick = onUserClick,
                         onLiveClick = onLiveClick
@@ -391,6 +413,7 @@ fun DynamicCardV2(
             ForwardedContent(
                 orig = item.orig,
                 onVideoClick = onVideoClick,
+                onBangumiClick = onBangumiClick,
                 onUserClick = onUserClick,
                 gifImageLoader = gifImageLoader
             )
@@ -431,8 +454,16 @@ fun DynamicCardV2(
                 onClick = { onLikeClick(item.id_str) }
             )
         }
+        }
+
+        if (!isDetail) {
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                thickness = 0.7.dp
+            )
+        }
     }
-    }  //  关闭 Surface
 }
 
 /**

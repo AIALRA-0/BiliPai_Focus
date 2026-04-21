@@ -57,6 +57,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -346,288 +348,391 @@ object AppIcons {
 
 @Composable
 fun rememberAppBackIcon(): ImageVector {
-    return resolveAppBackIcon(LocalUiPreset.current)
+    return resolveAppBackIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppSettingsIcon(): ImageVector {
-    return resolveAppSettingsIcon(LocalUiPreset.current)
+    return resolveAppSettingsIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppMoreIcon(): ImageVector {
-    return resolveAppMoreIcon(LocalUiPreset.current)
+    return resolveAppMoreIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppPhotoIcon(): ImageVector {
-    return resolveAppPhotoIcon(LocalUiPreset.current)
+    return resolveAppPhotoIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppFolderIcon(): ImageVector {
-    return resolveAppFolderIcon(LocalUiPreset.current)
+    return resolveAppFolderIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppRestoreIcon(): ImageVector {
-    return resolveAppRestoreIcon(LocalUiPreset.current)
+    return resolveAppRestoreIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppWarningIcon(): ImageVector {
-    return resolveAppWarningIcon(LocalUiPreset.current)
+    return resolveAppWarningIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppRefreshIcon(): ImageVector {
-    return resolveAppRefreshIcon(LocalUiPreset.current)
+    return resolveAppRefreshIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
 fun rememberAppDownloadIcon(): ImageVector {
-    return resolveAppDownloadIcon(LocalUiPreset.current)
+    return resolveAppDownloadIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 }
 
 @Composable
-fun rememberAppSearchIcon(): ImageVector = resolveAppSearchIcon(LocalUiPreset.current)
+fun rememberAppSearchIcon(): ImageVector = resolveAppSearchIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppClearIcon(): ImageVector = resolveAppClearIcon(LocalUiPreset.current)
+fun rememberAppClearIcon(): ImageVector = resolveAppClearIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppHistoryIcon(): ImageVector = resolveAppHistoryIcon(LocalUiPreset.current)
+fun rememberAppHistoryIcon(): ImageVector = resolveAppHistoryIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppBookmarkIcon(): ImageVector = resolveAppBookmarkIcon(LocalUiPreset.current)
+fun rememberAppBookmarkIcon(): ImageVector = resolveAppBookmarkIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppInboxIcon(): ImageVector = resolveAppInboxIcon(LocalUiPreset.current)
+fun rememberAppInboxIcon(): ImageVector = resolveAppInboxIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppTvIcon(): ImageVector = resolveAppTvIcon(LocalUiPreset.current)
+fun rememberAppTvIcon(): ImageVector = resolveAppTvIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppLogoutIcon(): ImageVector = resolveAppLogoutIcon(LocalUiPreset.current)
+fun rememberAppLogoutIcon(): ImageVector = resolveAppLogoutIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppTimerIcon(): ImageVector = resolveAppTimerIcon(LocalUiPreset.current)
+fun rememberAppTimerIcon(): ImageVector = resolveAppTimerIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppMusicIcon(): ImageVector = resolveAppMusicIcon(LocalUiPreset.current)
+fun rememberAppMusicIcon(): ImageVector = resolveAppMusicIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppFlipHorizontalIcon(): ImageVector = resolveAppFlipHorizontalIcon(LocalUiPreset.current)
+fun rememberAppFlipHorizontalIcon(): ImageVector = resolveAppFlipHorizontalIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppFlipVerticalIcon(): ImageVector = resolveAppFlipVerticalIcon(LocalUiPreset.current)
+fun rememberAppFlipVerticalIcon(): ImageVector = resolveAppFlipVerticalIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppHeadphonesIcon(): ImageVector = resolveAppHeadphonesIcon(LocalUiPreset.current)
+fun rememberAppHeadphonesIcon(): ImageVector = resolveAppHeadphonesIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppQualityIcon(): ImageVector = resolveAppQualityIcon(LocalUiPreset.current)
+fun rememberAppQualityIcon(): ImageVector = resolveAppQualityIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppCodecIcon(): ImageVector = resolveAppCodecIcon(LocalUiPreset.current)
+fun rememberAppCodecIcon(): ImageVector = resolveAppCodecIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppSpeedIcon(): ImageVector = resolveAppSpeedIcon(LocalUiPreset.current)
+fun rememberAppSpeedIcon(): ImageVector = resolveAppSpeedIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppGestureTapIcon(): ImageVector = resolveAppGestureTapIcon(LocalUiPreset.current)
+fun rememberAppGestureTapIcon(): ImageVector = resolveAppGestureTapIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppWifiIcon(): ImageVector = resolveAppWifiIcon(LocalUiPreset.current)
+fun rememberAppWifiIcon(): ImageVector = resolveAppWifiIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppChevronForwardIcon(): ImageVector = resolveAppChevronForwardIcon(LocalUiPreset.current)
+fun rememberAppChevronForwardIcon(): ImageVector = resolveAppChevronForwardIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppChevronDownIcon(): ImageVector = resolveAppChevronDownIcon(LocalUiPreset.current)
+fun rememberAppChevronDownIcon(): ImageVector = resolveAppChevronDownIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppChevronUpIcon(): ImageVector = resolveAppChevronUpIcon(LocalUiPreset.current)
+fun rememberAppChevronUpIcon(): ImageVector = resolveAppChevronUpIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppProfileAddIcon(): ImageVector = resolveAppProfileAddIcon(LocalUiPreset.current)
+fun rememberAppProfileAddIcon(): ImageVector = resolveAppProfileAddIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppLockIcon(): ImageVector = resolveAppLockIcon(LocalUiPreset.current)
+fun rememberAppLockIcon(): ImageVector = resolveAppLockIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppHomeIcon(): ImageVector = resolveAppHomeIcon(LocalUiPreset.current)
+fun rememberAppHomeIcon(): ImageVector = resolveAppHomeIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppDynamicIcon(): ImageVector = resolveAppDynamicIcon(LocalUiPreset.current)
+fun rememberAppDynamicIcon(): ImageVector = resolveAppDynamicIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppPlayIcon(): ImageVector = resolveAppPlayIcon(LocalUiPreset.current)
+fun rememberAppPlayIcon(): ImageVector = resolveAppPlayIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppCollectionIcon(): ImageVector = resolveAppCollectionIcon(LocalUiPreset.current)
+fun rememberAppCollectionIcon(): ImageVector = resolveAppCollectionIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppCommentIcon(): ImageVector = resolveAppCommentIcon(LocalUiPreset.current)
+fun rememberAppCommentIcon(): ImageVector = resolveAppCommentIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppLikeIcon(): ImageVector = resolveAppLikeIcon(LocalUiPreset.current)
+fun rememberAppLikeIcon(): ImageVector = resolveAppLikeIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppLikeFilledIcon(): ImageVector = resolveAppLikeFilledIcon(LocalUiPreset.current)
+fun rememberAppLikeFilledIcon(): ImageVector = resolveAppLikeFilledIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppShareIcon(): ImageVector = resolveAppShareIcon(LocalUiPreset.current)
+fun rememberAppShareIcon(): ImageVector = resolveAppShareIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppVisibilityOnIcon(): ImageVector = resolveAppVisibilityOnIcon(LocalUiPreset.current)
+fun rememberAppVisibilityOnIcon(): ImageVector = resolveAppVisibilityOnIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppVisibilityOffIcon(): ImageVector = resolveAppVisibilityOffIcon(LocalUiPreset.current)
+fun rememberAppVisibilityOffIcon(): ImageVector = resolveAppVisibilityOffIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppAnalyticsIcon(): ImageVector = resolveAppAnalyticsIcon(LocalUiPreset.current)
+fun rememberAppAnalyticsIcon(): ImageVector = resolveAppAnalyticsIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppInfoIcon(): ImageVector = resolveAppInfoIcon(LocalUiPreset.current)
+fun rememberAppInfoIcon(): ImageVector = resolveAppInfoIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppNotificationIcon(): ImageVector = resolveAppNotificationIcon(LocalUiPreset.current)
+fun rememberAppNotificationIcon(): ImageVector = resolveAppNotificationIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
 @Composable
-fun rememberAppSparklesIcon(): ImageVector = resolveAppSparklesIcon(LocalUiPreset.current)
+fun rememberAppSparklesIcon(): ImageVector = resolveAppSparklesIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
-fun resolveAppBackIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Filled.ArrowBack else CupertinoIcons.Outlined.ChevronBackward
+private fun resolvePlatformIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant,
+    materialIcon: ImageVector,
+    iosIcon: ImageVector
+): ImageVector {
+    return when {
+        uiPreset == UiPreset.IOS -> iosIcon
+        isNativeMiuixEnabled(uiPreset, androidNativeVariant) -> materialIcon
+        else -> materialIcon
+    }
+}
 
-fun resolveAppSettingsIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Settings else CupertinoIcons.Outlined.Gearshape
+fun resolveAppBackIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.AutoMirrored.Filled.ArrowBack, CupertinoIcons.Outlined.ChevronBackward)
 
-fun resolveAppMoreIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Filled.MoreVert else CupertinoIcons.Outlined.Ellipsis
+fun resolveAppSettingsIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Settings, CupertinoIcons.Outlined.Gearshape)
 
-fun resolveAppPhotoIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.MaterialPhoto else CupertinoIcons.Outlined.CupertinoPhoto
+fun resolveAppMoreIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Filled.MoreVert, CupertinoIcons.Outlined.Ellipsis)
 
-fun resolveAppFolderIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.MaterialFolder else CupertinoIcons.Outlined.CupertinoFolder
+fun resolveAppPhotoIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.MaterialPhoto, CupertinoIcons.Outlined.CupertinoPhoto)
 
-fun resolveAppRestoreIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Restore else CupertinoIcons.Outlined.ArrowCounterclockwise
+fun resolveAppFolderIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.MaterialFolder, CupertinoIcons.Outlined.CupertinoFolder)
 
-fun resolveAppWarningIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.WarningAmber else CupertinoIcons.Filled.ExclamationmarkTriangle
+fun resolveAppRestoreIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Restore, CupertinoIcons.Outlined.ArrowCounterclockwise)
 
-fun resolveAppRefreshIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Refresh else CupertinoIcons.Outlined.ArrowClockwise
+fun resolveAppWarningIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.WarningAmber, CupertinoIcons.Filled.ExclamationmarkTriangle)
 
-fun resolveAppDownloadIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Download else CupertinoIcons.Outlined.ArrowDownCircle
+fun resolveAppRefreshIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Refresh, CupertinoIcons.Outlined.ArrowClockwise)
 
-fun resolveAppSearchIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Filled.Search else CupertinoIcons.Outlined.MagnifyingGlass
+fun resolveAppDownloadIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Download, CupertinoIcons.Outlined.ArrowDownCircle)
 
-fun resolveAppClearIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Filled.Clear else CupertinoIcons.Outlined.XmarkCircle
+fun resolveAppSearchIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Filled.Search, CupertinoIcons.Outlined.MagnifyingGlass)
 
-fun resolveAppHistoryIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.History else CupertinoIcons.Outlined.Clock
+fun resolveAppClearIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Filled.Clear, CupertinoIcons.Outlined.XmarkCircle)
 
-fun resolveAppBookmarkIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.BookmarkBorder else CupertinoIcons.Outlined.Bookmark
+fun resolveAppHistoryIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.History, CupertinoIcons.Outlined.Clock)
 
-fun resolveAppInboxIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.MailOutline else CupertinoIcons.Outlined.Envelope
+fun resolveAppBookmarkIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.BookmarkBorder, CupertinoIcons.Outlined.Bookmark)
 
-fun resolveAppTvIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.LiveTv else CupertinoIcons.Filled.Tv
+fun resolveAppInboxIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.MailOutline, CupertinoIcons.Outlined.Envelope)
 
-fun resolveAppLogoutIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Outlined.ExitToApp else CupertinoIcons.Outlined.RectanglePortraitAndArrowForward
+fun resolveAppTvIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.LiveTv, CupertinoIcons.Filled.Tv)
 
-fun resolveAppTimerIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Timer else CupertinoIcons.Outlined.Timer
+fun resolveAppLogoutIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.AutoMirrored.Outlined.ExitToApp, CupertinoIcons.Outlined.RectanglePortraitAndArrowForward)
 
-fun resolveAppMusicIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.MusicNote else CupertinoIcons.Outlined.MusicNote
+fun resolveAppTimerIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Timer, CupertinoIcons.Outlined.Timer)
 
-fun resolveAppFlipHorizontalIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.SwapHoriz else CupertinoIcons.Outlined.ArrowLeftArrowRight
+fun resolveAppMusicIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.MusicNote, CupertinoIcons.Outlined.MusicNote)
 
-fun resolveAppFlipVerticalIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.SwapVert else CupertinoIcons.Outlined.ArrowUpArrowDown
+fun resolveAppFlipHorizontalIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.SwapHoriz, CupertinoIcons.Outlined.ArrowLeftArrowRight)
 
-fun resolveAppHeadphonesIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Headphones else CupertinoIcons.Outlined.Headphones
+fun resolveAppFlipVerticalIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.SwapVert, CupertinoIcons.Outlined.ArrowUpArrowDown)
 
-fun resolveAppQualityIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.PlayCircleOutline else CupertinoIcons.Outlined.PlayCircle
+fun resolveAppHeadphonesIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Headphones, CupertinoIcons.Outlined.Headphones)
 
-fun resolveAppCodecIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Memory else CupertinoIcons.Outlined.Cpu
+fun resolveAppQualityIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.PlayCircleOutline, CupertinoIcons.Outlined.PlayCircle)
 
-fun resolveAppSpeedIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Speed else CupertinoIcons.Outlined.Speedometer
+fun resolveAppCodecIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Memory, CupertinoIcons.Outlined.Cpu)
 
-fun resolveAppGestureTapIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.TouchApp else CupertinoIcons.Outlined.HandTap
+fun resolveAppSpeedIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Speed, CupertinoIcons.Outlined.Speedometer)
 
-fun resolveAppWifiIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Wifi else CupertinoIcons.Outlined.Wifi
+fun resolveAppGestureTapIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.TouchApp, CupertinoIcons.Outlined.HandTap)
 
-fun resolveAppChevronForwardIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Outlined.KeyboardArrowRight else CupertinoIcons.Outlined.ChevronForward
+fun resolveAppWifiIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Wifi, CupertinoIcons.Outlined.Wifi)
 
-fun resolveAppChevronDownIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.KeyboardArrowDown else CupertinoIcons.Outlined.ChevronDown
+fun resolveAppChevronForwardIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.AutoMirrored.Outlined.KeyboardArrowRight, CupertinoIcons.Outlined.ChevronForward)
 
-fun resolveAppChevronUpIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.KeyboardArrowUp else CupertinoIcons.Outlined.ChevronUp
+fun resolveAppChevronDownIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.KeyboardArrowDown, CupertinoIcons.Outlined.ChevronDown)
 
-fun resolveAppProfileAddIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.PersonAddAlt1 else CupertinoIcons.Outlined.PersonCropCircleBadgePlus
+fun resolveAppChevronUpIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.KeyboardArrowUp, CupertinoIcons.Outlined.ChevronUp)
 
-fun resolveAppLockIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Lock else CupertinoIcons.Outlined.Lock
+fun resolveAppProfileAddIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.PersonAddAlt1, CupertinoIcons.Outlined.PersonCropCircleBadgePlus)
 
-fun resolveAppHomeIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Home else CupertinoIcons.Outlined.House
+fun resolveAppLockIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Lock, CupertinoIcons.Outlined.Lock)
 
-fun resolveAppDynamicIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.DynamicFeed else CupertinoIcons.Outlined.RectangleStack
+fun resolveAppHomeIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Home, CupertinoIcons.Outlined.House)
 
-fun resolveAppPlayIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.PlayArrow else CupertinoIcons.Outlined.Play
+fun resolveAppDynamicIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.DynamicFeed, CupertinoIcons.Outlined.RectangleStack)
 
-fun resolveAppCollectionIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.FolderCopy else CupertinoIcons.Outlined.CupertinoFolder
+fun resolveAppPlayIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.PlayArrow, CupertinoIcons.Outlined.Play)
 
-fun resolveAppCommentIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Outlined.Comment else CupertinoIcons.Outlined.Message
+fun resolveAppCollectionIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.FolderCopy, CupertinoIcons.Outlined.CupertinoFolder)
 
-fun resolveAppLikeIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.ThumbUpOffAlt else CupertinoIcons.Outlined.HandThumbsup
+fun resolveAppCommentIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.AutoMirrored.Outlined.Comment, CupertinoIcons.Outlined.Message)
 
-fun resolveAppLikeFilledIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Filled.ThumbUp else CupertinoIcons.Filled.HandThumbsup
+fun resolveAppLikeIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.ThumbUpOffAlt, CupertinoIcons.Outlined.HandThumbsup)
 
-fun resolveAppShareIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Share else CupertinoIcons.Outlined.ArrowTurnUpRight
+fun resolveAppLikeFilledIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Filled.ThumbUp, CupertinoIcons.Filled.HandThumbsup)
 
-fun resolveAppVisibilityOnIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Visibility else CupertinoIcons.Outlined.Eye
+fun resolveAppShareIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Share, CupertinoIcons.Outlined.ArrowTurnUpRight)
 
-fun resolveAppVisibilityOffIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.VisibilityOff else CupertinoIcons.Outlined.EyeSlash
+fun resolveAppVisibilityOnIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Visibility, CupertinoIcons.Outlined.Eye)
 
-fun resolveAppAnalyticsIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.BarChart else CupertinoIcons.Outlined.ChartBar
+fun resolveAppVisibilityOffIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.VisibilityOff, CupertinoIcons.Outlined.EyeSlash)
 
-fun resolveAppInfoIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.Info else CupertinoIcons.Outlined.InfoCircle
+fun resolveAppAnalyticsIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.BarChart, CupertinoIcons.Outlined.ChartBar)
 
-fun resolveAppNotificationIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.NotificationsNone else CupertinoIcons.Outlined.BellBadge
+fun resolveAppInfoIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.Info, CupertinoIcons.Outlined.InfoCircle)
 
-fun resolveAppSparklesIcon(uiPreset: UiPreset): ImageVector =
-    if (uiPreset == UiPreset.MD3) Icons.Outlined.AutoAwesome else CupertinoIcons.Outlined.Sparkles
+fun resolveAppNotificationIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.NotificationsNone, CupertinoIcons.Outlined.BellBadge)
+
+fun resolveAppSparklesIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.AutoAwesome, CupertinoIcons.Outlined.Sparkles)

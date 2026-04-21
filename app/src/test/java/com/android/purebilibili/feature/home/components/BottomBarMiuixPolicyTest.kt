@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.ui.graphics.Color
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,12 +42,36 @@ class BottomBarMiuixPolicyTest {
     }
 
     @Test
+    fun `docked miuix bottom item uses theme color when selected`() {
+        val themeColor = Color(0xFFE85A91)
+        val neutralColor = Color(0xFF9A9AA0)
+
+        assertEquals(
+            themeColor,
+            resolveMiuixDockedBottomBarItemColor(
+                selected = true,
+                selectedColor = themeColor,
+                unselectedColor = neutralColor
+            )
+        )
+        assertEquals(
+            neutralColor,
+            resolveMiuixDockedBottomBarItemColor(
+                selected = false,
+                selectedColor = themeColor,
+                unselectedColor = neutralColor
+            )
+        )
+    }
+
+    @Test
     fun `android native floating branch declares its own tuning entrypoint`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
 
         assertTrue(source.contains("resolveAndroidNativeBottomBarTuning("))
         assertTrue(source.contains("resolveAndroidNativeBottomBarContainerColor("))
         assertTrue(source.contains("KernelSuAlignedBottomBar("))
+        assertTrue(source.contains("SharedFloatingBottomBarIconStyle.CUPERTINO"))
     }
 
     @Test
@@ -68,6 +93,14 @@ class BottomBarMiuixPolicyTest {
                 RegexOption.MULTILINE
             ).containsMatchIn(source)
         )
+    }
+
+    @Test
+    fun `android native ordinary blur does not redraw raw backdrop over haze`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+
+        assertTrue(source.contains("if (backdrop != null && !useHazeBlur)"))
+        assertTrue(source.contains("Modifier.unifiedBlur("))
     }
 
     private fun loadSource(path: String): String {

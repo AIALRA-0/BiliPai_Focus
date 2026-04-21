@@ -34,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-//  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -93,7 +92,8 @@ fun ActionButtonsRow(
     onCommentClick: () -> Unit,
     onDownloadClick: () -> Unit = {},  //  下载点击
     onWatchLaterClick: () -> Unit = {},  //  稍后再看点击
-    onFavoriteLongClick: () -> Unit = {} // [New] 长按收藏
+    onFavoriteLongClick: () -> Unit = {}, // [New] 长按收藏
+    onShareClick: () -> Unit = {}
 ) {
     val primaryActionColor = MaterialTheme.colorScheme.primary
     val haptic = rememberHapticFeedback()

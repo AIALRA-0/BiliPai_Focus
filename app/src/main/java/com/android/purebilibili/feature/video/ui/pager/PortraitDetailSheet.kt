@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.video.ui.pager
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,6 +28,12 @@ import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.ui.bottomSheetContentEnterTransition
+import com.android.purebilibili.core.ui.bottomSheetContentExitTransition
+import com.android.purebilibili.core.ui.bottomSheetScrimEnterTransition
+import com.android.purebilibili.core.ui.bottomSheetScrimExitTransition
+import com.android.purebilibili.core.ui.resolveAdaptiveBottomSheetMotionSpec
 import com.android.purebilibili.feature.video.ui.section.resolvePublishTimeRowText
 import com.android.purebilibili.feature.video.ui.section.shouldEmphasizePrecisePublishTime
 import kotlinx.coroutines.launch
@@ -54,6 +59,8 @@ fun PortraitDetailSheet(
 
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
+    val uiPreset = LocalUiPreset.current
+    val motionSpec = remember(uiPreset) { resolveAdaptiveBottomSheetMotionSpec(uiPreset) }
     
     // 拦截返回键
     BackHandler(enabled = visible) {
@@ -67,8 +74,8 @@ fun PortraitDetailSheet(
         // 1. 遮罩层 (Scrim)
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300))
+            enter = bottomSheetScrimEnterTransition(motionSpec),
+            exit = bottomSheetScrimExitTransition(motionSpec)
         ) {
             Box(
                 modifier = Modifier
@@ -84,14 +91,8 @@ fun PortraitDetailSheet(
         // 2. 内容层 (Sheet Content)
         AnimatedVisibility(
             visible = visible,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = tween(300)
-            ),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = tween(300)
-            )
+            enter = bottomSheetContentEnterTransition(motionSpec),
+            exit = bottomSheetContentExitTransition(motionSpec)
         ) {
             Surface(
                 modifier = Modifier

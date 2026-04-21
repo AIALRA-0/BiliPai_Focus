@@ -3,13 +3,15 @@ package com.android.purebilibili.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.navigation.NavBackStackEntry
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.continuityTween
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.util.CardPositionManager
 
-internal val IOS_RETURN_EASING = CubicBezierEasing(0.20f, 0.90f, 0.22f, 1.00f)
+internal val IOS_RETURN_EASING = AppMotionEasing.Continuity
 
 internal fun VideoPopExitDirection.toSlideDirection(): AnimatedContentTransitionScope.SlideDirection {
     return when (this) {
@@ -45,19 +47,13 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.resolveVideoCardR
         VideoCardReturnEnterAction.NO_OP -> EnterTransition.None
         VideoCardReturnEnterAction.SOFT_FADE -> {
             fadeIn(
-                animationSpec = tween(
-                    durationMillis = navMotionSpec.mediumFadeDurationMillis,
-                    easing = IOS_RETURN_EASING
-                ),
+                animationSpec = continuityTween(navMotionSpec.mediumFadeDurationMillis),
                 initialAlpha = 0.98f
             )
         }
         VideoCardReturnEnterAction.SEAMLESS_FADE -> {
             fadeIn(
-                animationSpec = tween(
-                    durationMillis = navMotionSpec.mediumFadeDurationMillis,
-                    easing = IOS_RETURN_EASING
-                ),
+                animationSpec = continuityTween(navMotionSpec.mediumFadeDurationMillis),
                 initialAlpha = 0.96f
             )
         }
@@ -93,7 +89,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.slideEnterLeft(
 ): EnterTransition {
     return slideIntoContainer(
         AnimatedContentTransitionScope.SlideDirection.Left,
-        tween(navMotionSpec.slideDurationMillis)
+        emphasizedEnterTween(navMotionSpec.slideDurationMillis)
     )
 }
 
@@ -102,7 +98,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.slideExitLeft(
 ): ExitTransition {
     return slideOutOfContainer(
         AnimatedContentTransitionScope.SlideDirection.Left,
-        tween(navMotionSpec.slideDurationMillis)
+        emphasizedExitTween(navMotionSpec.slideDurationMillis)
     )
 }
 
@@ -111,7 +107,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.slideEnterRight(
 ): EnterTransition {
     return slideIntoContainer(
         AnimatedContentTransitionScope.SlideDirection.Right,
-        tween(navMotionSpec.slideDurationMillis)
+        continuityTween(navMotionSpec.slideDurationMillis)
     )
 }
 
@@ -120,7 +116,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.slideExitRight(
 ): ExitTransition {
     return slideOutOfContainer(
         AnimatedContentTransitionScope.SlideDirection.Right,
-        tween(navMotionSpec.slideDurationMillis)
+        emphasizedExitTween(navMotionSpec.slideDurationMillis)
     )
 }
 
@@ -129,7 +125,7 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.slideEnterUp(
 ): EnterTransition {
     return slideIntoContainer(
         AnimatedContentTransitionScope.SlideDirection.Up,
-        tween(navMotionSpec.slideDurationMillis)
+        emphasizedEnterTween(navMotionSpec.slideDurationMillis)
     )
 }
 
@@ -138,6 +134,6 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.slideExitDown(
 ): ExitTransition {
     return slideOutOfContainer(
         AnimatedContentTransitionScope.SlideDirection.Down,
-        tween(navMotionSpec.slideDurationMillis)
+        emphasizedExitTween(navMotionSpec.slideDurationMillis)
     )
 }

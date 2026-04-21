@@ -8,8 +8,7 @@ import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.google.firebase.FirebaseApp
-import com.google.firebase.crashlytics.ktx.crashlytics
-import com.google.firebase.ktx.Firebase
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -77,6 +76,8 @@ object CrashReporter {
     private var previousUncaughtHandler: Thread.UncaughtExceptionHandler? = null
     private val nonFatalRateLimiter = ConcurrentHashMap<String, Long>()
     private val lastCustomKeyValues = ConcurrentHashMap<String, Any>()
+    private val crashlytics: FirebaseCrashlytics
+        get() = FirebaseCrashlytics.getInstance()
 
     @Volatile
     private var lastAppForegroundState: Boolean? = null
@@ -140,7 +141,7 @@ object CrashReporter {
             return
         }
         try {
-            Firebase.crashlytics.setCrashlyticsCollectionEnabled(isEnabled)
+            crashlytics.setCrashlyticsCollectionEnabled(isEnabled)
             Logger.d(TAG, " Crashlytics collection ${if (isEnabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Crashlytics enabled state", e)
@@ -198,7 +199,7 @@ object CrashReporter {
         lastAppForegroundState = inForeground
         try {
             setCustomKey("app_in_foreground", inForeground)
-            Firebase.crashlytics.log("App ${if (inForeground) "foreground" else "background"}")
+            crashlytics.log("App ${if (inForeground) "foreground" else "background"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set app foreground state", e)
         }
@@ -234,7 +235,7 @@ object CrashReporter {
     fun syncUserContext(mid: Long?, isVip: Boolean?, privacyModeEnabled: Boolean?) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setUserId(resolveCrashlyticsUserId(mid))
+            crashlytics.setUserId(resolveCrashlyticsUserId(mid))
             setCustomKey("is_logged_in", mid != null && mid > 0)
             isVip?.let { setCustomKey("is_vip", it) }
             privacyModeEnabled?.let { setCustomKey("privacy_mode", it) }
@@ -253,8 +254,8 @@ object CrashReporter {
         if (shouldDropByRateLimit(key)) return
 
         try {
-            message?.let { Firebase.crashlytics.log(it) }
-            Firebase.crashlytics.recordException(e)
+            message?.let { crashlytics.log(it) }
+            crashlytics.recordException(e)
             Logger.e(TAG, " Exception logged: ${e.message}", e)
         } catch (ex: Exception) {
             Log.e(TAG, "Failed to log exception", ex)
@@ -268,7 +269,7 @@ object CrashReporter {
     fun log(message: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.log(message)
+            crashlytics.log(message)
             Logger.d(TAG, " Log: $message")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log message", e)
@@ -282,7 +283,7 @@ object CrashReporter {
     fun setUserId(userId: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setUserId("")
+            crashlytics.setUserId("")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set user ID", e)
         }
@@ -296,7 +297,7 @@ object CrashReporter {
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
-            Firebase.crashlytics.setCustomKey(key, value)
+            crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set custom key", e)
         }
@@ -310,7 +311,7 @@ object CrashReporter {
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
-            Firebase.crashlytics.setCustomKey(key, value)
+            crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set custom key", e)
         }
@@ -324,7 +325,7 @@ object CrashReporter {
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
-            Firebase.crashlytics.setCustomKey(key, value)
+            crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set custom key", e)
         }
@@ -338,7 +339,7 @@ object CrashReporter {
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
-            Firebase.crashlytics.setCustomKey(key, value)
+            crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set custom key", e)
         }
@@ -367,8 +368,8 @@ object CrashReporter {
             setCustomKey("video_bvid", bvid.take(120))
             setCustomKey("video_error_type", errorType)
             exception?.let { setCustomKey("video_exception_type", it.javaClass.simpleName.take(80)) }
-            Firebase.crashlytics.log("Video Error: [$errorType] ${errorMessage.take(300)}")
-            Firebase.crashlytics.recordException(
+            crashlytics.log("Video Error: [$errorType] ${errorMessage.take(300)}")
+            crashlytics.recordException(
                 buildSanitizedThrowable(
                     VideoPlaybackException(errorType, errorMessage),
                     exception
@@ -398,10 +399,10 @@ object CrashReporter {
         if (shouldDropByRateLimit(key)) return
 
         try {
-            Firebase.crashlytics.setCustomKey("api_endpoint", safeEndpoint)
-            Firebase.crashlytics.setCustomKey("api_http_code", httpCode)
-            Firebase.crashlytics.log("API Error: [$httpCode] $safeEndpoint - ${errorMessage.take(300)}")
-            Firebase.crashlytics.recordException(ApiException(safeEndpoint, httpCode, errorMessage))
+            crashlytics.setCustomKey("api_endpoint", safeEndpoint)
+            crashlytics.setCustomKey("api_http_code", httpCode)
+            crashlytics.log("API Error: [$httpCode] $safeEndpoint - ${errorMessage.take(300)}")
+            crashlytics.recordException(ApiException(safeEndpoint, httpCode, errorMessage))
             Logger.e(TAG, "API error: [$httpCode] $safeEndpoint - $errorMessage")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report API error", e)
@@ -419,8 +420,8 @@ object CrashReporter {
         try {
             setCustomKey("danmaku_cid", cid)
             exception?.let { setCustomKey("danmaku_exception_type", it.javaClass.simpleName.take(80)) }
-            Firebase.crashlytics.log("Danmaku Error: ${errorMessage.take(300)}")
-            Firebase.crashlytics.recordException(
+            crashlytics.log("Danmaku Error: ${errorMessage.take(300)}")
+            crashlytics.recordException(
                 buildSanitizedThrowable(
                     DanmakuException(cid, errorMessage),
                     exception
@@ -449,8 +450,8 @@ object CrashReporter {
             setCustomKey("live_room_id", roomId)
             setCustomKey("live_error_type", errorType)
             exception?.let { setCustomKey("live_exception_type", it.javaClass.simpleName.take(80)) }
-            Firebase.crashlytics.log("Live Error: [$errorType] ${errorMessage.take(300)}")
-            Firebase.crashlytics.recordException(
+            crashlytics.log("Live Error: [$errorType] ${errorMessage.take(300)}")
+            crashlytics.recordException(
                 buildSanitizedThrowable(
                     LiveStreamException(roomId, errorType, errorMessage),
                     exception

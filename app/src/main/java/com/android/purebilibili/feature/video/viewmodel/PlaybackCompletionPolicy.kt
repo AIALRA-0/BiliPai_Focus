@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import androidx.media3.common.Player
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
@@ -56,4 +57,16 @@ internal fun resolvePlaybackEndActionForSession(
         isExternalPlaylist = isExternalPlaylist,
         externalPlaylistAutoContinueEnabled = externalPlaylistAutoContinueEnabled
     )
+}
+
+internal fun resolvePlaybackCompletionRepeatMode(
+    behavior: PlaybackCompletionBehavior
+): Int {
+    return when (behavior) {
+        PlaybackCompletionBehavior.REPEAT_ONE -> Player.REPEAT_MODE_ONE
+        PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
+        PlaybackCompletionBehavior.STOP_AFTER_CURRENT,
+        PlaybackCompletionBehavior.PLAY_IN_ORDER,
+        PlaybackCompletionBehavior.LOOP_PLAYLIST -> Player.REPEAT_MODE_OFF
+    }
 }

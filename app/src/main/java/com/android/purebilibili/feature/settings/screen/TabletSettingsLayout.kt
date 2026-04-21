@@ -86,7 +86,7 @@ fun TabletSettingsLayout(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     searchResults: List<SettingsSearchResult>,
-    onSearchResultClick: (SettingsSearchTarget) -> Unit,
+    onSearchResultClick: (SettingsSearchResult) -> Unit,
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
@@ -293,6 +293,7 @@ fun TabletSettingsLayout(
                                 state = state,
                                 viewModel = viewModel,
                                 context = context,
+                                onNavigateToBottomBarSettings = { activeDetail = SettingsDetail.BOTTOM_BAR },
                                 onNavigateToIconSettings = { activeDetail = SettingsDetail.ICONS },
                                 onNavigateToAnimationSettings = { activeDetail = SettingsDetail.ANIMATION },
                                 onAppLanguageChange = { language ->

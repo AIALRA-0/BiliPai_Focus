@@ -8,6 +8,7 @@ import com.android.purebilibili.core.util.Logger
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.AccountSessionStore
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.CaptchaData
 import com.google.zxing.BarcodeFormat
@@ -142,17 +143,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                 }
 
                                 isPolling = false
-                                withContext(Dispatchers.Main) {
-                                    _state.value = LoginState.Success
-                                    //  记录登录事件
-                                    com.android.purebilibili.core.util.AnalyticsHelper.logLogin("qrcode_web")
-                                    com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
-                                        mid = TokenManager.midCache,
-                                        isVip = TokenManager.isVipCache,
-                                        privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
-                                            .isPrivacyModeEnabledSync(getApplication())
-                                    )
-                                }
+                                finishLogin("qrcode_web")
                             } else {
                                 _state.value = LoginState.Error("Cookie 解析失败")
                             }
@@ -398,19 +389,38 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             if (biliJct.isNotEmpty()) {
                 TokenManager.saveCsrf(getApplication(), biliJct)
             }
-            withContext(Dispatchers.Main) {
-                _state.value = LoginState.Success
-                //  记录登录事件
-                com.android.purebilibili.core.util.AnalyticsHelper.logLogin("phone")
-                com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
-                    mid = TokenManager.midCache,
-                    isVip = TokenManager.isVipCache,
-                    privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
-                        .isPrivacyModeEnabledSync(getApplication())
-                )
-            }
+            finishLogin("phone")
         } else {
             _state.value = LoginState.Error("Cookie 解析失败")
+        }
+    }
+
+    private suspend fun finishLogin(source: String) {
+        syncCurrentAccountSession()
+        withContext(Dispatchers.Main) {
+            _state.value = LoginState.Success
+            com.android.purebilibili.core.util.AnalyticsHelper.logLogin(source)
+            com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                mid = TokenManager.midCache,
+                isVip = TokenManager.isVipCache,
+                privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
+                    .isPrivacyModeEnabledSync(getApplication())
+            )
+        }
+    }
+
+    private suspend fun syncCurrentAccountSession() {
+        NetworkModule.clearRuntimeCookies()
+        val navData = runCatching {
+            NetworkModule.api.getNavInfo().data
+        }.getOrNull()
+
+        if (navData != null && navData.isLogin && navData.mid > 0L) {
+            TokenManager.saveMid(getApplication(), navData.mid)
+            TokenManager.saveVipStatus(navData.vip.status == 1)
+            AccountSessionStore.upsertCurrentAccount(getApplication(), navData)
+        } else {
+            AccountSessionStore.upsertCurrentAccount(getApplication())
         }
     }
     
@@ -535,17 +545,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                 Logger.d("TvLogin", " access_token: ${data.accessToken.take(10)}...")
                                 
                                 isTvPolling = false
-                                withContext(Dispatchers.Main) {
-                                    _state.value = LoginState.Success
-                                    //  记录登录事件
-                                    com.android.purebilibili.core.util.AnalyticsHelper.logLogin("qrcode_tv")
-                                    com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
-                                        mid = TokenManager.midCache,
-                                        isVip = TokenManager.isVipCache,
-                                        privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
-                                            .isPrivacyModeEnabledSync(getApplication())
-                                    )
-                                }
+                                finishLogin("qrcode_tv")
                             } else {
                                 _state.value = LoginState.Error("登录数据解析失败")
                             }

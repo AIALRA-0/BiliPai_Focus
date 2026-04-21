@@ -14,6 +14,7 @@ fun PortraitCommentSheet(
     upMid: Long = 0,
     expectedReplyCount: Int = 0,
     emoteMap: Map<String, String> = emptyMap(),
+    maxTimestampMs: Long? = null,
     onRootCommentClick: () -> Unit = {},
     onReplyClick: (ReplyItem) -> Unit = {},
     onUserClick: (Long) -> Unit
@@ -26,6 +27,7 @@ fun PortraitCommentSheet(
         upMid = upMid,
         expectedReplyCount = expectedReplyCount,
         emoteMap = emoteMap,
+        maxTimestampMs = maxTimestampMs,
         onRootCommentClick = onRootCommentClick,
         onReplyClick = onReplyClick,
         onUserClick = onUserClick

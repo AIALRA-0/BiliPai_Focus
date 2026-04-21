@@ -10,8 +10,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.R
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.ui.rememberAppSettingsIcon
+import com.android.purebilibili.core.ui.components.resolveAdaptiveListComponentVisualSpec
 import com.android.purebilibili.core.ui.components.IOSClickableItem
 import com.android.purebilibili.core.ui.components.IOSDivider
 import com.android.purebilibili.core.ui.components.IOSGroup
@@ -33,9 +35,14 @@ internal fun SettingsSearchBarSection(
 @Composable
 internal fun SettingsSearchResultsSection(
     results: List<SettingsSearchResult>,
-    onResultClick: (SettingsSearchTarget) -> Unit
+    onResultClick: (SettingsSearchResult) -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = resolveAdaptiveListComponentVisualSpec(
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
+    )
     SettingsCategoryHeader(stringResource(R.string.settings_search_results_title))
     IOSGroup {
         if (results.isEmpty()) {
@@ -56,11 +63,11 @@ internal fun SettingsSearchResultsSection(
                     title = result.title,
                     subtitle = result.subtitle,
                     value = result.section,
-                    onClick = { onResultClick(result.target) },
+                    onClick = { onResultClick(result) },
                     iconTint = visual.iconTint
                 )
                 if (index != results.lastIndex) {
-                    IOSDivider(startIndent = 66.dp)
+                    IOSDivider(startIndent = visualSpec.dividerStartIndentDp.dp)
                 }
             }
         }

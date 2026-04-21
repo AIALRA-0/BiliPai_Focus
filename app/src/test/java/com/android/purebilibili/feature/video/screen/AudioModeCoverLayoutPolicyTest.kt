@@ -8,7 +8,7 @@ class AudioModeCoverLayoutPolicyTest {
     @Test
     fun usesWidthFractionWhenContentAreaIsTallEnough() {
         assertEquals(
-            295,
+            362,
             resolveAudioModeCenteredCoverSizeDp(
                 availableWidthDp = 393,
                 availableHeightDp = 420
@@ -19,7 +19,7 @@ class AudioModeCoverLayoutPolicyTest {
     @Test
     fun shrinksCoverWhenContentAreaNeedsTopAndBottomClearance() {
         assertEquals(
-            252,
+            284,
             resolveAudioModeCenteredCoverSizeDp(
                 availableWidthDp = 393,
                 availableHeightDp = 300
@@ -30,10 +30,43 @@ class AudioModeCoverLayoutPolicyTest {
     @Test
     fun neverReturnsNegativeCoverSizeOnVeryShortLayouts() {
         assertEquals(
-            0,
+            24,
             resolveAudioModeCenteredCoverSizeDp(
                 availableWidthDp = 393,
                 availableHeightDp = 40
+            )
+        )
+    }
+
+    @Test
+    fun artworkStyleUsesAppleMusicLikeRoundedShadowedCover() {
+        val style = resolveAudioModeCoverArtworkStyle()
+
+        assertEquals(26, style.cornerRadiusDp)
+        assertEquals(28, style.shadowElevationDp)
+        assertEquals(46, style.backgroundScrimAlphaPercent)
+        assertEquals(16, style.aspectWidth)
+        assertEquals(10, style.aspectHeight)
+        assertEquals(18, style.maxRotationDegrees)
+        assertEquals(34, style.maxTranslationDp)
+        assertEquals(10, style.maxScaleLossPercent)
+        assertEquals(28, style.maxAlphaLossPercent)
+    }
+
+    @Test
+    fun artworkSizeUsesWideRoundedRectangle() {
+        assertEquals(
+            AudioModeArtworkSizeDp(widthDp = 362, heightDp = 226),
+            resolveAudioModeArtworkSizeDp(
+                availableWidthDp = 393,
+                availableHeightDp = 420
+            )
+        )
+        assertEquals(
+            AudioModeArtworkSizeDp(widthDp = 362, heightDp = 226),
+            resolveAudioModeArtworkSizeDp(
+                availableWidthDp = 393,
+                availableHeightDp = 300
             )
         )
     }

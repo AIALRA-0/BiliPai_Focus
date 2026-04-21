@@ -17,6 +17,8 @@ import kotlinx.serialization.json.JsonPrimitive
 // --- 1. 热搜模型 (保持不变) ---
 @Serializable
 data class HotSearchResponse(
+    val code: Int = 0,
+    val message: String = "",
     val data: HotSearchData? = null
 )
 
@@ -34,7 +36,39 @@ data class TrendingData(
 data class HotItem(
     val keyword: String = "",
     val show_name: String = "",
-    val icon: String = ""
+    @Serializable(with = FlexibleImageUrlSerializer::class)
+    val icon: String = "",
+    val show_live_icon: Boolean = false,
+    val recommend_reason: String = ""
+)
+
+@Serializable
+data class SearchTrendingResponse(
+    val code: Int = 0,
+    val message: String = "",
+    @SerialName("top_list")
+    val topList: List<HotItem>? = null,
+    val list: List<HotItem>? = null,
+    val data: SearchTrendingData? = null
+)
+
+@Serializable
+data class SearchTrendingData(
+    @SerialName("top_list")
+    val topList: List<HotItem>? = null,
+    val list: List<HotItem>? = null
+)
+
+@Serializable
+data class SearchRecommendResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SearchRecommendData? = null
+)
+
+@Serializable
+data class SearchRecommendData(
+    val list: List<HotItem>? = null
 )
 
 // --- 1.1 默认搜索占位词 ---
@@ -396,6 +430,7 @@ data class SearchSuggestResult(
 
 @Serializable
 data class SearchSuggestTag(
+    val term: String = "",
     val value: String = "",    // 搜索建议词
     val name: String = "",     // 显示名称 (可能包含高亮)
     val ref: Int = 0,

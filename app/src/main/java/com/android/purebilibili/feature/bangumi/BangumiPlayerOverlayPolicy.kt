@@ -20,6 +20,14 @@ internal fun resolveBangumiOverlayQualityLabel(
         ?: "自动"
 }
 
+internal fun resolveBangumiOverlaySwitchableQualityIds(
+    acceptQuality: List<Int>
+): List<Int> {
+    return acceptQuality
+        .filter { it > 0 }
+        .distinct()
+}
+
 internal fun buildBangumiOverlayPages(
     episodes: List<BangumiEpisode>
 ): List<Page> {

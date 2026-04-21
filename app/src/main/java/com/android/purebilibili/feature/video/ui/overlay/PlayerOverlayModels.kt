@@ -264,6 +264,8 @@ internal fun resolveCenterLoadingUiState(
     isBuffering: Boolean,
     isQualitySwitching: Boolean,
     isSeekTransitionPending: Boolean,
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
     bandwidthEstimate: String
 ): CenterLoadingUiState? {
     val bandwidthLabel = bandwidthEstimate.trim().ifBlank { null }
@@ -275,11 +277,19 @@ internal fun resolveCenterLoadingUiState(
                 secondaryText = bandwidthLabel?.let { "正在切换清晰度..." }
             )
         }
-        isBuffering && isSeekTransitionPending -> {
+        isSeekTransitionPending && playWhenReady && !isPlaying -> {
             CenterLoadingUiState(
                 reason = CenterLoadingReason.SEEK_BUFFERING,
-                primaryText = bandwidthLabel ?: "正在缓冲...",
-                secondaryText = "正在定位新进度..."
+                primaryText = if (isBuffering) {
+                    bandwidthLabel ?: "正在缓冲..."
+                } else {
+                    "正在恢复播放..."
+                },
+                secondaryText = if (isBuffering) {
+                    "正在定位新进度..."
+                } else {
+                    "正在等待视频重新跟上进度..."
+                }
             )
         }
         else -> null

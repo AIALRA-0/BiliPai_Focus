@@ -45,17 +45,29 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.Stat
+import com.android.purebilibili.feature.list.resolveDeleteBatchParallelism
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
@@ -85,7 +97,6 @@ private fun fixCoverUrl(url: String?): String {
 }
 
 private const val WATCH_LATER_DELETE_MAX_ATTEMPTS = 3
-private const val WATCH_LATER_DELETE_INTERVAL_MS = 280L
 private const val WATCH_LATER_DELETE_RETRY_BASE_DELAY_MS = 850L
 
 internal fun isRetryableWatchLaterDeleteError(code: Int, message: String): Boolean {
@@ -240,48 +251,63 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
             dissolvingIds = _uiState.value.dissolvingIds - snapshot.filter { it.id in aidSet }.map { it.bvid }.toSet()
         )
 
-        viewModelScope.launch {
+        AppScope.ioScope.launch {
             try {
                 val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
                 if (csrf.isEmpty()) {
-                    _uiState.value = _uiState.value.copy(items = snapshot)
-                    android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    withContext(Dispatchers.Main.immediate) {
+                        _uiState.value = _uiState.value.copy(items = snapshot)
+                        android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                     return@launch
                 }
 
-                val successIds = mutableSetOf<Long>()
-                aids.forEachIndexed { index, aid ->
-                    val result = deleteWatchLaterAidWithRetry(aid = aid, csrf = csrf)
-                    if (result.isSuccess) {
-                        successIds += aid
-                    }
-                    if (index < aids.lastIndex) {
-                        kotlinx.coroutines.delay(WATCH_LATER_DELETE_INTERVAL_MS)
-                    }
-                }
+                val successIds = deleteWatchLaterItemsInBackground(aids = aids, csrf = csrf)
 
-                val successCount = successIds.size
-                _uiState.value = _uiState.value.copy(
-                    items = snapshot.filterNot { it.id in successIds },
-                    dissolvingIds = _uiState.value.dissolvingIds -
-                        snapshot.filter { it.id in successIds }.map { it.bvid }.toSet()
-                )
+                withContext(Dispatchers.Main.immediate) {
+                    val successCount = successIds.size
+                    _uiState.value = _uiState.value.copy(
+                        items = snapshot.filterNot { it.id in successIds },
+                        dissolvingIds = _uiState.value.dissolvingIds -
+                            snapshot.filter { it.id in successIds }.map { it.bvid }.toSet()
+                    )
 
-                if (successCount == aids.size) {
-                    android.widget.Toast.makeText(getApplication(), "已删除 ${aids.size} 个视频", android.widget.Toast.LENGTH_SHORT).show()
-                } else {
-                    android.widget.Toast.makeText(
-                        getApplication(),
-                        "批量删除完成：成功 $successCount / ${aids.size}",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                    if (successCount == aids.size) {
+                        android.widget.Toast.makeText(getApplication(), "已删除 ${aids.size} 个视频", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(
+                            getApplication(),
+                            "批量删除完成：成功 $successCount / ${aids.size}",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _uiState.value = _uiState.value.copy(items = snapshot)
-                android.widget.Toast.makeText(getApplication(), "批量删除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                withContext(Dispatchers.Main.immediate) {
+                    _uiState.value = _uiState.value.copy(items = snapshot)
+                    android.widget.Toast.makeText(getApplication(), "批量删除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
+    }
+
+    private suspend fun deleteWatchLaterItemsInBackground(
+        aids: List<Long>,
+        csrf: String
+    ): Set<Long> = supervisorScope {
+        val semaphore = Semaphore(resolveDeleteBatchParallelism(aids.size))
+        aids.map { aid ->
+            async {
+                semaphore.withPermit {
+                    if (deleteWatchLaterAidWithRetry(aid = aid, csrf = csrf).isSuccess) {
+                        aid
+                    } else {
+                        null
+                    }
+                }
+            }
+        }.awaitAll().filterNotNull().toSet()
     }
 
     private suspend fun deleteWatchLaterAidWithRetry(
@@ -361,7 +387,7 @@ fun WatchLaterScreen(
         }
     }
 
-    Scaffold(
+    AdaptiveScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             // 使用 Box 包裹实现毛玻璃背景
@@ -370,11 +396,11 @@ fun WatchLaterScreen(
                     .fillMaxWidth()
                     .unifiedBlur(hazeState)
             ) {
-                TopAppBar(
-                    title = { Text("稍后再看", fontWeight = FontWeight.Bold) },
+                AdaptiveTopAppBar(
+                    title = "稍后再看",
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                            Icon(rememberAppBackIcon(), contentDescription = "返回")
                         }
                     },
                     actions = {

@@ -24,7 +24,17 @@
 
     <string name="appearance_theme_color_section">主题与颜色</string>
     <string name="appearance_ui_preset_title">界面预设</string>
-    <string name="appearance_ui_preset_subtitle">在 iOS 与 Android 原生视觉之间无缝切换</string>
+    <string name="appearance_ui_preset_subtitle">全局切换 iOS 与 Android 原生外观预设</string>
+    <string name="appearance_ui_preset_ios_title">iOS 预设</string>
+    <string name="appearance_ui_preset_ios_summary">保留更强的玻璃感、圆角和 iOS 风格图标与交互细节。</string>
+    <string name="appearance_ui_preset_android_material_title">安卓原生 · Material 3</string>
+    <string name="appearance_ui_preset_android_material_summary">使用更标准的 Material 3 导航、图标、顶栏和列表语义，保留当前 Android 原生分支的交互节奏。</string>
+    <string name="appearance_ui_preset_android_miuix_title">安卓原生 · Miuix</string>
+    <string name="appearance_ui_preset_android_miuix_summary">保留安卓信息架构，但把顶栏与局部容器切换为更贴近小米系统语义的 Miuix 组件风格。</string>
+    <string name="appearance_android_native_variant_title">安卓原生风格</string>
+    <string name="appearance_android_native_variant_subtitle">在 Material 3 与 Miuix 两种安卓原生子风格之间切换</string>
+    <string name="appearance_android_native_variant_material3">Material 3</string>
+    <string name="appearance_android_native_variant_miuix">Miuix</string>
     <string name="appearance_theme_mode_title">主题模式</string>
     <string name="appearance_theme_mode_subtitle">支持点击或左右滑动切换</string>
     <string name="appearance_dark_theme_style_title">深色风格</string>

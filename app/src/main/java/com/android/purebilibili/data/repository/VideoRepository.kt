@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import okhttp3.CacheControl
@@ -277,6 +278,96 @@ object VideoRepository {
                 hasCompletedHomePreload = true
             }
         }
+    }
+
+    suspend fun getVideoInfoOnly(
+        bvid: String,
+        aid: Long = 0L,
+        requestedCid: Long = 0L
+    ): Result<ViewInfo> = withContext(Dispatchers.IO) {
+        try {
+            val lookup = resolveVideoInfoLookupInput(rawBvid = bvid, aid = aid)
+                ?: throw Exception("无效的视频标识: bvid=$bvid, aid=$aid")
+            val viewResp = if (lookup.bvid.isNotEmpty()) {
+                api.getVideoInfo(lookup.bvid)
+            } else {
+                api.getVideoInfoByAid(lookup.aid)
+            }
+            val rawInfo = viewResp.data ?: throw Exception("视频详情为空: ${viewResp.code}")
+            val cid = resolveRequestedVideoCid(
+                requestCid = requestedCid,
+                infoCid = rawInfo.cid,
+                pages = rawInfo.pages
+            )
+            if (cid == 0L) throw Exception("CID 获取失败")
+            val info = if (cid > 0L && cid != rawInfo.cid) {
+                rawInfo.copy(cid = cid)
+            } else {
+                rawInfo
+            }
+            Result.success(info)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getInitialPlayUrlData(
+        bvid: String,
+        cid: Long,
+        targetQuality: Int,
+        audioLang: String? = null
+    ): PlayUrlData? = withContext(Dispatchers.IO) {
+        if (bvid.isBlank() || cid <= 0L) return@withContext null
+
+        val isAutoHighestQuality = targetQuality >= 127
+        val isLogin = resolveVideoPlaybackAuthState(
+            hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty(),
+            hasAccessToken = !TokenManager.accessTokenCache.isNullOrEmpty()
+        )
+        val isVip = TokenManager.isVipCache
+        val auto1080pEnabled = try {
+            val context = NetworkModule.appContext
+            context?.getSharedPreferences("settings_prefs", android.content.Context.MODE_PRIVATE)
+                ?.getBoolean("exp_auto_1080p", true) ?: true
+        } catch (e: Exception) {
+            true
+        }
+        val startQuality = resolveInitialStartQuality(
+            targetQuality = targetQuality,
+            isAutoHighestQuality = isAutoHighestQuality,
+            isLogin = isLogin,
+            isVip = isVip,
+            auto1080pEnabled = auto1080pEnabled
+        )
+
+        if (!shouldSkipPlayUrlCache(isAutoHighestQuality, isVip, audioLang)) {
+            val cachedPlayData = PlayUrlCache.get(
+                bvid = bvid,
+                cid = cid,
+                requestedQuality = startQuality
+            )
+            if (cachedPlayData != null) {
+                return@withContext cachedPlayData
+            }
+        }
+
+        val fetchResult = fetchPlayUrlRecursive(
+            bvid = bvid,
+            cid = cid,
+            targetQn = startQuality,
+            audioLang = audioLang,
+            requestKind = PlayUrlRequestKind.INITIAL
+        ) ?: return@withContext null
+
+        if (shouldCachePlayUrlResult(fetchResult.source, audioLang)) {
+            PlayUrlCache.put(
+                bvid = bvid,
+                cid = cid,
+                data = fetchResult.data,
+                quality = startQuality
+            )
+        }
+        fetchResult.data
     }
 
     private suspend fun awaitHomePreloadResult(): Result<List<VideoItem>>? {
@@ -1419,6 +1510,10 @@ object VideoRepository {
 
     fun init(context: android.content.Context) {
         applicationContext = context.applicationContext
+        AppScope.ioScope.launch {
+            runCatching { ensureBuvid3FromSpi() }
+            runCatching { getWbiKeys() }
+        }
     }
 
     //  [New] Use access_token to get high quality stream (4K/HDR/1080P60)

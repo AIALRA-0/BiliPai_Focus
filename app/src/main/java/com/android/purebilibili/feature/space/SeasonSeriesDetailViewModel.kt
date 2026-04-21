@@ -9,7 +9,6 @@ import com.android.purebilibili.feature.list.BaseListViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.android.purebilibili.data.model.response.Stat
 
 class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(application, "") {
 
@@ -95,17 +94,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     hasMore = archives.size >= 30 // Assumption based on page size
                      _hasMoreState.value = hasMore
                      
-                    return archives.map { item ->
-                        VideoItem(
-                            bvid = item.bvid,
-                            title = item.title,
-                            pic = item.pic,
-                            owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
-                            stat = Stat(view = item.stat.view.toInt(), reply = item.stat.reply.toInt()),
-                            duration = item.duration,
-                            pubdate = item.pubdate
-                        )
-                    }
+                    return archives.map { item -> mapSeasonArchiveToVideoItem(item, mid) }
                 }
             }
         } catch (e: Exception) {
@@ -125,17 +114,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     hasMore = archives.size >= 30
                     _hasMoreState.value = hasMore
 
-                    return archives.map { item ->
-                        VideoItem(
-                            bvid = item.bvid,
-                            title = item.title,
-                            pic = item.pic,
-                            owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
-                            stat = Stat(view = item.stat.view.toInt(), reply = item.stat.reply.toInt()),
-                            duration = item.duration,
-                            pubdate = item.pubdate
-                        )
-                    }
+                    return archives.map { item -> mapSeriesArchiveToVideoItem(item, mid) }
                 }
             }
         } catch (e: Exception) {
@@ -183,33 +162,13 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                      val response = spaceApi.getSeasonArchives(mid, id, currentPage)
                      if (response.code == 0 && response.data != null) {
                          val archives = response.data.archives
-                         newItems = archives.map { item ->
-                            VideoItem(
-                                bvid = item.bvid,
-                                title = item.title,
-                                pic = item.pic,
-                                owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
-                                stat = Stat(view = item.stat.view.toInt(), reply = item.stat.reply.toInt()),
-                                duration = item.duration,
-                                pubdate = item.pubdate
-                            )
-                        }
+                         newItems = archives.map { item -> mapSeasonArchiveToVideoItem(item, mid) }
                      }
                 } else if (type == "series") {
                      val response = spaceApi.getSeriesArchives(mid, id, currentPage)
                      if (response.code == 0 && response.data != null) {
                          val archives = response.data.archives
-                         newItems = archives.map { item ->
-                            VideoItem(
-                                bvid = item.bvid,
-                                title = item.title,
-                                pic = item.pic,
-                                owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
-                                stat = Stat(view = item.stat.view.toInt(), reply = item.stat.reply.toInt()),
-                                duration = item.duration,
-                                pubdate = item.pubdate
-                            )
-                        }
+                         newItems = archives.map { item -> mapSeriesArchiveToVideoItem(item, mid) }
                      }
                 } else if (type == "favorite") {
                     val response = FavoriteRepository.getFavoriteList(mediaId = id, pn = currentPage).getOrNull()

@@ -219,39 +219,18 @@ fun GestureIndicator(
                         targetPositionMs = targetPositionMs,
                         currentPositionMs = currentPositionMs,
                         durationMs = duration,
-                        offsetX = 80f,  // 居中偏移（气泡宽度的一半）
-                        containerWidth = 160f  // 与气泡宽度匹配
+                        offsetX = 0f,
+                        containerWidth = 0f,
+                        placement = com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement.Centered
                     )
                 } else {
-                    // 无缩略图：显示简化版
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        // Seek fallback - keep background for readability
-                        color = Color.Black.copy(alpha = 0.8f)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            Text(
-                                "${FormatUtils.formatDuration((targetPositionMs / 1000).toInt())} / ${FormatUtils.formatDuration((duration / 1000).toInt())}",
-                                color = Color.White,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            // 显示时间差
-                            val deltaSeconds = (targetPositionMs - currentPositionMs) / 1000
-                            if (deltaSeconds != 0L) {
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = if (deltaSeconds > 0) "+${deltaSeconds}s" else "${deltaSeconds}s",
-                                    color = if (deltaSeconds > 0) Color(0xFF81C784) else Color(0xFFE57373),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
+                    com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple(
+                        targetPositionMs = targetPositionMs,
+                        currentPositionMs = currentPositionMs,
+                        offsetX = 0f,
+                        containerWidth = 0f,
+                        placement = com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement.Centered
+                    )
                 }
             }
         }

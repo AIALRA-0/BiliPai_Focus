@@ -14,6 +14,7 @@ import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
 import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.util.CacheClearTarget
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val uiPreset: UiPreset = UiPreset.IOS,
+    val androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
     val hwDecode: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     val darkThemeStyle: DarkThemeStyle = DarkThemeStyle.DEFAULT,
@@ -65,9 +67,8 @@ data class SettingsUiState(
     val sponsorBlockAutoSkip: Boolean = true,
     // [新增] 触感反馈
     val hapticFeedbackEnabled: Boolean = true,
-    // [New]
-    // [New]
-    val isLiquidGlassEnabled: Boolean = true,
+    val topBarLiquidGlassEnabled: Boolean = true,
+    val bottomBarLiquidGlassEnabled: Boolean = true,
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle = com.android.purebilibili.core.store.LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
@@ -76,11 +77,15 @@ data class SettingsUiState(
     val tabletUseSidebar: Boolean = false,
     val isHeaderCollapseEnabled: Boolean = true, // [New]
     val gridColumnCount: Int = 0 // [New]
-)
+) {
+    val isLiquidGlassEnabled: Boolean
+        get() = topBarLiquidGlassEnabled || bottomBarLiquidGlassEnabled
+}
 
 // 内部数据类，用于分批合并流
 private data class CoreSettings(
     val uiPreset: UiPreset,
+    val androidNativeVariant: AndroidNativeVariant,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val darkThemeStyle: DarkThemeStyle,
@@ -108,7 +113,8 @@ data class ExtraSettings(
     val predictiveBackAnimationEnabled: Boolean,
     val smartVisualGuardEnabled: Boolean,
     val hapticFeedbackEnabled: Boolean, // [Restored]
-    val isLiquidGlassEnabled: Boolean = true, // [New]
+    val topBarLiquidGlassEnabled: Boolean = true,
+    val bottomBarLiquidGlassEnabled: Boolean = true,
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle, // [New]
     val liquidGlassMode: LiquidGlassMode, // [New]
     val liquidGlassStrength: Float, // [New]
@@ -132,6 +138,7 @@ data class ExperimentalSettings(
 
 private data class BaseSettings(
     val uiPreset: UiPreset,
+    val androidNativeVariant: AndroidNativeVariant,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val darkThemeStyle: DarkThemeStyle,
@@ -156,7 +163,8 @@ private data class BaseSettings(
     val predictiveBackAnimationEnabled: Boolean, // [New]
     val smartVisualGuardEnabled: Boolean, // [New]
     val hapticFeedbackEnabled: Boolean, // [新增]
-    val isLiquidGlassEnabled: Boolean, // [New]
+    val topBarLiquidGlassEnabled: Boolean,
+    val bottomBarLiquidGlassEnabled: Boolean,
     val liquidGlassStyle: com.android.purebilibili.core.store.LiquidGlassStyle, // [New]
     val liquidGlassMode: LiquidGlassMode, // [New]
     val liquidGlassStrength: Float, // [New]
@@ -189,6 +197,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 第 1 步：合并前 4 个设置
     private val coreSettingsFlow = combine(
         SettingsManager.getUiPreset(context).asAnyFlow(),
+        SettingsManager.getAndroidNativeVariant(context).asAnyFlow(),
         SettingsManager.getHwDecode(context).asAnyFlow(),
         SettingsManager.getThemeMode(context).asAnyFlow(),
         SettingsManager.getDarkThemeStyle(context).asAnyFlow(),
@@ -198,12 +207,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     ) { values ->
         CoreSettings(
             uiPreset = values[0] as UiPreset,
-            hwDecode = values[1] as Boolean,
-            themeMode = values[2] as AppThemeMode,
-            darkThemeStyle = values[3] as DarkThemeStyle,
-            appLanguage = values[4] as AppLanguage,
-            dynamicColor = values[5] as Boolean,
-            bgPlay = values[6] as Boolean
+            androidNativeVariant = values[1] as AndroidNativeVariant,
+            hwDecode = values[2] as Boolean,
+            themeMode = values[3] as AppThemeMode,
+            darkThemeStyle = values[4] as DarkThemeStyle,
+            appLanguage = values[5] as AppLanguage,
+            dynamicColor = values[6] as Boolean,
+            bgPlay = values[7] as Boolean
         )
     }
     
@@ -236,7 +246,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getPredictiveBackAnimationEnabled(context).asAnyFlow(), // [New]
         SettingsManager.getSmartVisualGuardEnabled(context).asAnyFlow(), // [New]
         SettingsManager.getHapticFeedbackEnabled(context).asAnyFlow(), // [新增]
-        SettingsManager.getLiquidGlassEnabled(context).asAnyFlow(), // [New]
+        SettingsManager.getTopBarLiquidGlassEnabled(context).asAnyFlow(),
+        SettingsManager.getBottomBarLiquidGlassEnabled(context).asAnyFlow(),
         SettingsManager.getLiquidGlassStyle(context).asAnyFlow(), // [New]
         SettingsManager.getLiquidGlassMode(context).asAnyFlow(), // [New]
         SettingsManager.getLiquidGlassStrength(context).asAnyFlow(), // [New]
@@ -254,14 +265,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val predictiveBackAnimation = values[6] as Boolean
         val smartVisualGuard = values[7] as Boolean
         val hapticFeedback = values[8] as Boolean
-        val liquidGlass = values[9] as Boolean
-        val liquidGlassStyle = values[10] as com.android.purebilibili.core.store.LiquidGlassStyle
-        val liquidGlassMode = values[11] as LiquidGlassMode
-        val liquidGlassStrength = values[12] as Float
-        val liquidGlassProgress = values[13] as Float
-        val tabletUseSidebar = values[14] as Boolean
-        val headerCollapse = values[15] as Boolean
-        val gridColumnCount = values[16] as Int
+        val topBarLiquidGlass = values[9] as Boolean
+        val bottomBarLiquidGlass = values[10] as Boolean
+        val liquidGlassStyle = values[11] as com.android.purebilibili.core.store.LiquidGlassStyle
+        val liquidGlassMode = values[12] as LiquidGlassMode
+        val liquidGlassStrength = values[13] as Float
+        val liquidGlassProgress = values[14] as Float
+        val tabletUseSidebar = values[15] as Boolean
+        val headerCollapse = values[16] as Boolean
+        val gridColumnCount = values[17] as Int
         
         data class Ui2(
             val f: Boolean,
@@ -273,7 +285,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val pba: Boolean,
             val svg: Boolean,
             val h: Boolean,
-            val lg: Boolean,
+            val tlg: Boolean,
+            val blg: Boolean,
             val lgs: com.android.purebilibili.core.store.LiquidGlassStyle,
             val lgm: LiquidGlassMode,
             val lgt: Float,
@@ -292,7 +305,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             predictiveBackAnimation,
             smartVisualGuard,
             hapticFeedback,
-            liquidGlass,
+            topBarLiquidGlass,
+            bottomBarLiquidGlass,
             liquidGlassStyle,
             liquidGlassMode,
             liquidGlassStrength,
@@ -322,7 +336,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             predictiveBackAnimationEnabled = ui2.pba,
             smartVisualGuardEnabled = ui2.svg,
             hapticFeedbackEnabled = ui2.h, // [新增]
-            isLiquidGlassEnabled = ui2.lg, // [New]
+            topBarLiquidGlassEnabled = ui2.tlg,
+            bottomBarLiquidGlassEnabled = ui2.blg,
             liquidGlassStyle = ui2.lgs, // [New]
             liquidGlassMode = ui2.lgm, // [New]
             liquidGlassStrength = ui2.lgt, // [New]
@@ -377,6 +392,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val baseSettingsFlow = combine(coreSettingsFlow, extraSettingsFlow) { core, extra ->
         BaseSettings(
             uiPreset = core.uiPreset,
+            androidNativeVariant = core.androidNativeVariant,
             hwDecode = core.hwDecode,
             themeMode = core.themeMode,
             darkThemeStyle = core.darkThemeStyle,
@@ -401,7 +417,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             predictiveBackAnimationEnabled = extra.predictiveBackAnimationEnabled,
             smartVisualGuardEnabled = extra.smartVisualGuardEnabled,
             hapticFeedbackEnabled = extra.hapticFeedbackEnabled, // [新增]
-            isLiquidGlassEnabled = extra.isLiquidGlassEnabled, // [New]
+            topBarLiquidGlassEnabled = extra.topBarLiquidGlassEnabled,
+            bottomBarLiquidGlassEnabled = extra.bottomBarLiquidGlassEnabled,
             liquidGlassStyle = extra.liquidGlassStyle, // [New]
             liquidGlassMode = extra.liquidGlassMode, // [New]
             liquidGlassStrength = extra.liquidGlassStrength, // [New]
@@ -425,6 +442,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     ) { settings, cache, experimental ->
         SettingsUiState(
             uiPreset = settings.uiPreset,
+            androidNativeVariant = settings.androidNativeVariant,
             hwDecode = settings.hwDecode,
             themeMode = settings.themeMode,
             darkThemeStyle = settings.darkThemeStyle,
@@ -449,7 +467,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             predictiveBackAnimationEnabled = settings.predictiveBackAnimationEnabled,
             smartVisualGuardEnabled = settings.smartVisualGuardEnabled,
             hapticFeedbackEnabled = settings.hapticFeedbackEnabled, // [新增]
-            isLiquidGlassEnabled = settings.isLiquidGlassEnabled, // [New]
+            topBarLiquidGlassEnabled = settings.topBarLiquidGlassEnabled,
+            bottomBarLiquidGlassEnabled = settings.bottomBarLiquidGlassEnabled,
             liquidGlassStyle = settings.liquidGlassStyle, // [New]
             liquidGlassMode = settings.liquidGlassMode, // [New]
             liquidGlassStrength = settings.liquidGlassStrength, // [New]
@@ -506,6 +525,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setUiPreset(preset: UiPreset) {
         viewModelScope.launch {
             SettingsManager.setUiPreset(context, preset)
+        }
+    }
+    fun setAndroidNativeVariant(variant: AndroidNativeVariant) {
+        viewModelScope.launch {
+            SettingsManager.setAndroidNativeVariant(context, variant)
         }
     }
     fun setThemeMode(mode: AppThemeMode) { 
@@ -610,17 +634,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     
 
 
-    fun toggleHeaderBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderBlurEnabled(context, value) } }
+    fun toggleHeaderBlur(value: Boolean) {
+        viewModelScope.launch {
+            val resolved = resolveTopBarBlurToggleState(
+                enableHeaderBlur = value,
+                currentLiquidGlassEnabled = state.value.topBarLiquidGlassEnabled
+            )
+            SettingsManager.setHeaderBlurEnabled(context, resolved.headerBlurEnabled)
+            SettingsManager.setTopBarLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
+        }
+    }
     fun toggleHeaderCollapse(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderCollapseEnabled(context, value) } }
-    fun toggleBottomBarBlur(value: Boolean) { 
-        viewModelScope.launch { 
+    fun toggleBottomBarBlur(value: Boolean) {
+        viewModelScope.launch {
             val resolved = resolveBottomBarBlurToggleState(
                 enableBottomBarBlur = value,
-                currentLiquidGlassEnabled = state.value.isLiquidGlassEnabled
+                currentLiquidGlassEnabled = state.value.bottomBarLiquidGlassEnabled
             )
             SettingsManager.setBottomBarBlurEnabled(context, resolved.bottomBarBlurEnabled)
-            SettingsManager.setLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
-        } 
+            SettingsManager.setBottomBarLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
+        }
     }
     fun setBlurIntensity(intensity: BlurIntensity) { viewModelScope.launch { SettingsManager.setBlurIntensity(context, intensity) } }  //  模糊强度设置
     
@@ -687,14 +720,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleHapticFeedback(value: Boolean) { viewModelScope.launch { SettingsManager.setHapticFeedbackEnabled(context, value) } }
     
     // [New] Liquid Glass
-    fun toggleLiquidGlass(enabled: Boolean) {
+    fun toggleTopBarLiquidGlass(enabled: Boolean) {
+        viewModelScope.launch {
+            val resolved = resolveTopBarLiquidGlassToggleState(
+                enableLiquidGlass = enabled,
+                currentHeaderBlurEnabled = state.value.headerBlurEnabled
+            )
+            SettingsManager.setTopBarLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
+            SettingsManager.setHeaderBlurEnabled(context, resolved.headerBlurEnabled)
+        }
+    }
+
+    fun toggleBottomBarLiquidGlass(enabled: Boolean) {
         viewModelScope.launch {
             val resolved = resolveLiquidGlassToggleState(
                 enableLiquidGlass = enabled,
                 currentBottomBarBlurEnabled = state.value.bottomBarBlurEnabled
             )
-            SettingsManager.setLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
+            SettingsManager.setBottomBarLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
             SettingsManager.setBottomBarBlurEnabled(context, resolved.bottomBarBlurEnabled)
+        }
+    }
+
+    fun toggleLiquidGlass(enabled: Boolean) {
+        viewModelScope.launch {
+            SettingsManager.setLiquidGlassEnabled(context, enabled)
         }
     }
     

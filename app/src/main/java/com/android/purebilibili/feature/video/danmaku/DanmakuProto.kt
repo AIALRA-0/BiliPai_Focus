@@ -21,11 +21,15 @@ import java.nio.charset.StandardCharsets
  *   - content (field 7, string) - 弹幕内容
  *   - ctime (field 8, int64) - 发送时间戳
  *   - weight (field 9, int32) - 权重
- *   - action (field 10, string)
- *   - pool (field 11, int32) - 弹幕池
- *   - idStr (field 12, string)
- *   - attr (field 13, int32) - 属性
- */
+     *   - action (field 10, string)
+     *   - pool (field 11, int32) - 弹幕池
+     *   - idStr (field 12, string)
+     *   - attr (field 13, int32) - 属性
+     *   - like (field 15, int64)
+     *   - colorful (field 24, enum) - 60001=大会员渐变彩色弹幕
+     *   - count (field 28, int32) - 服务端合并计数
+     *   - isSelf (field 29, bool) - 当前账号发送
+     */
 object DanmakuProto {
     
     private const val TAG = "DanmakuProto"
@@ -45,8 +49,15 @@ object DanmakuProto {
         val midHash: String = "",   // 用户 hash（可用于过滤）
         val content: String = "",   // 弹幕内容
         val weight: Int = 0,        // 权重 (AI过滤)
-        val pool: Int = 0           // 弹幕池: 0普通, 1字幕, 2特殊
+        val pool: Int = 0,          // 弹幕池: 0普通, 1字幕, 2特殊
+        val like: Long = 0L,
+        val colorful: Int = DmColorfulTypeNone,
+        val count: Int = 0,
+        val isSelf: Boolean = false
     )
+
+    const val DmColorfulTypeNone: Int = 0
+    const val DmColorfulTypeVipGradualColor: Int = 60001
 
     /**
      * 弹幕元数据响应 (x/v2/dm/web/view)
@@ -366,6 +377,10 @@ object DanmakuProto {
         var content = ""
         var weight = 0
         var pool = 0
+        var like = 0L
+        var colorful = DmColorfulTypeNone
+        var count = 0
+        var isSelf = false
         
         try {
             val input = ProtoInput(data)
@@ -389,6 +404,15 @@ object DanmakuProto {
                     11 -> pool = input.readVarint().toInt()     // pool
                     12 -> input.readString()                    // idStr (skip)
                     13 -> input.readVarint()                    // attr (skip)
+                    15 -> like = input.readVarint()              // like
+                    22 -> input.readString()                    // animation (skip)
+                    23 -> input.readString()                    // extra (skip)
+                    24 -> colorful = input.readVarint().toInt() // colorful
+                    25 -> input.readVarint()                    // type (skip)
+                    26 -> input.readVarint()                    // oid (skip)
+                    27 -> input.readVarint()                    // dmFrom (skip)
+                    28 -> count = input.readVarint().toInt()    // count
+                    29 -> isSelf = input.readVarint() != 0L     // isSelf
                     else -> input.skipField(wireType)
                 }
             }
@@ -406,7 +430,11 @@ object DanmakuProto {
             midHash = midHash,
             content = content,
             weight = weight,
-            pool = pool
+            pool = pool,
+            like = like,
+            colorful = colorful,
+            count = count,
+            isSelf = isSelf
         )
     }
     

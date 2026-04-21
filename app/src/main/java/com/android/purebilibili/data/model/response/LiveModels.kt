@@ -3,6 +3,7 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 /**
  * 直播相关数据模型
@@ -119,8 +120,8 @@ data class FollowedLiveResponse(
 @Serializable
 data class FollowedLiveData(
     val list: List<FollowedLiveRoom>? = null,
-    @SerialName("living_num") val livingNum: Int = 0,
-    @SerialName("not_living_num") val notLivingNum: Int = 0,
+    @JsonNames("living_num", "live_count") val livingNum: Int = 0,
+    @JsonNames("not_living_num", "count") val notLivingNum: Int = 0,
     val pageinfo: PageInfo? = null
 )
 

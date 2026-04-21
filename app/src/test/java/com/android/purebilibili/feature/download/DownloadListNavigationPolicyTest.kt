@@ -1,12 +1,13 @@
 package com.android.purebilibili.feature.download
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class DownloadListNavigationPolicyTest {
 
-    private val completedTask = DownloadTask(
+    private fun completedTask(filePath: String? = null) = DownloadTask(
         bvid = "BV1offline",
         cid = 1001L,
         title = "Cached video",
@@ -20,13 +21,17 @@ class DownloadListNavigationPolicyTest {
         audioUrl = "https://example.com/audio.m4s",
         status = DownloadStatus.COMPLETED,
         progress = 1f,
-        filePath = "/tmp/cached.mp4"
+        filePath = filePath
     )
 
     @Test
     fun completedDownload_prefersOfflinePlaybackEvenWhenNetworkIsAvailable() {
+        val tempFile = File.createTempFile("download_nav", ".mp4").apply {
+            writeText("cached")
+            deleteOnExit()
+        }
         val target = resolveDownloadTaskClickTarget(
-            task = completedTask,
+            task = completedTask(filePath = tempFile.absolutePath),
             isNetworkAvailable = true
         )
 
@@ -36,7 +41,7 @@ class DownloadListNavigationPolicyTest {
     @Test
     fun incompleteDownload_doesNotNavigate() {
         val target = resolveDownloadTaskClickTarget(
-            task = completedTask.copy(status = DownloadStatus.DOWNLOADING, progress = 0.4f),
+            task = completedTask().copy(status = DownloadStatus.DOWNLOADING, progress = 0.4f),
             isNetworkAvailable = true
         )
 

@@ -63,6 +63,15 @@ internal fun resolveHistoryDeleteAnimationMode(itemCount: Int): HistoryDeleteAni
     }
 }
 
+internal fun resolveDeleteBatchParallelism(itemCount: Int): Int {
+    return when {
+        itemCount >= 24 -> 4
+        itemCount >= 8 -> 3
+        itemCount >= 2 -> 2
+        else -> 1
+    }
+}
+
 internal fun createHistoryDeleteSession(
     targetKeys: Set<String>
 ): HistoryDeleteSession? {

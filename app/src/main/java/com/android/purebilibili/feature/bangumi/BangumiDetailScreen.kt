@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.theme.iOSYellow
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.BangumiDetail
 import com.android.purebilibili.data.model.response.BangumiEpisode
@@ -71,13 +74,13 @@ fun BangumiDetailScreen(
         viewModel.loadSeasonDetail(seasonId, epId)
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("番剧详情") },
+            AdaptiveTopAppBar(
+                title = "番剧详情",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -132,8 +135,8 @@ fun BangumiDetailScreen(
                         hazeState = hazeState,
                         onEpisodeClick = { episode -> onEpisodeClick(actionSeasonId, episode) },
                         onSeasonClick = onSeasonClick,
-                        onToggleFollow = { isFollowing ->
-                            viewModel.toggleFollow(actionSeasonId, isFollowing)
+                        onFollowStatusSelect = { status ->
+                            viewModel.updateFollowStatus(actionSeasonId, status)
                         }
                     )
                 } else {
@@ -143,8 +146,8 @@ fun BangumiDetailScreen(
                         hazeState = hazeState,
                         onEpisodeClick = { episode -> onEpisodeClick(actionSeasonId, episode) },
                         onSeasonClick = onSeasonClick,
-                        onToggleFollow = { isFollowing ->
-                            viewModel.toggleFollow(actionSeasonId, isFollowing)
+                        onFollowStatusSelect = { status ->
+                            viewModel.updateFollowStatus(actionSeasonId, status)
                         }
                     )
                 }
@@ -160,13 +163,11 @@ private fun TabletBangumiDetailContent(
     hazeState: HazeState,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onSeasonClick: (Long) -> Unit,
-    onToggleFollow: (Boolean) -> Unit
+    onFollowStatusSelect: (Int) -> Unit
 ) {
     // 状态管理
-    val followFromApi = isBangumiFollowed(detail.userStatus)
-    var isFollowing by remember(detail.seasonId, followFromApi) { 
-        mutableStateOf(followFromApi) 
-    }
+    val isFollowing = isBangumiFollowed(detail.userStatus)
+    var showFollowStatusDialog by remember { mutableStateOf(false) }
     
     // 选集相关状态
     var showJumpDialog by remember { mutableStateOf(false) }
@@ -264,10 +265,12 @@ private fun TabletBangumiDetailContent(
                     Row(modifier = Modifier.fillMaxWidth()) {
                         // Follow Button
                          Button(
-                            onClick = { 
-                                val wasFollowing = isFollowing
-                                isFollowing = !wasFollowing
-                                onToggleFollow(wasFollowing)
+                            onClick = {
+                                if (isFollowing) {
+                                    showFollowStatusDialog = true
+                                } else {
+                                    onFollowStatusSelect(BANGUMI_FOLLOW_STATUS_WATCHING)
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if(isFollowing) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
@@ -282,7 +285,7 @@ private fun TabletBangumiDetailContent(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (isFollowing) "已追番" else "追番")
+                            Text(resolveBangumiFollowStatusLabel(detail.userStatus))
                         }
                     }
                 }
@@ -438,6 +441,16 @@ private fun TabletBangumiDetailContent(
             }
         )
     }
+    if (showFollowStatusDialog) {
+        BangumiFollowStatusDialog(
+            currentStatus = detail.userStatus?.followStatus ?: 0,
+            onSelect = { status ->
+                showFollowStatusDialog = false
+                onFollowStatusSelect(status)
+            },
+            onDismiss = { showFollowStatusDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -447,13 +460,11 @@ private fun MobileBangumiDetailContent(
     hazeState: HazeState,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onSeasonClick: (Long) -> Unit,
-    onToggleFollow: (Boolean) -> Unit
+    onFollowStatusSelect: (Int) -> Unit
 ) {
     //  [修复] 使用 detail 本身作为 key，这样当 ViewModel 更新 detail 时，状态会正确同步
-    val followFromApi = isBangumiFollowed(detail.userStatus)
-    var isFollowing by remember(detail.seasonId, followFromApi) { 
-        mutableStateOf(followFromApi) 
-    }
+    val isFollowing = isBangumiFollowed(detail.userStatus)
+    var showFollowStatusDialog by remember { mutableStateOf(false) }
     
     //  [修复] 移除 LaunchedEffect，避免重置用户的点击状态
     // 状态同步现在通过 remember 的 key 来实现
@@ -463,6 +474,9 @@ private fun MobileBangumiDetailContent(
     var showJumpDialog by remember { mutableStateOf(false) }
     var jumpInputText by remember { mutableStateOf("") }
     var jumpErrorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedPreviewPage by remember(detail.seasonId, detail.episodes?.size) {
+        mutableIntStateOf(0)
+    }
     
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -596,10 +610,8 @@ private fun MobileBangumiDetailContent(
                     if (isFollowing) {
                         //  已追番：使用带边框的样式，更清晰可见
                         OutlinedButton(
-                            onClick = { 
-                                val wasFollowing = isFollowing
-                                isFollowing = !wasFollowing
-                                onToggleFollow(wasFollowing)
+                            onClick = {
+                                showFollowStatusDialog = true
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.primary
@@ -616,15 +628,13 @@ private fun MobileBangumiDetailContent(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("已追番")
+                            Text(resolveBangumiFollowStatusLabel(detail.userStatus))
                         }
                     } else {
                         //  未追番：使用填充的主色按钮
                         Button(
-                            onClick = { 
-                                val wasFollowing = isFollowing
-                                isFollowing = !wasFollowing
-                                onToggleFollow(wasFollowing)
+                            onClick = {
+                                onFollowStatusSelect(BANGUMI_FOLLOW_STATUS_WATCHING)
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
@@ -706,7 +716,6 @@ private fun MobileBangumiDetailContent(
                     item {
                         val episodesPerPage = 50
                         val totalPages = (detail.episodes.size + episodesPerPage - 1) / episodesPerPage
-                        var selectedPage by remember { mutableIntStateOf(0) }
                         
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -716,10 +725,10 @@ private fun MobileBangumiDetailContent(
                             items(totalPages) { page ->
                                 val start = page * episodesPerPage + 1
                                 val end = minOf((page + 1) * episodesPerPage, detail.episodes.size)
-                                val isCurrentPage = page == selectedPage
+                                val isCurrentPage = page == selectedPreviewPage
                                 
                                 Surface(
-                                    onClick = { selectedPage = page },
+                                    onClick = { selectedPreviewPage = page },
                                     color = if (isCurrentPage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                     shape = RoundedCornerShape(16.dp)
                                 ) {
@@ -737,7 +746,17 @@ private fun MobileBangumiDetailContent(
                 
                 //  剧集预览（只显示前6个，点击展开完整列表）
                 item {
-                    val previewEpisodes = detail.episodes.take(6)
+                    val previewEpisodes = if (detail.episodes.size > 50) {
+                        val window = resolveBangumiEpisodePreviewWindow(
+                            episodeCount = detail.episodes.size,
+                            selectedPage = selectedPreviewPage,
+                            episodesPerPage = 50,
+                            previewCount = 6
+                        )
+                        detail.episodes.subList(window.startIndex, window.endExclusive)
+                    } else {
+                        detail.episodes.take(6)
+                    }
                     
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -900,7 +919,84 @@ private fun MobileBangumiDetailContent(
                 onSeasonClick = onSeasonClick
             )
         }
+        if (showFollowStatusDialog) {
+            BangumiFollowStatusDialog(
+                currentStatus = detail.userStatus?.followStatus ?: 0,
+                onSelect = { status ->
+                    showFollowStatusDialog = false
+                    onFollowStatusSelect(status)
+                },
+                onDismiss = { showFollowStatusDialog = false }
+            )
+        }
     }
+}
+
+@Composable
+private fun BangumiFollowStatusDialog(
+    currentStatus: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("追番状态") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BANGUMI_FOLLOW_STATUS_OPTIONS.forEach { option ->
+                    Surface(
+                        onClick = { onSelect(option.status) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (currentStatus == option.status) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = option.label,
+                                fontSize = 15.sp,
+                                fontWeight = if (currentStatus == option.status) {
+                                    FontWeight.SemiBold
+                                } else {
+                                    FontWeight.Normal
+                                },
+                                color = if (currentStatus == option.status) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (currentStatus == option.status) {
+                                Icon(
+                                    CupertinoIcons.Default.Checkmark,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSelect(BANGUMI_FOLLOW_STATUS_UNFOLLOW) }) {
+                Text("取消追番")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
 }
 
 @Composable

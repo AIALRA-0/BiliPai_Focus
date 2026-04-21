@@ -12,6 +12,7 @@ class SettingsMiuixSimplificationStructureTest {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/settings/screen/AppearanceSettingsScreen.kt")
 
         assertTrue(source.contains("resolveUiPresetSegmentOptions("))
+        assertTrue(source.contains("resolveAppearanceUiPresetDescription("))
         assertTrue(source.contains("viewModel.setUiPreset("))
         assertTrue(source.contains("MiuixScaffold("))
         assertTrue(source.contains("MiuixSmallTopAppBar("))

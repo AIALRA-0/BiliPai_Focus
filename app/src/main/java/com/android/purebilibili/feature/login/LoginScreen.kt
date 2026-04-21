@@ -167,7 +167,7 @@ private fun CompactLoginSheetContent(
         LoginContentArea(
             state = state,
             onRefreshQr = { viewModel.loadQrCode() },
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(20.dp))
         Text(

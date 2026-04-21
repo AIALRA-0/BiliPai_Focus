@@ -292,6 +292,13 @@ internal fun resolvePlaybackQualityModeForQualitySelection(qualityId: Int): Play
     return PlaybackQualityMode.fromQualityId(qualityId)
 }
 
+internal fun resolvePlaybackIntentForSourceReplacement(
+    playWhenReady: Boolean,
+    isPlaying: Boolean
+): Boolean {
+    return playWhenReady || isPlaying
+}
+
 internal data class QualitySwitchFailureDialogState(
     val requestedQualityId: Int,
     val requestedQualityLabel: String,
@@ -2900,7 +2907,8 @@ class PlayerViewModel : ViewModel() {
         message: String,
         color: Int = 16777215,
         mode: Int = 1,
-        fontSize: Int = 25
+        fontSize: Int = 25,
+        encourage: Boolean = false
     ) {
         val current = _uiState.value as? PlayerUiState.Success ?: run {
             viewModelScope.launch { toast("视频未加载") }
@@ -2913,6 +2921,9 @@ class PlayerViewModel : ViewModel() {
         }
         
         val progress = exoPlayer?.currentPosition ?: 0L
+        val isVipGradualColor =
+            color == com.android.purebilibili.feature.video.ui.components.DANMAKU_SEND_VIP_GRADUAL_COLOR
+        val actualColor = if (isVipGradualColor) 16777215 else color
         
         viewModelScope.launch {
             _isSendingDanmaku.value = true
@@ -2923,9 +2934,11 @@ class PlayerViewModel : ViewModel() {
                     cid = currentCid,
                     message = message,
                     progress = progress,
-                    color = color,
+                    color = actualColor,
                     fontSize = fontSize,
-                    mode = mode
+                    mode = mode,
+                    colorful = isVipGradualColor,
+                    encourage = encourage
                 )
                 .onSuccess {
                     toast("发送成功")
@@ -2934,7 +2947,7 @@ class PlayerViewModel : ViewModel() {
                     // 本地即时显示弹幕
                     // 注意：这需要在 Composable 中通过 DanmakuManager 调用
                     // 这里只发送事件通知
-                    _danmakuSentEvent.trySend(DanmakuSentData(message, color, mode, fontSize))
+                    _danmakuSentEvent.trySend(DanmakuSentData(message, actualColor, mode, fontSize))
                 }
                 .onFailure { error ->
                     toast(error.message ?: "发送失败")
@@ -3145,7 +3158,11 @@ class PlayerViewModel : ViewModel() {
      * 发送评论
      * @param inputMessage 可选直接传入的内容，如果不传则使用 state 中的内容
      */
-    fun sendComment(inputMessage: String? = null, imageUris: List<Uri> = emptyList()) {
+    fun sendComment(
+        inputMessage: String? = null,
+        imageUris: List<Uri> = emptyList(),
+        syncToDynamic: Boolean = false
+    ) {
         if (inputMessage != null) {
             _commentInput.value = inputMessage
         }
@@ -3183,7 +3200,8 @@ class PlayerViewModel : ViewModel() {
                     message = message,
                     root = root,
                     parent = parent,
-                    pictures = pictures
+                    pictures = pictures,
+                    syncToDynamic = syncToDynamic
                 )
                 .onSuccess { reply ->
                     toast(if (replyTo != null) "回复成功" else "评论成功")
@@ -3539,7 +3557,8 @@ class PlayerViewModel : ViewModel() {
             qualityDesc = "音频",
             videoUrl = "",
             audioUrl = audioUrl,
-            isAudioOnly = true
+            isAudioOnly = true,
+            isVerticalVideo = false
         )
         
         val started = com.android.purebilibili.feature.download.DownloadManager.addTask(task)
@@ -4625,10 +4644,16 @@ class PlayerViewModel : ViewModel() {
     ): com.android.purebilibili.feature.download.DownloadTask? {
         val qualityDesc = resolveDownloadQualityDescription(current, qualityId)
         val isCurrentTarget = targetBvid == currentBvid && targetCid == currentCid
+        val candidate = com.android.purebilibili.feature.download.resolveBatchDownloadCandidate(
+            info = current.info,
+            targetBvid = targetBvid,
+            targetCid = targetCid
+        )
+        val effectiveLabel = candidate?.label?.takeIf { it.isNotBlank() } ?: targetLabel
         val resolvedTitle = resolveBatchDownloadTaskTitle(
             rootTitle = current.info.title,
             candidateTitle = targetTitle,
-            candidateLabel = targetLabel
+            candidateLabel = effectiveLabel
         )
 
         val currentDashVideo = current.cachedDashVideos.find { it.id == qualityId }
@@ -4667,14 +4692,20 @@ class PlayerViewModel : ViewModel() {
             bvid = targetBvid,
             cid = targetCid,
             title = resolvedTitle,
+            episodeLabel = effectiveLabel.takeIf { it.isNotBlank() && it != resolvedTitle },
+            groupKey = candidate?.groupKey,
+            groupTitle = candidate?.groupTitle,
+            episodeSortIndex = candidate?.episodeSortIndex ?: 0,
+            episodeCount = candidate?.episodeCount ?: 1,
             cover = targetCover.ifBlank { current.info.pic },
             ownerName = current.info.owner.name,
             ownerFace = current.info.owner.face,
-            duration = 0,
+            duration = candidate?.durationSeconds ?: 0,
             quality = qualityId,
             qualityDesc = qualityDesc,
             videoUrl = resolvedUrls.first,
-            audioUrl = resolvedUrls.second
+            audioUrl = resolvedUrls.second,
+            isVerticalVideo = candidate?.isVerticalVideo ?: (current.info.dimension?.isVertical == true)
         )
     }
     
@@ -4725,7 +4756,7 @@ class PlayerViewModel : ViewModel() {
             var failedCount = 0
 
             candidates.filter { it.selected }.forEach { candidate ->
-                val existingTask = com.android.purebilibili.feature.download.DownloadManager.getTask(
+                val existingTask = com.android.purebilibili.feature.download.DownloadManager.getVideoTask(
                     candidate.bvid,
                     candidate.cid
                 )
@@ -4794,7 +4825,7 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    fun changeQuality(qualityId: Int, currentPos: Long) {
+    fun changeQuality(qualityId: Int) {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         if (current.isQualitySwitching) {
             toast("正在切换中...", PlayerToastPresentation.CenteredHighlight)
@@ -4821,7 +4852,15 @@ class PlayerViewModel : ViewModel() {
             isDolbyVisionSupported = isDolbyVisionSupported,
             serverAdvertisedQualities = current.qualityIds
         )
-        
+
+        val currentPos = playbackUseCase.getCurrentPosition().coerceAtLeast(0L)
+        val playWhenReadyAfterSwitch = exoPlayer?.let { player ->
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying
+            )
+        } ?: true
+
         when (permissionResult) {
             is QualityPermissionResult.RequiresVip -> {
                 showQualitySwitchFailureDialog(
@@ -4837,7 +4876,7 @@ class PlayerViewModel : ViewModel() {
                     isDolbyVisionSupported = isDolbyVisionSupported
                 )
                 if (fallbackQuality != current.currentQuality) {
-                    changeQuality(fallbackQuality, currentPos)
+                    changeQuality(fallbackQuality)
                 }
                 return
             }
@@ -4861,7 +4900,7 @@ class PlayerViewModel : ViewModel() {
                     isDolbyVisionSupported = isDolbyVisionSupported
                 )
                 if (fallbackQuality != current.currentQuality && fallbackQuality != qualityId) {
-                    changeQuality(fallbackQuality, currentPos)
+                    changeQuality(fallbackQuality)
                 }
                 return
             }
@@ -4929,7 +4968,8 @@ class PlayerViewModel : ViewModel() {
                     videoCodecPreference = videoCodecPreference,
                     videoSecondCodecPreference = videoSecondCodecPreference,
                     isHevcSupported = isHevcSupported,
-                    isAv1Supported = isAv1Supported
+                    isAv1Supported = isAv1Supported,
+                    playWhenReady = playWhenReadyAfterSwitch
                 ) ?: playbackUseCase.changeQualityFromApi(
                     bvid = currentBvid,
                     cid = currentCid,
@@ -4940,7 +4980,8 @@ class PlayerViewModel : ViewModel() {
                     videoCodecPreference = videoCodecPreference,
                     videoSecondCodecPreference = videoSecondCodecPreference,
                     isHevcSupported = isHevcSupported,
-                    isAv1Supported = isAv1Supported
+                    isAv1Supported = isAv1Supported,
+                    playWhenReady = playWhenReadyAfterSwitch
                 )
                 
                 if (result != null) {

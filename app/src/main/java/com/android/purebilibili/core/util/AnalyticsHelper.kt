@@ -9,9 +9,6 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.analytics.ktx.analytics
-import com.google.firebase.analytics.ktx.logEvent
-import com.google.firebase.ktx.Firebase
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -79,6 +76,21 @@ object AnalyticsHelper {
     private const val EVENT_RATE_LIMIT_MAX_KEYS = 512
     private const val EVENT_RATE_LIMIT_STALE_MS = 180_000L
 
+    private inline fun logAnalyticsEvent(
+        name: String,
+        buildParams: Bundle.() -> Unit = {}
+    ) {
+        analytics?.logEvent(name, Bundle().apply(buildParams))
+    }
+
+    private fun Bundle.param(key: String, value: String) {
+        putString(key, value)
+    }
+
+    private fun Bundle.param(key: String, value: Long) {
+        putLong(key, value)
+    }
+
     private fun resolveDurationBucket(durationMs: Long): String {
         return when {
             durationMs < 220L -> "under_220ms"
@@ -141,7 +153,7 @@ object AnalyticsHelper {
             return
         }
         try {
-            analytics = Firebase.analytics
+            analytics = FirebaseAnalytics.getInstance(context)
             analytics?.setUserProperty("app_version", BuildConfig.VERSION_NAME)
             analytics?.setUserProperty("build_type", BuildConfig.BUILD_TYPE)
             analytics?.setUserProperty("locale", Locale.getDefault().toLanguageTag())
@@ -225,7 +237,7 @@ object AnalyticsHelper {
         sessionStartMs = System.currentTimeMillis()
         isInForeground = true
         try {
-            analytics?.logEvent("app_foreground") {
+            logAnalyticsEvent("app_foreground") {
                 param("source", "process_lifecycle")
             }
             CrashReporter.setAppForegroundState(true)
@@ -245,7 +257,7 @@ object AnalyticsHelper {
         val sessionDurationSec = if (sessionStartMs > 0L) ((now - sessionStartMs) / 1000L).coerceAtLeast(0L) else 0L
         isInForeground = false
         try {
-            analytics?.logEvent("app_background") {
+            logAnalyticsEvent("app_background") {
                 param("source", "process_lifecycle")
                 param("session_duration_sec", sessionDurationSec)
             }
@@ -268,7 +280,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         if (shouldDropByRateLimit("screen_view", screenName, minIntervalMs = 500L)) return
         try {
-            analytics?.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW) {
+            logAnalyticsEvent(FirebaseAnalytics.Event.SCREEN_VIEW) {
                 param(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
                 screenClass?.let { param(FirebaseAnalytics.Param.SCREEN_CLASS, it) }
             }
@@ -293,7 +305,7 @@ object AnalyticsHelper {
     ) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("video_play") {
+            logAnalyticsEvent("video_play") {
                 // 🔒 不记录 video_id 和 title，仅记录时长范围用于分析
                 duration?.let { 
                     val durationRange = when {
@@ -328,7 +340,7 @@ object AnalyticsHelper {
         if (progress !in listOf(25, 50, 75, 100)) return
         if (shouldDropByRateLimit("video_progress", "$videoId:$progress", minIntervalMs = 10_000L)) return
         try {
-            analytics?.logEvent("video_progress") {
+            logAnalyticsEvent("video_progress") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("progress_percent", progress.toLong())
                 param("watch_time_sec", watchTime)
@@ -345,7 +357,7 @@ object AnalyticsHelper {
     fun logVideoComplete(videoId: String, totalWatchTime: Long) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("video_complete") {
+            logAnalyticsEvent("video_complete") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("total_watch_time_sec", totalWatchTime)
             }
@@ -362,7 +374,7 @@ object AnalyticsHelper {
     fun logSearch(query: String) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(FirebaseAnalytics.Event.SEARCH) {
+            logAnalyticsEvent(FirebaseAnalytics.Event.SEARCH) {
                 // 🔒 不记录具体搜索词，仅记录搜索词长度范围
                 val lengthRange = when {
                     query.length <= 2 -> "short"
@@ -384,7 +396,7 @@ object AnalyticsHelper {
     fun logSearchResultClick(query: String, videoId: String, position: Int) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("search_result_click") {
+            logAnalyticsEvent("search_result_click") {
                 // 🔒 仅记录点击位置用于分析搜索结果质量
                 param("position", position.toLong())
             }
@@ -401,7 +413,7 @@ object AnalyticsHelper {
     fun logLike(videoId: String, isLiked: Boolean) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(if (isLiked) "video_like" else "video_unlike") {
+            logAnalyticsEvent(if (isLiked) "video_like" else "video_unlike") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
             }
         } catch (e: Exception) {
@@ -415,7 +427,7 @@ object AnalyticsHelper {
     fun logFavorite(videoId: String, isFavorited: Boolean) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(if (isFavorited) "video_favorite" else "video_unfavorite") {
+            logAnalyticsEvent(if (isFavorited) "video_favorite" else "video_unfavorite") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
             }
         } catch (e: Exception) {
@@ -429,7 +441,7 @@ object AnalyticsHelper {
     fun logShare(videoId: String, method: String? = null) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(FirebaseAnalytics.Event.SHARE) {
+            logAnalyticsEvent(FirebaseAnalytics.Event.SHARE) {
                 param(FirebaseAnalytics.Param.CONTENT_TYPE, "video")
                 maybeLogAnalyticsParam(FirebaseAnalytics.Param.ITEM_ID) {
                     param(FirebaseAnalytics.Param.ITEM_ID, videoId)
@@ -447,7 +459,7 @@ object AnalyticsHelper {
     fun logFollow(userId: String, isFollowed: Boolean) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(if (isFollowed) "user_follow" else "user_unfollow") {
+            logAnalyticsEvent(if (isFollowed) "user_follow" else "user_unfollow") {
                 maybeLogAnalyticsParam("target_user_id") { param("target_user_id", userId) }
             }
         } catch (e: Exception) {
@@ -461,7 +473,7 @@ object AnalyticsHelper {
     fun logCoin(videoId: String, coinCount: Int) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("video_coin") {
+            logAnalyticsEvent("video_coin") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("coin_count", coinCount.toLong())
             }
@@ -478,7 +490,7 @@ object AnalyticsHelper {
     fun logAppOpen() {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(FirebaseAnalytics.Event.APP_OPEN, null)
+            logAnalyticsEvent(FirebaseAnalytics.Event.APP_OPEN)
             CrashReporter.setLastEvent("app_open")
             Logger.d(TAG, " App open")
         } catch (e: Exception) {
@@ -492,7 +504,7 @@ object AnalyticsHelper {
     fun logLogin(method: String = "qrcode") {
         if (!isEnabled) return
         try {
-            analytics?.logEvent(FirebaseAnalytics.Event.LOGIN) {
+            logAnalyticsEvent(FirebaseAnalytics.Event.LOGIN) {
                 param(FirebaseAnalytics.Param.METHOD, method)
             }
             CrashReporter.setLastEvent("login")
@@ -508,7 +520,7 @@ object AnalyticsHelper {
     fun logLogout() {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("logout", null)
+            logAnalyticsEvent("logout")
             syncUserContext(mid = null, isVip = false, privacyModeEnabled = null)
             CrashReporter.setLastEvent("logout")
         } catch (e: Exception) {
@@ -524,7 +536,7 @@ object AnalyticsHelper {
     fun logCategoryView(categoryName: String, categoryId: Int? = null) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("category_view") {
+            logAnalyticsEvent("category_view") {
                 param("category_name", categoryName)
                 categoryId?.let { param("category_id", it.toLong()) }
             }
@@ -539,7 +551,7 @@ object AnalyticsHelper {
     fun logBangumiPlay(seasonId: String, episodeId: String, title: String) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("bangumi_play") {
+            logAnalyticsEvent("bangumi_play") {
                 maybeLogAnalyticsParam("season_id") { param("season_id", seasonId) }
                 maybeLogAnalyticsParam("episode_id") { param("episode_id", episodeId) }
                 maybeLogAnalyticsParam("title") { param("title", title.take(100)) }
@@ -558,7 +570,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         if (shouldDropByRateLimit("setting_change", "$settingName:$value", minIntervalMs = 700L)) return
         try {
-            analytics?.logEvent("setting_change") {
+            logAnalyticsEvent("setting_change") {
                 param("setting_name", settingName)
                 param("setting_value", value)
             }
@@ -576,7 +588,7 @@ object AnalyticsHelper {
     fun logLivePlay(roomId: Long, title: String, upName: String? = null) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("live_play") {
+            logAnalyticsEvent("live_play") {
                 maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 maybeLogAnalyticsParam("title") { param("title", title.take(100)) }
                 upName?.let {
@@ -597,7 +609,7 @@ object AnalyticsHelper {
         val watchBucket = (watchTimeSeconds / 15L) * 15L
         if (shouldDropByRateLimit("live_watch_time", "$roomId:$watchBucket", minIntervalMs = 12_000L)) return
         try {
-            analytics?.logEvent("live_watch_time") {
+            logAnalyticsEvent("live_watch_time") {
                 maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 param("watch_time_sec", watchBucket)
             }
@@ -614,7 +626,7 @@ object AnalyticsHelper {
     fun logVideoError(videoId: String, errorType: String) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("video_error") {
+            logAnalyticsEvent("video_error") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("error_type", errorType)
             }
@@ -630,7 +642,7 @@ object AnalyticsHelper {
     fun logLiveError(roomId: Long, errorType: String) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("live_error") {
+            logAnalyticsEvent("live_error") {
                 maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 param("error_type", errorType)
             }
@@ -648,7 +660,7 @@ object AnalyticsHelper {
     fun logSponsorBlockSkip(videoId: String, segmentType: String) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("sponsorblock_skip") {
+            logAnalyticsEvent("sponsorblock_skip") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("segment_type", segmentType)
             }
@@ -663,7 +675,7 @@ object AnalyticsHelper {
     fun logQualityChange(videoId: String, fromQuality: Int, toQuality: Int) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("quality_change") {
+            logAnalyticsEvent("quality_change") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("from_quality", fromQuality.toLong())
                 param("to_quality", toQuality.toLong())
@@ -679,7 +691,7 @@ object AnalyticsHelper {
     fun logDanmakuToggle(enabled: Boolean) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("danmaku_toggle") {
+            logAnalyticsEvent("danmaku_toggle") {
                 param("enabled", if (enabled) "true" else "false")
             }
         } catch (e: Exception) {
@@ -698,7 +710,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         if (shouldDropByRateLimit("picture_in_picture", "$videoId:$action", minIntervalMs = 900L)) return
         try {
-            analytics?.logEvent("picture_in_picture") {
+            logAnalyticsEvent("picture_in_picture") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("action", action)
             }
@@ -717,7 +729,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         if (shouldDropByRateLimit("background_play", "$videoId:$action", minIntervalMs = 900L)) return
         try {
-            analytics?.logEvent("background_play") {
+            logAnalyticsEvent("background_play") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("action", action)
             }
@@ -736,7 +748,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         if (shouldDropByRateLimit("audio_mode", "$videoId:$enabled", minIntervalMs = 900L)) return
         try {
-            analytics?.logEvent("audio_mode") {
+            logAnalyticsEvent("audio_mode") {
                 maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("enabled", if (enabled) "true" else "false")
             }
@@ -755,7 +767,7 @@ object AnalyticsHelper {
     fun logLiveQualityChange(roomId: Long, fromQuality: Int, toQuality: Int) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("live_quality_change") {
+            logAnalyticsEvent("live_quality_change") {
                 maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 param("from_quality", fromQuality.toLong())
                 param("to_quality", toQuality.toLong())
@@ -780,7 +792,7 @@ object AnalyticsHelper {
     ) {
         if (!isEnabled) return
         try {
-            analytics?.logEvent("video_click") {
+            logAnalyticsEvent("video_click") {
                 // 🔒 隐私保护：不记录 video_id 和 title
                 tname?.let { param("category_name", it) }
                 position?.let { param("list_position", it.toLong()) }
@@ -813,7 +825,7 @@ object AnalyticsHelper {
         if (shouldDropByRateLimit("home_return_animation_perf", "$actualDurationMs:$isQuickReturn:$isTabletLayout", minIntervalMs = 800L)) return
         try {
             val totalPluginCount = builtinPluginEnabledCount + jsonPluginEnabledCount
-            analytics?.logEvent("home_return_animation_perf") {
+            logAnalyticsEvent("home_return_animation_perf") {
                 param("actual_duration_ms", actualDurationMs)
                 param("duration_bucket", resolveDurationBucket(actualDurationMs))
                 param("planned_suppression_ms", plannedSuppressionMs)

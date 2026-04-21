@@ -30,6 +30,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -73,6 +76,7 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
+import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -83,8 +87,10 @@ import com.android.purebilibili.feature.video.ui.components.CollectionSheet
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.VideoInlineSubReplyDetailContent
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
+import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
@@ -95,6 +101,7 @@ import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntr
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
+import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.launch
@@ -114,7 +121,7 @@ fun TabletCinemaLayout(
     bvid: String,
     coverUrl: String = "",
     onBack: () -> Unit,
-    onHomeClick: () -> Unit,
+    onHomeClick: () -> Unit = {},
     onUpClick: (Long) -> Unit,
     onNavigateToAudioMode: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -130,12 +137,14 @@ fun TabletCinemaLayout(
     transitionEnabled: Boolean = false,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     showRelatedVideosSection: Boolean = true,
+    showUpBadge: Boolean = true,
+    onSearchKeywordClick: (String) -> Unit = {},
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode =
         com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
     forceCoverOnlyOnReturn: Boolean = false
 ) {
-    val context = LocalContext.current
+    val appContext = LocalContext.current
     val policy = remember(configuration.screenWidthDp) {
         resolveTabletCinemaLayoutPolicy(
             widthDp = configuration.screenWidthDp
@@ -152,18 +161,17 @@ fun TabletCinemaLayout(
             .getOrDefault(resolveInitialCurtainState(configuration.screenWidthDp))
     }
     var selectedTab by rememberSaveable(bvid) { mutableIntStateOf(0) }
+    val curtainPagerState = rememberPagerState(
+        initialPage = selectedTab,
+        pageCount = { if (showRelatedVideosSection) 2 else 1 }
+    )
     val curtainWidth by animateDpAsState(
         targetValue = resolveCurtainWidthDp(curtainState, policy).dp,
         animationSpec = tween(durationMillis = 240),
         label = "cinemaCurtainWidth"
     )
 
-    LaunchedEffect(
-        success?.related?.size,
-        commentState.replyCount,
-        commentState.isRepliesLoading,
-        showRelatedVideosSection
-    ) {
+    LaunchedEffect(success?.related?.size, commentState.replyCount, commentState.isRepliesLoading) {
         selectedTab = resolveCinemaSideCurtainSelectedTab(
             currentSelectedTab = selectedTab,
             replyCount = commentState.replyCount,
@@ -171,6 +179,16 @@ fun TabletCinemaLayout(
             hasRelatedVideos = !success?.related.isNullOrEmpty(),
             showRelatedVideosSection = showRelatedVideosSection
         )
+    }
+    LaunchedEffect(selectedTab) {
+        if (curtainPagerState.currentPage != selectedTab) {
+            curtainPagerState.animateScrollToPage(selectedTab)
+        }
+    }
+    LaunchedEffect(curtainPagerState.currentPage) {
+        if (selectedTab != curtainPagerState.currentPage) {
+            selectedTab = curtainPagerState.currentPage
+        }
     }
 
     Box(
@@ -224,6 +242,7 @@ fun TabletCinemaLayout(
                     currentPlayMode = currentPlayMode,
                     onPlayModeClick = onPlayModeClick,
                     onRelatedVideoClick = onRelatedVideoClick,
+                    showRelatedVideosSection = showRelatedVideosSection,
                     playerMaxWidth = policy.playerMaxWidthDp.dp,
                     forceCoverOnlyOnReturn = forceCoverOnlyOnReturn
                 )
@@ -267,11 +286,12 @@ fun TabletCinemaLayout(
                 }
             }
 
-                CinemaSideCurtain(
-                    state = curtainState,
-                    width = curtainWidth,
-                    selectedTab = selectedTab,
-                    onToggle = {
+            CinemaSideCurtain(
+                state = curtainState,
+                width = curtainWidth,
+                selectedTab = selectedTab,
+                pagerState = curtainPagerState,
+                onToggle = {
                     curtainStateName = when (curtainState) {
                         TabletSideCurtainState.OPEN -> TabletSideCurtainState.PEEK.name
                         TabletSideCurtainState.PEEK -> TabletSideCurtainState.OPEN.name
@@ -286,14 +306,16 @@ fun TabletCinemaLayout(
                 commentState = commentState,
                 commentViewModel = commentViewModel,
                 viewModel = viewModel,
-                    playerState = playerState,
-                    onUpClick = onUpClick,
-                    onRelatedVideoClick = onRelatedVideoClick,
-                    context = context,
-                    showRelatedVideosSection = showRelatedVideosSection
-                )
-            }
+                playerState = playerState,
+                onUpClick = onUpClick,
+                onRelatedVideoClick = onRelatedVideoClick,
+                context = appContext,
+                showRelatedVideosSection = showRelatedVideosSection,
+                showUpBadge = showUpBadge,
+                onSearchKeywordClick = onSearchKeywordClick
+            )
         }
+    }
 }
 
 @Composable
@@ -323,6 +345,7 @@ private fun CinemaStagePlayer(
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode,
     onPlayModeClick: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    showRelatedVideosSection: Boolean,
     playerMaxWidth: Dp,
     forceCoverOnlyOnReturn: Boolean
 ) {
@@ -381,7 +404,7 @@ private fun CinemaStagePlayer(
                     isFullscreen = false,
                     isInPipMode = isInPipMode,
                     onToggleFullscreen = onToggleFullscreen,
-                    onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                    onQualityChange = { qid -> viewModel.changeQuality(qid) },
                     onBack = onBack,
                     onHomeClick = onHomeClick,
                     bvid = bvid,
@@ -453,6 +476,7 @@ private fun CinemaMetaPanel(
     onPageSelect: (Int) -> Unit,
     onRetryAiSummary: () -> Unit
 ) {
+    val context = LocalContext.current
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val currentPageIndex = remember(success.info.cid, success.info.pages) {
         success.info.pages.indexOfFirst { it.cid == success.info.cid }.coerceAtLeast(0)
@@ -523,7 +547,14 @@ private fun CinemaMetaPanel(
                             onTripleClick = onTripleClick,
                             onDownloadClick = onDownloadClick,
                             onWatchLaterClick = onWatchLaterClick,
-                            onCommentClick = onOpenComments
+                            onCommentClick = onOpenComments,
+                            onShareClick = {
+                                ShareUtils.shareVideo(
+                                    context,
+                                    success.info.title,
+                                    success.info.bvid
+                                )
+                            }
                         )
                     }
                     CinemaMetaPanelBlock.UP_INFO -> {
@@ -631,6 +662,7 @@ private fun CinemaSideCurtain(
     state: TabletSideCurtainState,
     width: Dp,
     selectedTab: Int,
+    pagerState: PagerState,
     onToggle: () -> Unit,
     onTabSelected: (Int) -> Unit,
     success: PlayerUiState.Success?,
@@ -641,8 +673,20 @@ private fun CinemaSideCurtain(
     onUpClick: (Long) -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     context: android.content.Context,
-    showRelatedVideosSection: Boolean
+    showRelatedVideosSection: Boolean,
+    showUpBadge: Boolean,
+    onSearchKeywordClick: (String) -> Unit
 ) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val subReplyState by commentViewModel.subReplyState.collectAsState()
+    LaunchedEffect(subReplyState.visible) {
+        if (subReplyState.visible) {
+            onTabSelected(0)
+            if (pagerState.currentPage != 0) {
+                pagerState.animateScrollToPage(0)
+            }
+        }
+    }
     Row(
         modifier = Modifier.fillMaxHeight(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -707,52 +751,67 @@ private fun CinemaSideCurtain(
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
+                        val tabs = resolveTabletSecondaryTabs(
+                            replyCount = commentState.replyCount,
+                            showRelatedVideosSection = showRelatedVideosSection
+                        )
                         TabRow(
-                            selectedTabIndex = selectedTab,
+                            selectedTabIndex = pagerState.currentPage,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = { onTabSelected(0) },
-                                text = {
-                                    Text(
-                                        text = "评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}"
-                                    )
-                                }
-                            )
-                            if (showRelatedVideosSection) {
+                            tabs.forEachIndexed { index, title ->
                                 Tab(
-                                    selected = selectedTab == 1,
-                                    onClick = { onTabSelected(1) },
-                                    text = { Text("相关推荐") }
+                                    selected = pagerState.currentPage == index,
+                                    onClick = {
+                                        onTabSelected(index)
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(index)
+                                        }
+                                    },
+                                    text = { Text(title) }
                                 )
                             }
                         }
 
-                        if (selectedTab == 0 && success != null) {
-                            CinemaCommentsPane(
-                                success = success,
-                                commentState = commentState,
-                                commentViewModel = commentViewModel,
-                                viewModel = viewModel,
-                                playerState = playerState,
-                                onUpClick = onUpClick,
-                                context = context,
-                                hasRelatedVideos = success.related.isNotEmpty(),
-                                showRelatedVideosSection = showRelatedVideosSection
-                            )
-                        } else if (showRelatedVideosSection && selectedTab == 1 && success != null) {
-                            CinemaRelatedPane(
-                                success = success,
-                                onRelatedVideoClick = onRelatedVideoClick,
-                                context = context
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CupertinoActivityIndicator()
+                        HorizontalPager(
+                            state = pagerState,
+                            userScrollEnabled = true,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            when {
+                                success == null -> {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CupertinoActivityIndicator()
+                                    }
+                                }
+
+                                page == 0 -> {
+                                    CinemaCommentsPane(
+                                        success = success,
+                                        commentState = commentState,
+                                        subReplyState = subReplyState,
+                                        commentViewModel = commentViewModel,
+                                        viewModel = viewModel,
+                                        playerState = playerState,
+                                        onUpClick = onUpClick,
+                                        context = context,
+                                        onRelatedVideoClick = onRelatedVideoClick,
+                                        onSearchKeywordClick = onSearchKeywordClick
+                                    )
+                                }
+
+                                else -> {
+                                    CinemaRelatedPane(
+                                        success = success,
+                                        onRelatedVideoClick = onRelatedVideoClick,
+                                        context = context,
+                                        showRelatedVideosSection = showRelatedVideosSection,
+                                        showUpBadge = showUpBadge
+                                    )
+                                }
                             }
                         }
                     }
@@ -766,13 +825,14 @@ private fun CinemaSideCurtain(
 private fun CinemaCommentsPane(
     success: PlayerUiState.Success,
     commentState: CommentUiState,
+    subReplyState: SubReplyUiState,
     commentViewModel: VideoCommentViewModel,
     viewModel: PlayerViewModel,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
     context: android.content.Context,
-    hasRelatedVideos: Boolean,
-    showRelatedVideosSection: Boolean
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    onSearchKeywordClick: (String) -> Unit
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     val listState = rememberLazyListState()
@@ -781,14 +841,23 @@ private fun CinemaCommentsPane(
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
-        if (shouldOpenCommentUrlInApp(url)) {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching {
-                context.startActivity(intent)
-            }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                onRelatedVideoClick(target.videoId, null)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Search -> {
+                onSearchKeywordClick(target.keyword)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUpClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
         runCatching { uriHandler.openUri(url) }
     }
@@ -824,7 +893,43 @@ private fun CinemaCommentsPane(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    if (subReplyState.visible && subReplyState.rootReply != null) {
+        VideoInlineSubReplyDetailContent(
+            state = subReplyState,
+            commentState = commentState,
+            emoteMap = success.emoteMap,
+            maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
+            onLoadMore = { commentViewModel.loadMoreSubReplies() },
+            onDismiss = { commentViewModel.closeSubReply() },
+            onRootCommentClick = {
+                viewModel.clearReplyingTo()
+                viewModel.showCommentInputDialog()
+            },
+            onTimestampClick = { positionMs ->
+                seekPlayerFromUserAction(playerState.player, positionMs)
+            },
+            onImagePreview = { images, index, rect, textContent ->
+                previewImages = images
+                previewInitialIndex = index
+                sourceRect = rect
+                previewTextContent = textContent
+                showImagePreview = true
+            },
+            onReplyClick = { reply ->
+                viewModel.setReplyingTo(reply)
+                viewModel.showCommentInputDialog()
+            },
+            onConversationClick = commentViewModel::openSubReplyConversation,
+            onConversationBack = commentViewModel::closeSubReplyConversation,
+            onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
+            onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
+            onCommentLike = commentViewModel::likeComment,
+            onReportComment = commentViewModel::reportComment,
+            onUrlClick = openCommentUrl,
+            onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
+        )
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -873,12 +978,14 @@ private fun CinemaCommentsPane(
                     item = reply,
                     upMid = success.info.owner.mid,
                     showUpFlag = commentState.showUpFlag,
+                    isPinned = reply.rpid in commentState.pinnedReplyIds,
                     emoteMap = success.emoteMap,
                     onClick = {},
                     onSubClick = { commentViewModel.openSubReply(it) },
                     onTimestampClick = { positionMs ->
                         seekPlayerFromUserAction(playerState.player, positionMs)
                     },
+                    maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
                     onImagePreview = { images, index, rect, textContent ->
                         previewImages = images
                         previewInitialIndex = index
@@ -892,6 +999,13 @@ private fun CinemaCommentsPane(
                         viewModel.setReplyingTo(reply)
                         viewModel.showCommentInputDialog()
                     },
+                    onReportClick = { reason -> commentViewModel.reportComment(reply.rpid, reason) },
+                    canToggleTop = shouldShowReplyTopAction(
+                        currentMid = commentState.currentMid,
+                        upMid = success.info.owner.mid,
+                        item = reply
+                    ),
+                    onToggleTopClick = { commentViewModel.toggleTopComment(reply) },
                     onDeleteClick = if (
                         commentState.currentMid > 0 && reply.mid == commentState.currentMid
                     ) {
@@ -925,12 +1039,8 @@ private fun CinemaCommentsPane(
                             .padding(horizontal = 20.dp, vertical = 28.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        val relatedHint = resolveVideoCommentEmptyStateHint(
-                            hasRelatedVideos = hasRelatedVideos,
-                            showRelatedVideosSection = showRelatedVideosSection
-                        )
                         Text(
-                            text = relatedHint?.let { "还没有评论，$it" } ?: "还没有评论",
+                            text = "还没有评论，先看看相关推荐",
                             style = MaterialTheme.typography.bodyMedium,
                             color = commentAppearance.secondaryTextColor
                         )
@@ -963,14 +1073,30 @@ private fun CinemaCommentsPane(
             )
         }
     }
+    }
 }
 
 @Composable
 private fun CinemaRelatedPane(
     success: PlayerUiState.Success,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    showRelatedVideosSection: Boolean,
+    showUpBadge: Boolean
 ) {
+    if (!showRelatedVideosSection) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "相关推荐已隐藏",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp)
@@ -982,6 +1108,7 @@ private fun CinemaRelatedPane(
             RelatedVideoItem(
                 video = video,
                 isFollowed = video.owner.mid in success.followingMids,
+                showUpBadge = showUpBadge,
                 onClick = {
                     val activity = (context as? Activity)
                         ?: (context as? ContextWrapper)?.baseContext as? Activity

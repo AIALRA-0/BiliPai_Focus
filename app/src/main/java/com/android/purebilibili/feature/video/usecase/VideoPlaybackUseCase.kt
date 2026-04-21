@@ -108,6 +108,32 @@ data class PlaybackSelectionResult(
 
 internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
 
+internal enum class PlaybackBootstrapMode {
+    DETAIL_ONLY,
+    DETAIL_AND_PLAYURL_PARALLEL
+}
+
+internal fun resolvePlaybackBootstrapMode(
+    bvid: String,
+    cid: Long
+): PlaybackBootstrapMode {
+    return if (bvid.isNotBlank() && cid > 0L) {
+        PlaybackBootstrapMode.DETAIL_AND_PLAYURL_PARALLEL
+    } else {
+        PlaybackBootstrapMode.DETAIL_ONLY
+    }
+}
+
+internal fun applyPlaybackIntentAfterSourceChange(
+    player: Player,
+    playWhenReady: Boolean
+) {
+    player.playWhenReady = playWhenReady
+    if (playWhenReady) {
+        player.play()
+    }
+}
+
 // TODO: Re-enable local adaptive DASH playback after the generated MPD seek path
 // is validated on real devices and covered by a playback-level regression test.
 private const val LOCAL_ADAPTIVE_DASH_PLAYBACK_ENABLED = false
@@ -140,20 +166,9 @@ internal fun playPlayerFromUserAction(player: Player) {
     playPlayerForUserIntent(player, trackUserAction = true)
 }
 
-internal fun shouldRunCompatibilitySeekBeforeExplicitPlay(
-    playbackState: Int,
-    isPlaying: Boolean,
-    hasMediaItems: Boolean
-): Boolean {
-    return hasMediaItems &&
-        playbackState == Player.STATE_READY &&
-        !isPlaying
-}
-
 private fun playPlayerForUserIntent(
     player: Player,
-    trackUserAction: Boolean,
-    compatibilitySeekPositionMs: Long? = null
+    trackUserAction: Boolean
 ) {
     if (trackUserAction) {
         PlaybackUserActionTracker.recordAction(
@@ -170,14 +185,6 @@ private fun playPlayerForUserIntent(
     val hasMediaItems = player.mediaItemCount > 0
     if (shouldPreparePlayerBeforeExplicitPlay(player.playbackState, hasMediaItems)) {
         player.prepare()
-    }
-    if (shouldRunCompatibilitySeekBeforeExplicitPlay(
-            playbackState = player.playbackState,
-            isPlaying = player.isPlaying,
-            hasMediaItems = hasMediaItems
-        )
-    ) {
-        player.seekTo((compatibilitySeekPositionMs ?: player.currentPosition).coerceAtLeast(0L))
     }
     player.play()
     Logger.d(
@@ -209,12 +216,14 @@ internal fun seekPlayerFromUserAction(
         "USER_DBG seekPlayerFromUserAction: target=$positionMs, shouldResume=$shouldResume, " +
             "beforeState=${player.playbackState}, beforePlaying=${player.isPlaying}, beforePwr=${player.playWhenReady}"
     )
+    if (shouldResume) {
+        player.playWhenReady = true
+    }
     player.seekTo(positionMs)
     if (shouldResume) {
         playPlayerForUserIntent(
             player = player,
-            trackUserAction = false,
-            compatibilitySeekPositionMs = positionMs
+            trackUserAction = false
         )
     }
 }
@@ -345,15 +354,10 @@ class VideoPlaybackUseCase(
             //  [性能优化] 并行请求视频详情、相关推荐。
             // 表情映射在首帧链路中跳过，避免自动播放起播被非关键请求阻塞。
             val (detailResult, relatedVideos, emoteMap) = kotlinx.coroutines.coroutineScope {
-                val detailDeferred = async {
-                    VideoRepository.getVideoDetails(
-                        bvid = bvid,
-                        aid = aid,
-                        requestedCid = cid,
-                        targetQuality = defaultQuality,
-                        audioLang = audioLang
-                    )
-                }
+                val bootstrapMode = resolvePlaybackBootstrapMode(
+                    bvid = bvid,
+                    cid = cid
+                )
                 val relatedDeferred = async { 
                     if (bvid.isNotEmpty()) VideoRepository.getRelatedVideos(bvid) else emptyList() 
                 }
@@ -362,8 +366,52 @@ class VideoPlaybackUseCase(
                 } else {
                     emptyMap()
                 }
-                
-                Triple(detailDeferred.await(), relatedDeferred.await(), emoteMap)
+
+                val mergedDetailResult = when (bootstrapMode) {
+                    PlaybackBootstrapMode.DETAIL_AND_PLAYURL_PARALLEL -> {
+                        val infoDeferred = async {
+                            VideoRepository.getVideoInfoOnly(
+                                bvid = bvid,
+                                aid = aid,
+                                requestedCid = cid
+                            )
+                        }
+                        val playUrlDeferred = async {
+                            VideoRepository.getInitialPlayUrlData(
+                                bvid = bvid,
+                                cid = cid,
+                                targetQuality = defaultQuality,
+                                audioLang = audioLang
+                            )
+                        }
+
+                        infoDeferred.await().fold(
+                            onSuccess = { info ->
+                                val playData = playUrlDeferred.await()
+                                if (playData == null) {
+                                    Result.failure(Exception("无法获取播放地址"))
+                                } else {
+                                    Result.success(info to playData)
+                                }
+                            },
+                            onFailure = { error ->
+                                Result.failure(error)
+                            }
+                        )
+                    }
+
+                    PlaybackBootstrapMode.DETAIL_ONLY -> {
+                        VideoRepository.getVideoDetails(
+                            bvid = bvid,
+                            aid = aid,
+                            requestedCid = cid,
+                            targetQuality = defaultQuality,
+                            audioLang = audioLang
+                        )
+                    }
+                }
+
+                Triple(mergedDetailResult, relatedDeferred.await(), emoteMap)
             }
             
             return detailResult.fold(
@@ -600,13 +648,17 @@ class VideoPlaybackUseCase(
         }
 
         player.setMediaSource(finalSource)
+        player.playWhenReady = playWhenReady
         if (seekTo > 0) {
             player.seekTo(seekTo)
         }
         if (shouldPreparePlayerOnLoad(playWhenReady)) {
             player.prepare()
         }
-        player.playWhenReady = playWhenReady
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = playWhenReady
+        )
     }
     
     /**
@@ -618,13 +670,17 @@ class VideoPlaybackUseCase(
         
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
+        player.playWhenReady = playWhenReady
         if (seekTo > 0) {
             player.seekTo(seekTo)
         }
         if (shouldPreparePlayerOnLoad(playWhenReady)) {
             player.prepare()
         }
-        player.playWhenReady = playWhenReady
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = playWhenReady
+        )
     }
     
     /**
@@ -641,7 +697,8 @@ class VideoPlaybackUseCase(
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        playWhenReady: Boolean = true
     ): QualitySwitchResult? {
         if (cachedVideos.isEmpty()) {
             Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: cache is EMPTY, returning null")
@@ -715,7 +772,7 @@ class VideoPlaybackUseCase(
                 audioUrl = audioUrl,
                 adaptiveDashSource = adaptiveDashSource,
                 seekTo = currentPos,
-                playWhenReady = true
+                playWhenReady = playWhenReady
             )
             return QualitySwitchResult(
                 videoUrl = videoUrl,
@@ -747,7 +804,8 @@ class VideoPlaybackUseCase(
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        playWhenReady: Boolean = true
     ): QualitySwitchResult? {
         Logger.d("VideoPlaybackUseCase", " changeQualityFromApi: bvid=$bvid, cid=$cid, target=$qualityId")
         val effectivePlaybackQualityMode = if (
@@ -790,10 +848,10 @@ class VideoPlaybackUseCase(
                 audioUrl = selection.audioUrl,
                 adaptiveDashSource = selection.adaptiveDashSource,
                 seekTo = currentPos,
-                playWhenReady = true
-            ) // Switching quality should always auto-play
+                playWhenReady = playWhenReady
+            )
         } else {
-            playVideo(selection.videoUrl, currentPos, playWhenReady = true)
+            playVideo(selection.videoUrl, currentPos, playWhenReady = playWhenReady)
         }
         
         Logger.d("VideoPlaybackUseCase", " Quality switch result: target=$qualityId, actual=${selection.actualQuality}")
@@ -1005,14 +1063,14 @@ class VideoPlaybackUseCase(
                 (qualityId < PREMIUM_API_ONLY_QUALITY_FLOOR || allowPremiumApiOnlyQualities)
         }
 
-        val mergedQualityIds = when {
-            normalizedApi.isNotEmpty() -> normalizedApi.filter { qualityId ->
+        val mergedQualityIds = (normalizedApi + normalizedDash)
+            .distinct()
+            .sortedDescending()
+            .filter { qualityId ->
                 qualityId in normalizedDash ||
                     qualityId < PREMIUM_API_ONLY_QUALITY_FLOOR ||
                     allowPremiumApiOnlyQualities
             }
-            else -> normalizedDash
-        }
         val switchableQualities = normalizedDash
 
         return QualityMergeResult(
@@ -1048,7 +1106,7 @@ class VideoPlaybackUseCase(
         isDolbyVisionSupported: Boolean
     ): Int {
         val capabilityCeiling = when {
-            isVip -> Int.MAX_VALUE
+            isVip -> 125
             isLoggedIn -> 80
             else -> 64
         }

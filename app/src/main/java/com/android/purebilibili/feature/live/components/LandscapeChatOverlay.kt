@@ -9,9 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -126,16 +124,11 @@ private fun LandscapeChatItem(item: LiveDanmakuItem) {
             }
         }
         
-        // 用户名 + 消息 (带描边确保可读)
+        // 用户名 + 消息
         val textStyle = TextStyle(
             fontSize = 14.sp,
             color = Color.White,
-            fontWeight = FontWeight.Medium,
-            shadow = Shadow(
-                color = Color.Black,
-                offset = Offset(1f, 1f),
-                blurRadius = 2f
-            )
+            fontWeight = FontWeight.Medium
         )
 
         if (item.emoticonUrl != null) {
@@ -149,8 +142,7 @@ private fun LandscapeChatItem(item: LiveDanmakuItem) {
                 modifier = Modifier.size(32.dp)
             )
         } else {
-             // 简单的描边效果实现比较麻烦，这里使用 Shadow 增强对比度
-             // 并区分用户名为黄色或根据权限变色
+             // 区分用户名颜色
              val nameColor = if (item.isAdmin) Color(0xFFFF6699) else Color(0xFFE0E0E0)
              
              Text(

@@ -42,5 +42,30 @@ class BangumiUiPolicyTest {
             0.01f
         )
     }
-}
 
+    @Test
+    fun `episode preview window should use selected range instead of first episodes`() {
+        val window = resolveBangumiEpisodePreviewWindow(
+            episodeCount = 1259,
+            selectedPage = 5,
+            episodesPerPage = 50,
+            previewCount = 6
+        )
+
+        assertEquals(250, window.startIndex)
+        assertEquals(256, window.endExclusive)
+    }
+
+    @Test
+    fun `episode preview window should clamp to final partial range`() {
+        val window = resolveBangumiEpisodePreviewWindow(
+            episodeCount = 259,
+            selectedPage = 5,
+            episodesPerPage = 50,
+            previewCount = 6
+        )
+
+        assertEquals(250, window.startIndex)
+        assertEquals(256, window.endExclusive)
+    }
+}

@@ -32,6 +32,15 @@ class BangumiPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun resolveBangumiOverlaySwitchableQualityIds_filtersInvalidAndDuplicateValues() {
+        val switchableQualityIds = resolveBangumiOverlaySwitchableQualityIds(
+            acceptQuality = listOf(120, 80, 80, 64, 0, -1)
+        )
+
+        assertEquals(listOf(120, 80, 64), switchableQualityIds)
+    }
+
+    @Test
     fun buildBangumiOverlayPages_convertsEpisodesInDisplayOrder() {
         val pages = buildBangumiOverlayPages(
             listOf(

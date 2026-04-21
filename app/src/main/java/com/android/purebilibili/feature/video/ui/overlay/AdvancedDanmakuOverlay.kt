@@ -23,7 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.feature.video.danmaku.AdvancedDanmakuData
 import kotlin.math.roundToInt
@@ -159,8 +158,6 @@ private fun RenderSingleAdvancedDanmaku(
         }
     } else 1.0f
 
-    // [视觉优化] 增加文字描边/阴影以提高清晰度
-    // Compose Text 原生不支持描边，使用 Shadow 或者 Box 叠加
     Box(
         modifier = Modifier
             .offset { IntOffset(xPx, yPx) }
@@ -177,34 +174,12 @@ private fun RenderSingleAdvancedDanmaku(
                 scaleY = scale
             }
     ) {
-        // 阴影层 (多次绘制模拟描边，或者简单的 Shadow)
-        // 简单方案：绘制黑色背景文字在下方
-        Text(
-            text = displayText,
-            color = Color.Black.copy(alpha = 0.8f),
-            fontSize = danmaku.fontSize.sp,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.offset(2.dp, 2.dp),
-            style = androidx.compose.ui.text.TextStyle(
-                shadow = androidx.compose.ui.graphics.Shadow(
-                    color = Color.Black,
-                    blurRadius = 4f
-                )
-            )
-        )
-        
         // 主文字
         Text(
             text = displayText,
             color = color,
             fontSize = danmaku.fontSize.sp,
-            fontWeight = FontWeight.Bold,
-            style = androidx.compose.ui.text.TextStyle(
-                shadow = androidx.compose.ui.graphics.Shadow(
-                    color = Color.Black.copy(alpha = 0.5f),
-                    blurRadius = 2f
-                )
-            )
+            fontWeight = FontWeight.Bold
         )
     }
 }

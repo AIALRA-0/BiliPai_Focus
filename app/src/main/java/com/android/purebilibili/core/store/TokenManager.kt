@@ -128,6 +128,10 @@ object TokenManager {
         com.android.purebilibili.core.util.Logger.d("TokenManager", " saveAccessToken: ${accessToken.take(10)}..., refreshToken: ${refreshToken.take(10)}...")
     }
 
+    fun saveVipStatus(isVip: Boolean) {
+        isVipCache = isVip
+    }
+
     suspend fun saveCookies(context: Context, sessData: String) {
         sessDataCache = sessData
         com.android.purebilibili.core.util.Logger.d("TokenManager", " saveCookies: ${sessData.take(10)}..., cache updated to: ${sessDataCache?.take(10)}...")
@@ -152,6 +156,39 @@ object TokenManager {
         // 2. 存入 DataStore
         context.dataStore.edit { prefs ->
             prefs[BUVID3_KEY] = buvid3
+        }
+    }
+
+    suspend fun applyStoredSession(
+        context: Context,
+        sessData: String,
+        csrf: String,
+        mid: Long,
+        accessToken: String,
+        refreshToken: String,
+        buvid3: String,
+        isVip: Boolean
+    ) {
+        saveCookies(context, sessData)
+
+        val sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+        csrfCache = csrf.ifBlank { null }
+        midCache = mid.takeIf { it > 0L }
+        accessTokenCache = accessToken.ifBlank { null }
+        refreshTokenCache = refreshToken.ifBlank { null }
+        isVipCache = isVip
+
+        sp.edit()
+            .putString(SP_KEY_CSRF, csrfCache)
+            .putLong(SP_KEY_MID, midCache ?: 0L)
+            .putString(SP_KEY_ACCESS_TOKEN, accessTokenCache)
+            .putString(SP_KEY_REFRESH_TOKEN, refreshTokenCache)
+            .apply()
+
+        if (buvid3.isNotBlank()) {
+            saveBuvid3(context, buvid3)
+        } else if (buvid3Cache.isNullOrBlank()) {
+            saveBuvid3(context, generateBuvid3())
         }
     }
 

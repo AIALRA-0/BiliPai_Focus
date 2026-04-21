@@ -3,11 +3,6 @@ package com.android.purebilibili.feature.video.ui.components
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -46,12 +41,18 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.util.BilibiliUrlParser
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.ui.bottomSheetContentEnterTransition
+import com.android.purebilibili.core.ui.bottomSheetContentExitTransition
+import com.android.purebilibili.core.ui.bottomSheetScrimEnterTransition
+import com.android.purebilibili.core.ui.bottomSheetScrimExitTransition
+import com.android.purebilibili.core.ui.resolveAdaptiveBottomSheetMotionSpec
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
-import com.android.purebilibili.feature.video.screen.shouldOpenCommentUrlInApp
+import com.android.purebilibili.feature.video.screen.CommentUrlNavigationTarget
+import com.android.purebilibili.feature.video.screen.resolveCommentUrlNavigationTarget
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetMaxHeightFraction
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetScrimAlpha
 import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitCommentReplyComposer
@@ -105,6 +106,19 @@ internal fun resolveVideoCommentSheetHostScrimAlpha(
     }
 }
 
+internal fun shouldApplyVideoCommentThreadStatusBarPadding(
+    mainSheetVisible: Boolean,
+    topReservedPx: Int = 0
+): Boolean {
+    return !mainSheetVisible && topReservedPx <= 0
+}
+
+internal fun shouldDismissVideoCommentSheetHostOnBackdropTap(
+    mainSheetVisible: Boolean
+): Boolean {
+    return mainSheetVisible
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun VideoCommentSheetHost(
@@ -118,9 +132,12 @@ fun VideoCommentSheetHost(
     onRootCommentClick: () -> Unit = {},
     onReplyClick: (ReplyItem) -> Unit = {},
     onUserClick: (Long) -> Unit,
+    onVideoClick: ((String) -> Unit)? = null,
+    onSearchKeywordClick: ((String) -> Unit)? = null,
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0,
     onTimestampClick: ((Long) -> Unit)? = null,
+    maxTimestampMs: Long? = null,
     onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -146,6 +163,15 @@ fun VideoCommentSheetHost(
         topReservedPx = topReservedPx
     )
     val scrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
+    val dismissOnBackdropTap = shouldDismissVideoCommentSheetHostOnBackdropTap(
+        mainSheetVisible = mainSheetVisible
+    )
+    val applyThreadStatusBarPadding = shouldApplyVideoCommentThreadStatusBarPadding(
+        mainSheetVisible = mainSheetVisible,
+        topReservedPx = topReservedPx
+    )
+    val uiPreset = LocalUiPreset.current
+    val motionSpec = remember(uiPreset) { resolveAdaptiveBottomSheetMotionSpec(uiPreset) }
     val appearance = rememberVideoCommentAppearance()
 
     var fallbackPreviewVisible by remember { mutableStateOf(false) }
@@ -226,25 +252,27 @@ fun VideoCommentSheetHost(
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
 
-        val parsedResult = BilibiliUrlParser.parse(url)
-        if (parsedResult.bvid != null && shouldOpenCommentUrlInApp(url)) {
-            val inAppIntent = android.content.Intent(
-                android.content.Intent.ACTION_VIEW,
-                android.net.Uri.parse(url)
-            ).setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching { context.startActivity(inAppIntent) }.isSuccess
-            if (launchedInApp) return@openCommentUrl
-        }
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                if (onVideoClick != null) {
+                    onVideoClick(target.videoId)
+                    return@openCommentUrl
+                }
+            }
 
-        if (shouldOpenCommentUrlInApp(url)) {
-            val inAppIntent = android.content.Intent(
-                android.content.Intent.ACTION_VIEW,
-                android.net.Uri.parse(url)
-            ).setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching { context.startActivity(inAppIntent) }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+            is CommentUrlNavigationTarget.Search -> {
+                if (onSearchKeywordClick != null) {
+                    onSearchKeywordClick(target.keyword)
+                    return@openCommentUrl
+                }
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUserClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
 
         runCatching { uriHandler.openUri(url) }
@@ -252,8 +280,8 @@ fun VideoCommentSheetHost(
 
     AnimatedVisibility(
         visible = hostVisible,
-        enter = fadeIn(tween(300)),
-        exit = fadeOut(tween(300))
+        enter = bottomSheetScrimEnterTransition(motionSpec),
+        exit = bottomSheetScrimExitTransition(motionSpec)
     ) {
         Box(
             modifier = Modifier
@@ -262,19 +290,17 @@ fun VideoCommentSheetHost(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss
+                    onClick = {
+                        if (dismissOnBackdropTap) {
+                            onDismiss()
+                        }
+                    }
                 )
         ) {
             AnimatedVisibility(
                 visible = hostVisible,
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(300)
-                ),
-                exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(300)
-                ),
+                enter = bottomSheetContentEnterTransition(motionSpec),
+                exit = bottomSheetContentExitTransition(motionSpec),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 Surface(
@@ -297,6 +323,7 @@ fun VideoCommentSheetHost(
                                 onUserClick = onUserClick,
                                 onCommentUrlClick = openCommentUrl,
                                 onTimestampClick = onTimestampClick,
+                                maxTimestampMs = maxTimestampMs,
                                 onImagePreview = previewCallback
                             )
                         }
@@ -312,22 +339,28 @@ fun VideoCommentSheetHost(
                                     emoteMap = emoteMap,
                                     onLoadMore = { commentViewModel.loadMoreSubReplies() },
                                     onDismiss = { commentViewModel.closeSubReply() },
+                                    applyStatusBarPadding = applyThreadStatusBarPadding,
                                     onRootCommentClick = onRootCommentClick,
                                     onTimestampClick = onTimestampClick,
                                     upMid = subReplyState.upMid,
                                     showUpFlag = commentState.showUpFlag,
                                     onImagePreview = previewCallback,
                                     onReplyClick = onReplyClick,
+                                    onConversationClick = commentViewModel::openSubReplyConversation,
+                                    onConversationBack = commentViewModel::closeSubReplyConversation,
+                                    isConversationMode = subReplyState.conversationAnchor != null,
                                     dissolvingIds = subReplyState.dissolvingIds,
                                     currentMid = commentState.currentMid,
                                     onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
                                     onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
                                     onCommentLike = commentViewModel::likeComment,
+                                    onReportComment = commentViewModel::reportComment,
                                     likedComments = commentState.likedComments,
                                     onUrlClick = openCommentUrl,
                                     onAvatarClick = { mid ->
                                         mid.toLongOrNull()?.let(onUserClick)
-                                    }
+                                    },
+                                    maxTimestampMs = maxTimestampMs
                                 )
                             }
                         }
@@ -348,6 +381,7 @@ private fun VideoCommentMainList(
     onUserClick: (Long) -> Unit,
     onCommentUrlClick: (String) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
+    maxTimestampMs: Long?,
     onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit
 ) {
     val state by viewModel.commentState.collectAsState()
@@ -408,7 +442,7 @@ private fun VideoCommentMainList(
                         item = reply,
                         upMid = state.upMid,
                         showUpFlag = state.showUpFlag,
-                        isPinned = false,
+                        isPinned = reply.rpid in state.pinnedReplyIds,
                         onClick = {},
                         onSubClick = { parentReply ->
                             if (shouldOpenPortraitCommentThreadDetail(useEmbeddedPresentation = true)) {
@@ -416,6 +450,7 @@ private fun VideoCommentMainList(
                             }
                         },
                         onTimestampClick = onTimestampClick,
+                        maxTimestampMs = maxTimestampMs,
                         onImagePreview = onImagePreview,
                         onLikeClick = { viewModel.likeComment(reply.rpid) },
                         onReplyClick = {
@@ -423,6 +458,13 @@ private fun VideoCommentMainList(
                                 onReplyClick(reply)
                             }
                         },
+                        onReportClick = { reason -> viewModel.reportComment(reply.rpid, reason) },
+                        canToggleTop = shouldShowReplyTopAction(
+                            currentMid = state.currentMid,
+                            upMid = state.upMid,
+                            item = reply
+                        ),
+                        onToggleTopClick = { viewModel.toggleTopComment(reply) },
                         onUrlClick = onCommentUrlClick,
                         onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) ?: Unit }
                     )

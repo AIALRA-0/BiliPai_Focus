@@ -13,7 +13,6 @@ import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Tv
-import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
@@ -25,7 +24,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -69,6 +67,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
@@ -91,8 +91,9 @@ import kotlin.math.roundToInt
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
 import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import androidx.compose.foundation.combinedClickable // [Added]
-import com.android.purebilibili.core.ui.animation.horizontalDragGesture
-import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
+import top.yukonga.miuix.kmp.basic.TabRowDefaults as MiuixTabRowDefaults
+import top.yukonga.miuix.kmp.basic.TabRowWithContour as MiuixTabRowWithContour
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 internal fun resolveFloatingIndicatorStartPaddingPx(
     baseInsetPx: Float,
@@ -242,6 +243,17 @@ internal fun shouldShowTopTabText(mode: Int): Boolean {
 internal fun resolveMd3TopTabLabelMode(requestedLabelMode: Int): Int =
     normalizeTopTabLabelMode(requestedLabelMode)
 
+internal fun shouldUseNativeMiuixTopTabRow(
+    androidNativeVariant: AndroidNativeVariant,
+    labelMode: Int
+): Boolean {
+    val normalized = normalizeTopTabLabelMode(labelMode)
+    // Native Miuix TabRow is text-first. Keep icon-only / icon+text modes on the shared row.
+    return androidNativeVariant == AndroidNativeVariant.MIUIX &&
+        shouldShowTopTabText(normalized) &&
+        !shouldShowTopTabIcon(normalized)
+}
+
 private fun resolveTopTabCategoryForIcon(categoryKey: String): HomeCategory? {
     val normalizedKey = categoryKey.trim()
     if (normalizedKey.isEmpty()) return null
@@ -297,14 +309,32 @@ internal enum class Md3TopTabRowVariant {
 internal fun resolveMd3TopTabRowVariant(): Md3TopTabRowVariant =
     Md3TopTabRowVariant.UNDERLINE_FIXED
 
-internal fun resolveMd3TopTabActionButtonCorner(isFloatingStyle: Boolean) =
+internal fun resolveMd3TopTabActionButtonCorner(
+    isFloatingStyle: Boolean,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+) = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+    if (isFloatingStyle) 18.dp else 14.dp
+} else {
     if (isFloatingStyle) 16.dp else 12.dp
+}
 
-internal fun resolveMd3TopTabActionButtonSize(isFloatingStyle: Boolean) =
+internal fun resolveMd3TopTabActionButtonSize(
+    isFloatingStyle: Boolean,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+) = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+    if (isFloatingStyle) 46.dp else 38.dp
+} else {
     if (isFloatingStyle) 44.dp else 36.dp
+}
 
-internal fun resolveMd3TopTabActionIconSize(isFloatingStyle: Boolean) =
+internal fun resolveMd3TopTabActionIconSize(
+    isFloatingStyle: Boolean,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+) = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+    if (isFloatingStyle) 21.dp else 18.dp
+} else {
     if (isFloatingStyle) 20.dp else 18.dp
+}
 
 internal fun resolveMd3TopTabActionContentBottomPadding(): Dp = 4.dp
 
@@ -399,13 +429,19 @@ fun FluidHomeTopBar(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 //  中间：搜索框
+                val searchClickInteractionSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable { onSearchClick() }
+                        .clickable(
+                            interactionSource = searchClickInteractionSource,
+                            indication = null
+                        ) {
+                            onSearchClick()
+                        }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
@@ -463,9 +499,9 @@ internal fun resolveTopTabUnselectedAlpha(): Float = 0.78f
 
 internal fun resolveTopTabUnselectedColor(isLightMode: Boolean): Color {
     return if (isLightMode) {
-        Color.Black
+        Color.Black.copy(alpha = 0.72f)
     } else {
-        Color.White.copy(alpha = 0.9f)
+        Color.White.copy(alpha = 0.72f)
     }
 }
 
@@ -493,8 +529,7 @@ fun CategoryTabRow(
     val uiPreset = LocalUiPreset.current
     val visualTuning = remember(uiPreset) { resolveTopTabVisualTuning(uiPreset) }
     val primaryColor = MaterialTheme.colorScheme.primary
-    val isLightMode = MaterialTheme.colorScheme.surface.luminance() > 0.5f
-    val unselectedColor = resolveTopTabUnselectedColor(isLightMode = isLightMode)
+    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val effectiveLiquidGlassEnabled = resolveEffectiveTopTabLiquidGlassEnabled(
         isLiquidGlassEnabled = isLiquidGlassEnabled,
         interactionBudget = interactionBudget
@@ -918,16 +953,43 @@ private fun Md3CategoryTabRow(
     isFloatingStyle: Boolean
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
-    val visualSpec = remember(isFloatingStyle) { resolveMd3TopTabVisualSpec(isFloatingStyle) }
-    val tabRowHeight = visualSpec.rowHeight
-    val actionButtonSize = resolveMd3TopTabActionButtonSize(isFloatingStyle)
-    val actionButtonCorner = resolveMd3TopTabActionButtonCorner(isFloatingStyle)
-    val actionIconSize = resolveMd3TopTabActionIconSize(isFloatingStyle)
-    val actionContentBottomPadding = resolveMd3TopTabActionContentBottomPadding()
-    val viewportPadding = resolveTopTabViewportPaddingDp(isFloatingStyle = isFloatingStyle)
     val normalizedLabelMode = resolveMd3TopTabLabelMode(labelMode)
+
+    if (shouldUseNativeMiuixTopTabRow(androidNativeVariant, normalizedLabelMode)) {
+        MiuixCategoryTabRow(
+            categories = categories,
+            categoryKeys = categoryKeys,
+            selectedIndex = selectedIndex,
+            onCategorySelected = onCategorySelected,
+            onPartitionClick = onPartitionClick,
+            onLiveClick = onLiveClick,
+            pagerState = pagerState,
+            haptic = haptic,
+            scrollChannel = scrollChannel
+        )
+        return
+    }
+
+    val visualSpec = remember(isFloatingStyle, androidNativeVariant, normalizedLabelMode) {
+        resolveMd3TopTabVisualSpec(
+            isFloatingStyle = isFloatingStyle,
+            androidNativeVariant = androidNativeVariant,
+            labelMode = normalizedLabelMode
+        )
+    }
+    val isMiuixChrome = androidNativeVariant == AndroidNativeVariant.MIUIX
+    val viewportPadding = resolveTopTabViewportPaddingDp(
+        isFloatingStyle = isFloatingStyle,
+        edgeToEdge = false
+    )
+    val tabRowHeight = visualSpec.rowHeight
+    val actionButtonSize = resolveMd3TopTabActionButtonSize(isFloatingStyle, androidNativeVariant)
+    val actionButtonCorner = resolveMd3TopTabActionButtonCorner(isFloatingStyle, androidNativeVariant)
+    val actionIconSize = resolveMd3TopTabActionIconSize(isFloatingStyle, androidNativeVariant)
+    val actionContentBottomPadding = resolveMd3TopTabActionContentBottomPadding()
     val viewportAnchorIndex by remember(pagerState, selectedIndex) {
         derivedStateOf {
             resolveTopTabViewportAnchorIndex(
@@ -992,7 +1054,11 @@ private fun Md3CategoryTabRow(
                 containerWidthDp = availableWidth.value,
                 categoryCount = slotCount
             ).dp
-            val indicatorWidth = (slotWidth * 0.34f).coerceIn(24.dp, 32.dp)
+            val indicatorWidth = if (isMiuixChrome) {
+                (slotWidth * 0.56f).coerceIn(50.dp, 74.dp)
+            } else {
+                (slotWidth * 0.34f).coerceIn(24.dp, 32.dp)
+            }
             val animatedIndicatorOffset by animateDpAsState(
                 targetValue = centeredStartPadding +
                     slotWidth * currentVisiblePosition +
@@ -1007,15 +1073,16 @@ private fun Md3CategoryTabRow(
                     .clipToBounds()
             ) {
                 val selectedContainerColor = resolveMd3TopTabSelectedContainerColor(
-                    colorScheme = MaterialTheme.colorScheme
+                    colorScheme = MaterialTheme.colorScheme,
+                    androidNativeVariant = androidNativeVariant
                 )
                 Surface(
                     modifier = Modifier
                         .offset(x = animatedIndicatorOffset)
                         .width(indicatorWidth)
                         .height(visualSpec.selectedCapsuleHeight)
-                        .padding(bottom = 2.dp)
-                        .align(Alignment.BottomStart),
+                        .padding(bottom = if (isMiuixChrome) 0.dp else 2.dp)
+                        .align(if (isMiuixChrome) Alignment.CenterStart else Alignment.BottomStart),
                     shape = RoundedCornerShape(visualSpec.selectedCapsuleCornerRadius),
                     color = selectedContainerColor,
                     tonalElevation = visualSpec.selectedCapsuleTonalElevation,
@@ -1048,11 +1115,13 @@ private fun Md3CategoryTabRow(
 
                         val iconColor = resolveMd3TopTabIconTint(
                             selectionFraction = selectionFraction,
-                            colorScheme = MaterialTheme.colorScheme
+                            colorScheme = MaterialTheme.colorScheme,
+                            androidNativeVariant = androidNativeVariant
                         )
                         val labelColor = resolveMd3TopTabLabelTint(
                             selectionFraction = selectionFraction,
-                            colorScheme = MaterialTheme.colorScheme
+                            colorScheme = MaterialTheme.colorScheme,
+                            androidNativeVariant = androidNativeVariant
                         )
 
                         Box(
@@ -1078,7 +1147,8 @@ private fun Md3CategoryTabRow(
                                     .padding(
                                         start = visualSpec.itemHorizontalPadding,
                                         end = visualSpec.itemHorizontalPadding,
-                                        bottom = 8.dp
+                                        top = if (showIcon && showText) 0.dp else if (isMiuixChrome) 0.dp else 2.dp,
+                                        bottom = if (showIcon && showText) 2.dp else if (isMiuixChrome) 0.dp else 8.dp
                                     ),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
@@ -1132,13 +1202,128 @@ private fun Md3CategoryTabRow(
                 Icon(
                     resolveTopTabPartitionIcon(uiPreset),
                     contentDescription = "浏览全部分区",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (isMiuixChrome) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(actionIconSize)
                 )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
         }
+    }
+}
+
+@Composable
+private fun MiuixCategoryTabRow(
+    categories: List<String>,
+    categoryKeys: List<String>,
+    selectedIndex: Int,
+    onCategorySelected: (Int) -> Unit,
+    onPartitionClick: () -> Unit,
+    onLiveClick: () -> Unit,
+    pagerState: androidx.compose.foundation.pager.PagerState?,
+    haptic: (HapticType) -> Unit,
+    scrollChannel: kotlinx.coroutines.channels.Channel<Unit>?
+) {
+    val selectedTabIndex by remember(pagerState, selectedIndex, categories.size) {
+        derivedStateOf {
+            resolveTopTabViewportAnchorIndex(
+                selectedIndex = selectedIndex,
+                pagerCurrentPage = pagerState?.currentPage,
+                pagerTargetPage = pagerState?.targetPage,
+                pagerIsScrolling = pagerState?.isScrollInProgress == true
+            ).coerceIn(0, (categories.size - 1).coerceAtLeast(0))
+        }
+    }
+    val topTabSpec = resolveMd3TopTabVisualSpec(
+        isFloatingStyle = false,
+        androidNativeVariant = AndroidNativeVariant.MIUIX
+    )
+    val actionButtonSize = resolveMd3TopTabActionButtonSize(
+        isFloatingStyle = false,
+        androidNativeVariant = AndroidNativeVariant.MIUIX
+    )
+    val actionButtonCorner = resolveMd3TopTabActionButtonCorner(
+        isFloatingStyle = false,
+        androidNativeVariant = AndroidNativeVariant.MIUIX
+    )
+    val actionIconSize = resolveMd3TopTabActionIconSize(
+        isFloatingStyle = false,
+        androidNativeVariant = AndroidNativeVariant.MIUIX
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(topTabSpec.rowHeight)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.Center
+        ) {
+            MiuixTabRowWithContour(
+                tabs = categories,
+                selectedTabIndex = selectedTabIndex,
+                onTabSelected = { index ->
+                    val categoryKey = categoryKeys.getOrNull(index) ?: categories[index]
+                    performHomeTopBarTap(haptic = haptic, onClick = {
+                        when {
+                            index == selectedIndex -> scrollChannel?.trySend(Unit)
+                            shouldRouteTopTabToLivePage(categoryKey) -> onLiveClick()
+                            else -> onCategorySelected(index)
+                        }
+                    })
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(topTabSpec.rowHeight),
+                colors = MiuixTabRowDefaults.tabRowColors(
+                    backgroundColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.10f),
+                    contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    selectedBackgroundColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    selectedContentColor = MiuixTheme.colorScheme.onSecondaryContainer
+                ),
+                height = topTabSpec.rowHeight,
+                cornerRadius = topTabSpec.selectedCapsuleCornerRadius + 4.dp,
+                itemSpacing = 6.dp
+            )
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        Surface(
+            modifier = Modifier
+                .size(actionButtonSize)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+            },
+            shape = RoundedCornerShape(actionButtonCorner),
+            color = MiuixTheme.colorScheme.primary.copy(alpha = 0.10f),
+            border = BorderStroke(
+                width = 0.8.dp,
+                color = MiuixTheme.colorScheme.primary.copy(alpha = 0.16f)
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    resolveTopTabPartitionIcon(UiPreset.MD3),
+                    contentDescription = "浏览全部分区",
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    modifier = Modifier.size(actionIconSize)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
     }
 }
 

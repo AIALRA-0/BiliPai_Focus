@@ -1,6 +1,8 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.UiPreset
 
 internal data class AppNavigationAppearance(
     val cardTransitionEnabled: Boolean,
@@ -11,7 +13,9 @@ internal data class AppNavigationAppearance(
 )
 
 internal fun resolveAppNavigationAppearance(
-    homeSettings: HomeSettings
+    homeSettings: HomeSettings,
+    uiPreset: UiPreset = UiPreset.IOS,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): AppNavigationAppearance {
     return AppNavigationAppearance(
         cardTransitionEnabled = homeSettings.cardTransitionEnabled,

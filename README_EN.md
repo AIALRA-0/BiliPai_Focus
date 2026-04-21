@@ -1,19 +1,18 @@
-# BiliPai Focus <img src="docs/images/233娘.jpeg" height="80" align="center">
+# BiliPai <img src="docs/images/233娘.jpeg" height="80" align="center">
 
 <p align="center">
-  <strong>Native, Pure, Extensible — a Focus-tailored fork built on top of BiliPai</strong>
+  <strong>Native, Pure, Extensible — Redefining your Bilibili experience</strong>
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-08 · Upstream base v7.5.1 · Current Focus release v7.5.1-focus.3</sub>
+  <sub>Last updated: 2026-04-21 · Synced to v7.9.6 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Focus-7.5.1--focus.3-fb7299?style=flat-square" alt="Focus Version">
-  <img src="https://img.shields.io/badge/Upstream-7.5.1-00a1d6?style=flat-square" alt="Upstream Version">
-  <img src="https://img.shields.io/badge/Channel-Focus-fb7299?style=flat-square" alt="Channel">
-  <img src="https://img.shields.io/badge/Update-Release%20Only-3fb950?style=flat-square" alt="Update Channel">
-  <img src="https://img.shields.io/badge/Install-Coexist%20Enabled-8250df?style=flat-square" alt="Coexist Install">
+  <img src="https://img.shields.io/badge/Version-7.9.6-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
+  <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
+  <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
 </p>
 
 <p align="center">
@@ -24,8 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://t.me/BiliPaii"><img src="https://img.shields.io/badge/Telegram-Group-2CA5E0?style=flat-square&logo=telegram" alt="Telegram Group"></a>
-  <a href="https://t.me/BiliPai"><img src="https://img.shields.io/badge/Telegram-Channel-2CA5E0?style=flat-square&logo=telegram" alt="Telegram Channel"></a>
+  <a href="https://t.me/BiliPai"><img src="https://img.shields.io/badge/Telegram-Join-2CA5E0?style=flat-square&logo=telegram" alt="Telegram"></a>
   <a href="https://x.com/YangY_0x00"><img src="https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x" alt="X"></a>
 </p>
 
@@ -33,152 +31,14 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Official Releases](https://github.com/jay3-yy/BiliPai/releases) · Focus Releases (the Releases page of the current repository) · [Focus Release Notes](docs/releases/focus-7.5.1-focus.3-en.md) · [Changelog](CHANGELOG.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
+| Get Started | [Download Releases](https://github.com/jay3-yy/BiliPai/releases) · [Changelog](CHANGELOG.md) |
 | Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
-## 🧩 Focus Edition
+> [!CAUTION]
+> `README`, `AI.txt`, `llm.txt`, `llms.txt`, and the Wiki are maintained periodically, but fast-moving main-branch changes can still make parts of them stale. Treat them as reference only; verify current behavior with source, `CHANGELOG.md`, and real builds.
 
-This fork keeps upstream features and mergeability intact, while shipping a more controlled default surface for Focus usage.
-
-### Core idea
-
-From the perspective of attention psychology and behavioral design, recommendation feeds are very good at exploiting variable rewards, instant feedback, and fear of missing out, pulling users away from their original intent into passive scrolling. The stronger side of Bilibili, however, often appears when you have intent: direct search, saved items, history replay, and followed creators. Focus is therefore not about “less capability”; it is about “fewer traps, more intention”, removing as many temptation-driven surfaces as possible while preserving what you deliberately choose to search for, follow, and watch.
-
-### Choose your edition
-
-| Edition | Best for | Entry |
-| --- | --- | --- |
-| Official upstream | You want the default upstream experience and release cadence | [Repository](https://github.com/jay3-yy/BiliPai) · [Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | You want the upstream base with quieter defaults, follow filtering, and Focus-specific switches | Current Focus repository · Current repository Releases page · [Release Notes](docs/releases/focus-7.5.1-focus.3-en.md) · [Focus Changelog](FOCUS_CHANGLOG.md) |
-
-### Current Focus release
-
-| Item | Value |
-| --- | --- |
-| Focus version | `7.5.1-focus.3` |
-| Upstream base | `7.5.1` |
-| Release tag | `v7.5.1-focus.3` |
-| Release notes | [docs/releases/focus-7.5.1-focus.3-en.md](docs/releases/focus-7.5.1-focus.3-en.md) |
-| Main refinements | Stays on the official `7.5.1` line and uses a `.3` patch release to verify the Focus in-app update and release pipeline, while keeping the `.2` player Home-root fix unchanged |
-| Public APK | `BliPai-Focus-release-7.5.1-focus.3.apk` |
-
-### Default customizations
-
-| Item | Default |
-| --- | --- |
-| Home title switches | Cover `Recommend / Follow / Popular / Live / Game` |
-| Home Recommend / Popular / Live / Game tabs | Hidden |
-| Home Follow tab | Visible by default and can be disabled in Focus |
-| Home Anime / Knowledge / Tech tabs | Follow the original top-tab management and are no longer exposed as separate Focus switches |
-| Home Partition button | Hidden |
-| Related videos below video detail | Hidden |
-| Search hot list | Disabled, while keeping suggestions, discovery, results, and search history |
-| Watch history | Adds a one-tap clear-all action |
-| Follow-group filtering | Supports single-group assignment per creator, shared filtering across Dynamic and Home Follow, with a master switch |
-| Settings entry | `Settings -> General -> Focus` |
-
-### Focus notes
-
-- Focus changes only the default UI surface and priority of entry points; upstream feature chains stay intact.
-- Home top categories now snap back to a strictly centered and symmetric layout after Focus filtering, including the single-tab case.
-- Dynamic and Home Follow now share the same local follow-group filtering rules.
-- Follow assignments are shown per group and expanded on demand, so large follow lists no longer render as one long flat block.
-- When no followed creators remain available, Dynamic sidebars, the horizontal follow row, and Home Follow now show a stable “no available followed creators” state instead of flickering blank space.
-- Follow-group management now includes a search field for creator name or UID, making large follow lists easier to manage.
-- The new-group field, creator-search field, add button, and refresh button now share a taller tap target and the same rounded style, making the control area feel more consistent.
-- Dynamic follow users now restore from local cache first and hydrate in parallel during startup, instead of waiting for the primary feed to finish first.
-- When Focus follow filtering is enabled, Home Follow now prioritizes per-creator concurrent user-feed fetching; the fast path still runs up to `8` requests in parallel while presentation is capped to `16` cards per reveal, with refresh reshuffling the visible page and load-more appending the next group.
-- Dynamic follow-user sync now targets up to `1000` creators by default; if you follow fewer than `1000`, it syncs the actual count instead of stopping at the first `50`.
-- If every Focus-controlled home title is hidden, Home now safely falls back to a single `Recommend` tab instead of crashing or becoming unrecoverable.
-
-### Maintenance cadence and test scope
-
-- Focus tries to stay on the same upstream major version. For now, the plan is to follow upstream major releases first, then roll Focus sub-versions on top of that baseline.
-- Testing is currently performed only on `realme Neo 7` and `Lenovo Y700 2023`. If you hit compatibility or behavior issues on other devices, please open an issue in the current repository.
-
-### Focus feature screenshots
-
-#### Focus entry and settings
-
-<p align="center">
-  <img src="docs/images/focus/focus-settings-entry.jpg" alt="Focus settings entry" height="500">
-  <img src="docs/images/focus/focus-settings-1.jpg" alt="Focus settings screen 1" height="500">
-  <img src="docs/images/focus/focus-settings-2.jpg" alt="Focus settings screen 2" height="500">
-</p>
-
-<p align="center">
-  <sub>Shows the settings entry, the Focus overview, and the default switches for home, search, history, and detail refinements</sub>
-</p>
-
-#### Home, search, and detail filtering
-
-<p align="center">
-  <img src="docs/images/focus/focus-home-filter.jpg" alt="Focus home filtering" height="500">
-  <img src="docs/images/focus/focus-search-filter.jpg" alt="Focus search filtering" height="500">
-  <img src="docs/images/focus/focus-related-filter.jpg" alt="Focus related video filtering" height="500">
-</p>
-
-<p align="center">
-  <sub>Shows the filtered home top surface, the disabled search hot list, and the hidden related-video area beneath video detail</sub>
-</p>
-
-#### Follow-group management
-
-<p align="center">
-  <img src="docs/images/focus/focus-follow-groups-entry.jpg" alt="Follow-group entry" height="500">
-  <img src="docs/images/focus/focus-follow-groups-1.jpg" alt="Follow-group management 1" height="500">
-  <img src="docs/images/focus/focus-follow-groups-2.jpg" alt="Follow-group management 2" height="500">
-</p>
-
-<p align="center">
-  <sub>Shows the Dynamic entry point, expanded group management, and single-group assignment for followed creators</sub>
-</p>
-
-#### Watch history clearing
-
-<p align="center">
-  <img src="docs/images/focus/focus-history-clear.jpg" alt="Focus watch history clear-all" height="500">
-</p>
-
-<p align="center">
-  <sub>Shows the one-tap watch-history clearing entry and its actual result state</sub>
-</p>
-
-### Main diff files against upstream
-
-This list only covers the main Focus-maintained entry points; use the repository history for the full diff.
-
-| Type | File | Purpose |
-| --- | --- | --- |
-| Added | `FOCUS_CHANGLOG.md` | Standalone Focus changelog and maintenance record |
-| Added | `docs/releases/focus-7.5.1-focus.3.md` | Chinese release notes for `v7.5.1-focus.3` |
-| Added | `docs/releases/focus-7.5.1-focus.3-en.md` | English release notes for `v7.5.1-focus.3` |
-| Added | `docs/images/focus/*` | Focus-specific screenshots and gallery assets |
-| Modified | `app/build.gradle.kts` | Focus sub-versioning, app naming, release naming, and signing output |
-| Modified | `app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt` | Focus persistence, follow filtering, and default values |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/screen/FocusSettingsScreen.kt` | Focus settings entry and Quiet Mode switches |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/SettingsSearchPolicy.kt` | Settings search indexing and Focus entry copy |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeTopCategoryPolicy.kt` | Five-switch Focus home filtering with a safe single-Recommend fallback |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt` | Safe pager and header handling around the fallback path |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt` | Home top-tab filtering, centered layout, and viewport spacing |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/components/LiquidIndicator.kt` | Indicator offset and centered compensation |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt` | Faster filtered Home Follow refresh and tail-fetch completion |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/home/HomeFollowFocusPolicy.kt` | Filtered Home Follow continuation thresholds and stopping rules |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicViewModel.kt` | Dynamic follow hydration, grouping, and visibility policy |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/FocusFollowGroupSheet.kt` | Follow-group management, expansion flow, and single-group assignment |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt` | Dynamic group entry and interaction handoff |
-| Modified | `app/src/main/java/com/android/purebilibili/core/network/ApiClient.kt` | Watch-history clear-all API integration |
-| Modified | `app/src/main/java/com/android/purebilibili/data/repository/HistoryRepository.kt` | Watch-history clear-all repository flow |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/list/ListViewModel.kt` | Watch-history clear-all state and UI feedback |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/onboarding/OnboardingBottomSheet.kt` | Official / Focus GitHub links on first-use onboarding |
-| Modified | `app/src/main/java/com/android/purebilibili/feature/settings/update/AppUpdateChecker.kt` | In-app update source switched to the Focus repository |
-| Modified | `README.md` / `README_EN.md` / `CHANGELOG.md` | Focus docs entry points, version line, screenshots, and release notes |
-
-## 📸 Official app preview
-
-> [!NOTE]
-> The preview below and most of the following feature description continue to use the upstream official README structure, so the Focus fork can be compared against the original app more easily.
+## 📸 Preview
 
 <p align="center">
   <img src="docs/images/screenshot_preview_1.png" alt="Preview 1" height="500">
@@ -240,7 +100,7 @@ This list only covers the main Focus-maintained entry points; use the repository
   - schedule + usage reminders + snooze
   - improved humane reminder copy and pacing strategy
 - `Quality Switching`:
-  - switchable quality list now prioritizes real DASH tracks
+  - quality options now follow the API list, while real DASH tracks decide which tiers stay switchable
   - cache switching requires exact target quality match; falls back to API when missing
   - clearer fallback toast when requested quality is unavailable
 
@@ -366,6 +226,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 |-----|-----|
 | **Bangumi Home** | Hot recommendations, schedule, categorical browsing |
 | **Episode Selection** | Official style bottom sheet for switching episodes/seasons |
+| **Landscape Top Bar Actions** | Like / coin / share are now available in landscape/fullscreen and stay closer to the regular video player behavior |
 | **Tracking** | Watch list management and progress synchronization |
 | **Danmaku** | Full danmaku support for anime |
 
@@ -444,27 +305,17 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - 🚫 **No Ads** - Pure viewing experience, no ad injections
 - 🔐 **Minimal Permissions** - Only essential permissions (No Location/Contacts/Phone)
 - 💾 **Local Storage** - Login credentials stored locally, no privacy data upload
+- 🛡️ **More conservative telemetry defaults** - Crash tracking stays on by default, usage analytics is off by default, and player diagnostic logging remains separately available for troubleshooting
+- 🪵 **Runtime logs no longer persist by default** - Ordinary runtime logs are no longer written to disk by default, while crash snapshots and manual export remain available
 - 🔍 **Open Source** - Full source code available for review
 
 ---
 
 ## 📦 Download & Install
 
-<p align="left">
-  <a href="https://github.com/jay3-yy/BiliPai/releases">
-    <img src="https://img.shields.io/badge/Download-Official%20Release-fb7299?style=for-the-badge&logo=github" alt="Official Download">
-  </a>
-  <a href="docs/releases/focus-7.5.1-focus.3-en.md">
-    <img src="https://img.shields.io/badge/Download-Focus%20Release-1f8bff?style=for-the-badge&logo=github" alt="Focus Download">
-  </a>
-</p>
-
-### Which build should you install
-
-| Edition | Notes | Download |
-| --- | --- | --- |
-| Official upstream | Matches upstream defaults and release rhythm | [jay3-yy/BiliPai Releases](https://github.com/jay3-yy/BiliPai/releases) |
-| Focus edition | Adds Focus switches, quieter defaults, and follow-group filtering on top of upstream | Current repository Releases page |
+<a href="https://github.com/jay3-yy/BiliPai/releases">
+  <img src="https://img.shields.io/badge/Download-Latest%20Release-fb7299?style=for-the-badge&logo=github" alt="Download">
+</a>
 
 ### Requirements
 
@@ -477,11 +328,10 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ### Installation
 
-1. If you want the upstream default experience, download the APK from [Official Releases](https://github.com/jay3-yy/BiliPai/releases)
-2. If you want this customized build, download the APK from the current repository Releases page
-3. Install it on your device (Unknown Sources permission may be required)
-4. Open the app and log in via QR code or Web
-5. On the Focus build, go to `Settings -> General -> Focus` to adjust Focus mode and follow filtering
+1. Download the latest APK from [Releases](https://github.com/jay3-yy/BiliPai/releases)
+2. Install on your device (Unknown Sources permission may be required)
+3. Open app, login via QR code or Web
+4. Enjoy the pure Bilibili experience!
 
 ---
 
@@ -525,6 +375,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 📚 Wiki
 
 - AI / LLM Entry: [`llms.txt`](llms.txt)
+- Compatibility aliases: `AI.txt` / `llm.txt`
 - AI Navigation Guide: [`docs/wiki/AI.md`](docs/wiki/AI.md)
 - Wiki Home: [`docs/wiki/README.md`](docs/wiki/README.md)
 - Feature Matrix: [`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
@@ -537,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-03-30 (v7.3.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-17 (v7.9.1). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -548,7 +399,8 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] Live Streaming
 - [x] Dynamic Feed (with fast-switch stability improvements)
 - [x] Offline Download + current-video batch caching
-- [x] Search + History (with bulk delete)
+- [x] Search + History (avoid "Delete All" for now)
+- [x] Native article search + article detail + article-aware history navigation
 - [x] Material You + Dark Mode
 - [x] TV Login + first-play quality auth fixes for logged-in non-premium users
 - [x] Landscape player controls upgrade (subtitle panel + more panel + play-order quick switch)
@@ -563,7 +415,6 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ### 🚧 WIP
 
-- [ ] Home / Dynamic / Player performance refactor (state isolation, fewer root recompositions, lower startup fanout)
 - [ ] Wiki and module-level documentation expansion
 
 ### 📋 Planned
@@ -579,51 +430,21 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.5.1 / v7.5.1-focus.3 · 2026-04-08)
+### Latest (v7.9.1 · 2026-04-17)
 
-- 🔄 **Still aligned with the official `7.5.1` release line**: the official `7.5.1` tag still points to the same source commit as `7.5.0`, so this `.3` build does not add new upstream code and is intended to verify the Focus in-app update and release pipeline.
-- 🏠 **The player Home fix remains in place**: the `.2` change that makes the house icon truly jump to the Home root is preserved unchanged.
-- 📱 **Existing stability fixes stay in place**: creator-space aggregate loading, suspicious-empty single retry, portrait aspect-ratio recovery, FOLLOW customizations, and the Focus-only update path all remain preserved on the `7.5.1` line.
-- 🔍 **Repository audit reconfirmed no cross-project residue**: no unintended files or keywords from unrelated projects were found in the tracked files or working tree of `bli`.
+- 🎞️ Fixed occasional aspect-ratio glitches and black bars when entering immersive portrait playback from tablet landscape.
+- ⏱️ Fixed the seek preview getting stuck after repeated progress-bar drags.
+- 🌙 Updated keep-screen-on behavior so the screen can sleep normally before playback starts, while paused, and after playback ends.
+- ✨ Added shared-element coverage for UP space season/series videos and improved theme adaptation for parts of the space UI.
 
 ---
 
 ## 🏗️ Build
 
 ```bash
-git clone git@github.com:<your-org>/BiliPai_Focus.git
-cd BiliPai_Focus
+git clone https://github.com/jay3-yy/BiliPai.git
+cd BiliPai
 ./gradlew assembleDebug
-```
-
-### Windows local build
-
-```powershell
-winget install --id GitHub.cli -e
-winget install --id EclipseAdoptium.Temurin.21.JDK -e
-winget install --id Google.AndroidStudio -e
-
-$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.10.7-hotspot"
-$env:ANDROID_SDK_ROOT="$env:LOCALAPPDATA\Android\Sdk"
-$env:Path="$env:JAVA_HOME\bin;$env:ANDROID_SDK_ROOT\platform-tools;$env:Path"
-
-.\scripts\ci_verify_windows.ps1
-.\scripts\ci_verify_windows.ps1 -IncludeConnectedAndroidTests
-.\scripts\ci_verify_windows.ps1 -IncludeBaselineProfile
-```
-
-- The script runs `:app:testDebugUnitTest`, `:app:lintDebug`, `:app:assembleDebug`, and `:app:assembleRelease` in a stable sequential order.
-- `-IncludeConnectedAndroidTests` adds `:app:connectedDebugAndroidTest`.
-- `-IncludeBaselineProfile` adds `:baselineprofile:pixel6Api31BenchmarkAndroidTest`.
-- The managed-device baselineprofile path uses `Pixel 6 / API 31 / AOSP image / x86_64 testedAbi`, while the app's dedicated `benchmark` variant emits an `x86_64` test APK. The real release APK policy still stays `arm64-v8a only`.
-
-### Sync with upstream
-
-```bash
-git remote add upstream https://github.com/jay3-yy/BiliPai.git
-git fetch upstream
-git checkout main
-git merge upstream/main
 ```
 
 ---
@@ -644,7 +465,13 @@ Issues and Pull Requests are welcome!
 
 | Project | Description |
 |-----|-----|
+| [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) | Playback flow, comment presentation, and mobile UX reference |
 | [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | Reference implementation for comment anti-fraud detection |
+| [BilibiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) | Sponsor skip segment data and API reference |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Miuix-style Compose Multiplatform components |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Liquid glass visual effect reference |
+| [Haze](https://github.com/chrisbanes/haze) | Blur and frosted-glass effects |
+| [Compose Cupertino](https://github.com/alexzhirkevich/compose-cupertino) | Cupertino-style Compose UI components |
 
 ---
 
@@ -670,13 +497,6 @@ Issues and Pull Requests are welcome!
 
 If you like BiliPai, buy me a coffee ☕
 
-## ⭐ Star History
-
-If this project helps you, a Star is appreciated.
-
-Use the current repository page for stars, forks, and release navigation.
-
 <p align="center">
   <img src="docs/donate.jpg" alt="Donation" width="300">
 </p>
-

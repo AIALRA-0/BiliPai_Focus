@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.search
 
 import kotlin.test.Test
 import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SearchHotVisibilityPolicyTest {
@@ -54,5 +55,17 @@ class SearchHotVisibilityPolicyTest {
                 hotSearchEnabled = true
             )
         )
+    }
+
+    @Test
+    fun keywordSectionToggleLabel_matchesVisibilityState() {
+        assertEquals("隐藏", resolveSearchKeywordSectionToggleLabel(enabled = true))
+        assertEquals("显示", resolveSearchKeywordSectionToggleLabel(enabled = false))
+    }
+
+    @Test
+    fun keywordSectionHiddenCopy_mentionsSectionTitle() {
+        assertEquals("已隐藏大家都在搜", resolveSearchKeywordSectionHiddenText("大家都在搜"))
+        assertEquals("已隐藏搜索发现", resolveSearchKeywordSectionHiddenText("搜索发现"))
     }
 }

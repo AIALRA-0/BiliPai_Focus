@@ -18,9 +18,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -67,13 +64,17 @@ import android.app.Activity
 import android.content.ContextWrapper
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.graphics.toArgb
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
+import com.android.purebilibili.core.ui.motion.expressiveSnapSpring
+import com.android.purebilibili.core.ui.motion.indicatorSpring
+import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
+import com.android.purebilibili.core.ui.motion.softLandingSpring
 import com.android.purebilibili.core.util.rememberHapticFeedback
 
 /**
  *  图片预览对话框 - 支持左右滑动切换和3D立体动画
  */
-private val ImagePreviewOpenEasing = CubicBezierEasing(0.2f, 0.9f, 0.2f, 1f)
-private val ImagePreviewCloseEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
 
 internal const val IMAGE_PREVIEW_BACKDROP_TAG = "image_preview_backdrop"
 internal const val IMAGE_PREVIEW_PAGE_TAG = "image_preview_page"
@@ -356,7 +357,7 @@ private fun ImagePreviewOverlayContent(
                 animateTrigger.snapTo(0f)
                 animateTrigger.animateTo(
                     targetValue = 1f,
-                    animationSpec = tween(durationMillis = 340, easing = ImagePreviewOpenEasing)
+                    animationSpec = emphasizedEnterTween(durationMillis = 340)
                 )
             }
 
@@ -376,14 +377,11 @@ private fun ImagePreviewOverlayContent(
                     val dismissMotion = imagePreviewDismissMotion()
                     animateTrigger.animateTo(
                         targetValue = dismissMotion.overshootTarget,
-                        animationSpec = tween(durationMillis = 240, easing = ImagePreviewCloseEasing)
+                        animationSpec = emphasizedExitTween(durationMillis = 240)
                     )
                     animateTrigger.animateTo(
                         targetValue = dismissMotion.settleTarget,
-                        animationSpec = spring(
-                            dampingRatio = 0.72f,
-                            stiffness = 520f
-                        )
+                        animationSpec = expressiveSnapSpring()
                     )
                     onDismiss()
                 }
@@ -582,10 +580,7 @@ private fun ImagePreviewOverlayContent(
                                             scope.launch {
                                                 verticalDismissOffsetYPx.animateTo(
                                                     targetValue = 0f,
-                                                    animationSpec = spring(
-                                                        dampingRatio = 0.78f,
-                                                        stiffness = 420f
-                                                    )
+                                                    animationSpec = interactiveSnapSpring()
                                                 )
                                             }
                                         }
@@ -598,10 +593,7 @@ private fun ImagePreviewOverlayContent(
                                     scope.launch {
                                         verticalDismissOffsetYPx.animateTo(
                                             targetValue = 0f,
-                                            animationSpec = spring(
-                                                dampingRatio = 0.78f,
-                                                stiffness = 420f
-                                            )
+                                            animationSpec = interactiveSnapSpring()
                                         )
                                     }
                                 }
@@ -680,8 +672,12 @@ private fun ImagePreviewOverlayContent(
                             AnimatedContent(
                                 targetState = pagerState.currentPage,
                                 transitionSpec = {
-                                    (fadeIn(animationSpec = tween(250)) + slideInVertically { it / 3 }) togetherWith
-                                        (fadeOut(animationSpec = tween(180)) + slideOutVertically { -it / 4 })
+                                    (fadeIn(animationSpec = emphasizedEnterTween(250)) + slideInVertically(
+                                        animationSpec = emphasizedEnterTween(250)
+                                    ) { it / 3 }) togetherWith
+                                        (fadeOut(animationSpec = emphasizedExitTween(180)) + slideOutVertically(
+                                            animationSpec = emphasizedExitTween(180)
+                                        ) { -it / 4 })
                                 },
                                 label = "imagePreviewTextSwitch"
                             ) { page ->
@@ -739,12 +735,12 @@ private fun ImagePreviewOverlayContent(
                             // 动画过渡
                             val dotSize by animateFloatAsState(
                                 targetValue = if (isSelected) 10f else 6f,
-                                animationSpec = spring(dampingRatio = 0.7f),
+                                animationSpec = indicatorSpring(),
                                 label = "dotSize"
                             )
                             val dotAlpha by animateFloatAsState(
                                 targetValue = if (isSelected) 1f else 0.5f,
-                                animationSpec = spring(dampingRatio = 0.7f),
+                                animationSpec = softLandingSpring(),
                                 label = "dotAlpha"
                             )
                             
@@ -807,11 +803,11 @@ private fun ImagePreviewOverlayContent(
                                         targetState = pagerState.currentPage,
                                         transitionSpec = {
                                             val isForward = targetState > initialState
-                                            (fadeIn(animationSpec = tween(220)) +
+                                            (fadeIn(animationSpec = emphasizedEnterTween(220)) +
                                                 slideInHorizontally { fullWidth ->
                                                     if (isForward) fullWidth / 3 else -fullWidth / 3
                                                 }) togetherWith
-                                                (fadeOut(animationSpec = tween(160)) +
+                                                (fadeOut(animationSpec = emphasizedExitTween(160)) +
                                                     slideOutHorizontally { fullWidth ->
                                                         if (isForward) -fullWidth / 4 else fullWidth / 4
                                                     })

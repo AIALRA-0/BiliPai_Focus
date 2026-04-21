@@ -13,66 +13,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
-import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
-import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.shouldHoldPlaybackSeekSettledProgress
-import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
-import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
-
-private const val PORTRAIT_PROGRESS_SETTLED_TOLERANCE = 0.01f
-
-internal fun shouldHoldPortraitSettledProgress(
-    progress: Float,
-    pendingSettledProgress: Float?,
-    tolerance: Float = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
-): Boolean {
-    return shouldHoldPlaybackSeekSettledProgress(
-        playbackProgress = progress,
-        pendingSettledProgress = pendingSettledProgress,
-        tolerance = tolerance
-    )
-}
-
-internal fun resolvePortraitProgressDisplayProgress(
-    progress: Float,
-    dragProgress: Float,
-    isDragging: Boolean,
-    pendingSettledProgress: Float?
-): Float {
-    return resolvePlaybackSeekDisplayProgress(
-        playbackProgress = progress,
-        state = PlaybackSeekUiState(
-            isScrubbing = isDragging,
-            dragProgress = dragProgress,
-            pendingSettledProgress = pendingSettledProgress
-        ),
-        tolerance = PORTRAIT_PROGRESS_SETTLED_TOLERANCE
-    )
-}
+import com.android.purebilibili.data.model.response.VideoshotData
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple
+import kotlin.math.roundToInt
 
 /**
  * 竖屏模式下的底部容器 (含进度条)
@@ -89,6 +50,7 @@ fun PortraitBottomContainer(
     onSeekDragStart: (Long) -> Unit = {},
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
+    videoshotData: VideoshotData? = null,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -124,7 +86,8 @@ fun PortraitBottomContainer(
             onSeekDragUpdate = onSeekDragUpdate,
             onSeekDragCancel = onSeekDragCancel,
             duration = duration, // 传递时长用于显示
-            bufferProgress = bufferProgress
+            bufferProgress = bufferProgress,
+            videoshotData = videoshotData
         )
     }
 }
@@ -146,14 +109,21 @@ fun ThinWigglyProgressBar(
     onSeekDragUpdate: (Long) -> Unit = {},
     onSeekDragCancel: () -> Unit = {},
     duration: Long,
-    bufferProgress: Float = 0f
+    bufferProgress: Float = 0f,
+    videoshotData: VideoshotData? = null
 ) {
-    val displayProgress = if (duration > 0L) {
-        seekPositionMs.toFloat() / duration.toFloat()
-    } else {
-        progress
-    }
     var dragTargetPositionMs by remember { mutableLongStateOf(seekPositionMs.coerceAtLeast(0L)) }
+    var containerWidth by remember { mutableFloatStateOf(0f) }
+    val activePositionMs = resolveSeekPreviewTargetPositionMs(
+        displayPositionMs = seekPositionMs,
+        dragTargetPositionMs = dragTargetPositionMs,
+        isSeekScrubbing = isSeekScrubbing
+    )
+    val displayProgress = resolveProgressFraction(
+        positionMs = activePositionMs,
+        durationMs = duration
+    ).takeIf { duration > 0L } ?: progress
+    val currentPositionMs = seekPositionMs.coerceAtLeast(0L)
     LaunchedEffect(seekPositionMs, isSeekScrubbing) {
         if (!isSeekScrubbing) {
             dragTargetPositionMs = seekPositionMs.coerceAtLeast(0L)
@@ -174,19 +144,21 @@ fun ThinWigglyProgressBar(
         targetValue = if (isSeekScrubbing) layoutPolicy.draggingThumbSizeDp.dp else 0.dp,
         label = "thumbSize"
     )
+    val thumbSizePx = with(LocalDensity.current) { thumbSize.toPx() }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
+            .onSizeChanged { containerWidth = it.width.toFloat() }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { offset ->
-                        val targetPositionMs = if (duration > 0L) {
-                            ((offset.x / size.width).coerceIn(0f, 1f) * duration).toLong()
-                        } else {
-                            0L
-                        }
+                        val targetPositionMs = resolveSeekPositionFromTouch(
+                            touchX = offset.x,
+                            containerWidthPx = size.width.toFloat(),
+                            durationMs = duration
+                        )
                         dragTargetPositionMs = targetPositionMs
                         onSeekStart()
                         onSeekDragStart(targetPositionMs)
@@ -202,16 +174,13 @@ fun ThinWigglyProgressBar(
                     onDragCancel = {
                         onSeekDragCancel()
                     },
-                    onHorizontalDrag = { change, dragAmount ->
+                    onHorizontalDrag = { change, _ ->
                         change.consume()
-                        val targetPositionMs = if (duration > 0L) {
-                            ((dragTargetPositionMs.toFloat() / duration.toFloat()) + dragAmount / size.width)
-                                .coerceIn(0f, 1f)
-                                .times(duration.toFloat())
-                                .toLong()
-                        } else {
-                            0L
-                        }
+                        val targetPositionMs = resolveSeekPositionFromTouch(
+                            touchX = change.position.x,
+                            containerWidthPx = size.width.toFloat(),
+                            durationMs = duration
+                        )
                         dragTargetPositionMs = targetPositionMs
                         onSeekDragUpdate(targetPositionMs)
                     }
@@ -221,11 +190,11 @@ fun ThinWigglyProgressBar(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = { offset ->
-                        val targetPositionMs = if (duration > 0L) {
-                            ((offset.x / size.width).coerceIn(0f, 1f) * duration).toLong()
-                        } else {
-                            0L
-                        }
+                        val targetPositionMs = resolveSeekPositionFromTouch(
+                            touchX = offset.x,
+                            containerWidthPx = size.width.toFloat(),
+                            durationMs = duration
+                        )
                         dragTargetPositionMs = targetPositionMs
                         onSeekStart()
                         onSeekDragStart(targetPositionMs)
@@ -257,6 +226,16 @@ fun ThinWigglyProgressBar(
                     RoundedCornerShape(layoutPolicy.trackCornerRadiusDp.dp)
                 )
         )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(bufferProgress.coerceIn(0f, 1f))
+                .height(barHeight)
+                .background(
+                    Color.White.copy(alpha = 0.55f),
+                    RoundedCornerShape(layoutPolicy.trackCornerRadiusDp.dp)
+                )
+        )
         
         // 进度 (当前进度)
         Box(
@@ -271,48 +250,55 @@ fun ThinWigglyProgressBar(
         
         // 滑块 (Thumb) - 仅拖拽时显示
         if (isSeekScrubbing) {
-            // 使用 Box + BiasAlignment 来定位滑块
+            val previewPositionMs = dragTargetPositionMs.coerceAtLeast(0L)
+            val thumbOffsetX = (containerWidth * displayProgress - thumbSizePx / 2f)
+                .coerceIn(0f, (containerWidth - thumbSizePx).coerceAtLeast(0f))
+
             Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.CenterStart
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.CenterStart)
             ) {
-                 val bias = (displayProgress * 2f) - 1f
-                 
-                 Box(
-                     modifier = Modifier
-                         .size(thumbSize)
-                         .align(BiasAlignment(bias, 0f))
-                         .background(Color.White, CircleShape)
-                 )
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(thumbOffsetX.roundToInt(), 0) }
+                        .size(thumbSize)
+                        .align(Alignment.CenterStart)
+                        .background(Color.White, CircleShape)
+                )
             }
-        
-            // 拖拽时的气泡提示 (上方)
-             // 计算时间文本
-             val currentMs = (duration * displayProgress).toLong()
-             val timeText = FormatUtils.formatDuration(currentMs) + " / " + FormatUtils.formatDuration(duration)
-             
-             Box(
-                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = layoutPolicy.bubbleOffsetYDp.dp)
-             ) {
-                 Text(
-                     text = timeText,
-                     color = Color.White,
-                     fontSize = layoutPolicy.bubbleFontSp.sp,
-                     fontWeight = FontWeight.Bold,
-                     style = MaterialTheme.typography.titleLarge,
-                     modifier = Modifier
-                         .background(
-                             Color.Black.copy(alpha = 0.5f),
-                             RoundedCornerShape(layoutPolicy.bubbleCornerRadiusDp.dp)
-                         )
-                         .padding(
-                             horizontal = layoutPolicy.bubbleHorizontalPaddingDp.dp,
-                             vertical = layoutPolicy.bubbleVerticalPaddingDp.dp
-                         )
-                 )
-             }
+
+            if (videoshotData != null && videoshotData.isValid) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = layoutPolicy.previewBubbleOffsetYDp.dp)
+                ) {
+                    SeekPreviewBubble(
+                        videoshotData = videoshotData,
+                        targetPositionMs = previewPositionMs,
+                        currentPositionMs = currentPositionMs,
+                        durationMs = duration,
+                        offsetX = 0f,
+                        containerWidth = 0f,
+                        placement = SeekPreviewBubblePlacement.Centered
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = layoutPolicy.bubbleOffsetYDp.dp)
+                ) {
+                    SeekPreviewBubbleSimple(
+                        targetPositionMs = previewPositionMs,
+                        currentPositionMs = currentPositionMs,
+                        offsetX = 0f,
+                        containerWidth = 0f,
+                        placement = SeekPreviewBubblePlacement.Centered
+                    )
+                }
+            }
         }
     }
 }

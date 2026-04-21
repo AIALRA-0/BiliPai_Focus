@@ -73,6 +73,16 @@ val iOSShapes = Shapes(
     extraLarge = RoundedCornerShape(iOSCornerRadius.ExtraLarge)
 )
 
+val Md3Shapes = Shapes()
+
+val MiuixAlignedShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
+
 /**
  *  常用圆角形状快捷访问
  */

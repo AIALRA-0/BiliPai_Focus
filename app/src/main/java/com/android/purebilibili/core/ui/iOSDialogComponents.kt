@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import androidx.compose.ui.window.Dialog
@@ -27,7 +28,7 @@ internal fun resolveIosDialogActionLayoutPolicy(
     uiPreset: UiPreset
 ): IOSDialogActionLayoutPolicy {
     return IOSDialogActionLayoutPolicy(
-        expandToContainer = uiPreset != UiPreset.MD3
+        expandToContainer = uiPreset == UiPreset.IOS
     )
 }
 
@@ -44,7 +45,9 @@ fun IOSAlertDialog(
     dismissButton: @Composable (() -> Unit)? = null,
     properties: DialogProperties = DialogProperties()
 ) {
-    if (LocalUiPreset.current == UiPreset.MD3) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    if (uiPreset == UiPreset.MD3) {
         AlertDialog(
             onDismissRequest = onDismissRequest,
             title = title,
@@ -52,8 +55,16 @@ fun IOSAlertDialog(
             confirmButton = { confirmButton?.invoke() ?: Spacer(modifier = Modifier) },
             dismissButton = dismissButton,
             properties = properties,
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surface
+            shape = if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
+                RoundedCornerShape(26.dp)
+            } else {
+                MaterialTheme.shapes.extraLarge
+            },
+            containerColor = if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
         )
         return
     }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -41,6 +42,7 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppSparklesIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -101,33 +103,72 @@ fun AppearanceSettingsScreen(
         }
     }
     
-    MiuixScaffold(
-        topBar = {
-            MiuixSmallTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
+    val useMaterialAndroidChrome =
+        state.uiPreset == UiPreset.MD3 && state.androidNativeVariant == AndroidNativeVariant.MATERIAL3
+
+    if (useMaterialAndroidChrome) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(screenTitle) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0.dp)
+        ) { padding ->
+            AppearanceSettingsContent(
+                modifier = Modifier.padding(padding),
+                state = state,
+                onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
+                onNavigateToIconSettings = onNavigateToIconSettings,
+                onNavigateToAnimationSettings = onNavigateToAnimationSettings,
+                viewModel = viewModel,
+                context = context,
+                onAppLanguageChange = { language ->
+                    if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                        pendingLanguageRestart = language
                     }
                 }
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        AppearanceSettingsContent(
-            modifier = Modifier.padding(padding),
-            state = state,
-            onNavigateToIconSettings = onNavigateToIconSettings,
-            onNavigateToAnimationSettings = onNavigateToAnimationSettings,
-            viewModel = viewModel,
-            context = context,
-            onAppLanguageChange = { language ->
-                if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
-                    pendingLanguageRestart = language
+        }
+    } else {
+        MiuixScaffold(
+            topBar = {
+                MiuixSmallTopAppBar(
+                    title = screenTitle,
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
+                        }
+                    }
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0.dp)
+        ) { padding ->
+            AppearanceSettingsContent(
+                modifier = Modifier.padding(padding),
+                state = state,
+                onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
+                onNavigateToIconSettings = onNavigateToIconSettings,
+                onNavigateToAnimationSettings = onNavigateToAnimationSettings,
+                viewModel = viewModel,
+                context = context,
+                onAppLanguageChange = { language ->
+                    if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                        pendingLanguageRestart = language
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     pendingLanguageRestart?.let { pendingLanguage ->
@@ -166,12 +207,15 @@ fun AppearanceSettingsScreen(
 fun AppearanceSettingsContent(
     modifier: Modifier = Modifier,
     state: SettingsUiState,
+    onNavigateToBottomBarSettings: () -> Unit,
     onNavigateToIconSettings: () -> Unit,
     onNavigateToAnimationSettings: () -> Unit,
     viewModel: SettingsViewModel,
     context: android.content.Context,
     onAppLanguageChange: (AppLanguage) -> Unit
 ) {
+    val listState = rememberLazyListState()
+    val focusRequest by SettingsSearchFocusController.request.collectAsState()
     // Animation Trigger
     var isVisible by remember { mutableStateOf(false) }
     val displayModeTint = rememberAdaptiveSemanticIconTint(iOSBlue)
@@ -182,6 +226,13 @@ fun AppearanceSettingsContent(
     val configuration = LocalConfiguration.current
     val displayMetricsSnapshot = LocalDisplayMetricsSnapshot.current
     val isTablet = configuration.screenWidthDp >= 600 // Material Design 3 中型屏幕断点
+    LaunchedEffect(focusRequest?.token, isTablet) {
+        val request = focusRequest ?: return@LaunchedEffect
+        if (request.target != SettingsSearchTarget.APPEARANCE) return@LaunchedEffect
+        val index = resolveAppearanceSettingsScrollIndex(request.focusId, isTablet) ?: return@LaunchedEffect
+        listState.animateScrollToItem(index)
+        SettingsSearchFocusController.clear(request.token)
+    }
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
@@ -203,8 +254,51 @@ fun AppearanceSettingsContent(
             androidNativeLabel = uiPresetAndroidLabel
         )
     }
+    val uiPresetIosTitle = stringResource(R.string.appearance_ui_preset_ios_title)
+    val uiPresetIosSummary = stringResource(R.string.appearance_ui_preset_ios_summary)
+    val uiPresetAndroidMaterialTitle = stringResource(R.string.appearance_ui_preset_android_material_title)
+    val uiPresetAndroidMaterialSummary = stringResource(R.string.appearance_ui_preset_android_material_summary)
+    val uiPresetAndroidMiuixTitle = stringResource(R.string.appearance_ui_preset_android_miuix_title)
+    val uiPresetAndroidMiuixSummary = stringResource(R.string.appearance_ui_preset_android_miuix_summary)
+    val androidNativeVariantTitle = stringResource(R.string.appearance_android_native_variant_title)
+    val androidNativeVariantSubtitle = stringResource(R.string.appearance_android_native_variant_subtitle)
+    val androidNativeVariantMaterialLabel = stringResource(R.string.appearance_android_native_variant_material3)
+    val androidNativeVariantMiuixLabel = stringResource(R.string.appearance_android_native_variant_miuix)
+    val androidNativeVariantOptions = remember(
+        androidNativeVariantMaterialLabel,
+        androidNativeVariantMiuixLabel
+    ) {
+        resolveAndroidNativeVariantSegmentOptions(
+            material3Label = androidNativeVariantMaterialLabel,
+            miuixLabel = androidNativeVariantMiuixLabel
+        )
+    }
+    val uiPresetDescription = remember(
+        state.uiPreset,
+        state.androidNativeVariant,
+        uiPresetIosTitle,
+        uiPresetIosSummary,
+        uiPresetAndroidMaterialTitle,
+        uiPresetAndroidMaterialSummary,
+        uiPresetAndroidMiuixTitle,
+        uiPresetAndroidMiuixSummary
+    ) {
+        resolveAppearanceUiPresetDescription(
+            preset = state.uiPreset,
+            androidNativeVariant = state.androidNativeVariant,
+            iosTitle = uiPresetIosTitle,
+            iosSummary = uiPresetIosSummary,
+            materialTitle = uiPresetAndroidMaterialTitle,
+            materialSummary = uiPresetAndroidMaterialSummary,
+            miuixTitle = uiPresetAndroidMiuixTitle,
+            miuixSummary = uiPresetAndroidMiuixSummary
+        )
+    }
     val selectedUiPresetLabel =
         uiPresetOptions.firstOrNull { it.value == state.uiPreset }?.label ?: state.uiPreset.label
+    val selectedAndroidNativeVariantLabel = androidNativeVariantOptions
+        .firstOrNull { it.value == state.androidNativeVariant }
+        ?.label ?: state.androidNativeVariant.label
     val themeModeTitle = stringResource(R.string.appearance_theme_mode_title)
     val themeModeSubtitle = stringResource(R.string.appearance_theme_mode_subtitle)
     val themeModeFollowSystemLabel = stringResource(R.string.theme_mode_follow_system)
@@ -275,11 +369,15 @@ fun AppearanceSettingsContent(
     val homeInfoGlassBadgesVisible by SettingsManager
         .getHomeInfoGlassBadgesVisible(context)
         .collectAsState(initial = true)
+    val homeUpBadgesVisible by SettingsManager
+        .getHomeUpBadgesVisible(context)
+        .collectAsState(initial = true)
     val showMd3DynamicColorControl =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showThemeColorPicker = !state.dynamicColor
 
     LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxSize(),
         // [Fix] 为可展开配置项增加安全底部留白，避免“小屏+展开”时显示不全
@@ -305,6 +403,32 @@ fun AppearanceSettingsContent(
                             onSelectionChange = { preset ->
                                 viewModel.setUiPreset(preset)
                             }
+                        )
+
+                        AnimatedVisibility(
+                            visible = state.uiPreset == UiPreset.MD3,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 16.dp)) {
+                                IOSDivider()
+                                Spacer(modifier = Modifier.height(8.dp))
+                                IOSSlidingSegmentedSetting(
+                                    title = "${androidNativeVariantTitle}：$selectedAndroidNativeVariantLabel",
+                                    subtitle = androidNativeVariantSubtitle,
+                                    options = androidNativeVariantOptions,
+                                    selectedValue = state.androidNativeVariant,
+                                    onSelectionChange = { variant ->
+                                        viewModel.setAndroidNativeVariant(variant)
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AppearanceUiPresetDescriptionCard(
+                            title = uiPresetDescription.title,
+                            summary = uiPresetDescription.summary
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -1039,10 +1163,21 @@ fun AppearanceSettingsContent(
                         }
                         
                         IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSClickableItem(
+                            icon = CupertinoIcons.Default.ListBullet,
+                            title = "顶部标签页",
+                            value = "显示/隐藏、排序、自动收缩",
+                            onClick = {
+                                openTopTabManagement(onNavigateToBottomBarSettings)
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChevronUp,
                             title = "顶部栏自动收缩",
-                            subtitle = "上滑时自动收起推荐分类",
+                            subtitle = "列表离开顶部时自动隐藏标签，回到顶部时自动出现",
                             checked = state.isHeaderCollapseEnabled,
                             onCheckedChange = { viewModel.toggleHeaderCollapse(it) },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
@@ -1100,6 +1235,24 @@ fun AppearanceSettingsContent(
                                 }
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.PersonCropCircleBadgePlus,
+                            title = "UP主标识",
+                            subtitle = if (homeUpBadgesVisible) {
+                                "首页和相关推荐显示 UP 标识"
+                            } else {
+                                "首页和相关推荐隐藏 UP 标识"
+                            },
+                            checked = homeUpBadgesVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeUpBadgesVisible(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
                         
                         // 网格列数设置 (仅在双列网格模式下显示)
@@ -1189,6 +1342,74 @@ fun AppearanceSettingsContent(
             }
         
 
+    }
+}
+
+internal fun openTopTabManagement(
+    onNavigateToBottomBarSettings: () -> Unit
+) {
+    SettingsSearchFocusController.submit(
+        SettingsSearchTarget.BOTTOM_BAR,
+        SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS
+    )
+    onNavigateToBottomBarSettings()
+}
+
+@Composable
+private fun AppearanceUiPresetDescriptionCard(
+    title: String,
+    summary: String
+) {
+    val icon = rememberAppSparklesIcon()
+    val containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.44f)
+    val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        tonalElevation = 0.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.82f)
+                )
+            }
+        }
     }
 }
 

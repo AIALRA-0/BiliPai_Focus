@@ -6,12 +6,16 @@ import com.android.purebilibili.core.theme.UiPreset
 internal data class HomePerformanceConfig(
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
-    val liquidGlassEnabled: Boolean,
+    val topBarLiquidGlassEnabled: Boolean,
+    val bottomBarLiquidGlassEnabled: Boolean,
     val cardAnimationEnabled: Boolean,
     val cardTransitionEnabled: Boolean,
     val isDataSaverActive: Boolean,
     val preloadAheadCount: Int
-)
+) {
+    val isAnyLiquidGlassEnabled: Boolean
+        get() = topBarLiquidGlassEnabled || bottomBarLiquidGlassEnabled
+}
 
 internal fun resolveHomePreloadAheadCount(
     isDataSaverActive: Boolean,
@@ -25,7 +29,8 @@ internal fun resolveHomePerformanceConfig(
     uiPreset: UiPreset = UiPreset.IOS,
     headerBlurEnabled: Boolean,
     bottomBarBlurEnabled: Boolean,
-    liquidGlassEnabled: Boolean,
+    topBarLiquidGlassEnabled: Boolean,
+    bottomBarLiquidGlassEnabled: Boolean,
     cardAnimationEnabled: Boolean,
     cardTransitionEnabled: Boolean,
     isDataSaverActive: Boolean,
@@ -35,8 +40,12 @@ internal fun resolveHomePerformanceConfig(
     // Feature retired: keep parameter for compatibility, but never apply runtime smoothness downgrade.
     val shouldPrioritizeSmoothness = false
     val effectiveDataSaver = isDataSaverActive
-    val effectiveLiquidGlass = resolveEffectiveLiquidGlassEnabled(
-        requestedEnabled = liquidGlassEnabled,
+    val effectiveTopBarLiquidGlass = resolveEffectiveLiquidGlassEnabled(
+        requestedEnabled = topBarLiquidGlassEnabled,
+        uiPreset = uiPreset
+    ) && !shouldPrioritizeSmoothness
+    val effectiveBottomBarLiquidGlass = resolveEffectiveLiquidGlassEnabled(
+        requestedEnabled = bottomBarLiquidGlassEnabled,
         uiPreset = uiPreset
     ) && !shouldPrioritizeSmoothness
     val effectivePreloadAheadCount = when {
@@ -50,7 +59,8 @@ internal fun resolveHomePerformanceConfig(
     return HomePerformanceConfig(
         headerBlurEnabled = headerBlurEnabled,
         bottomBarBlurEnabled = bottomBarBlurEnabled,
-        liquidGlassEnabled = effectiveLiquidGlass,
+        topBarLiquidGlassEnabled = effectiveTopBarLiquidGlass,
+        bottomBarLiquidGlassEnabled = effectiveBottomBarLiquidGlass,
         cardAnimationEnabled = cardAnimationEnabled,
         cardTransitionEnabled = cardTransitionEnabled,
         isDataSaverActive = effectiveDataSaver,

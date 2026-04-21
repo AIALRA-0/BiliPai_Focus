@@ -16,6 +16,8 @@ import kotlinx.coroutines.withContext
 object DynamicRepository {
     private val feedPagination = DynamicFeedPaginationRegistry()
     private val userFeedPagination = DynamicUserPaginationRegistry()
+    private const val DYNAMIC_SCREEN_MIN_VISIBLE_ITEMS_PER_REQUEST = 8
+    private const val DYNAMIC_SCREEN_MAX_PAGES_PER_REQUEST = 8
     private const val HOME_FOLLOW_MIN_VISIBLE_ITEMS_PER_REQUEST = 8
     private const val HOME_FOLLOW_MAX_PAGES_PER_REQUEST = 6
     
@@ -25,7 +27,8 @@ object DynamicRepository {
      */
     suspend fun getDynamicFeed(
         refresh: Boolean = false,
-        scope: DynamicFeedScope = DynamicFeedScope.DYNAMIC_SCREEN
+        scope: DynamicFeedScope = DynamicFeedScope.DYNAMIC_SCREEN,
+        type: String = "all"
     ): Result<List<DynamicItem>> = withContext(Dispatchers.IO) {
         try {
             if (refresh) {
@@ -44,7 +47,7 @@ object DynamicRepository {
                 val previousOffset = feedPagination.offset(scope)
                 val response = fetchDynamicFeedPageWithRetry {
                     NetworkModule.dynamicApi.getDynamicFeed(
-                        type = "all",
+                        type = type,
                         offset = previousOffset
                     )
                 }.getOrElse { error ->
@@ -289,14 +292,14 @@ object DynamicRepository {
     private fun resolveDynamicFeedMinimumVisibleItems(scope: DynamicFeedScope): Int {
         return when (scope) {
             DynamicFeedScope.HOME_FOLLOW -> HOME_FOLLOW_MIN_VISIBLE_ITEMS_PER_REQUEST
-            DynamicFeedScope.DYNAMIC_SCREEN -> 1
+            DynamicFeedScope.DYNAMIC_SCREEN -> DYNAMIC_SCREEN_MIN_VISIBLE_ITEMS_PER_REQUEST
         }
     }
 
     private fun resolveDynamicFeedMaxPages(scope: DynamicFeedScope): Int {
         return when (scope) {
             DynamicFeedScope.HOME_FOLLOW -> HOME_FOLLOW_MAX_PAGES_PER_REQUEST
-            DynamicFeedScope.DYNAMIC_SCREEN -> DYNAMIC_EMPTY_PAGE_FETCH_LIMIT
+            DynamicFeedScope.DYNAMIC_SCREEN -> DYNAMIC_SCREEN_MAX_PAGES_PER_REQUEST
         }
     }
 }

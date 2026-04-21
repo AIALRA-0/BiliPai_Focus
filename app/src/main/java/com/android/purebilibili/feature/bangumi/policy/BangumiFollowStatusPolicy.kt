@@ -12,9 +12,38 @@ internal data class FollowPreloadResult(
     val requestSucceeded: Boolean
 )
 
+internal const val BANGUMI_FOLLOW_STATUS_UNFOLLOW = -1
+internal const val BANGUMI_FOLLOW_STATUS_WANT = 1
+internal const val BANGUMI_FOLLOW_STATUS_WATCHING = 2
+internal const val BANGUMI_FOLLOW_STATUS_WATCHED = 3
+
+internal data class BangumiFollowStatusOption(
+    val status: Int,
+    val label: String
+)
+
+internal val BANGUMI_FOLLOW_STATUS_OPTIONS = listOf(
+    BangumiFollowStatusOption(BANGUMI_FOLLOW_STATUS_WANT, "想看"),
+    BangumiFollowStatusOption(BANGUMI_FOLLOW_STATUS_WATCHING, "在看"),
+    BangumiFollowStatusOption(BANGUMI_FOLLOW_STATUS_WATCHED, "看过")
+)
+
 internal fun isBangumiFollowed(userStatus: UserStatus?): Boolean {
     if (userStatus == null) return false
     return userStatus.follow == 1 || userStatus.followStatus > 0
+}
+
+internal fun resolveBangumiFollowStatusLabel(
+    userStatus: UserStatus?,
+    defaultFollowLabel: String = "追番"
+): String {
+    if (!isBangumiFollowed(userStatus)) return defaultFollowLabel
+    return when (userStatus?.followStatus) {
+        BANGUMI_FOLLOW_STATUS_WANT -> "想看"
+        BANGUMI_FOLLOW_STATUS_WATCHING -> "在看"
+        BANGUMI_FOLLOW_STATUS_WATCHED -> "看过"
+        else -> "已追"
+    }
 }
 
 internal fun resolveFollowPreloadPageCount(

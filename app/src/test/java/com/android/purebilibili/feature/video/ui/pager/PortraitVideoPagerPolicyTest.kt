@@ -5,6 +5,7 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
 import androidx.media3.common.Player
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -145,6 +146,45 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitViewportSize_canFillContainerForImmersivePlayback() {
+        val layout = resolvePortraitVideoViewportSize(
+            containerWidth = 1200,
+            containerHeight = 800,
+            currentVideoAspect = 16f / 9f,
+            fillContainer = true
+        )
+
+        assertEquals(1200, layout.width)
+        assertEquals(800, layout.height)
+    }
+
+    @Test
+    fun portraitViewportSize_fitModeKeepsAspectInsideContainer() {
+        val layout = resolvePortraitVideoViewportSize(
+            containerWidth = 1200,
+            containerHeight = 800,
+            currentVideoAspect = 16f / 9f,
+            fillContainer = false
+        )
+
+        assertEquals(1200, layout.width)
+        assertEquals(675, layout.height)
+    }
+
+    @Test
+    fun portraitPager_defaultViewportPolicy_doesNotForceFillContainer() {
+        assertFalse(resolvePortraitPagerFillContainer())
+    }
+
+    @Test
+    fun portraitPager_defaultResizeMode_prefersFit() {
+        assertEquals(
+            AspectRatioFrameLayout.RESIZE_MODE_FIT,
+            resolvePortraitPagerResizeMode()
+        )
+    }
+
+    @Test
     fun sharedPlayerEntry_reusesExistingFrameWhenSharedPlayerAlreadyHasVideoSize() {
         assertEquals(
             0,
@@ -204,5 +244,19 @@ class PortraitVideoPagerPolicyTest {
         assertTrue(resolved.isFavorited)
         assertEquals(9, resolved.likeCount)
         assertEquals(4, resolved.favoriteCount)
+    }
+
+    @Test
+    fun portraitRecommendationSnapshot_extractsStableBvidSetFromMixedPageItems() {
+        assertEquals(
+            setOf("BV_INFO", "BV_RELATED"),
+            snapshotPortraitPageBvids(
+                listOf(
+                    ViewInfo(bvid = "BV_INFO", aid = 1L),
+                    RelatedVideo(bvid = "BV_RELATED", aid = 2L),
+                    "ignored"
+                )
+            )
+        )
     }
 }

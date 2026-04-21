@@ -9,6 +9,7 @@ import android.util.Rational
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -43,6 +45,7 @@ import androidx.media3.common.Player
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.util.FormatUtils
@@ -219,7 +222,7 @@ fun AudioModeScreen(
         }
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         containerColor = Color.Black,
         //  沉浸式导航栏 - 移除系统窗口内边距
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -481,6 +484,7 @@ fun AudioModeScreen(
                 }
 
                 // ==================== 布局分支 ====================
+                val artworkStyle = remember { resolveAudioModeCoverArtworkStyle() }
 
                 if (renderPolicy.showCompactPipCoverOnly) {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -556,9 +560,24 @@ fun AudioModeScreen(
                         AsyncImage(
                             model = FormatUtils.fixImageUrl(currentCover),
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize().blur(60.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(70.dp),
                             contentScale = ContentScale.Crop,
-                            alpha = 0.6f
+                            alpha = 0.72f
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.40f),
+                                            Color.Black.copy(alpha = artworkStyle.backgroundScrimAlphaPercent / 100f),
+                                            Color.Black.copy(alpha = 0.78f)
+                                        )
+                                    )
+                                )
                         )
                     }
                     
@@ -581,7 +600,7 @@ fun AudioModeScreen(
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            val coverSizeDp = resolveAudioModeCenteredCoverSizeDp(
+                            val coverSizeDp = resolveAudioModeArtworkSizeDp(
                                 availableWidthDp = maxWidth.value.roundToInt(),
                                 availableHeightDp = maxHeight.value.roundToInt()
                             )
@@ -601,34 +620,35 @@ fun AudioModeScreen(
                                         modifier = Modifier.fillMaxSize(),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        // 实际的卡片内容框 - 限制宽度为 75%
+                                        // 实际的卡片内容框 - Apple Music 风格封面
                                         Box(
                                             modifier = Modifier
-                                                .size(coverSizeDp.dp)
+                                                .width(coverSizeDp.widthDp.dp)
+                                                .height(coverSizeDp.heightDp.dp)
                                                 .graphicsLayer {
-                                                    val rotationAngle = pageOffset * 45f
-                                                    rotationY = rotationAngle
-                                                    cameraDistance = 12f * density.density
+                                                    val clampedOffset = pageOffset.coerceIn(-1f, 1f)
+                                                    val distance = abs(clampedOffset)
+                                                    rotationY = clampedOffset * -artworkStyle.maxRotationDegrees
+                                                    cameraDistance = 18f * density.density
                                                     transformOrigin = TransformOrigin(
-                                                        pivotFractionX = if (pageOffset < 0) 1f else 0f,
+                                                        pivotFractionX = if (clampedOffset < 0f) 1f else 0f,
                                                         pivotFractionY = 0.5f
                                                     )
-                                                    val scale = 1f - (abs(pageOffset) * 0.15f).coerceIn(0f, 0.2f)
+                                                    translationX = clampedOffset * -artworkStyle.maxTranslationDp.dp.toPx()
+                                                    val scale = 1f -
+                                                        (distance * artworkStyle.maxScaleLossPercent / 100f)
+                                                            .coerceIn(0f, artworkStyle.maxScaleLossPercent / 100f)
                                                     scaleX = scale
                                                     scaleY = scale
-                                                    alpha = 1f - (abs(pageOffset) * 0.5f).coerceIn(0f, 0.5f)
+                                                    alpha = 1f -
+                                                        (distance * artworkStyle.maxAlphaLossPercent / 100f)
+                                                            .coerceIn(0f, artworkStyle.maxAlphaLossPercent / 100f)
                                                 }
                                         ) {
-
-                                            // 封面图片
-                                            AsyncImage(
-                                                model = FormatUtils.fixImageUrl(playlist.getOrNull(page)?.cover ?: ""),
-                                                contentDescription = "Cover",
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .clip(RoundedCornerShape(20.dp)) // 只裁剪封面本身
-                                                    .background(Color.DarkGray),
-                                                contentScale = ContentScale.Crop
+                                            AudioModeArtworkCard(
+                                                coverUrl = playlist.getOrNull(page)?.cover.orEmpty(),
+                                                style = artworkStyle,
+                                                modifier = Modifier.fillMaxSize()
                                             )
                                         }
                                     }
@@ -637,16 +657,13 @@ fun AudioModeScreen(
                                 // 空列表兜底
                                 Box(
                                     modifier = Modifier
-                                        .size(coverSizeDp.dp)
+                                        .width(coverSizeDp.widthDp.dp)
+                                        .height(coverSizeDp.heightDp.dp)
                                 ) {
-                                    AsyncImage(
-                                        model = FormatUtils.fixImageUrl(info.pic),
-                                        contentDescription = "Cover",
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(20.dp))
-                                            .background(Color.DarkGray),
-                                        contentScale = ContentScale.Crop
+                                    AudioModeArtworkCard(
+                                        coverUrl = info.pic,
+                                        style = artworkStyle,
+                                        modifier = Modifier.fillMaxSize()
                                     )
                                 }
                              }
@@ -705,6 +722,52 @@ fun AudioModeScreen(
                 viewModel.setSleepTimer(minutes)
                 showSleepTimerDialog = false
             }
+        )
+    }
+}
+
+@Composable
+private fun AudioModeArtworkCard(
+    coverUrl: String,
+    style: AudioModeCoverArtworkStyle,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(style.cornerRadiusDp.dp)
+    Box(
+        modifier = modifier
+            .shadow(
+                elevation = style.shadowElevationDp.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.46f),
+                spotColor = Color.Black.copy(alpha = 0.62f)
+            )
+            .clip(shape)
+            .background(Color(0xFF1C1C1E))
+            .border(
+                width = 0.8.dp,
+                color = Color.White.copy(alpha = 0.12f),
+                shape = shape
+            )
+    ) {
+        AsyncImage(
+            model = FormatUtils.fixImageUrl(coverUrl),
+            contentDescription = "Cover",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.10f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.14f)
+                        )
+                    )
+                )
         )
     }
 }

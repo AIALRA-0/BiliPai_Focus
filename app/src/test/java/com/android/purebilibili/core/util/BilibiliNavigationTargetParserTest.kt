@@ -58,6 +58,16 @@ class BilibiliNavigationTargetParserTest {
     }
 
     @Test
+    fun parse_searchHttpUrl_resolvesSearchTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://search.bilibili.com/all?keyword=oppo%205g"
+        )
+
+        assertIs<BilibiliNavigationTarget.Search>(target)
+        assertEquals("oppo 5g", target.keyword)
+    }
+
+    @Test
     fun parse_nonBilibiliUrl_returnsNull() {
         val target = BilibiliNavigationTargetParser.parse("https://example.com/video/1")
 

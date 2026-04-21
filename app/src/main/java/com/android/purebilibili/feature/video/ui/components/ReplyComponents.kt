@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -9,7 +11,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,19 +20,18 @@ import androidx.compose.foundation.text.appendInlineContent
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,9 +44,10 @@ import coil.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.BilibiliUrlParser
-import com.android.purebilibili.R
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyCardLabel
+import com.android.purebilibili.data.model.response.ReplyContent
+import com.android.purebilibili.data.model.response.ReplyContentUrl
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyPicture
@@ -61,17 +62,29 @@ import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import androidx.compose.foundation.text.selection.SelectionContainer
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import com.android.purebilibili.core.ui.components.UserLevelBadge
+import com.android.purebilibili.core.ui.components.UserUpBadge
 
 private val EMOTE_TOKEN_PATTERN = """\[(.*?)\]""".toRegex()
+private const val COMMENT_INLINE_UP_BADGE_ID = "comment_inline_up_badge"
+internal const val COMMENT_INLINE_TOP_BADGE_ID = "comment_inline_top_badge"
+internal const val COMMENT_URL_TAG = "URL"
+internal const val COMMENT_TIMESTAMP_TAG = "TIMESTAMP"
+internal const val COMMENT_USER_TAG = "USER"
+internal const val COMMENT_TOPIC_TAG = "TOPIC"
+internal const val COMMENT_VOTE_TAG = "VOTE"
 internal val COMMENT_TIMESTAMP_PATTERN =
     """(?<!\d)(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*[:：]\s*(\d{2}))?(?!\d)""".toRegex()
 internal val COMMENT_URL_PATTERN =
     """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
 internal val COMMENT_INLINE_BVID_PATTERN =
     Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
+internal val COMMENT_VOTE_PATTERN = Regex("""\{vote:(\d+)\}""")
 internal const val COLLAPSED_SUB_REPLY_PREVIEW_LIMIT = 3
 const val COMMENT_PICTURE_TAG_PREFIX = "comment_picture_"
 const val COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX = "comment_sub_reply_preview_"
@@ -140,6 +153,8 @@ internal fun shouldShowReplyAncillaryDecorations(
     lightweightMode: Boolean
 ): Boolean = !lightweightMode
 
+internal fun shouldShowReplyIdentityDecorations(): Boolean = true
+
 internal fun shouldShowReplySubPreview(
     hideSubPreview: Boolean,
     lightweightMode: Boolean
@@ -202,6 +217,85 @@ internal fun resolveReplyItemContentType(item: ReplyItem): String {
     }
 }
 
+internal fun shouldShowReplyTopBadge(
+    item: ReplyItem,
+    isPinned: Boolean
+): Boolean = isPinned || item.replyControl?.isUpTop == true
+
+internal fun shouldShowReplyTopAction(
+    currentMid: Long,
+    upMid: Long,
+    item: ReplyItem
+): Boolean {
+    return currentMid > 0L && currentMid == upMid && item.root == 0L
+}
+
+internal fun resolveReplyTopActionLabel(isCurrentlyTop: Boolean): String {
+    return if (isCurrentlyTop) "取消置顶" else "置顶"
+}
+
+internal fun resolveReplyThreadCount(item: ReplyItem): Int {
+    return maxOf(
+        item.count,
+        item.rcount,
+        item.replies.orEmpty().size
+    ).coerceAtLeast(0)
+}
+
+internal fun resolveSubReplyPreviewSummaryLabel(
+    replyCount: Int,
+    hasUpReply: Boolean
+): String {
+    val count = replyCount.coerceAtLeast(0)
+    return if (hasUpReply) {
+        "UP主等人 共${count}条回复"
+    } else {
+        "共${count}条回复"
+    }
+}
+
+internal fun resolveReplyCommentShareUrl(item: ReplyItem): String {
+    val rootId = if (item.root > 0L) item.root else item.rpid
+    return buildString {
+        append("https://www.bilibili.com/video/av")
+        append(item.oid)
+        append("?comment_on=1&comment_root_id=")
+        append(rootId)
+        if (item.root > 0L && item.rpid > 0L) {
+            append("&comment_secondary_id=")
+            append(item.rpid)
+        }
+    }
+}
+
+internal fun buildReplyCommentShareText(item: ReplyItem): String {
+    return buildString {
+        append(item.member.uname.ifBlank { "未知用户" })
+        append(": ")
+        append(item.content.message.trim())
+        val url = resolveReplyCommentShareUrl(item)
+        if (url.isNotBlank()) {
+            append('\n')
+            append(url)
+        }
+    }
+}
+
+internal fun shareReplyComment(context: android.content.Context, item: ReplyItem) {
+    val shareText = buildReplyCommentShareText(item)
+    if (shareText.isBlank()) return
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "保存评论")
+        putExtra(Intent.EXTRA_TEXT, shareText)
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, "保存评论"))
+    }.onFailure {
+        Toast.makeText(context, "无法打开保存面板", Toast.LENGTH_SHORT).show()
+    }
+}
+
 internal data class ReplyVideoReference(
     val bvid: String,
     val navigationUrl: String
@@ -236,6 +330,74 @@ internal fun resolveReplyVideoDisplayText(
 internal fun resolveReplyVideoNavigationUrl(bvid: String): String =
     "https://www.bilibili.com/video/$bvid"
 
+internal fun resolveReplyTopicNavigationUrl(topic: String): String {
+    val encoded = URLEncoder.encode(topic, StandardCharsets.UTF_8.name())
+    return "bilibili://search?keyword=$encoded"
+}
+
+internal fun resolveReplyContentUrlNavigationUrl(
+    rawToken: String,
+    url: ReplyContentUrl
+): String {
+    return listOf(
+        url.appUrlSchema,
+        url.url,
+        rawToken
+    ).firstOrNull { it.isNotBlank() }.orEmpty()
+}
+
+internal fun resolveReplyContentUrlDisplayText(
+    rawToken: String,
+    url: ReplyContentUrl
+): String {
+    return url.title.trim().takeIf { it.isNotEmpty() } ?: rawToken
+}
+
+internal fun resolveReplyContentUrlPrefixInlineId(rawToken: String): String {
+    return "comment_url_prefix_${rawToken.hashCode()}"
+}
+
+internal data class ReplyLeadingRichTextReference(
+    val label: String,
+    val navigationUrl: String
+)
+
+internal fun resolveReplyNoteNavigationUrl(noteCvidStr: String): String {
+    val cvid = noteCvidStr.trim().removePrefix("cv").toLongOrNull()?.takeIf { it > 0L }
+    return if (cvid != null) "https://www.bilibili.com/read/cv$cvid" else ""
+}
+
+internal fun resolveReplyOpusNavigationUrl(opusId: Long): String {
+    return if (opusId > 0L) "https://www.bilibili.com/opus/$opusId" else ""
+}
+
+internal fun resolveReplyLeadingRichTextReferences(
+    content: ReplyContent?,
+    noteCvidStr: String = ""
+): List<ReplyLeadingRichTextReference> {
+    content ?: return emptyList()
+    val noteUrl = content.richText.note?.clickUrl?.takeIf { it.isNotBlank() }
+        ?: resolveReplyNoteNavigationUrl(noteCvidStr).takeIf { it.isNotBlank() }
+    if (!noteUrl.isNullOrBlank()) {
+        return listOf(ReplyLeadingRichTextReference(label = "笔记 ", navigationUrl = noteUrl))
+    }
+
+    val opusUrl = resolveReplyOpusNavigationUrl(content.richText.opus?.opusId ?: 0L)
+    return if (opusUrl.isNotBlank()) {
+        listOf(ReplyLeadingRichTextReference(label = "笔记 ", navigationUrl = opusUrl))
+    } else {
+        emptyList()
+    }
+}
+
+internal fun resolveReplyVoteDisplayText(
+    voteId: Long,
+    title: String?
+): String {
+    val cleanTitle = title?.trim().orEmpty()
+    return if (cleanTitle.isNotEmpty()) "投票: $cleanTitle" else "投票: $voteId"
+}
+
 internal suspend fun resolveReplyVideoTitle(
     reference: ReplyVideoReference?,
     cache: MutableMap<String, String>,
@@ -256,6 +418,12 @@ internal fun buildRichCommentAnnotatedString(
     text: String,
     prefix: AnnotatedString? = null,
     renderableEmoteKeys: Set<String> = emptySet(),
+    richUrls: Map<String, ReplyContentUrl> = emptyMap(),
+    atNameToMid: Map<String, Long> = emptyMap(),
+    topics: Set<String> = emptySet(),
+    voteTitle: String? = null,
+    leadingReferences: List<ReplyLeadingRichTextReference> = emptyList(),
+    maxTimestampSeconds: Long? = null,
     color: Color = Color.Unspecified,
     timestampColor: Color = Color.Unspecified,
     urlColor: Color = Color.Unspecified
@@ -263,6 +431,15 @@ internal fun buildRichCommentAnnotatedString(
     return buildAnnotatedString {
         if (prefix != null) {
             append(prefix)
+        }
+        leadingReferences.forEach { reference ->
+            if (reference.navigationUrl.isNotBlank()) {
+                pushStringAnnotation(tag = COMMENT_URL_TAG, annotation = reference.navigationUrl)
+                withStyle(SpanStyle(color = urlColor, fontWeight = FontWeight.Medium)) {
+                    append(reference.label)
+                }
+                pop()
+            }
         }
 
         val replyPattern = "^回复 @(.*?) :".toRegex()
@@ -282,22 +459,101 @@ internal fun buildRichCommentAnnotatedString(
             val type: String,
             val value: String,
             val seconds: Long = 0L,
-            val annotation: String = value
+            val annotation: String = value,
+            val displayText: String = value,
+            val inlineContentId: String? = null,
+            val priority: Int = 5
         )
 
         val allMatches = mutableListOf<MatchInfo>()
 
+        fun addExactTokenMatch(
+            token: String,
+            type: String,
+            annotation: String = token,
+            displayText: String = token,
+            inlineContentId: String? = null,
+            priority: Int = 0
+        ) {
+            if (token.isBlank()) return
+            var searchStart = 0
+            while (searchStart < remainingText.length) {
+                val index = remainingText.indexOf(token, startIndex = searchStart)
+                if (index < 0) break
+                allMatches.add(
+                    MatchInfo(
+                        range = index until index + token.length,
+                        type = type,
+                        value = token,
+                        annotation = annotation,
+                        displayText = displayText,
+                        inlineContentId = inlineContentId,
+                        priority = priority
+                    )
+                )
+                searchStart = index + token.length
+            }
+        }
+
+        richUrls.forEach { (token, url) ->
+            addExactTokenMatch(
+                token = token,
+                type = "rich_url",
+                annotation = resolveReplyContentUrlNavigationUrl(token, url),
+                displayText = resolveReplyContentUrlDisplayText(token, url),
+                inlineContentId = url.prefixIcon.takeIf { it.isNotBlank() }?.let {
+                    resolveReplyContentUrlPrefixInlineId(token)
+                },
+                priority = 0
+            )
+        }
+
+        atNameToMid.forEach { (name, mid) ->
+            if (mid > 0L) {
+                addExactTokenMatch(
+                    token = "@$name",
+                    type = "user",
+                    annotation = mid.toString(),
+                    priority = 0
+                )
+            }
+        }
+
+        topics.forEach { topic ->
+            addExactTokenMatch(
+                token = "#$topic#",
+                type = "topic",
+                annotation = topic,
+                priority = 0
+            )
+        }
+
         EMOTE_TOKEN_PATTERN.findAll(remainingText).forEach { match ->
-            allMatches.add(MatchInfo(match.range, "emote", match.value))
+            allMatches.add(MatchInfo(match.range, "emote", match.value, priority = 1))
         }
 
         COMMENT_TIMESTAMP_PATTERN.findAll(remainingText).forEach { match ->
             val totalSeconds = parseCommentTimestampSeconds(match) ?: return@forEach
-            allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds))
+            if (maxTimestampSeconds != null && totalSeconds > maxTimestampSeconds) return@forEach
+            allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds, priority = 2))
+        }
+
+        COMMENT_VOTE_PATTERN.findAll(remainingText).forEach { match ->
+            val voteId = match.groupValues.getOrNull(1)?.toLongOrNull() ?: return@forEach
+            allMatches.add(
+                MatchInfo(
+                    range = match.range,
+                    type = "vote",
+                    value = match.value,
+                    annotation = voteId.toString(),
+                    displayText = resolveReplyVoteDisplayText(voteId, voteTitle),
+                    priority = 2
+                )
+            )
         }
 
         COMMENT_URL_PATTERN.findAll(remainingText).forEach { match ->
-            allMatches.add(MatchInfo(match.range, "url", match.value))
+            allMatches.add(MatchInfo(match.range, "url", match.value, priority = 3))
         }
 
         COMMENT_INLINE_BVID_PATTERN.findAll(remainingText).forEach { match ->
@@ -307,12 +563,13 @@ internal fun buildRichCommentAnnotatedString(
                     range = match.range,
                     type = "video",
                     value = match.value,
-                    annotation = resolveReplyVideoNavigationUrl(bvid)
+                    annotation = resolveReplyVideoNavigationUrl(bvid),
+                    priority = 4
                 )
             )
         }
 
-        allMatches.sortBy { it.range.first }
+        allMatches.sortWith(compareBy<MatchInfo> { it.range.first }.thenBy { it.priority })
 
         var lastIndex = 0
         allMatches.forEach { matchInfo ->
@@ -330,18 +587,46 @@ internal fun buildRichCommentAnnotatedString(
                     }
 
                     "timestamp" -> {
-                        pushStringAnnotation(tag = "TIMESTAMP", annotation = matchInfo.seconds.toString())
+                        pushStringAnnotation(tag = COMMENT_TIMESTAMP_TAG, annotation = matchInfo.seconds.toString())
                         withStyle(SpanStyle(color = timestampColor, fontWeight = FontWeight.Medium)) {
                             append(matchInfo.value)
                         }
                         pop()
                     }
 
-                    "url",
-                    "video" -> {
-                        pushStringAnnotation(tag = "URL", annotation = matchInfo.annotation)
-                        withStyle(SpanStyle(color = urlColor, textDecoration = TextDecoration.Underline)) {
+                    "user" -> {
+                        pushStringAnnotation(tag = COMMENT_USER_TAG, annotation = matchInfo.annotation)
+                        withStyle(SpanStyle(color = urlColor, fontWeight = FontWeight.Medium)) {
                             append(matchInfo.value)
+                        }
+                        pop()
+                    }
+
+                    "topic" -> {
+                        pushStringAnnotation(tag = COMMENT_TOPIC_TAG, annotation = matchInfo.annotation)
+                        withStyle(SpanStyle(color = urlColor, fontWeight = FontWeight.Medium)) {
+                            append(matchInfo.value)
+                        }
+                        pop()
+                    }
+
+                    "vote" -> {
+                        pushStringAnnotation(tag = COMMENT_VOTE_TAG, annotation = matchInfo.annotation)
+                        withStyle(SpanStyle(color = urlColor, fontWeight = FontWeight.Medium)) {
+                            append(matchInfo.displayText)
+                        }
+                        pop()
+                    }
+
+                    "url",
+                    "rich_url",
+                    "video" -> {
+                        pushStringAnnotation(tag = COMMENT_URL_TAG, annotation = matchInfo.annotation)
+                        withStyle(SpanStyle(color = urlColor, textDecoration = TextDecoration.Underline)) {
+                            if (matchInfo.inlineContentId != null) {
+                                appendInlineContent(id = matchInfo.inlineContentId, alternateText = " ")
+                            }
+                            append(matchInfo.displayText)
                         }
                         pop()
                     }
@@ -496,14 +781,20 @@ fun ReplyItemView(
     onReplyClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
+    onReportClick: ((Int) -> Unit)? = null,
+    canToggleTop: Boolean = false,
+    onToggleTopClick: (() -> Unit)? = null,
     location: String? = item.replyControl?.location,
     onUrlClick: ((String) -> Unit)? = null,
+    maxTimestampMs: Long? = null,
     hideSubPreview: Boolean = false,
     onAvatarClick: (String) -> Unit
 ) {
     val appearance = rememberVideoCommentAppearance()
+    val context = LocalContext.current
     val isUpComment = upMid > 0 && item.mid == upMid
     val showAncillaryDecorations = shouldShowReplyAncillaryDecorations(lightweightMode)
+    val showIdentityDecorations = shouldShowReplyIdentityDecorations()
     val showSubPreview = shouldShowReplySubPreview(
         hideSubPreview = hideSubPreview,
         lightweightMode = lightweightMode
@@ -522,6 +813,25 @@ fun ReplyItemView(
     val displayLocation = remember(location) {
         resolveReplyLocationText(location)
     }
+    val metadataText = remember(item.ctime, displayLocation) {
+        buildString {
+            append(formatTime(item.ctime))
+            if (!displayLocation.isNullOrEmpty()) {
+                append(" · $displayLocation")
+            }
+        }
+    }
+    val showTopBadge = shouldShowReplyTopBadge(item = item, isPinned = isPinned)
+    val contentPrefix = remember(showTopBadge) {
+        if (!showTopBadge) {
+            null
+        } else {
+            buildAnnotatedString {
+                appendInlineContent(COMMENT_INLINE_TOP_BADGE_ID, "TOP")
+                append(" ")
+            }
+        }
+    }
     val specialLabelText = remember(item.cardLabels, showUpFlag, item.upAction, showAncillaryDecorations) {
         if (!showAncillaryDecorations) return@remember null
         resolveReplySpecialLabelText(
@@ -537,17 +847,17 @@ fun ReplyItemView(
             isLiked = isLiked
         )
     }
-    val fansDetail = if (showAncillaryDecorations) {
+    val fansDetail = if (showIdentityDecorations) {
         item.member.fansDetail?.takeIf { it.medalName.isNotBlank() && it.level > 0 }
     } else {
         null
     }
-    val nameplateImage = if (showAncillaryDecorations) {
+    val nameplateImage = if (showIdentityDecorations) {
         item.member.nameplate?.imageSmall?.takeIf { it.isNotBlank() }
     } else {
         null
     }
-    val sailingCardBgs = if (showAncillaryDecorations) {
+    val sailingCardBgs = if (showIdentityDecorations) {
         listOfNotNull(
             item.member.userSailing?.cardBg,
             item.member.userSailing?.cardBgWithFocus,
@@ -557,7 +867,7 @@ fun ReplyItemView(
     } else {
         emptyList()
     }
-    val fanGroupVisual = if (showAncillaryDecorations) {
+    val fanGroupVisual = if (showIdentityDecorations) {
         resolveFanGroupVisualFromMemberAndSailing(
             member = item.member,
             cardBgs = sailingCardBgs
@@ -577,13 +887,82 @@ fun ReplyItemView(
     val showInlineSubReplyToggle = remember(item.replies) {
         shouldShowInlineSubReplyToggle(item.replies.orEmpty().size)
     }
+    val threadReplyCount = remember(item.count, item.rcount, item.replies) {
+        resolveReplyThreadCount(item)
+    }
+    val hasUpSubReply = remember(item.replyControl?.upReply, item.replies, upMid) {
+        item.replyControl?.upReply == true || (upMid > 0 && item.replies.orEmpty().any { it.mid == upMid })
+    }
+    val subReplySummaryLabel = remember(threadReplyCount, hasUpSubReply) {
+        resolveSubReplyPreviewSummaryLabel(
+            replyCount = threadReplyCount,
+            hasUpReply = hasUpSubReply
+        )
+    }
     val copyToClipboard = rememberClipboardCopyHandler()
+    var showActionSheet by remember(item.rpid) { mutableStateOf(false) }
+    var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
+    var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
+    val copyText = remember(item.content.message) { item.content.message.trim() }
+
+    if (showActionSheet) {
+        ReplyActionSheet(
+            canDelete = onDeleteClick != null,
+            canReport = onReportClick != null,
+            topActionLabel = if (canToggleTop) resolveReplyTopActionLabel(showTopBadge) else null,
+            onDismiss = { showActionSheet = false },
+            onCopyAll = {
+                copyToClipboard(copyText, "评论内容")
+            },
+            onFreeCopy = {
+                showFreeCopyDialog = true
+            },
+            onSave = {
+                shareReplyComment(context, item)
+            },
+            onReply = {
+                onReplyClick?.invoke() ?: onSubClick(item)
+            },
+            onReport = {
+                showReportDialog = true
+            },
+            onToggleTop = {
+                onToggleTopClick?.invoke()
+            },
+            onDelete = {
+                onDeleteClick?.invoke()
+            }
+        )
+    }
+
+    if (showFreeCopyDialog) {
+        CopySelectionDialog(
+            text = copyText,
+            title = "选择评论内容",
+            onDismiss = { showFreeCopyDialog = false }
+        )
+    }
+
+    ReportReasonDialog(
+        visible = showReportDialog,
+        onDismiss = { showReportDialog = false },
+        onReport = { reason ->
+            onReportClick?.invoke(reason)
+            showReportDialog = false
+        }
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(appearance.panelColor)
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    onLongClick?.invoke()
+                    showActionSheet = true
+                }
+            )
     ) {
         Row(
             modifier = Modifier
@@ -636,19 +1015,15 @@ fun ReplyItemView(
                                     .copyOnLongPress(item.member.uname, "用户名")
                             )
 
-                            if (isUpComment) {
-                                UpTag()
-                            }
-
-                            if (isPinned) {
-                                PinnedTag()
-                            }
-
                             if (item.member.levelInfo.currentLevel > 0) {
                                 LevelTag(
                                     level = item.member.levelInfo.currentLevel,
                                     isSeniorMember = item.member.isSeniorMember == 1
                                 )
+                            }
+
+                            if (isUpComment) {
+                                UpTag()
                             }
 
                             if (fansDetail != null) {
@@ -663,14 +1038,29 @@ fun ReplyItemView(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
+                    Text(
+                        text = metadataText,
+                        fontSize = 12.sp,
+                        color = appearance.secondaryTextColor
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     // Content
                     ReplyMessageText(
                         text = item.content.message,
                         fontSize = 15.sp,
                         color = appearance.primaryTextColor,
                         emoteMap = localEmoteMap,
+                        content = item.content,
                         onTimestampClick = onTimestampClick,
-                        onUrlClick = onUrlClick
+                        maxTimestampMs = maxTimestampMs,
+                        onUrlClick = onUrlClick,
+                        onUserClick = { mid -> onAvatarClick(mid.toString()) },
+                        onTopicClick = { topic -> onUrlClick?.invoke(resolveReplyTopicNavigationUrl(topic)) },
+                        onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
+                        noteCvidStr = item.noteCvidStr,
+                        prefix = contentPrefix
                     )
 
                     // Images
@@ -689,26 +1079,20 @@ fun ReplyItemView(
                         )
                     }
 
-                    if (!specialLabelText.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ReplySpecialLabelChip(text = specialLabelText)
-                    }
-
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Footer Actions
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Time & Location
-                    Text(
-                        text = buildString {
-                            append(formatTime(item.ctime))
-                            if (!displayLocation.isNullOrEmpty()) {
-                                append(" · $displayLocation")
-                            }
-                        },
-                        fontSize = 12.sp,
-                        color = appearance.secondaryTextColor.copy(alpha = 0.7f)
+                    ReplyTextAction(
+                        label = "回复",
+                        appearance = appearance,
+                        onClick = { onReplyClick?.invoke() ?: onSubClick(item) }
                     )
+
+                    if (!specialLabelText.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.width(10.dp))
+                        ReplySpecialLabelChip(text = specialLabelText)
+                    }
 
                     Spacer(modifier = Modifier.weight(1f))
 
@@ -735,30 +1119,6 @@ fun ReplyItemView(
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Dislike (Placeholder)
-                    Icon(
-                        imageVector = CupertinoIcons.Default.MinusCircle, // Fallback Dislike
-                        contentDescription = "Dislike",
-                        tint = appearance.actionTint,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { /* TODO: Dislike */ }
-                    )
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Reply Icon
-                    Icon(
-                        imageVector = CupertinoIcons.Default.BubbleLeft, // iOS Bubble icon
-                        contentDescription = "Reply",
-                        tint = appearance.actionTint,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { onReplyClick?.invoke() ?: onSubClick(item) }
-                    )
-
                     // [新增] 删除按钮 (仅显示给本人)
                     if (onDeleteClick != null) {
                         Spacer(modifier = Modifier.width(16.dp))
@@ -776,10 +1136,13 @@ fun ReplyItemView(
                 // Sub-comments (Threaded view)
                 if (showSubPreview && (!item.replies.isNullOrEmpty() || item.rcount > 0)) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    // No background container, just cleaner list
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(appearance.composerHintBackgroundColor)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         visibleSubReplies.forEach { subReply ->
                             val subEmoteMap = remember(subReply.content.emote, emoteMap) {
@@ -808,12 +1171,9 @@ fun ReplyItemView(
                                     prefixTokens.forEach { token ->
                                         when (token) {
                                             "[UP]" -> withStyle(
-                                                SpanStyle(
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = upTagColor
-                                                )
+                                                SpanStyle(color = upTagColor)
                                             ) {
-                                                append(token)
+                                                appendInlineContent(COMMENT_INLINE_UP_BADGE_ID, "UP")
                                             }
                                             ": " -> withStyle(
                                                 SpanStyle(color = prefixSeparatorColor)
@@ -852,16 +1212,21 @@ fun ReplyItemView(
                                     fontSize = 13.sp,
                                     color = appearance.primaryTextColor.copy(alpha = 0.8f),
                                     emoteMap = subEmoteMap,
-                                    maxLines = 3,
+                                    content = subReply.content,
+                                    maxLines = 2,
                                     onTimestampClick = onTimestampClick,
+                                    maxTimestampMs = maxTimestampMs,
                                     onUrlClick = onUrlClick,
+                                    onUserClick = { mid -> onAvatarClick(mid.toString()) },
+                                    onTopicClick = { topic -> onUrlClick?.invoke(resolveReplyTopicNavigationUrl(topic)) },
+                                    onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
+                                    noteCvidStr = subReply.noteCvidStr,
                                     prefix = prefix
                                 )
                             }
                         }
 
                         if (showInlineSubReplyToggle) {
-                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = resolveInlineSubReplyToggleLabel(expanded = isSubPreviewExpanded),
                                 fontSize = 13.sp,
@@ -873,22 +1238,21 @@ fun ReplyItemView(
                             )
                         }
                         
-                        if (item.rcount > 0) {
-                            Spacer(modifier = Modifier.height(4.dp))
+                        if (threadReplyCount > 0) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 44.dp)
+                                    .heightIn(min = 32.dp)
                                     .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
                                     .clickable { onSubClick(item) },
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 Text(
-                                    text = "查看全部 ${item.rcount} 条回复 >",
+                                    text = subReplySummaryLabel,
                                     fontSize = 13.sp,
                                     color = appearance.accentColor,
                                     fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+                                    modifier = Modifier.padding(vertical = 6.dp)
                                 )
                             }
                         }
@@ -926,9 +1290,15 @@ internal fun ReplyMessageText(
     fontSize: TextUnit,
     color: Color = MaterialTheme.colorScheme.onSurface,
     emoteMap: Map<String, String>,
+    content: ReplyContent? = null,
     maxLines: Int = Int.MAX_VALUE,
     onTimestampClick: ((Long) -> Unit)? = null,
+    maxTimestampMs: Long? = null,
     onUrlClick: ((String) -> Unit)? = null,
+    onUserClick: ((Long) -> Unit)? = null,
+    onTopicClick: ((String) -> Unit)? = null,
+    onVoteClick: ((Long) -> Unit)? = null,
+    noteCvidStr: String = "",
     prefix: AnnotatedString? = null
 ) {
     val videoReference = remember(text) { resolveReplyVideoReference(text) }
@@ -967,9 +1337,15 @@ internal fun ReplyMessageText(
             fontSize = fontSize,
             color = color,
             emoteMap = emoteMap,
+            content = content,
             maxLines = maxLines,
             onTimestampClick = onTimestampClick,
+            maxTimestampMs = maxTimestampMs,
             onUrlClick = onUrlClick,
+            onUserClick = onUserClick,
+            onTopicClick = onTopicClick,
+            onVoteClick = onVoteClick,
+            noteCvidStr = noteCvidStr,
             prefix = prefix
         )
     }
@@ -1003,6 +1379,14 @@ private fun ReplyVideoReferenceText(
             pop()
         }
     }
+    val upBadgeInlineContent = rememberInlineUpBadgeContent()
+    val topBadgeInlineContent = rememberInlineTopBadgeContent()
+    val inlineContent = remember(upBadgeInlineContent, topBadgeInlineContent) {
+        mapOf(
+            COMMENT_INLINE_UP_BADGE_ID to upBadgeInlineContent,
+            COMMENT_INLINE_TOP_BADGE_ID to topBadgeInlineContent
+        )
+    }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
     val modifier = if (onUrlClick != null) {
@@ -1017,7 +1401,7 @@ private fun ReplyVideoReferenceText(
                     textLayoutResult?.let { layoutResult ->
                         val position = layoutResult.getOffsetForPosition(offset)
                         annotatedString.getStringAnnotations(
-                            tag = "URL",
+                            tag = COMMENT_URL_TAG,
                             start = maxOf(0, position - 1),
                             end = minOf(annotatedString.length, position + 1)
                         ).firstOrNull()?.let { annotation ->
@@ -1033,6 +1417,7 @@ private fun ReplyVideoReferenceText(
 
     Text(
         text = annotatedString,
+        inlineContent = inlineContent,
         fontSize = fontSize,
         color = primaryColor,
         lineHeight = (fontSize.value * 1.5).sp,
@@ -1060,9 +1445,15 @@ fun RichCommentText(
     fontSize: TextUnit,
     color: Color = MaterialTheme.colorScheme.onSurface,
     emoteMap: Map<String, String>,
+    content: ReplyContent? = null,
     maxLines: Int = Int.MAX_VALUE,
     onTimestampClick: ((Long) -> Unit)? = null,
+    maxTimestampMs: Long? = null,
     onUrlClick: ((String) -> Unit)? = null,
+    onUserClick: ((Long) -> Unit)? = null,
+    onTopicClick: ((String) -> Unit)? = null,
+    onVoteClick: ((Long) -> Unit)? = null,
+    noteCvidStr: String = "",
     prefix: AnnotatedString? = null
 ) {
     val context = LocalContext.current
@@ -1077,6 +1468,13 @@ fun RichCommentText(
         text,
         prefix,
         renderableEmoteKeys,
+        content?.urls,
+        content?.atNameToMid,
+        content?.topics,
+        content?.vote,
+        content?.richText,
+        noteCvidStr,
+        maxTimestampMs,
         timestampColor,
         color,
         urlColor
@@ -1085,31 +1483,74 @@ fun RichCommentText(
             text = text,
             prefix = prefix,
             renderableEmoteKeys = renderableEmoteKeys,
+            richUrls = content?.urls.orEmpty(),
+            atNameToMid = content?.atNameToMid.orEmpty(),
+            topics = content?.topics.orEmpty().keys,
+            voteTitle = content?.vote?.title,
+            leadingReferences = resolveReplyLeadingRichTextReferences(content, noteCvidStr),
+            maxTimestampSeconds = maxTimestampMs?.let { it / 1000L },
             color = color,
             timestampColor = timestampColor,
             urlColor = urlColor
         )
     }
 
-    val inlineContent = remember(renderableEmoteKeys, emoteMap, context) {
-        renderableEmoteKeys.associateWith { key ->
-            val url = emoteMap[key].orEmpty()
-            InlineTextContent(
-                Placeholder(width = 1.4.em, height = 1.4.em, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(url)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize()
+    val upBadgeInlineContent = rememberInlineUpBadgeContent()
+    val topBadgeInlineContent = rememberInlineTopBadgeContent()
+    val inlineContent = remember(renderableEmoteKeys, emoteMap, content?.urls, context, urlColor, upBadgeInlineContent, topBadgeInlineContent) {
+        buildMap {
+            renderableEmoteKeys.forEach { key ->
+                val url = emoteMap[key].orEmpty()
+                put(
+                    key,
+                    InlineTextContent(
+                        Placeholder(width = 1.4.em, height = 1.4.em, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(url)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 )
             }
+            content?.urls.orEmpty().forEach { (token, richUrl) ->
+                val prefixIcon = richUrl.prefixIcon.takeIf { it.isNotBlank() } ?: return@forEach
+                put(
+                    resolveReplyContentUrlPrefixInlineId(token),
+                    InlineTextContent(
+                        Placeholder(
+                            width = 1.15.em,
+                            height = 1.15.em,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                        )
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(FormatUtils.fixImageUrl(prefixIcon))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(urlColor),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                )
+            }
+            put(COMMENT_INLINE_UP_BADGE_ID, upBadgeInlineContent)
+            put(COMMENT_INLINE_TOP_BADGE_ID, topBadgeInlineContent)
         }
     }
     
-    val hasInteractiveAnnotations = onTimestampClick != null || onUrlClick != null
+    val hasInteractiveAnnotations =
+        onTimestampClick != null ||
+            onUrlClick != null ||
+            onUserClick != null ||
+            onTopicClick != null ||
+            onVoteClick != null
     val selectionEnabled = remember(renderableEmoteKeys, hasInteractiveAnnotations) {
         shouldEnableRichCommentSelection(
             hasRenderableEmotes = renderableEmoteKeys.isNotEmpty(),
@@ -1137,7 +1578,7 @@ fun RichCommentText(
                             val searchEnd = minOf(annotatedString.length, position + 1)
 
                             annotatedString.getStringAnnotations(
-                                tag = "URL",
+                                tag = COMMENT_URL_TAG,
                                 start = searchStart,
                                 end = searchEnd
                             ).firstOrNull()?.let { annotation ->
@@ -1146,7 +1587,34 @@ fun RichCommentText(
                             }
 
                             annotatedString.getStringAnnotations(
-                                tag = "TIMESTAMP",
+                                tag = COMMENT_USER_TAG,
+                                start = searchStart,
+                                end = searchEnd
+                            ).firstOrNull()?.let { annotation ->
+                                annotation.item.toLongOrNull()?.let { onUserClick?.invoke(it) }
+                                return@detectTapGestures
+                            }
+
+                            annotatedString.getStringAnnotations(
+                                tag = COMMENT_TOPIC_TAG,
+                                start = searchStart,
+                                end = searchEnd
+                            ).firstOrNull()?.let { annotation ->
+                                onTopicClick?.invoke(annotation.item)
+                                return@detectTapGestures
+                            }
+
+                            annotatedString.getStringAnnotations(
+                                tag = COMMENT_VOTE_TAG,
+                                start = searchStart,
+                                end = searchEnd
+                            ).firstOrNull()?.let { annotation ->
+                                annotation.item.toLongOrNull()?.let { onVoteClick?.invoke(it) }
+                                return@detectTapGestures
+                            }
+
+                            annotatedString.getStringAnnotations(
+                                tag = COMMENT_TIMESTAMP_TAG,
                                 start = searchStart,
                                 end = searchEnd
                             )
@@ -1199,6 +1667,46 @@ fun RichCommentText(
     }
 }
 
+@Composable
+private fun rememberInlineTopBadgeContent(): InlineTextContent {
+    return remember {
+        InlineTextContent(
+            Placeholder(
+                width = 2.5.em,
+                height = 1.15.em,
+                placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                TopTag()
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberInlineUpBadgeContent(): InlineTextContent {
+    return remember {
+        InlineTextContent(
+            Placeholder(
+                width = 1.7.em,
+                height = 1.15.em,
+                placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                UserUpBadge()
+            }
+        }
+    }
+}
+
 /**
  *  [兼容] 旧版 EmojiText (保持向后兼容)
  */
@@ -1218,63 +1726,13 @@ fun EmojiText(
     )
 }
 
-private fun resolveReplyLevelBadgeResId(asset: ReplyLevelBadgeAsset): Int {
-    return when (asset) {
-        ReplyLevelBadgeAsset.LEVEL_0 -> R.drawable.lv0
-        ReplyLevelBadgeAsset.LEVEL_1 -> R.drawable.lv1
-        ReplyLevelBadgeAsset.LEVEL_2 -> R.drawable.lv2
-        ReplyLevelBadgeAsset.LEVEL_3 -> R.drawable.lv3
-        ReplyLevelBadgeAsset.LEVEL_4 -> R.drawable.lv4
-        ReplyLevelBadgeAsset.LEVEL_5 -> R.drawable.lv5
-        ReplyLevelBadgeAsset.LEVEL_6 -> R.drawable.lv6
-        ReplyLevelBadgeAsset.LEVEL_6_SENIOR -> R.drawable.lv6_s
-    }
-}
-
 //  评论等级标签（PiliPlus pixel badge with text fallback）
 @Composable
 fun LevelTag(level: Int, isSeniorMember: Boolean = false) {
-    val badgeAsset = resolveReplyLevelBadgeAsset(
+    UserLevelBadge(
         level = level,
         isSeniorMember = isSeniorMember
     )
-    if (badgeAsset != null) {
-        Image(
-            bitmap = ImageBitmap.imageResource(id = resolveReplyLevelBadgeResId(badgeAsset)),
-            contentDescription = "等级$level",
-            modifier = Modifier.height(11.dp),
-            filterQuality = FilterQuality.None
-        )
-        return
-    }
-
-    LegacyLevelTag(level = level)
-}
-
-@Composable
-private fun LegacyLevelTag(level: Int) {
-    val badgeColor = resolveLevelBadgeColor(level)
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(3.dp))
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        badgeColor.copy(alpha = 0.92f),
-                        badgeColor
-                    )
-                )
-            )
-            .padding(horizontal = 5.dp, vertical = 1.dp)
-    ) {
-        Text(
-            text = "LV$level",
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            lineHeight = 10.sp
-        )
-    }
 }
 
 @Composable
@@ -1412,17 +1870,6 @@ internal fun resolveDecorationImageUrl(url: String?): String {
     }
 }
 
-private fun resolveLevelBadgeColor(level: Int): Color {
-    return when {
-        level >= 6 -> Color(0xFFF04444)
-        level >= 5 -> Color(0xFFFF7A45)
-        level >= 4 -> Color(0xFFFF8B5A)
-        level >= 3 -> Color(0xFFFF9C6E)
-        level >= 2 -> Color(0xFFFFAE84)
-        else -> Color(0xFFA7ADB8)
-    }
-}
-
 private fun resolveFansMedalColor(level: Int): Color {
     return when {
         level >= 30 -> Color(0xFFE67A2B)
@@ -1453,52 +1900,159 @@ internal fun ReplySpecialLabelChip(text: String) {
     )
 }
 
-//  UP 标签 - iOS Pill Style
 @Composable
-fun UpTag() {
-    Surface(
-        color = Color(0xFFFF6699),
-        shape = CircleShape, // Capsule/Pill shape
+private fun ReplyTextAction(
+    label: String,
+    appearance: VideoCommentAppearance,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .height(16.dp)
-            .wrapContentWidth(),
+            .heightIn(min = 32.dp)
+            .clickable { onClick() }
+            .padding(end = 8.dp)
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.Reply,
+            contentDescription = null,
+            tint = appearance.actionTint,
+            modifier = Modifier.size(17.dp)
+        )
+        Spacer(modifier = Modifier.width(3.dp))
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = appearance.actionTint
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ReplyActionSheet(
+    canDelete: Boolean,
+    canReport: Boolean,
+    topActionLabel: String? = null,
+    onDismiss: () -> Unit,
+    onCopyAll: () -> Unit,
+    onFreeCopy: () -> Unit,
+    onSave: () -> Unit,
+    onReply: () -> Unit,
+    onReport: () -> Unit,
+    onToggleTop: () -> Unit,
+    onDelete: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
             modifier = Modifier
-                .padding(horizontal = 6.dp)
-                .fillMaxHeight()
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp)
         ) {
-            Text(
-                text = "UP",
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                lineHeight = 9.sp
+            ReplyActionSheetItem(
+                label = "复制全部",
+                onClick = {
+                    onCopyAll()
+                    onDismiss()
+                }
             )
+            ReplyActionSheetItem(
+                label = "自由复制",
+                onClick = {
+                    onFreeCopy()
+                    onDismiss()
+                }
+            )
+            ReplyActionSheetItem(
+                label = "保存评论",
+                onClick = {
+                    onSave()
+                    onDismiss()
+                }
+            )
+            ReplyActionSheetItem(
+                label = "回复",
+                onClick = {
+                    onReply()
+                    onDismiss()
+                }
+            )
+            if (canReport) {
+                ReplyActionSheetItem(
+                    label = "举报",
+                    isDestructive = true,
+                    onClick = {
+                        onReport()
+                        onDismiss()
+                    }
+                )
+            }
+            if (!topActionLabel.isNullOrBlank()) {
+                ReplyActionSheetItem(
+                    label = topActionLabel,
+                    onClick = {
+                        onToggleTop()
+                        onDismiss()
+                    }
+                )
+            }
+            if (canDelete) {
+                ReplyActionSheetItem(
+                    label = "删除",
+                    isDestructive = true,
+                    onClick = {
+                        onDelete()
+                        onDismiss()
+                    }
+                )
+            }
         }
     }
 }
 
-//  置顶标签 - iOS Pill Style
 @Composable
-fun PinnedTag() {
-    Surface(
-        color = Color(0xFFFFA500),
-        shape = CircleShape,
-        modifier = Modifier.height(16.dp),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(horizontal = 6.dp)
-        ) {
-            Text(
-                text = "置顶",
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+private fun ReplyActionSheetItem(
+    label: String,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    Text(
+        text = label,
+        fontSize = 16.sp,
+        color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    )
+}
+
+//  UP 标签 - PiliPlus small badge style
+@Composable
+fun UpTag() {
+    UserUpBadge()
+}
+
+@Composable
+fun TopTag() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(3.dp))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(3.dp)
             )
-        }
+            .padding(horizontal = 3.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = "TOP",
+            fontSize = 9.sp,
+            lineHeight = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 

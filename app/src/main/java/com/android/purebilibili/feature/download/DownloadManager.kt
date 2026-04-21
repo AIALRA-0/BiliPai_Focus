@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.IOException
 import java.io.FileOutputStream
 
 private const val DEFAULT_MUXER_SAMPLE_BUFFER_SIZE_BYTES = 1024 * 1024
@@ -37,8 +38,6 @@ internal fun resolveMuxerSampleBufferSize(
     val advertisedMax = maxInputSizes.filter { it > 0 }.maxOrNull() ?: 0
     return maxOf(defaultBytes, advertisedMax)
 }
-
-private class InvalidRangeResponseException(message: String) : IllegalStateException(message)
 
 /**
  *  视频下载管理器
@@ -74,25 +73,18 @@ object DownloadManager {
      */
     fun init(context: Context) {
         appContext = context.applicationContext
-        
-        // [Optim] Perform file IO on background thread
-            // [修复] 1. 同步初始化 (解决竞态条件)
-            val initialPath = com.android.purebilibili.core.store.SettingsManager.getDownloadPathSync(context)
-            downloadDir = resolveDownloadDir(context, initialPath)
-            
-            // [Optim] Perform file IO on background thread
-            scope.launch {
-                // 默认路径 (虽然上面已经设置了，但在协程里保留作为 fallback)
-                // downloadDir = ... (removed)
-                
-                tasksFile = File(context.filesDir, "download_tasks.json")
-                loadTasks()
-                
-                // 监听路径变化
-                com.android.purebilibili.core.store.SettingsManager.getDownloadPath(context)
-                    .collect { customPath ->
-                         downloadDir = resolveDownloadDir(context, customPath)
-                    }
+
+        val initialPath = com.android.purebilibili.core.store.SettingsManager.getDownloadPathSync(context)
+        downloadDir = resolveDownloadDir(context, initialPath)
+        tasksFile = File(context.filesDir, "download_tasks.json")
+        loadTasks()
+        scheduleNextQueuedDownload()
+
+        scope.launch {
+            com.android.purebilibili.core.store.SettingsManager.getDownloadPath(context)
+                .collect { customPath ->
+                    downloadDir = resolveDownloadDir(context, customPath)
+                }
         }
     }
     
@@ -106,16 +98,14 @@ object DownloadManager {
      */
     fun addTask(task: DownloadTask): Boolean {
         val existing = _tasks.value[task.id]
-        if (existing != null && existing.isDownloading) {
+        if (existing != null && existing.status != DownloadStatus.FAILED && existing.status != DownloadStatus.PAUSED) {
             return false // 已在下载中
         }
         
-        val newTask = task.copy(status = DownloadStatus.PENDING)
+        val newTask = task.copy(status = DownloadStatus.QUEUED, errorMessage = null)
         _tasks.value = _tasks.value + (task.id to newTask)
         saveTasks()
-        
-        // 自动开始下载
-        startDownload(task.id)
+        scheduleNextQueuedDownload()
         return true
     }
     
@@ -124,13 +114,10 @@ object DownloadManager {
      */
     fun startDownload(taskId: String) {
         val task = _tasks.value[taskId] ?: return
-        if (task.isDownloading) return
+        if (isDownloadTaskActive(task) || task.status == DownloadStatus.QUEUED) return
         
-        val context = appContext ?: return
-        
-        // 🔧 [修复] 使用 WorkManager 调度下载，确保后台持续运行
-        updateTask(taskId) { it.copy(status = DownloadStatus.PENDING) }
-        DownloadWorker.enqueue(context, taskId)
+        updateTask(taskId) { it.copy(status = DownloadStatus.QUEUED, errorMessage = null) }
+        scheduleNextQueuedDownload()
     }
     
     /**
@@ -140,7 +127,10 @@ object DownloadManager {
     suspend fun executeDownload(taskId: String) {
         val task = _tasks.value[taskId] 
             ?: throw IllegalStateException("任务不存在: $taskId")
-        downloadTask(task)
+        if (task.status != DownloadStatus.PENDING && task.status != DownloadStatus.DOWNLOADING) {
+            throw CancellationException("任务未处于可执行状态: ${task.status}")
+        }
+        downloadTask(taskId)
     }
     
     /**
@@ -150,6 +140,7 @@ object DownloadManager {
         updateTask(taskId) {
             it.copy(status = DownloadStatus.FAILED, errorMessage = errorMessage)
         }
+        scheduleNextQueuedDownload()
     }
     
     /**
@@ -160,6 +151,7 @@ object DownloadManager {
         // 🔧 [修复] 取消 WorkManager 任务
         DownloadWorker.cancel(context, taskId)
         updateTask(taskId) { it.copy(status = DownloadStatus.PAUSED) }
+        scheduleNextQueuedDownload()
     }
     
     /**
@@ -170,28 +162,53 @@ object DownloadManager {
         // 🔧 取消 WorkManager 任务
         DownloadWorker.cancel(context, taskId)
         
-        // 删除文件
         val task = _tasks.value[taskId]
-        task?.filePath?.let { File(it).delete() }
-        task?.exportedFileUri?.let { deleteExportedFile(context, it) }
-        getVideoFile(taskId).delete()
-        getAudioFile(taskId).delete()
+        if (task != null) {
+            val cleanupTargets = resolveDownloadCleanupTargets(
+                taskId = taskId,
+                task = task,
+                taskDirectoryPath = getTaskDir(taskId).absolutePath
+            )
+            cleanupTargets.filePaths.forEach { path ->
+                runCatching { File(path).delete() }
+            }
+            task.exportedFileUri?.let { deleteExportedFile(context, it) }
+            val taskDir = File(cleanupTargets.taskDirectoryPath)
+            if (taskDir.exists() && taskDir.isDirectory && taskDir.listFiles().isNullOrEmpty()) {
+                taskDir.delete()
+            }
+        }
         
         _tasks.value = _tasks.value - taskId
         saveTasks()
+        scheduleNextQueuedDownload()
+    }
+
+    fun updatePlaybackPosition(taskId: String, positionMs: Long) {
+        updateTask(taskId) { current ->
+            current.copy(lastPlaybackPositionMs = positionMs.coerceAtLeast(0L))
+        }
     }
     
     /**
      * 获取任务状态
      */
-    fun getTask(bvid: String, cid: Long): DownloadTask? {
-        return _tasks.value.values.find { it.bvid == bvid && it.cid == cid }
+    fun getVideoTask(bvid: String, cid: Long): DownloadTask? {
+        return _tasks.value.values
+            .filter { !it.isAudioOnly && it.bvid == bvid && it.cid == cid }
+            .sortedWith(
+                compareByDescending<DownloadTask> { it.isComplete }
+                    .thenByDescending { it.isDownloading }
+                    .thenByDescending { it.createdAt }
+            )
+            .firstOrNull()
     }
     
     /**
      * 执行下载
      */
-    private suspend fun downloadTask(task: DownloadTask) {
+    private suspend fun downloadTask(taskId: String) {
+        val task = _tasks.value[taskId] ?: throw IllegalStateException("任务不存在: $taskId")
         updateTask(task.id) { it.copy(status = DownloadStatus.DOWNLOADING) }
         
         val videoFile = getVideoFile(task.id)
@@ -201,9 +218,11 @@ object DownloadManager {
         
         // 🖼️ 0. 下载封面图片（用于离线显示）
         try {
-            downloadCoverImage(task.cover, coverFile)
+            if (!coverFile.exists() || coverFile.length() <= 0L) {
+                downloadCoverImage(task.cover, coverFile)
+                com.android.purebilibili.core.util.Logger.d("DownloadManager", "🖼️ Cover downloaded: ${coverFile.name}")
+            }
             updateTask(task.id) { it.copy(localCoverPath = coverFile.absolutePath) }
-            com.android.purebilibili.core.util.Logger.d("DownloadManager", "🖼️ Cover downloaded: ${coverFile.name}")
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.w("DownloadManager", "⚠️ Cover download failed, will use network URL", e)
         }
@@ -212,15 +231,17 @@ object DownloadManager {
         if (!task.isAudioOnly) {
             downloadFile(task.videoUrl, videoFile, task.id) { progress ->
                 // 如果不仅音频，总进度 = (video + audio) / 2
-                updateTask(task.id) { it.copy(videoProgress = progress, progress = (progress + it.audioProgress) / 2) }
+                updateTask(task.id, persist = false) {
+                    it.copy(videoProgress = progress, progress = (progress + it.audioProgress) / 2)
+                }
             }
         } else {
-             updateTask(task.id) { it.copy(videoProgress = 1f) }
+             updateTask(task.id, persist = false) { it.copy(videoProgress = 1f) }
         }
         
         // 2. 下载音频流
         downloadFile(task.audioUrl, audioFile, task.id) { progress ->
-            updateTask(task.id) {
+            updateTask(task.id, persist = false) {
                 val totalProgress = if (task.isAudioOnly) progress else (it.videoProgress + progress) / 2
                 it.copy(audioProgress = progress, progress = totalProgress)
             }
@@ -228,6 +249,9 @@ object DownloadManager {
         
         // 3. 合并音视频 (或直接处理音频)
         updateTask(task.id) { it.copy(status = DownloadStatus.MERGING, progress = 0.95f) }
+        if (outputFile.exists()) {
+            outputFile.delete()
+        }
         
         if (task.isAudioOnly) {
             // 仅音频模式：直接将音频文件作为输出（或者是转换为 m4a/mp3，这里直接用音频流）
@@ -264,13 +288,13 @@ object DownloadManager {
                 fileSize = outputFile.length()
             ) 
         }
+        scheduleNextQueuedDownload()
         
         com.android.purebilibili.core.util.Logger.d("DownloadManager", "✅ Download completed: ${task.title} (AudioOnly: ${task.isAudioOnly})")
     }
     
     /**
-     * 多线程分段下载单个文件
-     * 使用 Range 请求分段下载，4个线程并发
+     * 单线程下载单个文件，支持基于已有临时文件的续传。
      */
     private suspend fun downloadFile(
         url: String, 
@@ -278,6 +302,8 @@ object DownloadManager {
         taskId: String,
         onProgress: (Float) -> Unit
     ) = withContext(Dispatchers.IO) {
+        ensureTaskCanRun(taskId)
+
         // 获取用户 Cookie
         val sessData = com.android.purebilibili.core.store.TokenManager.sessDataCache ?: ""
         val biliJct = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
@@ -299,137 +325,20 @@ object DownloadManager {
         
         val headResponse = client.newCall(headRequest).execute()
         val totalBytes = headResponse.header("Content-Length")?.toLongOrNull() ?: 0L
-        val acceptRanges = headResponse.header("Accept-Ranges")
+        val acceptRanges = headResponse.header("Accept-Ranges").equals("bytes", ignoreCase = true)
         headResponse.close()
-        
-        // 如果服务器不支持 Range 或文件太小，使用单线程下载
-        if (acceptRanges != "bytes" || totalBytes < 1024 * 1024) { // 小于 1MB 用单线程
-            downloadFileSingleThread(url, file, cookieString, onProgress)
+
+        val plan = resolveResumableDownloadPlan(
+            existingBytes = file.takeIf(File::exists)?.length() ?: 0L,
+            totalBytes = totalBytes,
+            acceptsRanges = acceptRanges
+        )
+        if (plan.alreadyComplete) {
+            onProgress(1f)
             return@withContext
         }
-        
-        // 多线程分段下载
-        val threadCount = 4  // 4个并发线程
-        val segmentSize = totalBytes / threadCount
-        val segmentProgress = LongArray(threadCount)
-        val progressLock = Any()
-        
-        // 创建临时分段文件
-        val segmentFiles = (0 until threadCount).map { 
-            File(getTaskDir(taskId), "${taskId}_seg$it.tmp") 
-        }
-        
-        try {
-            // 并发下载所有分段
-            val jobs = (0 until threadCount).map { index ->
-                async {
-                    val start = index * segmentSize
-                    val end = if (index == threadCount - 1) totalBytes - 1 else (index + 1) * segmentSize - 1
-                    
-                    downloadSegment(
-                        url = url,
-                        file = segmentFiles[index],
-                        start = start,
-                        end = end,
-                        cookieString = cookieString,
-                        onProgress = { downloaded ->
-                            synchronized(progressLock) {
-                                segmentProgress[index] = downloaded
-                                val total = segmentProgress.sum()
-                                onProgress(total.toFloat() / totalBytes)
-                            }
-                        }
-                    )
-                }
-            }
-            
-            // 等待所有分段下载完成
-            jobs.awaitAll()
-            
-            // 合并分段文件
-            java.io.RandomAccessFile(file, "rw").use { output ->
-                segmentFiles.forEach { segmentFile ->
-                    segmentFile.inputStream().use { input ->
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
-                        }
-                    }
-                }
-            }
-            
-            com.android.purebilibili.core.util.Logger.d("DownloadManager", "🚀 Multi-thread download completed: ${file.name}")
-            if (totalBytes > 0L && file.length() != totalBytes) {
-                throw InvalidRangeResponseException(
-                    "Merged file size mismatch, expected=$totalBytes actual=${file.length()}"
-                )
-            }
-            
-        } catch (e: InvalidRangeResponseException) {
-            com.android.purebilibili.core.util.Logger.w(
-                "DownloadManager",
-                "⚠️ Range download validation failed, fallback to single-thread: ${e.message}"
-            )
-            downloadFileSingleThread(url, file, cookieString, onProgress)
-        } finally {
-            // 清理临时分段文件
-            segmentFiles.forEach { it.delete() }
-        }
-    }
-    
-    /**
-     * 下载单个分段
-     */
-    private suspend fun downloadSegment(
-        url: String,
-        file: File,
-        start: Long,
-        end: Long,
-        cookieString: String,
-        onProgress: (Long) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Referer", "https://www.bilibili.com")
-            .header("Cookie", cookieString)
-            .header("Range", "bytes=$start-$end")
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("HTTP ${response.code}")
-        }
-        if (
-            !isValidPartialContentResponse(
-                responseCode = response.code,
-                contentRange = response.header("Content-Range"),
-                requestedStart = start,
-                requestedEnd = end
-            )
-        ) {
-            response.close()
-            throw InvalidRangeResponseException(
-                "Unexpected range response: code=${response.code}, contentRange=${response.header("Content-Range")}"
-            )
-        }
 
-        val body = response.body ?: throw Exception("Empty response")
-        var downloadedBytes = 0L
-        
-        FileOutputStream(file).use { output ->
-            body.byteStream().use { input ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    if (!isActive) throw CancellationException()
-                    output.write(buffer, 0, bytesRead)
-                    downloadedBytes += bytesRead
-                    onProgress(downloadedBytes)
-                }
-            }
-        }
+        downloadFileSingleThread(url, file, cookieString, taskId, plan, onProgress)
     }
     
     /**
@@ -439,37 +348,68 @@ object DownloadManager {
         url: String,
         file: File,
         cookieString: String,
+        taskId: String,
+        plan: ResumableDownloadPlan,
         onProgress: (Float) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
+    ): Unit = withContext(Dispatchers.IO) {
+        if (!plan.append && file.exists() && file.length() > 0L) {
+            file.delete()
+        }
+
+        val requestBuilder = Request.Builder()
             .url(url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .header("Referer", "https://www.bilibili.com")
             .header("Cookie", cookieString)
-            .build()
-        
-        val response = client.newCall(request).execute()
+        if (plan.append) {
+            requestBuilder.header("Range", "bytes=${plan.rangeStartBytes}-")
+        }
+
+        val response = client.newCall(requestBuilder.build()).execute()
         if (!response.isSuccessful) {
             throw Exception("HTTP ${response.code}")
         }
-        
+
+        if (plan.append && response.code != 206) {
+            response.close()
+            file.delete()
+            val restartedPlan = plan.copy(
+                append = false,
+                rangeStartBytes = 0L,
+                initialDownloadedBytes = 0L
+            )
+            downloadFileSingleThread(url, file, cookieString, taskId, restartedPlan, onProgress)
+            return@withContext
+        }
+
         val body = response.body ?: throw Exception("Empty response")
-        val totalBytes = body.contentLength()
-        var downloadedBytes = 0L
-        
-        FileOutputStream(file).use { output ->
+        val totalResponseBytes = plan.totalBytes.takeIf { it > 0L } ?: run {
+            val bodyBytes = body.contentLength()
+            if (bodyBytes > 0L) bodyBytes + plan.initialDownloadedBytes else 0L
+        }
+        var downloadedBytes = plan.initialDownloadedBytes
+
+        if (totalResponseBytes > 0L) {
+            onProgress(downloadedBytes.toFloat() / totalResponseBytes.toFloat())
+        }
+
+        FileOutputStream(file, plan.append).use { output ->
             body.byteStream().use { input ->
                 val buffer = ByteArray(8192)
                 var bytesRead: Int
                 while (input.read(buffer).also { bytesRead = it } != -1) {
-                    if (!isActive) throw CancellationException()
+                    ensureTaskCanRun(taskId)
                     output.write(buffer, 0, bytesRead)
                     downloadedBytes += bytesRead
-                    if (totalBytes > 0) {
-                        onProgress(downloadedBytes.toFloat() / totalBytes)
+                    if (totalResponseBytes > 0L) {
+                        onProgress(downloadedBytes.toFloat() / totalResponseBytes.toFloat())
                     }
                 }
             }
+        }
+
+        if (totalResponseBytes > 0L && downloadedBytes < totalResponseBytes) {
+            throw IOException("下载未完成: $downloadedBytes/$totalResponseBytes")
         }
     }
 
@@ -654,10 +594,35 @@ object DownloadManager {
         } ?: throw Exception("Empty response body")
     }
     
-    private fun updateTask(taskId: String, update: (DownloadTask) -> DownloadTask) {
+    private fun updateTask(
+        taskId: String,
+        persist: Boolean = true,
+        update: (DownloadTask) -> DownloadTask
+    ) {
         val current = _tasks.value[taskId] ?: return
-        _tasks.value = _tasks.value + (taskId to update(current))
-        saveTasks()
+        val updated = update(current)
+        _tasks.value = _tasks.value + (taskId to updated)
+        if (persist && shouldPersistDownloadTaskUpdate(current, updated)) {
+            saveTasks()
+        }
+    }
+
+    private fun enqueueDownload(taskId: String) {
+        val context = appContext ?: return
+        updateTask(taskId) { it.copy(status = DownloadStatus.PENDING, errorMessage = null) }
+        DownloadWorker.enqueue(context, taskId)
+    }
+
+    private fun scheduleNextQueuedDownload() {
+        val nextTaskId = resolveNextQueuedDownloadTaskId(_tasks.value.values) ?: return
+        enqueueDownload(nextTaskId)
+    }
+
+    private fun ensureTaskCanRun(taskId: String) {
+        val task = _tasks.value[taskId] ?: throw CancellationException("任务已不存在")
+        if (!isDownloadTaskActive(task)) {
+            throw CancellationException("任务已停止: ${task.status}")
+        }
     }
     
     private fun loadTasks() {
@@ -666,7 +631,9 @@ object DownloadManager {
             if (file.exists()) {
                 val content = file.readText()
                 val list = json.decodeFromString<List<DownloadTask>>(content)
-                _tasks.value = list.associateBy { it.id }
+                _tasks.value = list
+                    .map(::normalizeRestoredDownloadTask)
+                    .associateBy { it.id }
             }
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("DownloadManager", "Failed to load tasks", e)
@@ -674,14 +641,21 @@ object DownloadManager {
     }
     
     private fun saveTasks() {
-        scope.launch {
-            try {
-                val file = tasksFile ?: return@launch
-                val content = json.encodeToString(_tasks.value.values.toList())
-                file.writeText(content)
-            } catch (e: Exception) {
-                com.android.purebilibili.core.util.Logger.e("DownloadManager", "Failed to save tasks", e)
+        try {
+            val file = tasksFile ?: return
+            val content = json.encodeToString(_tasks.value.values.toList())
+            val parent = file.parentFile ?: return
+            if (!parent.exists()) {
+                parent.mkdirs()
             }
+            val tempFile = File(parent, "${file.name}.tmp")
+            tempFile.writeText(content)
+            if (!tempFile.renameTo(file)) {
+                file.writeText(content)
+                tempFile.delete()
+            }
+        } catch (e: Exception) {
+            com.android.purebilibili.core.util.Logger.e("DownloadManager", "Failed to save tasks", e)
         }
     }
     

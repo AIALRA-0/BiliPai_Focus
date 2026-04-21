@@ -40,18 +40,21 @@ class HomeSettingsStoreParityTest {
 
         assertTrue(result.showHomeCoverGlassBadges)
         assertTrue(result.showHomeInfoGlassBadges)
+        assertTrue(result.showHomeUpBadges)
     }
 
     @Test
     fun `home settings map new glass visibility groups from preferences`() {
         val prefs = mutablePreferencesOf(
             booleanPreferencesKey("home_cover_glass_badges_visible") to false,
-            booleanPreferencesKey("home_info_glass_badges_visible") to false
+            booleanPreferencesKey("home_info_glass_badges_visible") to false,
+            booleanPreferencesKey("home_up_badges_visible") to false
         )
 
         val result = mapHomeSettingsFromPreferences(prefs)
 
         assertEquals(false, result.showHomeCoverGlassBadges)
         assertEquals(false, result.showHomeInfoGlassBadges)
+        assertEquals(false, result.showHomeUpBadges)
     }
 }

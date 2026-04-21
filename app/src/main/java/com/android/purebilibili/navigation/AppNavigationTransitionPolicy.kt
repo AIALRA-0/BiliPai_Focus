@@ -319,6 +319,13 @@ internal fun shouldUseLinkedSettingsBackMotion(
     return mode == BackRouteMotionMode.PREDICTIVE_STABLE
 }
 
+internal fun shouldInterceptSystemBackForClassicMotion(
+    predictiveBackAnimationEnabled: Boolean,
+    hasPreviousBackStackEntry: Boolean
+): Boolean {
+    return !predictiveBackAnimationEnabled && hasPreviousBackStackEntry
+}
+
 internal fun shouldDeferBottomBarRevealOnVideoReturn(
     isReturningFromDetail: Boolean,
     currentRoute: String?

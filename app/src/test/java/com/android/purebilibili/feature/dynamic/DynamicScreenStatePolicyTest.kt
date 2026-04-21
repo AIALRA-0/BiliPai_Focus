@@ -11,8 +11,27 @@ class DynamicScreenStatePolicyTest {
 
     @Test
     fun `horizontal dynamic header should use tighter list top padding`() {
-        assertEquals(168, resolveDynamicListTopPaddingExtraDp(isHorizontalMode = true))
-        assertEquals(100, resolveDynamicListTopPaddingExtraDp(isHorizontalMode = false))
+        assertEquals(
+            168,
+            resolveDynamicListTopPaddingExtraDp(
+                isHorizontalMode = true,
+                isHorizontalUserListCollapsed = false
+            )
+        )
+        assertEquals(
+            100,
+            resolveDynamicListTopPaddingExtraDp(
+                isHorizontalMode = true,
+                isHorizontalUserListCollapsed = true
+            )
+        )
+        assertEquals(
+            100,
+            resolveDynamicListTopPaddingExtraDp(
+                isHorizontalMode = false,
+                isHorizontalUserListCollapsed = false
+            )
+        )
     }
 
     @Test
@@ -42,6 +61,42 @@ class DynamicScreenStatePolicyTest {
                 visibleItemCount = 3,
                 isLoading = false,
                 hasMore = true
+            )
+        )
+    }
+
+    @Test
+    fun shouldLoadMoreDynamicFeed_keepsPrefetchingWhenDefaultTimelineVisibleItemsAreSparse() {
+        assertTrue(
+            shouldLoadMoreDynamicFeed(
+                totalItems = 3,
+                lastVisibleItemIndex = 1,
+                visibleItemCount = 3,
+                isLoading = false,
+                hasMore = true,
+                minimumVisibleItemCountBeforePause = DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE
+            )
+        )
+    }
+
+    @Test
+    fun `horizontal user list collapses once feed leaves top`() {
+        assertFalse(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 12
+            )
+        )
+        assertTrue(
+            shouldCollapseDynamicHorizontalUserList(
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0
             )
         )
     }
@@ -159,16 +214,69 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `selected user feed is active only on up tab`() {
+        assertTrue(shouldUseSelectedUserDynamicFeed(selectedTab = 4, selectedUserId = 10001L))
+        assertFalse(shouldUseSelectedUserDynamicFeed(selectedTab = 0, selectedUserId = 10001L))
+        assertFalse(shouldUseSelectedUserDynamicFeed(selectedTab = 4, selectedUserId = null))
+    }
+
+    @Test
+    fun `clicking user avatar switches to up tab and clearing returns to all`() {
+        assertEquals(
+            4,
+            resolveDynamicTabAfterUserSelection(
+                selectedUserId = null,
+                clickedUserId = 10001L,
+                currentTab = 0
+            )
+        )
+        assertEquals(
+            0,
+            resolveDynamicTabAfterUserSelection(
+                selectedUserId = 10001L,
+                clickedUserId = 10001L,
+                currentTab = 4
+            )
+        )
+        assertEquals(
+            2,
+            resolveDynamicTabAfterUserSelection(
+                selectedUserId = 10001L,
+                clickedUserId = 10001L,
+                currentTab = 2
+            )
+        )
+    }
+
+    @Test
     fun `saved dynamic tab restores when index is valid`() {
-        assertEquals(1, resolveDynamicSelectedTab(savedTab = 1, tabCount = 2))
+        assertEquals(4, resolveDynamicSelectedTab(savedTab = 4, tabCount = 5))
     }
 
     @Test
     fun `saved dynamic tab falls back to all when index is invalid`() {
-        assertEquals(0, resolveDynamicSelectedTab(savedTab = null, tabCount = 2))
-        assertEquals(0, resolveDynamicSelectedTab(savedTab = -1, tabCount = 2))
-        assertEquals(0, resolveDynamicSelectedTab(savedTab = 2, tabCount = 2))
+        assertEquals(0, resolveDynamicSelectedTab(savedTab = null, tabCount = 5))
+        assertEquals(0, resolveDynamicSelectedTab(savedTab = -1, tabCount = 5))
+        assertEquals(0, resolveDynamicSelectedTab(savedTab = 5, tabCount = 5))
         assertEquals(0, resolveDynamicSelectedTab(savedTab = 1, tabCount = 0))
+    }
+
+    @Test
+    fun `dynamic request type aligns with pili plus tab mapping`() {
+        assertEquals("all", resolveDynamicFeedRequestType(selectedTab = 0))
+        assertEquals("video", resolveDynamicFeedRequestType(selectedTab = 1))
+        assertEquals("pgc", resolveDynamicFeedRequestType(selectedTab = 2))
+        assertEquals("article", resolveDynamicFeedRequestType(selectedTab = 3))
+        assertEquals("all", resolveDynamicFeedRequestType(selectedTab = 4))
+    }
+
+    @Test
+    fun `only content tabs use server filtered dynamic feed`() {
+        assertTrue(shouldUseServerFilteredDynamicFeed(selectedTab = 1))
+        assertTrue(shouldUseServerFilteredDynamicFeed(selectedTab = 2))
+        assertTrue(shouldUseServerFilteredDynamicFeed(selectedTab = 3))
+        assertFalse(shouldUseServerFilteredDynamicFeed(selectedTab = 0))
+        assertFalse(shouldUseServerFilteredDynamicFeed(selectedTab = 4))
     }
 
     @Test

@@ -32,6 +32,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoCamera
 import com.android.purebilibili.core.store.LONG_PRESS_SPEED_OPTIONS
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.rememberAppChevronForwardIcon
 import com.android.purebilibili.core.ui.rememberAppCodecIcon
 import com.android.purebilibili.core.ui.rememberAppDownloadIcon
@@ -50,6 +54,88 @@ import com.android.purebilibili.core.ui.rememberAppWifiIcon
 import com.android.purebilibili.core.ui.components.DefaultPlaybackSpeedPreferenceControl
 import com.android.purebilibili.core.ui.components.formatDefaultPlaybackSpeed
 import com.android.purebilibili.data.model.response.AiAudioInfo
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+private data class VideoSettingsPanelVisualSpec(
+    val rowHorizontalPadding: androidx.compose.ui.unit.Dp,
+    val rowVerticalPadding: androidx.compose.ui.unit.Dp,
+    val rowMinHeight: androidx.compose.ui.unit.Dp,
+    val iconSize: androidx.compose.ui.unit.Dp,
+    val iconGap: androidx.compose.ui.unit.Dp,
+    val dividerHorizontalPadding: androidx.compose.ui.unit.Dp,
+    val dividerAlpha: Float,
+    val chipHeight: androidx.compose.ui.unit.Dp,
+    val chipCornerRadius: androidx.compose.ui.unit.Dp,
+    val chipHorizontalPadding: androidx.compose.ui.unit.Dp,
+    val chipSpacing: androidx.compose.ui.unit.Dp
+)
+
+private fun resolveVideoSettingsPanelVisualSpec(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant
+): VideoSettingsPanelVisualSpec {
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        VideoSettingsPanelVisualSpec(
+            rowHorizontalPadding = 16.dp,
+            rowVerticalPadding = 12.dp,
+            rowMinHeight = 56.dp,
+            iconSize = 20.dp,
+            iconGap = 12.dp,
+            dividerHorizontalPadding = 16.dp,
+            dividerAlpha = 0.18f,
+            chipHeight = 34.dp,
+            chipCornerRadius = 17.dp,
+            chipHorizontalPadding = 13.dp,
+            chipSpacing = 7.dp
+        )
+    } else {
+        VideoSettingsPanelVisualSpec(
+            rowHorizontalPadding = 16.dp,
+            rowVerticalPadding = 14.dp,
+            rowMinHeight = 52.dp,
+            iconSize = 24.dp,
+            iconGap = 16.dp,
+            dividerHorizontalPadding = 16.dp,
+            dividerAlpha = 0.5f,
+            chipHeight = 32.dp,
+            chipCornerRadius = 16.dp,
+            chipHorizontalPadding = 12.dp,
+            chipSpacing = 8.dp
+        )
+    }
+}
+
+@Composable
+private fun rememberVideoSettingsPanelVisualSpec(): VideoSettingsPanelVisualSpec {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    return remember(uiPreset, androidNativeVariant) {
+        resolveVideoSettingsPanelVisualSpec(uiPreset, androidNativeVariant)
+    }
+}
+
+@Composable
+private fun videoSettingsChipContainerColor(isSelected: Boolean): Color {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        if (isSelected) MiuixTheme.colorScheme.secondaryContainer else MiuixTheme.colorScheme.surfaceContainerHigh
+    } else {
+        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    }
+}
+
+@Composable
+private fun videoSettingsChipContentColor(isSelected: Boolean): Color {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        if (isSelected) MiuixTheme.colorScheme.onSecondaryContainer else MiuixTheme.colorScheme.onSurfaceVariantSummary
+    } else {
+        if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
 
 /**
  *  视频设置面板 - 竖屏模式下的高级设置底部弹窗
@@ -123,6 +209,7 @@ fun VideoSettingsPanel(
     }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val panelSpec = rememberVideoSettingsPanelVisualSpec()
     val context = androidx.compose.ui.platform.LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val actionPolicy = remember(configuration.screenWidthDp) {
@@ -176,7 +263,9 @@ fun VideoSettingsPanel(
                 .fillMaxWidth()
                 .navigationBarsPadding(),
             contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(
+                if (LocalAndroidNativeVariant.current == AndroidNativeVariant.MIUIX) 4.dp else 8.dp
+            )
         ) {
             //  定时关闭 - 垂直布局，选项在下一行
             item {
@@ -191,10 +280,14 @@ fun VideoSettingsPanel(
                         Icon(
                             imageVector = timerIcon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
+                            tint = if (LocalAndroidNativeVariant.current == AndroidNativeVariant.MIUIX) {
+                                MiuixTheme.colorScheme.onSurfaceVariantActions
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(panelSpec.iconSize)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(panelSpec.iconGap))
                         Text(
                             text = "定时关闭",
                             fontSize = 16.sp,
@@ -368,8 +461,8 @@ fun VideoSettingsPanel(
                         // 画质选项
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                    horizontalArrangement = Arrangement.spacedBy(panelSpec.chipSpacing)
+                ) {
                             qualityLabels.forEachIndexed { index, label ->
                                 val isSelected = label == currentQualityLabel
                                 val qualityId = qualityIds.getOrNull(index) ?: 0
@@ -377,14 +470,14 @@ fun VideoSettingsPanel(
                                 val hasPermission = hasPermissionForQuality(qualityId)
                                 val isEnabled = isSwitchable && hasPermission
                                 val containerColor = when {
-                                    isSelected -> MaterialTheme.colorScheme.primary
-                                    isEnabled -> MaterialTheme.colorScheme.surfaceVariant
-                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                    isSelected -> videoSettingsChipContainerColor(true)
+                                    isEnabled -> videoSettingsChipContainerColor(false)
+                                    else -> videoSettingsChipContainerColor(false).copy(alpha = 0.55f)
                                 }
                                 val contentColor = when {
-                                    isSelected -> MaterialTheme.colorScheme.onPrimary
-                                    isEnabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                    isSelected -> videoSettingsChipContentColor(true)
+                                    isEnabled -> videoSettingsChipContentColor(false)
+                                    else -> videoSettingsChipContentColor(false).copy(alpha = 0.45f)
                                 }
 
                                 Surface(
@@ -394,13 +487,13 @@ fun VideoSettingsPanel(
                                         }
                                     },
                                     enabled = isSelected || isEnabled,
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = RoundedCornerShape(panelSpec.chipCornerRadius),
                                     color = containerColor,
-                                    modifier = Modifier.height(32.dp)
+                                    modifier = Modifier.height(panelSpec.chipHeight)
                                 ) {
                                     Box(
                                         contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 12.dp)
+                                        modifier = Modifier.padding(horizontal = panelSpec.chipHorizontalPadding)
                                     ) {
                                         Text(
                                             text = label,
@@ -1083,12 +1176,47 @@ private fun SettingsItem(
     trailing: @Composable (() -> Unit)? = null
 ) {
     val chevronIcon = rememberAppChevronForwardIcon()
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val spec = rememberVideoSettingsPanelVisualSpec()
+    if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        BasicComponent(
+            title = title,
+            summary = subtitle,
+            onClick = onClick,
+            insideMargin = PaddingValues(
+                horizontal = spec.rowHorizontalPadding,
+                vertical = spec.rowVerticalPadding
+            ),
+            startAction = {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    modifier = Modifier.size(spec.iconSize)
+                )
+            },
+            endActions = {
+                if (trailing != null) {
+                    trailing()
+                } else {
+                    Icon(
+                        imageVector = chevronIcon,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        )
+        return
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .heightIn(min = spec.rowMinHeight)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = spec.rowHorizontalPadding, vertical = spec.rowVerticalPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 图标
@@ -1096,10 +1224,10 @@ private fun SettingsItem(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(spec.iconSize)
         )
         
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(spec.iconGap))
         
         // 标题和副标题
         Column(modifier = Modifier.weight(1f)) {
@@ -1134,10 +1262,11 @@ private fun SettingsItem(
 
 @Composable
 private fun SettingsDivider() {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier.padding(horizontal = spec.dividerHorizontalPadding),
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = spec.dividerAlpha)
     )
 }
 
@@ -1149,6 +1278,7 @@ private fun SleepTimerOptions(
     currentMinutes: Int?,
     onSelect: (Int?) -> Unit
 ) {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     val options = listOf(
         null to "关闭",
         15 to "15分钟",
@@ -1159,30 +1289,24 @@ private fun SleepTimerOptions(
     
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
     ) {
         options.forEach { (minutes, label) ->
             val isSelected = currentMinutes == minutes
             Surface(
                 onClick = { onSelect(minutes) },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.height(32.dp)
+                shape = RoundedCornerShape(spec.chipCornerRadius),
+                color = videoSettingsChipContainerColor(isSelected),
+                modifier = Modifier.height(spec.chipHeight)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
                 ) {
                     Text(
                         text = label,
                         fontSize = 13.sp,
-                        color = if (isSelected) 
-                            MaterialTheme.colorScheme.onPrimary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        color = videoSettingsChipContentColor(isSelected)
                     )
                 }
             }
@@ -1198,6 +1322,7 @@ private fun SpeedOptions(
     currentSpeed: Float,
     onSelect: (Float) -> Unit
 ) {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     val options = listOf(
         0.5f to "0.5x",
         0.75f to "0.75x",
@@ -1210,30 +1335,24 @@ private fun SpeedOptions(
     
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
     ) {
         options.forEach { (speed, label) ->
             val isSelected = currentSpeed == speed
             Surface(
                 onClick = { onSelect(speed) },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.height(32.dp)
+                shape = RoundedCornerShape(spec.chipCornerRadius),
+                color = videoSettingsChipContainerColor(isSelected),
+                modifier = Modifier.height(spec.chipHeight)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
                 ) {
                     Text(
                         text = label,
                         fontSize = 13.sp,
-                        color = if (isSelected) 
-                            MaterialTheme.colorScheme.onPrimary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        color = videoSettingsChipContentColor(isSelected)
                     )
                 }
             }
@@ -1252,13 +1371,11 @@ private fun FlipButton(
     onClick: () -> Unit,
     policy: VideoSettingsPanelActionPolicy
 ) {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(policy.pillHeightDp.dp),
-        color = if (isActive) 
-            MaterialTheme.colorScheme.primaryContainer 
-        else 
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+        color = if (isActive) videoSettingsChipContainerColor(true) else videoSettingsChipContainerColor(false).copy(alpha = 0.78f),
         border = if (isActive) null else null,
         modifier = Modifier
             .height(policy.pillHeightDp.dp)
@@ -1275,9 +1392,9 @@ private fun FlipButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (isActive) 
-                    MaterialTheme.colorScheme.onPrimaryContainer 
+                    videoSettingsChipContentColor(true)
                 else 
-                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    videoSettingsChipContentColor(false),
                 modifier = Modifier.size(policy.pillIconSizeDp.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -1286,9 +1403,9 @@ private fun FlipButton(
                 fontSize = 13.sp,
                 fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
                 color = if (isActive) 
-                    MaterialTheme.colorScheme.onPrimaryContainer 
+                    videoSettingsChipContentColor(true)
                 else 
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    videoSettingsChipContentColor(false)
             )
         }
     }
@@ -1301,10 +1418,15 @@ private fun SettingsActionPill(
     onClick: () -> Unit,
     policy: VideoSettingsPanelActionPolicy
 ) {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(policy.pillHeightDp.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = if (LocalAndroidNativeVariant.current == AndroidNativeVariant.MIUIX) {
+            MiuixTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
         modifier = Modifier
             .height(policy.pillHeightDp.dp)
             .defaultMinSize(minWidth = policy.pillMinWidthDp.dp)
@@ -1342,34 +1464,29 @@ private fun SeekSecondsOptions(
     currentSeconds: Int,
     onSelect: (Int) -> Unit
 ) {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     val options = listOf(5, 10, 15, 20, 30)
     
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
     ) {
         options.forEach { seconds ->
             val isSelected = currentSeconds == seconds
             Surface(
                 onClick = { onSelect(seconds) },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.height(32.dp)
+                shape = RoundedCornerShape(spec.chipCornerRadius),
+                color = videoSettingsChipContainerColor(isSelected),
+                modifier = Modifier.height(spec.chipHeight)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
                 ) {
                     Text(
                         text = "${seconds}s",
                         fontSize = 13.sp,
-                        color = if (isSelected) 
-                            MaterialTheme.colorScheme.onPrimary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        color = videoSettingsChipContentColor(isSelected)
                     )
                 }
             }
@@ -1385,34 +1502,29 @@ private fun LongPressSpeedOptions(
     currentSpeed: Float,
     onSelect: (Float) -> Unit
 ) {
+    val spec = rememberVideoSettingsPanelVisualSpec()
     val options = LONG_PRESS_SPEED_OPTIONS
     
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
     ) {
         options.forEach { speed ->
             val isSelected = currentSpeed == speed
             Surface(
                 onClick = { onSelect(speed) },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.height(32.dp)
+                shape = RoundedCornerShape(spec.chipCornerRadius),
+                color = videoSettingsChipContainerColor(isSelected),
+                modifier = Modifier.height(spec.chipHeight)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
                 ) {
                     Text(
                         text = "${speed}x",
                         fontSize = 13.sp,
-                        color = if (isSelected) 
-                            MaterialTheme.colorScheme.onPrimary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        color = videoSettingsChipContentColor(isSelected)
                     )
                 }
             }

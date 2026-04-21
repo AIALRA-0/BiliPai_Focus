@@ -11,7 +11,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -37,29 +39,45 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowClockwise
 import io.github.alexzhirkevich.cupertino.icons.filled.TextBubble
 import io.github.alexzhirkevich.cupertino.icons.filled.BubbleLeft
 import android.app.Activity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AspectRatio
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.android.purebilibili.feature.live.rememberLiveChromePalette
 
 @Composable
 private fun PlayerIconBtn(
     icon: ImageVector,
     onClick: () -> Unit,
+    active: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val palette = rememberLiveChromePalette()
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.24f),
+        color = if (active) palette.accentSoft else palette.scrim.copy(alpha = 0.48f),
         modifier = modifier
             .size(38.dp)
-            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
+            .border(
+                1.dp,
+                if (active) palette.accent.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.10f),
+                CircleShape
+            )
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White
+                tint = if (active) palette.accentStrong else Color.White
             )
         }
     }
@@ -77,7 +95,9 @@ private fun PlayerIconBtn(
 fun LivePlayerControls(
     isPlaying: Boolean,
     isFullscreen: Boolean,
+    showTopBar: Boolean = true,
     title: String,
+    subtitle: String = "",
     onPlayPause: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onBack: () -> Unit,
@@ -88,12 +108,25 @@ fun LivePlayerControls(
     // 新增：弹幕开关
     isDanmakuEnabled: Boolean = true,
     onToggleDanmaku: () -> Unit = {},
+    onOpenDanmakuSettings: () -> Unit = {},
+    onOpenBlockSettings: () -> Unit = {},
     // [新增] 刷新
     onRefresh: () -> Unit = {},
+    isAudioOnly: Boolean = false,
+    onToggleAudioOnly: () -> Unit = {},
+    isBackgroundPlaybackEnabled: Boolean = true,
+    onToggleBackgroundPlayback: () -> Unit = {},
+    onOpenShutdownTimer: () -> Unit = {},
+    onOpenPlayerInfo: () -> Unit = {},
+    videoFitDesc: String = "",
+    onVideoFitClick: () -> Unit = {},
+    currentQualityDesc: String = "",
+    onQualityClick: () -> Unit = {},
     showPipButton: Boolean = false,
     onEnterPip: () -> Unit = {}
 ) {
     var isControlsVisible by remember { mutableStateOf(true) }
+    val palette = rememberLiveChromePalette()
     
     // 自动隐藏控制器
     LaunchedEffect(isControlsVisible, isPlaying) {
@@ -208,11 +241,11 @@ fun LivePlayerControls(
             modifier = Modifier.align(Alignment.Center)
         ) {
             Surface(
-                color = Color.Black.copy(alpha = 0.42f),
+                color = palette.scrim.copy(alpha = 0.68f),
                 shape = RoundedCornerShape(18.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
-                    Color.White.copy(alpha = 0.08f)
+                    palette.border
                 )
             ) {
                 Column(
@@ -230,7 +263,7 @@ fun LivePlayerControls(
         
         // 2. 顶部栏 (返回 + 标题)
         AnimatedVisibility(
-            visible = isControlsVisible,
+            visible = showTopBar && isControlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopStart)
@@ -241,8 +274,8 @@ fun LivePlayerControls(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color.Black.copy(alpha = 0.78f),
-                                Color.Black.copy(alpha = 0.36f),
+                                palette.scrim.copy(alpha = 0.92f),
+                                palette.scrim.copy(alpha = 0.48f),
                                 Color.Transparent
                             )
                         )
@@ -256,14 +289,61 @@ fun LivePlayerControls(
                     onClick = onBack
                 )
                 Spacer(Modifier.width(16.dp))
-                Text(
-                    text = title,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    if (subtitle.isNotBlank() && isFullscreen) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = subtitle,
+                            color = Color.White.copy(alpha = 0.76f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (showPipButton) {
+                        PlayerIconBtn(
+                            icon = Icons.Outlined.PictureInPictureAlt,
+                            onClick = onEnterPip,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                    PlayerIconBtn(
+                        icon = Icons.Outlined.MusicNote,
+                        onClick = onToggleAudioOnly,
+                        active = isAudioOnly,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    PlayerIconBtn(
+                        icon = Icons.Outlined.PlayCircleOutline,
+                        onClick = onToggleBackgroundPlayback,
+                        active = isBackgroundPlaybackEnabled,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    PlayerIconBtn(
+                        icon = Icons.Outlined.Timer,
+                        onClick = onOpenShutdownTimer,
+                        modifier = Modifier.size(34.dp)
+                    )
+                    PlayerIconBtn(
+                        icon = Icons.Outlined.Info,
+                        onClick = onOpenPlayerInfo,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
             }
         }
         
@@ -274,6 +354,7 @@ fun LivePlayerControls(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
+            val scrollState = rememberScrollState()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -281,8 +362,8 @@ fun LivePlayerControls(
                         Brush.verticalGradient(
                             listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.34f),
-                                Color.Black.copy(alpha = 0.78f)
+                                palette.scrim.copy(alpha = 0.44f),
+                                palette.scrim.copy(alpha = 0.92f)
                             )
                         )
                     )
@@ -304,92 +385,129 @@ fun LivePlayerControls(
                     onClick = onRefresh
                 )
                 
-                Spacer(Modifier.weight(1f))
-                
-                // [修改] 弹幕开关 - 始终显示 (竖屏/横屏都需要)
-                // 弹幕开关胶囊按钮
-                Surface(
-                    onClick = onToggleDanmaku,
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isDanmakuEnabled) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    ) {
-                         // [小图标]
-                        Icon(
-                            imageVector = CupertinoIcons.Filled.TextBubble, 
-                            contentDescription = null,
-                            tint = if (isDanmakuEnabled) Color.White else Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = if (isDanmakuEnabled) "弹幕 开" else "弹幕 关",
-                            color = if (isDanmakuEnabled) Color.White else Color.White.copy(alpha = 0.5f),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                }
-                
                 Spacer(Modifier.width(12.dp))
-
-                // 侧边栏开关 (仅横屏/全屏下显示)
-                if (showChatToggle) {
-                    // 侧边栏开关胶囊按钮
-                    Surface(
-                        onClick = {
-                            com.android.purebilibili.core.util.Logger.d("LivePlayerControls", "Chat toggle clicked, current visible: $isChatVisible")
-                            onToggleChat()
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isChatVisible) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
-                        modifier = Modifier.height(32.dp)
-                    ) {
+                
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(scrollState),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PlayerIconBtn(
+                        icon = Icons.Outlined.Block,
+                        onClick = onOpenBlockSettings
+                    )
+                    
+                        Surface(
+                            onClick = onToggleDanmaku,
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isDanmakuEnabled) palette.accentSoft else palette.scrim.copy(alpha = 0.34f),
+                            modifier = Modifier.height(32.dp)
+                        ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 12.dp)
                         ) {
-                             Icon(
-                                imageVector = CupertinoIcons.Filled.BubbleLeft, 
-                                contentDescription = null,
-                                tint = if (isChatVisible) Color.White else Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.size(14.dp)
-                            )
+                                Icon(
+                                    imageVector = CupertinoIcons.Filled.TextBubble,
+                                    contentDescription = null,
+                                    tint = if (isDanmakuEnabled) palette.accentStrong else Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(14.dp)
+                                )
                             Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "互动区",
-                                color = if (isChatVisible) Color.White else Color.White.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        }
+                                Text(
+                                    text = if (isDanmakuEnabled) "弹幕 开" else "弹幕 关",
+                                    color = if (isDanmakuEnabled) palette.accentStrong else Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                     }
                     
-                    Spacer(Modifier.width(16.dp))
-                }
-
-                if (showPipButton) {
-                    Surface(
-                        onClick = onEnterPip,
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White.copy(alpha = 0.14f),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp)
+                    PlayerIconBtn(
+                        icon = Icons.Outlined.Settings,
+                        onClick = onOpenDanmakuSettings
+                    )
+                    
+                    if (showChatToggle) {
+                        Surface(
+                            onClick = {
+                                com.android.purebilibili.core.util.Logger.d("LivePlayerControls", "Chat toggle clicked, current visible: $isChatVisible")
+                                onToggleChat()
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isChatVisible) palette.accentSoft else palette.scrim.copy(alpha = 0.34f),
+                            modifier = Modifier.height(32.dp)
                         ) {
-                            Text(
-                                text = "小窗",
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelMedium
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = CupertinoIcons.Filled.BubbleLeft,
+                                    contentDescription = null,
+                                    tint = if (isChatVisible) palette.accentStrong else Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "互动区",
+                                    color = if (isChatVisible) palette.accentStrong else Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                     }
-                    Spacer(Modifier.width(12.dp))
+
+                    if (videoFitDesc.isNotBlank()) {
+                        Surface(
+                            onClick = onVideoFitClick,
+                            shape = RoundedCornerShape(16.dp),
+                            color = palette.scrim.copy(alpha = 0.42f),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AspectRatio,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = videoFitDesc,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+
+                    if (currentQualityDesc.isNotBlank()) {
+                        Surface(
+                            onClick = onQualityClick,
+                            shape = RoundedCornerShape(16.dp),
+                            color = palette.scrim.copy(alpha = 0.42f),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Text(
+                                    text = currentQualityDesc,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
                 }
+
+                Spacer(Modifier.width(12.dp))
                 
                 // 全屏
                 PlayerIconBtn(

@@ -7,6 +7,90 @@ import kotlin.test.assertNull
 class HomeScrollCoordinatorTest {
 
     @Test
+    fun collapsedHeaderWithoutMotion_doesNotCountAsHeaderTransition() {
+        assertEquals(
+            false,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = false,
+                isPagerScrolling = false,
+                isHeaderSettleAnimating = false
+            )
+        )
+    }
+
+    @Test
+    fun activeScrollOrSettle_countsAsHeaderTransition() {
+        assertEquals(
+            true,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = true,
+                isPagerScrolling = false,
+                isHeaderSettleAnimating = false
+            )
+        )
+        assertEquals(
+            true,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = false,
+                isPagerScrolling = true,
+                isHeaderSettleAnimating = false
+            )
+        )
+        assertEquals(
+            true,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = false,
+                isPagerScrolling = false,
+                isHeaderSettleAnimating = true
+            )
+        )
+    }
+
+    @Test
+    fun horizontalDominantPreScroll_doesNotDriveHomeHeader() {
+        assertEquals(
+            false,
+            shouldHandleHomeVerticalPreScroll(
+                deltaX = -42f,
+                deltaY = 6f
+            )
+        )
+    }
+
+    @Test
+    fun verticalDominantPreScroll_keepsHomeHeaderTrackingEnabled() {
+        assertEquals(
+            true,
+            shouldHandleHomeVerticalPreScroll(
+                deltaX = 4f,
+                deltaY = -24f
+            )
+        )
+    }
+
+    @Test
+    fun settledHeaderOffsetChange_animatesBetweenPages() {
+        val result = resolveHomeHeaderSettleTransition(
+            currentHeaderOffsetPx = -54f,
+            targetHeaderOffsetPx = 0f
+        )
+
+        assertEquals(0f, result.targetOffsetPx)
+        assertEquals(true, result.shouldAnimate)
+    }
+
+    @Test
+    fun unchangedSettledHeaderOffset_skipsAnimation() {
+        val result = resolveHomeHeaderSettleTransition(
+            currentHeaderOffsetPx = -54f,
+            targetHeaderOffsetPx = -54f
+        )
+
+        assertEquals(-54f, result.targetOffsetPx)
+        assertEquals(false, result.shouldAnimate)
+    }
+
+    @Test
     fun preScroll_updatesHeaderOffsetWithinBounds() {
         val result = reduceHomePreScroll(
             currentHeaderOffsetPx = -40f,

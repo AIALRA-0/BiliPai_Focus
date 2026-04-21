@@ -128,4 +128,66 @@ class SearchModelsParsingTest {
         assertEquals("专栏", item?.categoryName)
         assertTrue(item?.imageUrls?.firstOrNull()?.startsWith("https://") == true)
     }
+
+    @Test
+    fun decodeSearchTrendingResponse_preservesPinnedRowsAndBadges() {
+        val payload = """
+            {
+              "code": 0,
+              "top_list": [
+                {
+                  "keyword": "中华民族伟大复兴势不可挡",
+                  "show_name": "中华民族伟大复兴势不可挡"
+                }
+              ],
+              "list": [
+                {
+                  "keyword": "Vitality G2",
+                  "show_name": "Vitality G2",
+                  "show_live_icon": true
+                },
+                {
+                  "keyword": "UP主探访水利院校",
+                  "show_name": "UP主探访水利院校",
+                  "icon": "//i0.hdslb.com/hot.png",
+                  "recommend_reason": "热"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<SearchTrendingResponse>(payload)
+        val pinned = response.topList?.firstOrNull()
+        val ranked = response.list?.getOrNull(1)
+
+        assertEquals("中华民族伟大复兴势不可挡", pinned?.show_name)
+        assertTrue(response.list?.firstOrNull()?.show_live_icon == true)
+        assertEquals("//i0.hdslb.com/hot.png", ranked?.icon)
+        assertEquals("热", ranked?.recommend_reason)
+    }
+
+    @Test
+    fun decodeSearchSuggestResponse_acceptsTermAndRichText() {
+        val payload = """
+            {
+              "code": 0,
+              "result": {
+                "tag": [
+                  {
+                    "term": "黑神话",
+                    "value": "黑神话",
+                    "name": "<suggest_high_light>黑神话</suggest_high_light>悟空"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<SearchSuggestResponse>(payload)
+        val tag = response.result?.tag?.firstOrNull()
+
+        assertEquals("黑神话", tag?.term)
+        assertEquals("黑神话", tag?.value)
+        assertEquals("<suggest_high_light>黑神话</suggest_high_light>悟空", tag?.name)
+    }
 }

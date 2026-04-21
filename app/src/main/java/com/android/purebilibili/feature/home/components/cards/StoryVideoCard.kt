@@ -74,8 +74,11 @@ fun StoryVideoCard(
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     scrollLiteModeEnabled: Boolean = false,
+    isDataSaverActive: Boolean = false,
+    preferLowQualityCover: Boolean = false,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    showUpBadge: Boolean = true,
     showPublishTime: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
@@ -111,6 +114,13 @@ fun StoryVideoCard(
     val premiumBadgeLabel = remember(video.rights) {
         resolveVideoPremiumBadgeLabel(video.rights)
     }
+    val useLowQualityCover = isDataSaverActive && preferLowQualityCover
+    val coverUrl = remember(video.bvid, useLowQualityCover) {
+        FormatUtils.resolveVideoCoverUrl(
+            if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic,
+            useLowQuality = useLowQualityCover
+        )
+    }
     val publishTimeRowText = remember(showPublishTime, video.pubdate, video.title) {
         if (!showPublishTime) {
             ""
@@ -131,10 +141,6 @@ fun StoryVideoCard(
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
-    
-    val coverUrl = remember(video.bvid) {
-        FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
-    }
     
     //  获取屏幕尺寸用于计算归一化坐标
     val configuration = LocalConfiguration.current
@@ -460,6 +466,7 @@ fun StoryVideoCard(
                 metaColor = MaterialTheme.colorScheme.primary,
                 badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                 badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                showUpBadge = showUpBadge,
                 modifier = upNameModifier
             )
             

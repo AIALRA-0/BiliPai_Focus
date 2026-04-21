@@ -33,6 +33,8 @@ import com.kyant.backdrop.effects.blur
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
+import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
+import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
 
 /**
  * 🌊 液态玻璃选中指示器
@@ -51,7 +53,7 @@ import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
  * @param modifier Modifier
  */
 @Composable
-fun LiquidIndicator(
+internal fun LiquidIndicator(
     position: Float,
     itemWidth: Dp,
     itemCount: Int,
@@ -77,6 +79,7 @@ fun LiquidIndicator(
     forceChromaticAberration: Boolean = false,
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
     liquidGlassTuning: LiquidGlassTuning? = null,
+    motionSpec: BottomBarMotionSpec = resolveBottomBarMotionSpec(),
     backdrop: Backdrop? = null // [New] Backdrop for refraction
 ) {
     val density = LocalDensity.current
@@ -90,7 +93,8 @@ fun LiquidIndicator(
         lensIntensityBoost,
         edgeWarpBoost,
         chromaticBoost,
-        resolvedTuning
+        resolvedTuning,
+        motionSpec
     ) {
         resolveLiquidLensProfile(
             isDragging = isDragging,
@@ -99,7 +103,8 @@ fun LiquidIndicator(
             dragMotionFloor = styleTuning.dragMotionFloor,
             lensIntensityBoost = lensIntensityBoost * styleTuning.lensIntensityMultiplier,
             edgeWarpBoost = edgeWarpBoost * styleTuning.edgeWarpMultiplier,
-            chromaticBoost = chromaticBoost * styleTuning.chromaticMultiplier
+            chromaticBoost = chromaticBoost * styleTuning.chromaticMultiplier,
+            velocityRangePxPerSecond = motionSpec.indicator.lensVelocityRangePxPerSecond
         )
     }
     
@@ -121,14 +126,27 @@ fun LiquidIndicator(
     val centerOffsetPx = (itemWidthPx - indicatorWidthPx) / 2f
     
     // 速度形变
-    val deformation = lensProfile.motionFraction * (0.34f * styleTuning.deformationMultiplier)
-    
+    val deformation = lensProfile.motionFraction *
+        (motionSpec.indicator.deformationScaleXDelta * styleTuning.deformationMultiplier)
+
     val targetScaleX = 1f + deformation
-    val targetScaleY = 1f - (deformation * 0.52f)
-    
-    val scaleX by animateFloatAsState(targetValue = targetScaleX, animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f), label = "scaleX")
-    val scaleY by animateFloatAsState(targetValue = targetScaleY, animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f), label = "scaleY")
-    val dragScale by animateFloatAsState(targetValue = if (isDragging) 1.0f else 1f, animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f), label = "dragScale")
+    val targetScaleY = 1f - (deformation * motionSpec.indicator.deformationScaleYCompressionRatio)
+
+    val scaleX by animateFloatAsState(
+        targetValue = targetScaleX,
+        animationSpec = motionSpec.indicator.scaleSpring.toSpringSpec(),
+        label = "scaleX"
+    )
+    val scaleY by animateFloatAsState(
+        targetValue = targetScaleY,
+        animationSpec = motionSpec.indicator.scaleSpring.toSpringSpec(),
+        label = "scaleY"
+    )
+    val dragScale by animateFloatAsState(
+        targetValue = if (isDragging) 1.0f else 1f,
+        animationSpec = motionSpec.indicator.dragScaleSpring.toSpringSpec(),
+        label = "dragScale"
+    )
 
     val finalScaleX = scaleX * dragScale
     val finalScaleY = scaleY * dragScale
@@ -463,19 +481,21 @@ internal fun resolveLiquidLensProfile(
     dragMotionFloor: Float = 0.22f,
     lensIntensityBoost: Float = 1f,
     edgeWarpBoost: Float = 1f,
-    chromaticBoost: Float = 1f
+    chromaticBoost: Float = 1f,
+    velocityRangePxPerSecond: Float = 2600f
 ): LiquidLensProfile {
     val speed = abs(velocityPxPerSecond)
     val threshold = idleThresholdPxPerSecond
+    val safeVelocityRange = velocityRangePxPerSecond.coerceAtLeast(1f)
     val safeDragFloor = dragMotionFloor.coerceIn(0f, 0.8f)
     val safeLensBoost = lensIntensityBoost.coerceIn(0.8f, 2.2f)
     val safeEdgeWarpBoost = edgeWarpBoost.coerceIn(0.8f, 2.2f)
     val safeChromaBoost = chromaticBoost.coerceIn(0.8f, 2.2f)
     val baseMotion = if (isDragging) safeDragFloor else 0f
     val speedMotion = if (isDragging) {
-        (speed / 2600f).coerceIn(0f, 1f)
+        (speed / safeVelocityRange).coerceIn(0f, 1f)
     } else {
-        ((speed - threshold).coerceAtLeast(0f) / 2600f).coerceIn(0f, 1f)
+        ((speed - threshold).coerceAtLeast(0f) / safeVelocityRange).coerceIn(0f, 1f)
     }
     val motionFraction = (baseMotion + speedMotion * (1f - baseMotion)).coerceIn(0f, 1f)
     val shouldRefract = isDragging || speed > threshold

@@ -53,6 +53,8 @@ import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
@@ -797,15 +799,16 @@ fun SettingsScreen(
     val settingsSearchResults = remember(settingsSearchQuery) {
         resolveSettingsSearchResults(
             query = settingsSearchQuery,
-            maxResults = 12
+            maxResults = 20
         )
     }
     BackHandler(enabled = shouldConsumeSettingsBack(showBlockedList)) {
         showBlockedList = false
     }
-    val onSettingsSearchResultClick: (SettingsSearchTarget) -> Unit = { target ->
+    val onSettingsSearchResultClick: (SettingsSearchResult) -> Unit = { result ->
         settingsSearchQuery = ""
-        when (target) {
+        SettingsSearchFocusController.submit(result.target, result.focusId)
+        when (result.target) {
             SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
             SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
             SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
@@ -1103,7 +1106,7 @@ private fun MobileSettingsLayout(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     searchResults: List<SettingsSearchResult>,
-    onSearchResultClick: (SettingsSearchTarget) -> Unit,
+    onSearchResultClick: (SettingsSearchResult) -> Unit,
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
@@ -1167,12 +1170,10 @@ private fun MobileSettingsLayout(
 
     LaunchedEffect(Unit) { isVisible = true }
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(screenTitle, fontWeight = FontWeight.Bold)
-                },
+            AdaptiveTopAppBar(
+                title = screenTitle,
                 navigationIcon = {
                     IconButton(
                         onClick = onBack

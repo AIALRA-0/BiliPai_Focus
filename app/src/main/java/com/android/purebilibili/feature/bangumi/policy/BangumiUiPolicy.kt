@@ -24,3 +24,26 @@ internal fun resolveBangumiDanmakuTopInsetDp(
     return if (isFullscreen) 0f else safeInset + 52f
 }
 
+internal data class BangumiEpisodePreviewWindow(
+    val startIndex: Int,
+    val endExclusive: Int
+)
+
+internal fun resolveBangumiEpisodePreviewWindow(
+    episodeCount: Int,
+    selectedPage: Int,
+    episodesPerPage: Int,
+    previewCount: Int
+): BangumiEpisodePreviewWindow {
+    if (episodeCount <= 0 || episodesPerPage <= 0 || previewCount <= 0) {
+        return BangumiEpisodePreviewWindow(startIndex = 0, endExclusive = 0)
+    }
+    val maxPage = (episodeCount - 1) / episodesPerPage
+    val safePage = selectedPage.coerceIn(0, maxPage)
+    val pageStart = safePage * episodesPerPage
+    val pageEnd = minOf(pageStart + episodesPerPage, episodeCount)
+    return BangumiEpisodePreviewWindow(
+        startIndex = pageStart,
+        endExclusive = minOf(pageStart + previewCount, pageEnd)
+    )
+}

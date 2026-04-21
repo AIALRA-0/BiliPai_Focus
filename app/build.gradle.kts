@@ -69,11 +69,44 @@ fun parseGitHubRepositoryCoordinates(raw: String?): GitHubRepositoryCoordinates?
 fun detectFocusRepositoryCoordinates(): GitHubRepositoryCoordinates {
     val explicit = sequenceOf(
         System.getenv("FOCUS_GITHUB_REPOSITORY"),
-        System.getenv("GITHUB_REPOSITORY")
+        System.getenv("GITHUB_REPOSITORY"),
+        System.getProperty("focus.github.repository")
     ).mapNotNull(::parseGitHubRepositoryCoordinates).firstOrNull()
     if (explicit != null) return explicit
+    val originDerived = runCatching {
+        val dotGit = rootProject.file(".git")
+        val configFile = when {
+            dotGit.isDirectory -> File(dotGit, "config")
+            dotGit.isFile -> {
+                val gitDir = dotGit.readText()
+                    .lineSequence()
+                    .firstOrNull { it.trim().startsWith("gitdir:", ignoreCase = true) }
+                    ?.substringAfter(':')
+                    ?.trim()
+                    ?.let { File(rootProject.projectDir, it).normalize() }
+                gitDir?.let { File(it, "config") }
+            }
+            else -> null
+        }
+        configFile
+            ?.takeIf { it.exists() }
+            ?.readText()
+            ?.let { config ->
+                Regex("""\[remote "origin"]([\s\S]*?)(?:\r?\n\[|$)""")
+                    .find(config)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.lineSequence()
+                    ?.map { it.trim() }
+                    ?.firstOrNull { it.startsWith("url =", ignoreCase = true) }
+                    ?.substringAfter('=')
+                    ?.trim()
+            }
+            ?.let(::parseGitHubRepositoryCoordinates)
+    }.getOrNull()
+    if (originDerived != null) return originDerived
     return GitHubRepositoryCoordinates(
-        owner = "focus-release",
+        owner = "AIALRA-0",
         name = "BiliPai_Focus"
     )
 }
@@ -136,8 +169,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：官方主版本 + Focus 子版本
         // 更新日志：CHANGELOG.md
-        versionCode = 163
-        versionName = "7.5.1-focus.3"
+        versionCode = 164
+        versionName = "7.9.6-focus.1"
         resValue("string", "app_name", "BliPai Focus")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -333,29 +366,32 @@ tasks.matching { task ->
 
 dependencies {
     val miuixVersion = "0.8.6"
+    val media3Version = "1.10.0"
+    val lifecycleVersion = "2.10.0"
+    val roomVersion = "2.8.4"
 
     implementation(project(":settings-core"))
     implementation(project(":network-core"))
 
     // --- 1. Compose UI ---
-    implementation(platform("androidx.compose:compose-bom:2025.12.00"))  // 🔥 更新到最新版本
-    implementation("androidx.activity:activity-compose:1.11.0")
-    implementation("androidx.appcompat:appcompat:1.6.1")  // 🚀 For AppCompatDelegate night mode
+    implementation(platform("androidx.compose:compose-bom:2026.03.01"))  // 🔥 更新到最新版本
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")  // 🚀 For AppCompatDelegate night mode
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material3:material3-window-size-class:1.3.1") // [新增] 窗口大小类
+    implementation("androidx.compose.material3:material3-window-size-class") // [新增] 窗口大小类
     implementation("top.yukonga.miuix.kmp:miuix-android:$miuixVersion")
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
 
     // --- 2. Network (网络请求) ---
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:retrofit:2.12.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     // 🔥 Brotli Decompression (for Bilibili Live Danmaku ProtoVer=3)
     implementation("org.brotli:dec:0.1.2")
 
@@ -367,14 +403,14 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
     
     // --- 3.2 Lottie (动画效果) ---
-    implementation("com.airbnb.android:lottie-compose:6.6.2")
+    implementation("com.airbnb.android:lottie-compose:6.7.1")
     
     // --- 3.3 Haze (毛玻璃效果) ---
-    implementation("dev.chrisbanes.haze:haze:1.7.1")
-    implementation("dev.chrisbanes.haze:haze-materials:1.7.1")
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
     
     // --- 3.4 Shimmer (骨架屏加载) ---
-    implementation("com.valentinilk.shimmer:compose-shimmer:1.2.0")
+    implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")
     
     // --- 3.5 Compose Cupertino (iOS 风格 UI 组件) ---
     // 提供 iOS 风格的 Switch、Button、Picker、Dialog 等组件
@@ -388,7 +424,7 @@ dependencies {
     implementation("com.github.skydoves:orbital:0.4.0")
     
     // --- 3.7 Startup (应用初始化) ---
-    implementation("androidx.startup:startup-runtime:1.1.1")
+    implementation("androidx.startup:startup-runtime:1.2.0")
     
     // --- 3.8 Backdrop (液态玻璃效果) ---
     // 提供透镜折射、玻璃高光、连续圆角等 iOS/visionOS 风格视觉效果
@@ -396,13 +432,12 @@ dependencies {
 
 
     // --- 4. Player (视频播放器 Media3) ---
-    implementation("androidx.media3:media3-exoplayer:1.3.0")
-    implementation("androidx.media3:media3-exoplayer-dash:1.3.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.3.0")  // 🔥 HLS 直播流支持
-    implementation("androidx.media3:media3-ui:1.3.0")
-    implementation("androidx.media3:media3-datasource-okhttp:1.3.0")
-    implementation("androidx.media3:media3-session:1.3.0")
-    implementation("androidx.media:media:1.7.0")
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3Version")  // 🔥 HLS 直播流支持
+    implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
 
     // --- 5. Danmaku (弹幕引擎) ---
     // 🔥 使用 ByteDance DanmakuRenderEngine - 轻量级高性能弹幕渲染引擎
@@ -411,29 +446,28 @@ dependencies {
     // 注：FFmpegKit 已于 2025 年停止维护，改用 ExoPlayer 直接播放分离音视频
 
     // --- 6. Database (Room 数据库) ---
-    val roomVersion = "2.7.0"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // --- 7. DataStore (本地存储 Cookie/设置) ---
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // --- 8. Utils (工具类) ---
     // 二维码生成
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
     // Pinyin 拼音转换 (用于模糊搜索)
     implementation("com.belerweb:pinyin4j:2.5.0")
     // Core KTX
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
-    implementation("androidx.lifecycle:lifecycle-process:2.9.4")  // 🔋 ProcessLifecycleOwner 后台检测
-    implementation("androidx.metrics:metrics-performance:1.0.0-beta01")
+    implementation("androidx.core:core-ktx:1.18.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-process:$lifecycleVersion")  // 🔋 ProcessLifecycleOwner 后台检测
+    implementation("androidx.metrics:metrics-performance:1.0.0")
     
     // --- 8.1 WorkManager (后台下载任务) ---
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     // [新增] ML Kit 人脸检测（远程模型，减少 APK 体积）
     // 使用 Play Services 动态下发模型，不把人脸模型打进 APK。
     implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
@@ -451,20 +485,20 @@ dependencies {
     // NanoHTTPD (Lightweight local proxy server)
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
-    implementation("androidx.navigation:navigation-compose:2.9.4")
+    implementation("androidx.navigation:navigation-compose:2.9.7")
     
     // --- 9. SplashScreen (启动屏支持) ---
-    implementation("androidx.core:core-splashscreen:1.2.0-alpha02")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     
     // --- 10. ProfileInstaller (启动优化) ---
-    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     add("benchmarkImplementation", "androidx.tracing:tracing-perfetto:1.0.0")
     add("benchmarkImplementation", "androidx.tracing:tracing-perfetto-binary:1.0.0")
     
     // --- 11. Firebase (崩溃追踪和分析) ---
-    implementation(platform("com.google.firebase:firebase-bom:33.11.0"))
-    implementation("com.google.firebase:firebase-crashlytics-ktx")
-    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-analytics")
 
     // --- 11. Debug (调试工具) ---
     debugImplementation("androidx.compose.ui:ui-test-manifest")
@@ -494,9 +528,9 @@ dependencies {
     testImplementation("app.cash.turbine:turbine:1.0.0")
     
     // --- 13. Android Instrumented Tests ---
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.03.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }
 

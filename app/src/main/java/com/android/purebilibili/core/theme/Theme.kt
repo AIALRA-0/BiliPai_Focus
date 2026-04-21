@@ -17,6 +17,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -24,6 +25,7 @@ import com.android.purebilibili.feature.settings.AppThemeMode
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.defaultTextStyles
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
@@ -293,45 +295,282 @@ private fun createLightColorScheme(primaryColor: Color) = lightColorScheme(
 private val DarkColorScheme = createDarkColorScheme(iOSSystemBlue)
 private val LightColorScheme = createLightColorScheme(iOSSystemBlue)
 
-private fun createMd3DarkColorScheme(primaryColor: Color) = darkColorScheme(
-    primary = primaryColor,
-    onPrimary = White,
-    primaryContainer = primaryColor.copy(alpha = 0.28f),
-    onPrimaryContainer = White,
-    secondary = primaryColor.copy(alpha = 0.82f),
-    secondaryContainer = primaryColor.copy(alpha = 0.2f),
-    onSecondaryContainer = White,
-    background = Color(0xFF121212),
-    surface = Color(0xFF1E1E1E),
-    onSurface = White,
-    surfaceVariant = Color(0xFF2B2B2B),
-    onSurfaceVariant = Color(0xFFD1D1D1),
-    surfaceContainer = Color(0xFF242424),
-    outline = Color(0xFF8D8D8D),
-    outlineVariant = Color(0xFF4C4C4C)
+private data class HslColorModel(
+    val hue: Float,
+    val saturation: Float,
+    val lightness: Float
 )
 
-private fun createMd3LightColorScheme(primaryColor: Color) = lightColorScheme(
-    primary = primaryColor,
-    onPrimary = White,
-    primaryContainer = primaryColor.copy(alpha = 0.14f),
-    onPrimaryContainer = primaryColor,
-    secondary = primaryColor.copy(alpha = 0.84f),
-    secondaryContainer = primaryColor.copy(alpha = 0.1f),
-    onSecondaryContainer = primaryColor,
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EC),
-    onSurfaceVariant = Color(0xFF49454F),
-    surfaceContainer = Color(0xFFF3EDF7),
-    outline = Color(0xFF79747E),
-    outlineVariant = Color(0xFFCAC4D0)
+private fun Color.toHslColorModel(): HslColorModel {
+    val red = red
+    val green = green
+    val blue = blue
+    val max = maxOf(red, green, blue)
+    val min = minOf(red, green, blue)
+    val delta = max - min
+    val lightness = (max + min) / 2f
+
+    val saturation = if (delta == 0f) {
+        0f
+    } else {
+        delta / (1f - kotlin.math.abs(2f * lightness - 1f))
+    }
+
+    val hue = when {
+        delta == 0f -> 0f
+        max == red -> 60f * positiveModulo((green - blue) / delta, 6f)
+        max == green -> 60f * (((blue - red) / delta) + 2f)
+        else -> 60f * (((red - green) / delta) + 4f)
+    }
+
+    return HslColorModel(
+        hue = normalizeHue(hue),
+        saturation = saturation.coerceIn(0f, 1f),
+        lightness = lightness.coerceIn(0f, 1f)
+    )
+}
+
+private fun normalizeHue(hue: Float): Float {
+    val value = hue % 360f
+    return if (value < 0f) value + 360f else value
+}
+
+private fun positiveModulo(value: Float, modulus: Float): Float {
+    val result = value % modulus
+    return if (result < 0f) result + modulus else result
+}
+
+private fun colorFromHsl(
+    hue: Float,
+    saturation: Float,
+    lightness: Float
+): Color {
+    val normalizedHue = normalizeHue(hue)
+    val normalizedSaturation = saturation.coerceIn(0f, 1f)
+    val normalizedLightness = lightness.coerceIn(0f, 1f)
+    val chroma = (1f - kotlin.math.abs(2f * normalizedLightness - 1f)) * normalizedSaturation
+    val huePrime = normalizedHue / 60f
+    val secondComponent = chroma * (1f - kotlin.math.abs(positiveModulo(huePrime, 2f) - 1f))
+    val match = normalizedLightness - chroma / 2f
+
+    val (redPrime, greenPrime, bluePrime) = when {
+        huePrime < 1f -> Triple(chroma, secondComponent, 0f)
+        huePrime < 2f -> Triple(secondComponent, chroma, 0f)
+        huePrime < 3f -> Triple(0f, chroma, secondComponent)
+        huePrime < 4f -> Triple(0f, secondComponent, chroma)
+        huePrime < 5f -> Triple(secondComponent, 0f, chroma)
+        else -> Triple(chroma, 0f, secondComponent)
+    }
+
+    return Color(
+        redPrime + match,
+        greenPrime + match,
+        bluePrime + match,
+        1f,
+        ColorSpaces.Srgb
+    )
+}
+
+private fun blendColors(
+    background: Color,
+    foreground: Color,
+    foregroundRatio: Float
+): Color {
+    val ratio = foregroundRatio.coerceIn(0f, 1f)
+    val inverse = 1f - ratio
+    return Color(
+        background.red * inverse + foreground.red * ratio,
+        background.green * inverse + foreground.green * ratio,
+        background.blue * inverse + foreground.blue * ratio,
+        background.alpha * inverse + foreground.alpha * ratio,
+        ColorSpaces.Srgb
+    )
+}
+
+private fun chooseReadableOnColor(background: Color): Color {
+    return if (calculateContrastRatio(White, background) >= calculateContrastRatio(Black, background)) {
+        White
+    } else {
+        Black
+    }
+}
+
+private fun deriveNeutralSurfaceColor(
+    source: HslColorModel,
+    lightness: Float,
+    maxSaturation: Float
+): Color {
+    return colorFromHsl(
+        hue = source.hue,
+        saturation = minOf(source.saturation * 0.16f, maxSaturation),
+        lightness = lightness
+    )
+}
+
+private fun deriveAccentColor(
+    source: HslColorModel,
+    hueShift: Float,
+    saturationScale: Float,
+    lightness: Float,
+    minimumSaturation: Float = 0.18f
+): Color {
+    return colorFromHsl(
+        hue = source.hue + hueShift,
+        saturation = maxOf(minimumSaturation, source.saturation * saturationScale),
+        lightness = lightness
+    )
+}
+
+internal fun createStaticMd3ColorScheme(
+    primaryColor: Color,
+    darkTheme: Boolean,
+    amoledDarkTheme: Boolean
+): ColorScheme {
+    val source = primaryColor.toHslColorModel()
+
+    val scheme = if (darkTheme) {
+        val primary = deriveAccentColor(
+            source = source,
+            hueShift = 0f,
+            saturationScale = 0.90f,
+            lightness = maxOf(source.lightness, 0.78f),
+            minimumSaturation = 0.22f
+        )
+        val secondary = deriveAccentColor(
+            source = source,
+            hueShift = 10f,
+            saturationScale = 0.42f,
+            lightness = 0.76f,
+            minimumSaturation = 0.16f
+        )
+        val tertiary = deriveAccentColor(
+            source = source,
+            hueShift = 56f,
+            saturationScale = 0.52f,
+            lightness = 0.78f,
+            minimumSaturation = 0.20f
+        )
+        val background = deriveNeutralSurfaceColor(source, lightness = 0.075f, maxSaturation = 0.05f)
+        val surface = deriveNeutralSurfaceColor(source, lightness = 0.10f, maxSaturation = 0.06f)
+        val surfaceVariant = deriveNeutralSurfaceColor(source, lightness = 0.18f, maxSaturation = 0.09f)
+        val surfaceContainer = deriveNeutralSurfaceColor(source, lightness = 0.14f, maxSaturation = 0.07f)
+        val surfaceContainerHigh = deriveNeutralSurfaceColor(source, lightness = 0.17f, maxSaturation = 0.08f)
+        val outline = deriveNeutralSurfaceColor(source, lightness = 0.54f, maxSaturation = 0.08f)
+        val outlineVariant = deriveNeutralSurfaceColor(source, lightness = 0.33f, maxSaturation = 0.07f)
+        val primaryContainer = blendColors(background = background, foreground = primary, foregroundRatio = 0.34f)
+        val secondaryContainer = blendColors(background = background, foreground = secondary, foregroundRatio = 0.28f)
+        val tertiaryContainer = blendColors(background = background, foreground = tertiary, foregroundRatio = 0.28f)
+
+        darkColorScheme(
+            primary = primary,
+            onPrimary = chooseReadableOnColor(primary),
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = chooseReadableOnColor(primaryContainer),
+            secondary = secondary,
+            onSecondary = chooseReadableOnColor(secondary),
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = chooseReadableOnColor(secondaryContainer),
+            tertiary = tertiary,
+            onTertiary = chooseReadableOnColor(tertiary),
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = chooseReadableOnColor(tertiaryContainer),
+            background = background,
+            onBackground = chooseReadableOnColor(background),
+            surface = surface,
+            onSurface = chooseReadableOnColor(surface),
+            surfaceVariant = surfaceVariant,
+            onSurfaceVariant = resolveReadableTextColor(
+                candidate = deriveNeutralSurfaceColor(source, lightness = 0.78f, maxSaturation = 0.08f),
+                background = surfaceVariant,
+                fallback = chooseReadableOnColor(surfaceVariant),
+                minimumContrast = 3.0f
+            ),
+            surfaceContainer = surfaceContainer,
+            surfaceContainerHigh = surfaceContainerHigh,
+            outline = outline,
+            outlineVariant = outlineVariant
+        )
+    } else {
+        val primary = primaryColor
+        val secondary = deriveAccentColor(
+            source = source,
+            hueShift = 10f,
+            saturationScale = 0.42f,
+            lightness = source.lightness.coerceIn(0.34f, 0.46f),
+            minimumSaturation = 0.15f
+        )
+        val tertiary = deriveAccentColor(
+            source = source,
+            hueShift = 56f,
+            saturationScale = 0.55f,
+            lightness = 0.42f,
+            minimumSaturation = 0.18f
+        )
+        val background = deriveNeutralSurfaceColor(source, lightness = 0.98f, maxSaturation = 0.12f)
+        val surface = deriveNeutralSurfaceColor(source, lightness = 0.99f, maxSaturation = 0.04f)
+        val surfaceVariant = deriveNeutralSurfaceColor(source, lightness = 0.90f, maxSaturation = 0.08f)
+        val surfaceContainer = deriveNeutralSurfaceColor(source, lightness = 0.95f, maxSaturation = 0.06f)
+        val surfaceContainerHigh = deriveNeutralSurfaceColor(source, lightness = 0.92f, maxSaturation = 0.07f)
+        val outline = deriveNeutralSurfaceColor(source, lightness = 0.55f, maxSaturation = 0.08f)
+        val outlineVariant = deriveNeutralSurfaceColor(source, lightness = 0.82f, maxSaturation = 0.06f)
+        val primaryContainer = blendColors(background = background, foreground = primary, foregroundRatio = 0.18f)
+        val secondaryContainer = blendColors(background = background, foreground = secondary, foregroundRatio = 0.16f)
+        val tertiaryContainer = blendColors(background = background, foreground = tertiary, foregroundRatio = 0.16f)
+
+        lightColorScheme(
+            primary = primary,
+            onPrimary = chooseReadableOnColor(primary),
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = chooseReadableOnColor(primaryContainer),
+            secondary = secondary,
+            onSecondary = chooseReadableOnColor(secondary),
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = chooseReadableOnColor(secondaryContainer),
+            tertiary = tertiary,
+            onTertiary = chooseReadableOnColor(tertiary),
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = chooseReadableOnColor(tertiaryContainer),
+            background = background,
+            onBackground = chooseReadableOnColor(background),
+            surface = surface,
+            onSurface = chooseReadableOnColor(surface),
+            surfaceVariant = surfaceVariant,
+            onSurfaceVariant = resolveReadableTextColor(
+                candidate = deriveNeutralSurfaceColor(source, lightness = 0.36f, maxSaturation = 0.08f),
+                background = surfaceVariant,
+                fallback = chooseReadableOnColor(surfaceVariant),
+                minimumContrast = 3.0f
+            ),
+            surfaceContainer = surfaceContainer,
+            surfaceContainerHigh = surfaceContainerHigh,
+            outline = outline,
+            outlineVariant = outlineVariant
+        )
+    }
+
+    return if (darkTheme && amoledDarkTheme) {
+        applyAmoledSurfaceOverrides(scheme)
+    } else {
+        scheme
+    }
+}
+
+private fun createMd3DarkColorScheme(primaryColor: Color) = createStaticMd3ColorScheme(
+    primaryColor = primaryColor,
+    darkTheme = true,
+    amoledDarkTheme = false
+)
+
+private fun createMd3LightColorScheme(primaryColor: Color) = createStaticMd3ColorScheme(
+    primaryColor = primaryColor,
+    darkTheme = false,
+    amoledDarkTheme = false
 )
 
 @Composable
 fun PureBiliBiliTheme(
     uiPreset: UiPreset = UiPreset.IOS,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
     themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
@@ -354,10 +593,13 @@ fun PureBiliBiliTheme(
         amoledDarkTheme = amoledDarkTheme,
         uiPreset = uiPreset
     ) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val shapes = if (renderingProfile.useMaterialChrome) {
-        Shapes()
-    } else {
-        iOSShapes
+    val shapes = resolveMaterialShapes(uiPreset, androidNativeVariant)
+    val materialTypography = resolveMaterialTypography(
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
+    ).scaled(fontSizePreset.multiplier)
+    val miuixTextStyles = remember(fontSizePreset) {
+        defaultTextStyles().scaled(fontSizePreset.multiplier)
     }
     val lightMaterialScheme = enforceDynamicLightTextContrast(
         if (renderingProfile.useMaterialChrome) {
@@ -390,7 +632,9 @@ fun PureBiliBiliTheme(
     val controller = remember(
         themeMode,
         dynamicColor,
-        darkTheme
+        darkTheme,
+        miuixLightColors,
+        miuixDarkColors
     ) {
         ThemeController(
             colorSchemeMode = resolveMiuixColorSchemeMode(
@@ -427,15 +671,20 @@ fun PureBiliBiliTheme(
 
     CompositionLocalProvider(
         LocalUiPreset provides uiPreset,
+        LocalAndroidNativeVariant provides androidNativeVariant,
         LocalDynamicColorActive provides isDynamicColorActive,
-        LocalCornerRadiusScale provides if (renderingProfile.useMaterialChrome) 0.9f else 1f
+        LocalCornerRadiusScale provides resolveCornerRadiusScale(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
     ) {
         MiuixTheme(
-            controller = controller
+            controller = controller,
+            textStyles = miuixTextStyles
         ) {
             MaterialTheme(
                 colorScheme = materialColorScheme,
-                typography = BiliTypography.scaled(fontSizePreset.multiplier),
+                typography = materialTypography,
                 shapes = shapes,
                 content = content
             )

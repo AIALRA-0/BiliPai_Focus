@@ -62,4 +62,35 @@ class SpaceSelectionChipColorPolicyTest {
         assertEquals(scheme.surfaceVariant.copy(alpha = 0.7f), colors.backgroundColor)
         assertEquals(scheme.onSurfaceVariant, colors.textColor)
     }
+
+    @Test
+    fun `followed button uses theme aware secondary container`() {
+        val scheme = darkColorScheme(
+            secondaryContainer = Color(0xFF3D2F14),
+            onSecondaryContainer = Color(0xFFFFDFA0),
+            primary = Color(0xFF9FCBFF),
+            onPrimary = Color(0xFF003258)
+        )
+
+        val followed = resolveSpaceFollowButtonColors(isFollowed = true, colorScheme = scheme)
+        val unfollowed = resolveSpaceFollowButtonColors(isFollowed = false, colorScheme = scheme)
+
+        assertEquals(scheme.secondaryContainer, followed.backgroundColor)
+        assertEquals(scheme.onSecondaryContainer, followed.textColor)
+        assertEquals(scheme.primary, unfollowed.backgroundColor)
+        assertEquals(scheme.onPrimary, unfollowed.textColor)
+    }
+
+    @Test
+    fun `official tag uses theme aware tertiary container`() {
+        val scheme = darkColorScheme(
+            tertiaryContainer = Color(0xFF4A3420),
+            onTertiaryContainer = Color(0xFFFFDCC4)
+        )
+
+        val colors = resolveSpaceOfficialTagColors(scheme)
+
+        assertEquals(scheme.tertiaryContainer, colors.backgroundColor)
+        assertEquals(scheme.onTertiaryContainer, colors.textColor)
+    }
 }

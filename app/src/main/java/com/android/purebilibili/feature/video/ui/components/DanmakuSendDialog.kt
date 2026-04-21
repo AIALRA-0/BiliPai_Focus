@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
@@ -51,6 +52,8 @@ internal data class DanmakuSendSelectionState(
     val mode: Int,
     val fontSize: Int
 )
+
+internal const val DANMAKU_SEND_VIP_GRADUAL_COLOR = -1
 
 internal fun resolveDanmakuSendDialogLayoutPolicy(): DanmakuSendDialogLayoutPolicy {
     return DanmakuSendDialogLayoutPolicy(
@@ -94,7 +97,7 @@ internal fun resolveDanmakuSendSelectionState(
 fun DanmakuSendDialog(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onSend: (message: String, color: Int, mode: Int, fontSize: Int) -> Unit,
+    onSend: (message: String, color: Int, mode: Int, fontSize: Int, encourage: Boolean) -> Unit,
     isSending: Boolean = false,
     initialColor: Int = 16777215,
     initialMode: Int = 1,
@@ -124,7 +127,8 @@ fun DanmakuSendDialog(
         52224 to "绿色",     // 0x00CD00
         41430 to "蓝色",     // 0x00A1D6
         13369971 to "紫色",  // 0xCC0273
-        2236962 to "黑色"    // 0x222222
+        2236962 to "黑色",   // 0x222222
+        DANMAKU_SEND_VIP_GRADUAL_COLOR to "会员渐变"
     )
 
     // 弹幕位置模式
@@ -146,6 +150,7 @@ fun DanmakuSendDialog(
     var selectedColor by remember { mutableIntStateOf(initialColor) }
     var selectedMode by remember { mutableIntStateOf(initialMode) }
     var selectedFontSize by remember { mutableIntStateOf(initialFontSize) }
+    var encourageChecked by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -165,6 +170,7 @@ fun DanmakuSendDialog(
             selectedColor = selection.color
             selectedMode = selection.mode
             selectedFontSize = selection.fontSize
+            encourageChecked = false
             delay(100)
             focusRequester.requestFocus()
             keyboardController?.show()
@@ -329,7 +335,20 @@ fun DanmakuSendDialog(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(Color(colorValue or 0xFF000000.toInt()))
+                                            .then(
+                                                if (colorValue == DANMAKU_SEND_VIP_GRADUAL_COLOR) {
+                                                    Modifier.background(
+                                                        Brush.linearGradient(
+                                                            colors = listOf(
+                                                                Color(0xFFDD94DA),
+                                                                Color(0xFF72B2EA)
+                                                            )
+                                                        )
+                                                    )
+                                                } else {
+                                                    Modifier.background(Color(colorValue or 0xFF000000.toInt()))
+                                                }
+                                            )
                                             .then(
                                                 if (isSelected) {
                                                     Modifier.border(
@@ -342,8 +361,47 @@ fun DanmakuSendDialog(
                                                 }
                                             )
                                             .clickable { selectedColor = colorValue }
-                                    )
+                                    ) {
+                                        if (colorValue == DANMAKU_SEND_VIP_GRADUAL_COLOR) {
+                                            Text(
+                                                text = "VIP",
+                                                modifier = Modifier.align(Alignment.Center),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
                                 }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f))
+                                .clickable { encourageChecked = !encourageChecked }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = encourageChecked,
+                                onCheckedChange = { encourageChecked = it }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "关注弹幕",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "发送时附带 B 站关注/鼓励弹幕标识",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
 
@@ -423,7 +481,13 @@ fun DanmakuSendDialog(
                         Button(
                             onClick = {
                                 if (text.isNotBlank() && !isSending) {
-                                    onSend(text.trim(), selectedColor, selectedMode, selectedFontSize)
+                                    onSend(
+                                        text.trim(),
+                                        selectedColor,
+                                        selectedMode,
+                                        selectedFontSize,
+                                        encourageChecked
+                                    )
                                 }
                             },
                             modifier = Modifier

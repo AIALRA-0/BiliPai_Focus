@@ -11,6 +11,7 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.Image
@@ -38,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.layout.ContentScale
@@ -50,6 +50,7 @@ import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.SharedTransitionProvider
 import com.android.purebilibili.core.ui.wallpaper.SplashWallpaperLayout
 import com.android.purebilibili.core.ui.wallpaper.resolveSplashWallpaperLayout
@@ -101,6 +102,7 @@ import kotlin.math.pow
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
 private const val KEY_FIRST_LAUNCH = "first_launch_shown"
+internal const val EXTRA_PENDING_NAVIGATION_ROUTE = "pending_navigation_route"
 private val PLUGIN_INSTALL_HTTPS_HOSTS = setOf(
     "bilipai.app",
     "www.bilipai.app",
@@ -148,8 +150,8 @@ internal fun resolvePluginInstallDeepLink(rawDeepLink: String): PluginInstallDee
         ?.mapNotNull { part ->
             if (part.isBlank()) return@mapNotNull null
             val pair = part.split("=", limit = 2)
-            val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8)
-            val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8)
+            val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8.name())
+            val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8.name())
             key to value
         }
         ?.toMap()
@@ -177,7 +179,8 @@ internal fun shouldNavigateToVideoFromNotification(
 
 internal fun resolveMainActivityVideoRoute(
     bvid: String,
-    cid: Long
+    cid: Long,
+    startFullscreen: Boolean = false
 ): String {
     return com.android.purebilibili.navigation.VideoRoute.resolveVideoRoutePath(
         bvid = bvid,
@@ -185,6 +188,7 @@ internal fun resolveMainActivityVideoRoute(
         encodedCover = "",
         startAudio = false,
         autoPortrait = true,
+        fullscreen = startFullscreen,
         resumePositionMs = 0L
     )
 }
@@ -506,6 +510,57 @@ internal fun splashTrailSecondaryAlpha(progress: Float): Float {
     return (0.2f * (1f - trailProgress).pow(1.22f)).coerceIn(0f, 1f)
 }
 
+@RequiresApi(Build.VERSION_CODES.S)
+private fun applySplashRealtimeBlur(
+    splashView: android.view.View,
+    animatedTarget: android.view.View,
+    primaryTrailView: android.view.View?,
+    secondaryTrailView: android.view.View?,
+    radius: Float
+) {
+    splashView.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius * 0.55f,
+            radius * 0.55f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+    animatedTarget.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius,
+            radius,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+    primaryTrailView?.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius * 1.2f,
+            radius * 1.2f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+    secondaryTrailView?.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius * 1.45f,
+            radius * 1.45f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+private fun clearSplashRealtimeBlur(
+    splashView: android.view.View,
+    animatedTarget: android.view.View,
+    primaryTrailView: android.view.View?,
+    secondaryTrailView: android.view.View?
+) {
+    splashView.setRenderEffect(null)
+    animatedTarget.setRenderEffect(null)
+    primaryTrailView?.setRenderEffect(null)
+    secondaryTrailView?.setRenderEffect(null)
+}
+
 internal enum class SplashFlyoutTargetType {
     SYSTEM_ICON,
     FALLBACK_ICON,
@@ -530,7 +585,7 @@ internal fun shouldLogWarmResume(
     return hasCompletedInitialResume && !isChangingConfigurations
 }
 
-@OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
 class MainActivity : AppCompatActivity() {
     
     //  PiP 状态
@@ -611,44 +666,14 @@ class MainActivity : AppCompatActivity() {
                 splashExitCallbackTriggered = true
                 runCatching {
                     val splashView = splashScreenViewProvider.view
-                    val systemIconView = splashScreenViewProvider.iconView
-                    if (systemIconView == null) {
-                        Logger.w(TAG, "⚠️ Splash system iconView unavailable, attempting fallback icon")
-                    }
-                    val fallbackIconView = if (systemIconView == null) {
-                        (splashView as? android.view.ViewGroup)?.let { container ->
-                            val sizePx = (112f * resources.displayMetrics.density).toInt()
-                            ImageView(this).apply {
-                                scaleType = ImageView.ScaleType.FIT_CENTER
-                                setImageResource(splashFlyoutIconResId)
-                                if (container is android.widget.FrameLayout) {
-                                    container.addView(
-                                        this,
-                                        android.widget.FrameLayout.LayoutParams(
-                                            sizePx,
-                                            sizePx,
-                                            android.view.Gravity.CENTER
-                                        )
-                                    )
-                                } else {
-                                    container.addView(
-                                        this,
-                                        android.view.ViewGroup.LayoutParams(sizePx, sizePx)
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        null
-                    }
-                    val animatedTarget = systemIconView ?: fallbackIconView ?: splashView
+                    val animatedTarget = splashScreenViewProvider.iconView
                     val targetType = resolveSplashFlyoutTargetType(
-                        hasSystemIcon = systemIconView != null,
-                        hasFallbackIcon = fallbackIconView != null
+                        hasSystemIcon = true,
+                        hasFallbackIcon = false
                     )
                     Logger.d(
                         TAG,
-                        "🚀 Splash exit animation start. targetType=$targetType, hasSystemIcon=${systemIconView != null}, hasFallbackIcon=${fallbackIconView != null}"
+                        "🚀 Splash exit animation start. targetType=$targetType, hasSystemIcon=true, hasFallbackIcon=false"
                     )
                     if (targetType == SplashFlyoutTargetType.SPLASH_ROOT) {
                         Logger.w(
@@ -733,54 +758,42 @@ class MainActivity : AppCompatActivity() {
                                 trail.scaleY = scale * 1.06f
                             }
 
-                            if (shouldApplySplashRealtimeBlur(blurEffectEnabled, progress)) {
+                            if (
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                shouldApplySplashRealtimeBlur(blurEffectEnabled, progress)
+                            ) {
                                 val radius = splashExitBlurRadiusEnd() * splashExitBlurProgress(progress)
                                 runCatching {
-                                    splashView.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius * 0.55f,
-                                            radius * 0.55f,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
-                                    )
-                                    animatedTarget.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius,
-                                            radius,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
-                                    )
-                                    primaryTrailView?.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius * 1.2f,
-                                            radius * 1.2f,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
-                                    )
-                                    secondaryTrailView?.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius * 1.45f,
-                                            radius * 1.45f,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
+                                    applySplashRealtimeBlur(
+                                        splashView = splashView,
+                                        animatedTarget = animatedTarget,
+                                        primaryTrailView = primaryTrailView,
+                                        secondaryTrailView = secondaryTrailView,
+                                        radius = radius
                                     )
                                 }.onFailure {
                                     blurEffectEnabled = false
-                                    splashView.setRenderEffect(null)
-                                    animatedTarget.setRenderEffect(null)
-                                    primaryTrailView?.setRenderEffect(null)
-                                    secondaryTrailView?.setRenderEffect(null)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        clearSplashRealtimeBlur(
+                                            splashView = splashView,
+                                            animatedTarget = animatedTarget,
+                                            primaryTrailView = primaryTrailView,
+                                            secondaryTrailView = secondaryTrailView
+                                        )
+                                    }
                                     Logger.w(TAG, "⚠️ Splash realtime blur failed, fallback to non-blur flyout", it)
                                 }
                             }
                         }
                     }
                     animator.doOnEnd {
-                        if (supportsRealtimeBlur) {
-                            splashView.setRenderEffect(null)
-                            animatedTarget.setRenderEffect(null)
-                            primaryTrailView?.setRenderEffect(null)
-                            secondaryTrailView?.setRenderEffect(null)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && supportsRealtimeBlur) {
+                            clearSplashRealtimeBlur(
+                                splashView = splashView,
+                                animatedTarget = animatedTarget,
+                                primaryTrailView = primaryTrailView,
+                                secondaryTrailView = secondaryTrailView
+                            )
                         }
                         primaryTrailView?.let { frameContainer?.removeView(it) }
                         secondaryTrailView?.let { frameContainer?.removeView(it) }
@@ -895,6 +908,9 @@ class MainActivity : AppCompatActivity() {
 
             // 1. 获取存储的模式 (默认为跟随系统)
             val uiPreset by SettingsManager.getUiPreset(context).collectAsState(initial = UiPreset.IOS)
+            val androidNativeVariant by SettingsManager.getAndroidNativeVariant(context).collectAsState(
+                initial = com.android.purebilibili.core.theme.AndroidNativeVariant.MATERIAL3
+            )
             val themeMode by SettingsManager.getThemeMode(context).collectAsState(initial = AppThemeMode.FOLLOW_SYSTEM)
             val darkThemeStyle by SettingsManager.getDarkThemeStyle(context).collectAsState(initial = DarkThemeStyle.DEFAULT)
             val appLanguage by SettingsManager.getAppLanguage(context).collectAsState(
@@ -984,6 +1000,7 @@ class MainActivity : AppCompatActivity() {
             // 6. 传入参数
             PureBiliBiliTheme(
                 uiPreset = uiPreset,
+                androidNativeVariant = androidNativeVariant,
                 themeMode = themeMode,
                 darkTheme = useDarkTheme,
                 dynamicColor = effectiveDynamicColor,
@@ -1162,7 +1179,7 @@ class MainActivity : AppCompatActivity() {
                         targetValue = if (showSplash) 1f else 0f,
                         animationSpec = tween(
                             durationMillis = customSplashFadeDurationMs(),
-                            easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+                            easing = AppMotionEasing.EmphasizedEnter
                         ),
                         label = "customSplashOverlayAlpha"
                     )
@@ -1624,6 +1641,14 @@ class MainActivity : AppCompatActivity() {
      */
     private fun handleIntent(intent: android.content.Intent?) {
         if (intent == null) return
+
+        intent.getStringExtra(EXTRA_PENDING_NAVIGATION_ROUTE)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { route ->
+                Logger.d(TAG, "🧭 restore route from intent extra: $route")
+                pendingNavigationRoute = route
+                return
+            }
         
         Logger.d(TAG, "🔗 handleIntent: action=${intent.action}, data=${intent.data}")
         

@@ -50,6 +50,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.delay
 
 private const val COMMENT_INPUT_FOCUS_RETRY_COUNT = 3
@@ -87,6 +88,10 @@ internal fun shouldAutoShowCommentKeyboard(
     return visible && canInputComment && !showEmojiPanel
 }
 
+internal fun resolveCommentProgressInsertText(positionMs: Long): String {
+    return " ${FormatUtils.formatDuration(positionMs.coerceAtLeast(0L))} "
+}
+
 /**
  * 评论输入对话框
  * 
@@ -97,13 +102,14 @@ internal fun shouldAutoShowCommentKeyboard(
 fun CommentInputDialog(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onSend: (String, List<Uri>) -> Unit,
+    onSend: (String, List<Uri>, Boolean) -> Unit,
     isSending: Boolean = false,
     replyToName: String? = null,
     inputHint: String = "进来唠会嗑呗~",
     canUploadImage: Boolean = true,
     canInputComment: Boolean = true,
     modifier: Modifier = Modifier,
+    currentVideoPositionMsProvider: () -> Long = { 0L },
     emotePackages: List<com.android.purebilibili.data.model.response.EmotePackage> = emptyList() // [新增] 表情包列表
 ) {
     val configuration = LocalConfiguration.current
@@ -396,6 +402,22 @@ fun CommentInputDialog(
                                     modifier = Modifier.size(26.dp)
                                 )
                             }
+
+                            TextButton(
+                                onClick = {
+                                    text += resolveCommentProgressInsertText(currentVideoPositionMsProvider())
+                                    showEmojiPanel = false
+                                },
+                                enabled = canInputComment && !isSending,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text(
+                                    text = "进度",
+                                    fontSize = 13.sp,
+                                    maxLines = 1
+                                )
+                            }
                             
                             IconButton(
                                 onClick = {
@@ -426,7 +448,7 @@ fun CommentInputDialog(
                                         keyboardController?.hide()
                                         focusManager.clearFocus(force = true)
                                         android.util.Log.d("CommentInputDialog", "📤 Sending comment: $text")
-                                        onSend(text.trim(), selectedImageUris)
+                                        onSend(text.trim(), selectedImageUris, isForwardToDynamic)
                                     }
                                 },
                                 enabled = text.isNotBlank() && !isSending && canInputComment,

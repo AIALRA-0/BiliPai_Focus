@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.AccountSessionStore
+import com.android.purebilibili.core.store.StoredAccountSession
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.feature.home.UserState
 import kotlinx.coroutines.async
@@ -47,11 +49,22 @@ internal fun shouldStartProfileLoad(
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
     val uiState = _uiState.asStateFlow()
+    private val _accounts = MutableStateFlow<List<StoredAccountSession>>(emptyList())
+    val accounts = _accounts.asStateFlow()
+    private val _activeAccountMid = MutableStateFlow<Long?>(null)
+    val activeAccountMid = _activeAccountMid.asStateFlow()
     private var hasLoadedProfileOnce = false
     private var isProfileLoadInFlight = false
 
     init {
+        refreshSavedAccounts()
         loadProfile()
+    }
+
+    fun refreshSavedAccounts() {
+        val context = getApplication<Application>()
+        _accounts.value = AccountSessionStore.getAccounts(context)
+        _activeAccountMid.value = AccountSessionStore.getActiveAccountMid(context)
     }
 
     fun loadProfile(force: Boolean = false) {
@@ -155,9 +168,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                             topPhoto = finalTopPhoto
                         )
                     )
+                    TokenManager.saveMid(getApplication(), data.mid)
+                    TokenManager.saveVipStatus(data.vip.status == 1)
+                    AccountSessionStore.upsertCurrentAccount(getApplication(), data)
+                    refreshSavedAccounts()
                 } else {
                     // Cookie 过期或无效
                     TokenManager.clear(getApplication())
+                    AccountSessionStore.clearActiveAccount(getApplication())
+                    refreshSavedAccounts()
                     _uiState.value = ProfileUiState.LoggedOut(topPhoto = customBgUri)
                 }
             } catch (e: Exception) {
@@ -248,7 +267,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             // retain background
             val customBgUri = SettingsManager.getProfileBgUri(getApplication()).first() ?: ""
+            AccountSessionStore.upsertCurrentAccount(getApplication())
             TokenManager.clear(getApplication())
+            AccountSessionStore.clearActiveAccount(getApplication())
+            refreshSavedAccounts()
             _uiState.value = ProfileUiState.LoggedOut(topPhoto = customBgUri)
             com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
                 mid = null,
@@ -257,6 +279,48 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             )
             //  记录登出事件
             com.android.purebilibili.core.util.AnalyticsHelper.logLogout()
+        }
+    }
+
+    fun switchAccount(
+        mid: Long,
+        onSuccess: () -> Unit = {},
+        onFailure: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            if (mid == TokenManager.midCache) {
+                onSuccess()
+                return@launch
+            }
+
+            val switched = AccountSessionStore.activateAccount(getApplication(), mid)
+            if (!switched) {
+                onFailure("切换账号失败")
+                return@launch
+            }
+
+            refreshSavedAccounts()
+            loadProfile(force = true)
+            onSuccess()
+        }
+    }
+
+    fun removeStoredAccount(
+        mid: Long,
+        onSuccess: () -> Unit = {},
+        onFailure: (String) -> Unit = {}
+    ) {
+        if (TokenManager.midCache == mid) {
+            onFailure("请先切换到其他账号后再移除当前账号")
+            return
+        }
+
+        val removed = AccountSessionStore.removeAccount(getApplication(), mid)
+        if (removed) {
+            refreshSavedAccounts()
+            onSuccess()
+        } else {
+            onFailure("移除账号失败")
         }
     }
     

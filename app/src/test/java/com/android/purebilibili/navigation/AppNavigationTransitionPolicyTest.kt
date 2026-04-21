@@ -115,6 +115,28 @@ class AppNavigationTransitionPolicyTest {
     }
 
     @Test
+    fun classicBackMotion_interceptsSystemBackWhenPreviousEntryExists() {
+        assertTrue(
+            shouldInterceptSystemBackForClassicMotion(
+                predictiveBackAnimationEnabled = false,
+                hasPreviousBackStackEntry = true
+            )
+        )
+        assertFalse(
+            shouldInterceptSystemBackForClassicMotion(
+                predictiveBackAnimationEnabled = true,
+                hasPreviousBackStackEntry = true
+            )
+        )
+        assertFalse(
+            shouldInterceptSystemBackForClassicMotion(
+                predictiveBackAnimationEnabled = false,
+                hasPreviousBackStackEntry = false
+            )
+        )
+    }
+
+    @Test
     fun nonSharedReturnToHome_leftCard_slidesRightToLeft() {
         assertEquals(
             VideoPopExitDirection.LEFT,

@@ -95,28 +95,63 @@ internal data class AppUpdateReleaseCandidate(
     val buildMetadata: AppReleaseBuildMetadata? = null
 )
 
+internal data class AppUpdateEndpointSet(
+    val releasesApi: String,
+    val repositoryBuildGradleUrl: String,
+    val repositoryUrl: String,
+    val releasesPageUrl: String
+)
+
 object AppUpdateChecker {
-    private val RELEASES_API = BuildConfig.FOCUS_RELEASES_API_URL
-    private val REPOSITORY_BUILD_GRADLE_URL = BuildConfig.FOCUS_REPOSITORY_BUILD_GRADLE_URL
-    private val REPOSITORY_URL = BuildConfig.FOCUS_REPOSITORY_URL
-    private val RELEASES_PAGE_URL = BuildConfig.FOCUS_RELEASES_URL
+    private const val FALLBACK_FOCUS_REPOSITORY_PATH = "AIALRA-0/BiliPai_Focus"
     private const val CONNECT_TIMEOUT_MS = 6000
     private const val READ_TIMEOUT_MS = 8000
     private val releaseJson = Json { ignoreUnknownKeys = true }
 
     suspend fun check(currentVersion: String): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val releaseCandidate = fetchRemoteText(RELEASES_API, required = false)
-                ?.let { body -> selectLatestReleaseCandidate(body, currentVersion) }
-            val repositoryCandidate = fetchRemoteText(REPOSITORY_BUILD_GRADLE_URL, required = false)
-                ?.let { body -> parseRepositoryVersionCandidate(body) }
-                ?.takeIf { candidate ->
-                    !candidate.isPrerelease || isPrereleaseVersion(currentVersion)
+            val endpointErrors = mutableListOf<String>()
+            val resolved = resolveEndpointCandidates().firstNotNullOfOrNull { endpoints ->
+                runCatching {
+                    val releaseCandidate = fetchRemoteText(endpoints.releasesApi, required = false)
+                        ?.let { body ->
+                            selectLatestReleaseCandidate(
+                                rawReleaseJson = body,
+                                currentVersion = currentVersion,
+                                releasesPageUrl = endpoints.releasesPageUrl
+                            )
+                        }
+                    val repositoryCandidate = fetchRemoteText(
+                        url = endpoints.repositoryBuildGradleUrl,
+                        required = false
+                    )?.let { body ->
+                        parseRepositoryVersionCandidate(
+                            rawBuildGradle = body,
+                            repositoryUrl = endpoints.repositoryUrl
+                        )
+                    }?.takeIf { candidate ->
+                        !candidate.isPrerelease || isPrereleaseVersion(currentVersion)
+                    }
+                    val preferred = selectPreferredUpdateCandidate(
+                        releaseCandidate = releaseCandidate,
+                        repositoryCandidate = repositoryCandidate
+                    ) ?: return@runCatching null
+                    endpoints to preferred
+                }.onFailure { error ->
+                    endpointErrors += "${endpoints.repositoryUrl}: ${error.message ?: "未知错误"}"
+                }.getOrNull()
+            } ?: throw IllegalStateException(
+                buildString {
+                    append("未获取到有效版本信息")
+                    if (endpointErrors.isNotEmpty()) {
+                        append("（")
+                        append(endpointErrors.joinToString("；"))
+                        append('）')
+                    }
                 }
-            val release = selectPreferredUpdateCandidate(
-                releaseCandidate = releaseCandidate,
-                repositoryCandidate = repositoryCandidate
-            ) ?: throw IllegalStateException("未获取到有效版本信息")
+            )
+
+            val release = resolved.second
 
             val latestTag = release.tagName
             val latestVersion = normalizeVersion(latestTag)
@@ -163,6 +198,36 @@ object AppUpdateChecker {
                 verificationMetadata = verificationMetadata
             )
         }
+    }
+
+    internal fun resolveEndpointCandidates(
+        primary: AppUpdateEndpointSet = AppUpdateEndpointSet(
+            releasesApi = BuildConfig.FOCUS_RELEASES_API_URL,
+            repositoryBuildGradleUrl = BuildConfig.FOCUS_REPOSITORY_BUILD_GRADLE_URL,
+            repositoryUrl = BuildConfig.FOCUS_REPOSITORY_URL,
+            releasesPageUrl = BuildConfig.FOCUS_RELEASES_URL
+        )
+    ): List<AppUpdateEndpointSet> {
+        val fallback = buildEndpointSetFromRepositoryPath(FALLBACK_FOCUS_REPOSITORY_PATH)
+        return listOf(primary, fallback)
+            .filter { endpoint ->
+                endpoint.releasesApi.isNotBlank() &&
+                    endpoint.repositoryBuildGradleUrl.isNotBlank() &&
+                    endpoint.repositoryUrl.isNotBlank() &&
+                    endpoint.releasesPageUrl.isNotBlank()
+            }
+            .distinctBy { it.repositoryUrl.trim().lowercase() }
+    }
+
+    private fun buildEndpointSetFromRepositoryPath(path: String): AppUpdateEndpointSet {
+        val normalizedPath = path.trim().removePrefix("https://github.com/").removeSuffix(".git")
+        val repositoryUrl = "https://github.com/$normalizedPath"
+        return AppUpdateEndpointSet(
+            releasesApi = "https://api.github.com/repos/$normalizedPath/releases",
+            repositoryBuildGradleUrl = "https://raw.githubusercontent.com/$normalizedPath/main/app/build.gradle.kts",
+            repositoryUrl = repositoryUrl,
+            releasesPageUrl = "$repositoryUrl/releases"
+        )
     }
 
     private fun fetchRemoteText(
@@ -277,7 +342,8 @@ object AppUpdateChecker {
 
     internal fun selectLatestReleaseCandidate(
         rawReleaseJson: String,
-        currentVersion: String
+        currentVersion: String,
+        releasesPageUrl: String = BuildConfig.FOCUS_RELEASES_URL
     ): AppUpdateReleaseCandidate? {
         val releasesJson = runCatching {
             releaseJson.parseToJsonElement(rawReleaseJson).jsonArray
@@ -286,7 +352,10 @@ object AppUpdateChecker {
         val allowPrerelease = isPrereleaseVersion(currentVersion)
         return releasesJson
             .mapNotNull { releaseElement ->
-                parseReleaseCandidateElement(releaseElement)
+                parseReleaseCandidateElement(
+                    releaseElement = releaseElement,
+                    releasesPageUrl = releasesPageUrl
+                )
             }
             .filter { !it.isPrerelease || allowPrerelease }
             .maxWithOrNull { left, right ->
@@ -298,7 +367,8 @@ object AppUpdateChecker {
     }
 
     internal fun parseRepositoryVersionCandidate(
-        rawBuildGradle: String
+        rawBuildGradle: String,
+        repositoryUrl: String = BuildConfig.FOCUS_REPOSITORY_URL
     ): AppUpdateReleaseCandidate? {
         val versionName = Regex("""versionName\s*=\s*"([^"]+)"""")
             .find(rawBuildGradle)
@@ -309,7 +379,7 @@ object AppUpdateChecker {
         if (versionName.isBlank()) return null
         return AppUpdateReleaseCandidate(
             tagName = versionName,
-            releaseUrl = REPOSITORY_URL,
+            releaseUrl = repositoryUrl,
             releaseNotes = "当前版本来自仓库默认分支，尚未创建 GitHub Release",
             publishedAt = null,
             assets = emptyList(),
@@ -336,7 +406,8 @@ object AppUpdateChecker {
     }
 
     private fun parseReleaseCandidateElement(
-        releaseElement: JsonElement
+        releaseElement: JsonElement,
+        releasesPageUrl: String
     ): AppUpdateReleaseCandidate? {
         val releaseObject = releaseElement.jsonObject
         val isDraft = releaseObject["draft"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
@@ -345,7 +416,7 @@ object AppUpdateChecker {
         if (tagName.isBlank()) return null
         val releaseUrl = releaseObject["html_url"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
-            ?: RELEASES_PAGE_URL
+            ?: releasesPageUrl
         val releaseNotes = releaseObject["body"]?.jsonPrimitive?.content.orEmpty().trim()
         val publishedAt = releaseObject["published_at"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val isPrerelease = releaseObject["prerelease"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false

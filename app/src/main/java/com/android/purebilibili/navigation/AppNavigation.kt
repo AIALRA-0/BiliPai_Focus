@@ -2,6 +2,8 @@
 package com.android.purebilibili.navigation
 
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -17,6 +19,9 @@ import androidx.compose.runtime.collectAsState //  新增
 import androidx.compose.runtime.getValue //  新增
 import androidx.compose.runtime.LaunchedEffect // 新增
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -81,6 +86,9 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
+import com.android.purebilibili.core.ui.motion.softLandingSpring
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.shouldUseSidebarNavigationForLayout
 // import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass (Removed)
@@ -93,6 +101,7 @@ import com.android.purebilibili.core.store.AppNavigationSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.util.NetworkUtils
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier // 确保 Modifier 被导入
 import androidx.compose.foundation.layout.Box // 确保 Box 被导入
@@ -108,7 +117,7 @@ import java.nio.charset.StandardCharsets
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
-    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&resumePositionMs={resumePositionMs}"
+    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&fullscreen={fullscreen}&resumePositionMs={resumePositionMs}&commentRootRpid={commentRootRpid}"
 
     internal fun resolveVideoRoutePath(
         bvid: String,
@@ -116,9 +125,11 @@ object VideoRoute {
         encodedCover: String,
         startAudio: Boolean,
         autoPortrait: Boolean,
-        resumePositionMs: Long = 0L
+        fullscreen: Boolean = false,
+        resumePositionMs: Long = 0L,
+        commentRootRpid: Long = 0L
     ): String {
-        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}"
+        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&fullscreen=$fullscreen&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}&commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}"
     }
 
     // 构建 helper
@@ -128,7 +139,9 @@ object VideoRoute {
         coverUrl: String,
         startAudio: Boolean = false,
         autoPortrait: Boolean = false,
-        resumePositionMs: Long = 0L
+        fullscreen: Boolean = false,
+        resumePositionMs: Long = 0L,
+        commentRootRpid: Long = 0L
     ): String {
         val encodedCover = Uri.encode(coverUrl)
         return resolveVideoRoutePath(
@@ -137,7 +150,9 @@ object VideoRoute {
             encodedCover = encodedCover,
             startAudio = startAudio,
             autoPortrait = autoPortrait,
-            resumePositionMs = resumePositionMs
+            fullscreen = fullscreen,
+            resumePositionMs = resumePositionMs,
+            commentRootRpid = commentRootRpid
         )
     }
 }
@@ -150,7 +165,9 @@ internal fun resolveStandardVideoRoute(
     coverUrl: String,
     startAudio: Boolean = false,
     autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
-    resumePositionMs: Long = 0L
+    fullscreen: Boolean = false,
+    resumePositionMs: Long = 0L,
+    commentRootRpid: Long = 0L
 ): String {
     val encodedCover = URLEncoder.encode(coverUrl, StandardCharsets.UTF_8.toString())
     return VideoRoute.resolveVideoRoutePath(
@@ -159,7 +176,9 @@ internal fun resolveStandardVideoRoute(
         encodedCover = encodedCover,
         startAudio = startAudio,
         autoPortrait = autoPortrait,
-        resumePositionMs = resumePositionMs
+        fullscreen = fullscreen,
+        resumePositionMs = resumePositionMs,
+        commentRootRpid = commentRootRpid
     )
 }
 
@@ -187,6 +206,7 @@ fun AppNavigation(
     // 单一首页视觉配置源：减少根导航层多路 DataStore 收集导致的全局重组。
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val downloadTasks by com.android.purebilibili.feature.download.DownloadManager.tasks.collectAsState()
     val uiPreset = LocalUiPreset.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
         initial = com.android.purebilibili.core.store.HomeSettings()
@@ -197,7 +217,14 @@ fun AppNavigation(
             uiPreset = uiPreset
         )
     }
-    val appearance = remember(homeSettings) { resolveAppNavigationAppearance(homeSettings) }
+    val androidNativeVariant = com.android.purebilibili.core.theme.LocalAndroidNativeVariant.current
+    val appearance = remember(homeSettings, uiPreset, androidNativeVariant) {
+        resolveAppNavigationAppearance(
+            homeSettings = homeSettings,
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
+    }
     val cardTransitionEnabled = appearance.cardTransitionEnabled
     val predictiveBackAnimationEnabled = appearance.predictiveBackAnimationEnabled
     val isBottomBarBlurEnabled = appearance.bottomBarBlurEnabled
@@ -206,11 +233,27 @@ fun AppNavigation(
 
     // 🔒 [防抖] 全局导航防抖机制 - 防止快速点击导致页面重复加载
     val lastNavigationTime = androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
-    val canNavigate: () -> Boolean = {
+    fun canNavigate(bypassDebounce: Boolean = false): Boolean {
         val currentTime = System.currentTimeMillis()
-        val canNav = currentTime - lastNavigationTime.longValue > 300 // 300ms 防抖
+        val canNav = bypassDebounce || currentTime - lastNavigationTime.longValue > 300 // 300ms 防抖
         if (canNav) lastNavigationTime.longValue = currentTime
-        canNav
+        return canNav
+    }
+    var inAppSearchKeyword by remember { mutableStateOf<String?>(null) }
+    val effectiveInitialSearchKeyword = inAppSearchKeyword ?: initialSearchKeyword
+    val consumeInitialSearchKeyword: (String) -> Unit = { consumedKeyword ->
+        if (inAppSearchKeyword == consumedKeyword) {
+            inAppSearchKeyword = null
+        } else {
+            onInitialSearchKeywordConsumed(consumedKeyword)
+        }
+    }
+    val navigateToSearchKeyword: (String) -> Unit = navigateToSearchKeyword@{ keyword ->
+        val normalizedKeyword = keyword.trim()
+        if (normalizedKeyword.isEmpty()) return@navigateToSearchKeyword
+        if (!canNavigate(false)) return@navigateToSearchKeyword
+        inAppSearchKeyword = normalizedKeyword
+        navController.navigate(ScreenRoutes.Search.route)
     }
     fun navigateToVideoRoute(route: String) {
         // 🔒 防抖检查
@@ -236,6 +279,21 @@ fun AppNavigation(
         autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
         resumePositionMs: Long = 0L
     ) {
+        val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
+        val offlineTask = com.android.purebilibili.feature.download.resolveOfflineVideoNavigationTask(
+            tasks = downloadTasks.values,
+            bvid = bvid,
+            cid = cid,
+            isNetworkAvailable = isNetworkAvailable
+        )
+        if (offlineTask != null) {
+            navigateToVideoRoute(ScreenRoutes.OfflineVideoPlayer.createRoute(offlineTask.id))
+            return
+        }
+        if (!isNetworkAvailable) {
+            Toast.makeText(context, "当前无网络，仅支持播放已缓存视频", Toast.LENGTH_SHORT).show()
+            return
+        }
         navigateToVideoRoute(
             resolveStandardVideoRoute(
                 bvid = bvid,
@@ -259,7 +317,17 @@ fun AppNavigation(
                     "AppNavigation",
                     "SUB_DBG home click resolved video route: ${target.route}"
                 )
-                navigateToVideoRoute(target.route)
+                val intent = resolveHomeVideoNavigationIntent(request)
+                if (intent != null) {
+                    navigateToVideo(
+                        bvid = intent.bvid,
+                        cid = intent.cid,
+                        coverUrl = intent.coverUrl,
+                        autoPortrait = true
+                    )
+                } else {
+                    navigateToVideoRoute(target.route)
+                }
             }
             is HomeNavigationTarget.DynamicDetail -> {
                 com.android.purebilibili.core.util.Logger.d(
@@ -278,7 +346,20 @@ fun AppNavigation(
             is MessageLinkNavigationAction.Video -> {
                 navigateToVideo(action.videoId, 0L, "")
             }
+            is MessageLinkNavigationAction.VideoComment -> {
+                navigateToVideoRoute(
+                    VideoRoute.createRoute(
+                        bvid = action.videoId,
+                        cid = 0L,
+                        coverUrl = "",
+                        commentRootRpid = action.rootReplyId
+                    )
+                )
+            }
             is MessageLinkNavigationAction.Dynamic -> {
+                navController.navigate(ScreenRoutes.DynamicDetail.createRoute(action.dynamicId))
+            }
+            is MessageLinkNavigationAction.DynamicComment -> {
                 navController.navigate(ScreenRoutes.DynamicDetail.createRoute(action.dynamicId))
             }
             is MessageLinkNavigationAction.Space -> {
@@ -300,6 +381,16 @@ fun AppNavigation(
             is MessageLinkNavigationAction.Web -> {
                 navController.navigate(ScreenRoutes.Web.createRoute(action.url))
             }
+        }
+    }
+
+    fun navigateToBangumiTarget(seasonId: Long, epId: Long) {
+        when {
+            seasonId > 0L && epId > 0L -> navController.navigate(
+                ScreenRoutes.BangumiPlayer.createRoute(seasonId, epId)
+            )
+            seasonId > 0L -> navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId, epId))
+            epId > 0L -> navController.navigate(ScreenRoutes.BangumiDetail.createRoute(0L, epId))
         }
     }
 
@@ -346,17 +437,28 @@ fun AppNavigation(
         }
     }
 
-    fun navigateHomeFromPlayer() {
+    fun navigateToSpace(mid: Long) {
+        if (mid <= 0L) return
+        if (!canNavigate(false)) return
+        val currentEntry = navController.currentBackStackEntry
+        val alreadyOnTargetSpace =
+            currentEntry?.destination?.route == ScreenRoutes.Space.route &&
+                currentEntry.arguments?.getLong("mid") == mid
+        if (alreadyOnTargetSpace) return
+        navController.navigate(ScreenRoutes.Space.createRoute(mid)) {
+            launchSingleTop = true
+        }
+    }
+
+    fun forceNavigateToHome() {
         lastNavigationTime.longValue = System.currentTimeMillis()
 
         if (navController.popBackStack(ScreenRoutes.Home.route, inclusive = false)) {
-            if (navController.currentBackStackEntry?.destination?.route == ScreenRoutes.Home.route) {
-                return
-            }
+            return
         }
 
         navController.navigate(ScreenRoutes.Home.route) {
-            popUpTo(navController.graph.findStartDestination().id) {
+            popUpTo(navController.graph.startDestinationId) {
                 saveState = true
             }
             launchSingleTop = true
@@ -436,6 +538,16 @@ fun AppNavigation(
         val linkedSettingsBackMotion = remember(backRouteMotionMode) {
             shouldUseLinkedSettingsBackMotion(backRouteMotionMode)
         }
+        val hasPreviousBackStackEntry = navController.previousBackStackEntry != null
+        val shouldInterceptSystemBack = remember(
+            predictiveBackAnimationEnabled,
+            hasPreviousBackStackEntry
+        ) {
+            shouldInterceptSystemBackForClassicMotion(
+                predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                hasPreviousBackStackEntry = hasPreviousBackStackEntry
+            )
+        }
         val isSettingsScreen = currentRoute == ScreenRoutes.Settings.route
         val shouldHideBottomBarOnTablet = isTabletLayout && isSettingsScreen
 
@@ -489,6 +601,8 @@ fun AppNavigation(
         // [新增] 首页回顶事件通道 (Channel based event bus)
         val homeScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
         val dynamicScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+        val historyScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+        val favoriteScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
         // [New] Global Scroll Offset State
         val scrollOffsetState = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
@@ -503,7 +617,10 @@ fun AppNavigation(
             LocalDynamicScrollChannel provides dynamicScrollChannel,
             com.android.purebilibili.feature.home.LocalHomeScrollOffset provides scrollOffsetState  // [新增] 提供回顶通道
         ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+            BackHandler(enabled = shouldInterceptSystemBack) {
+                navController.navigateUp()
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
             // ===== 内容层 (hazeSource) =====
             // 这个 Box 包裹所有 NavHost 内容，作为底栏模糊的源
             // [LayerBackdrop] Apply layerBackdrop to capture content for bottom bar refraction
@@ -701,7 +818,8 @@ fun AppNavigation(
                 navArgument("startAudio") { type = NavType.BoolType; defaultValue = false },
                 navArgument("autoPortrait") { type = NavType.BoolType; defaultValue = false },
                 navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false },
-                navArgument("resumePositionMs") { type = NavType.LongType; defaultValue = 0L }
+                navArgument("resumePositionMs") { type = NavType.LongType; defaultValue = 0L },
+                navArgument("commentRootRpid") { type = NavType.LongType; defaultValue = 0L }
             ),
             //  进入动画：当卡片过渡开启时用淡入（配合共享元素），关闭时用滑入
             //  进入动画：基于位置的扩散展开 (Scale + Fade)
@@ -887,6 +1005,7 @@ fun AppNavigation(
             val autoPortraitFromRoute = backStackEntry.arguments?.getBoolean("autoPortrait") ?: false
             val startFullscreen = backStackEntry.arguments?.getBoolean("fullscreen") ?: false
             val resumePositionMsFromRoute = backStackEntry.arguments?.getLong("resumePositionMs") ?: 0L
+            val commentRootRpidFromRoute = backStackEntry.arguments?.getLong("commentRootRpid") ?: 0L
             
             //  使用顶层定义的 cardTransitionEnabled（已在 line 68 定义）
 
@@ -950,7 +1069,7 @@ fun AppNavigation(
                     coverUrl = coverUrl,
                     // 传递 cid 参数
                     cid = backStackEntry.arguments?.getLong("cid") ?: 0L,
-                    onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  //  点击UP跳转空间
+                    onUpClick = { mid -> navigateToSpace(mid) },  //  点击UP跳转空间
                     miniPlayerManager = miniPlayerManager,
                     isInPipMode = isInPipMode,
                     isVisible = true,
@@ -958,6 +1077,7 @@ fun AppNavigation(
                     startAudioFromRoute = startAudio,
                     autoEnterPortraitFromRoute = autoPortraitFromRoute,
                     resumePositionMsFromRoute = resumePositionMsFromRoute,
+                    openCommentRootRpidFromRoute = commentRootRpidFromRoute,
                     transitionEnabled = shouldUseClassicBackRouteMotion(backRouteMotionMode),  // 预测返回优先稳定路由动画
                     predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
                     transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
@@ -973,7 +1093,7 @@ fun AppNavigation(
                     onHomeClick = {
                         CardPositionManager.markReturning()
                         miniPlayerManager?.markLeavingByNavigation(expectedBvid = bvid)
-                        navigateHomeFromPlayer()
+                        forceNavigateToHome()
                     },
                     //  [新增] 导航到音频模式
                     onNavigateToAudioMode = { 
@@ -983,6 +1103,7 @@ fun AppNavigation(
                     onNavigateToSearch = {
                         if (canNavigate()) navController.navigate(ScreenRoutes.Search.route)
                     },
+                    onSearchKeywordClick = navigateToSearchKeyword,
                     // [修复] 传递视频点击导航回调
                     onVideoClick = { vid, options ->
                         val targetCid = options?.getLong(
@@ -1086,6 +1207,7 @@ fun AppNavigation(
                 onBack = { navController.popBackStack() },
                 onGoToLogin = { navController.navigate(ScreenRoutes.Login.route) },
                 onLogoutSuccess = { homeViewModel.refresh() },
+                onAccountSwitchSuccess = { homeViewModel.refresh() },
                 onSettingsClick = { navigateFromProfile(ScreenRoutes.Settings.route) },
                 onHistoryClick = { navigateFromProfile(ScreenRoutes.History.route) },
                 onFavoriteClick = { navigateFromProfile(ScreenRoutes.Favorite.route) },
@@ -1136,6 +1258,7 @@ fun AppNavigation(
                     viewModel = historyViewModel,
                     onBack = { navController.popBackStack() },
                     globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
+                    scrollToTopChannel = historyScrollChannel,
                     onVideoClick = { lookupKey, cid, cover ->
                         // [修复] 根据历史记录类型导航到不同页面
                         val historyItem = historyViewModel.getHistoryItem(lookupKey)
@@ -1238,6 +1361,7 @@ fun AppNavigation(
                     viewModel = favoriteViewModel,
                     onBack = { navController.popBackStack() },
                     globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
+                    scrollToTopChannel = favoriteScrollChannel,
                     onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) },
                     onFavoriteFolderClick = { mediaId, ownerMid, title ->
                         navController.navigate(
@@ -1362,6 +1486,7 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 DynamicScreen(
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onBangumiClick = { seasonId, epId -> navigateToBangumiTarget(seasonId, epId) },
                     onDynamicDetailClick = { dynamicId ->
                         navController.navigate(ScreenRoutes.DynamicDetail.createRoute(dynamicId))
                     },
@@ -1388,13 +1513,14 @@ fun AppNavigation(
             popExitTransition = { slideExitRight(navMotionSpec) }
         ) { backStackEntry ->
             val dynamicId = android.net.Uri.decode(backStackEntry.arguments?.getString("dynamicId") ?: "")
-            com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
-                dynamicId = dynamicId,
-                onBack = { navController.popBackStack() },
-                onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
-                onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
-                onLiveClick = { roomId, title, uname ->
-                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
+                    dynamicId = dynamicId,
+                    onBack = { navController.popBackStack() },
+                    onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onBangumiClick = { seasonId, epId -> navigateToBangumiTarget(seasonId, epId) },
+                    onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
+                    onLiveClick = { roomId, title, uname ->
+                        navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
                 }
             )
         }
@@ -1433,9 +1559,14 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 SearchScreen(
                     userFace = homeState.user.face, // 传入头像 URL
-                    initialKeyword = initialSearchKeyword.orEmpty(),
-                    onInitialKeywordConsumed = onInitialSearchKeywordConsumed,
+                    initialKeyword = effectiveInitialSearchKeyword.orEmpty(),
+                    onInitialKeywordConsumed = consumeInitialSearchKeyword,
                     onBack = { navController.popBackStack() },
+                    onOpenTrending = {
+                        if (canNavigate(false)) {
+                            navController.navigate(ScreenRoutes.SearchTrending.route)
+                        }
+                    },
                     onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
                     onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  //  点击UP主跳转到空间
                     onBangumiClick = { seasonId ->
@@ -1475,6 +1606,17 @@ fun AppNavigation(
                     }
                 )
             }
+        }
+
+        composable(
+            route = ScreenRoutes.SearchTrending.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.search.SearchTrendingScreen(
+                onBack = { navController.popBackStack() },
+                onKeywordClick = navigateToSearchKeyword
+            )
         }
 
         // --- Settings & Login ---
@@ -1822,6 +1964,17 @@ fun AppNavigation(
                     mid = mid,
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onAudioClick = { sid ->
+                        navController.navigate(ScreenRoutes.MusicDetail.createRoute(sid))
+                    },
+                    onBangumiClick = { seasonId ->
+                        if (seasonId > 0L) {
+                            navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId))
+                        }
+                    },
+                    onWebClick = { url, title ->
+                        navController.navigate(ScreenRoutes.Web.createRoute(url, title))
+                    },
                     onPlayAllAudioClick = { bvid ->
                         navigateToVideo(bvid, 0L, "", startAudio = true)
                     },
@@ -2104,7 +2257,8 @@ fun AppNavigation(
             popExitTransition = { slideExitRight(navMotionSpec) }
         ) {
             com.android.purebilibili.feature.message.feed.SystemNoticeScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onOpenLink = ::openMessageLink
             )
         }
         
@@ -2185,15 +2339,13 @@ fun AppNavigation(
                     AnimatedVisibility(
                         visible = finalBottomBarVisible,
                         enter = slideInVertically(
-                            // [UX优化] 物理弹簧进场 (Spring Entrance)
-                            animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+                            animationSpec = softLandingSpring(),
                             initialOffsetY = { it }
-                        ) + fadeIn(animationSpec = tween(navMotionSpec.slowFadeDurationMillis)),
+                        ) + fadeIn(animationSpec = emphasizedEnterTween(navMotionSpec.slowFadeDurationMillis)),
                         exit = slideOutVertically(
-                            // [UX优化] 物理弹簧出场 (Spring Exit)
-                            animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+                            animationSpec = emphasizedExitTween(navMotionSpec.fastFadeDurationMillis),
                             targetOffsetY = { it }
-                        ) + fadeOut(animationSpec = tween(navMotionSpec.fastFadeDurationMillis))
+                        ) + fadeOut(animationSpec = emphasizedExitTween(navMotionSpec.fastFadeDurationMillis))
                     ) {
                         if (isBottomBarFloating) {
                             // 悬浮式底栏
@@ -2206,7 +2358,13 @@ fun AppNavigation(
                                     onItemClick = { item ->
                                         when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
                                             BottomBarSelectionAction.NAVIGATE -> navigateTo(item.route)
-                                            BottomBarSelectionAction.HOME_RESELECT -> homeScrollChannel.trySend(Unit)
+                                            BottomBarSelectionAction.RESELECT -> when (item) {
+                                                BottomNavItem.HOME -> homeScrollChannel.trySend(Unit)
+                                                BottomNavItem.DYNAMIC -> dynamicScrollChannel.trySend(Unit)
+                                                BottomNavItem.HISTORY -> historyScrollChannel.trySend(Unit)
+                                                BottomNavItem.FAVORITE -> favoriteScrollChannel.trySend(Unit)
+                                                else -> Unit
+                                            }
                                         }
                                     },
                                     onHomeDoubleTap = { homeScrollChannel.trySend(Unit) },
@@ -2235,7 +2393,13 @@ fun AppNavigation(
                                 onItemClick = { item ->
                                     when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
                                         BottomBarSelectionAction.NAVIGATE -> navigateTo(item.route)
-                                        BottomBarSelectionAction.HOME_RESELECT -> homeScrollChannel.trySend(Unit)
+                                        BottomBarSelectionAction.RESELECT -> when (item) {
+                                            BottomNavItem.HOME -> homeScrollChannel.trySend(Unit)
+                                            BottomNavItem.DYNAMIC -> dynamicScrollChannel.trySend(Unit)
+                                            BottomNavItem.HISTORY -> historyScrollChannel.trySend(Unit)
+                                            BottomNavItem.FAVORITE -> favoriteScrollChannel.trySend(Unit)
+                                            else -> Unit
+                                        }
                                     }
                                 },
                                 onHomeDoubleTap = { homeScrollChannel.trySend(Unit) },

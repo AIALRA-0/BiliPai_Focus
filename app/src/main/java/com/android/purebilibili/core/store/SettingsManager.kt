@@ -16,6 +16,7 @@ import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
@@ -272,7 +273,8 @@ data class HomeSettings(
     val isHeaderBlurEnabled: Boolean = true,
     val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.FOLLOW_PRESET,
     val isBottomBarBlurEnabled: Boolean = true,
-    val isLiquidGlassEnabled: Boolean = true, // [New]
+    val isTopBarLiquidGlassEnabled: Boolean = true,
+    val isBottomBarLiquidGlassEnabled: Boolean = true,
     val liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
@@ -285,16 +287,25 @@ data class HomeSettings(
     val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回手势支持（默认开启）
     val smartVisualGuardEnabled: Boolean = false, // [Retired] 智能流畅优先已下线，固定关闭
     val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
+    val lowQualityHomeCoverInDataSaver: Boolean = false, // 省流量时首页封面使用低清晰度
     val showHomeCoverGlassBadges: Boolean = true, // 首页封面玻璃信息显示
     val showHomeInfoGlassBadges: Boolean = true, // 首页信息区玻璃标签显示
+    val showHomeUpBadges: Boolean = true, // 首页和相关推荐 UP 主标识显示
     val easterEggEnabled: Boolean = false, // 下拉刷新趣味提示开关
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
-)
+) {
+    val isLiquidGlassEnabled: Boolean
+        get() = isTopBarLiquidGlassEnabled || isBottomBarLiquidGlassEnabled
+}
 
 internal fun resolveUiPresetPreferenceValue(rawValue: Int?): UiPreset {
     return UiPreset.fromValue(rawValue ?: UiPreset.IOS.value)
+}
+
+internal fun resolveAndroidNativeVariantPreferenceValue(rawValue: Int?): AndroidNativeVariant {
+    return AndroidNativeVariant.fromValue(rawValue ?: AndroidNativeVariant.MATERIAL3.value)
 }
 
 enum class DanmakuPanelWidthMode(val value: Int, val label: String, val widthFraction: Float) {
@@ -588,6 +599,7 @@ object SettingsManager {
     private val KEY_DARK_THEME_STYLE = intPreferencesKey("dark_theme_style_v1")
     private val KEY_APP_LANGUAGE = intPreferencesKey("app_language_v1")
     private val KEY_UI_PRESET = intPreferencesKey("ui_preset")
+    private val KEY_ANDROID_NATIVE_VARIANT = intPreferencesKey("android_native_variant_v1")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
     //  [新增] 触感反馈 (默认开启)
@@ -598,6 +610,7 @@ object SettingsManager {
     private val KEY_SET_SYSTEM_BRIGHTNESS = booleanPreferencesKey("set_system_brightness")
     private val KEY_PIP_NO_DANMAKU = booleanPreferencesKey("pip_no_danmaku")
     private val KEY_SEARCH_HOT_SECTION_ENABLED = booleanPreferencesKey("search_hot_section_enabled")
+    private val KEY_SEARCH_DISCOVER_SECTION_ENABLED = booleanPreferencesKey("search_discover_section_enabled")
     //  [新增] 双击跳转秒数 (可分开设置快进和后退)
     private val KEY_DOUBLE_TAP_SEEK_ENABLED = booleanPreferencesKey("double_tap_seek_enabled")
     private val KEY_SEEK_FORWARD_SECONDS = intPreferencesKey("seek_forward_seconds")
@@ -697,7 +710,9 @@ object SettingsManager {
     //  [新增] 首页顶部栏自动收缩 (Shrink)
     private val KEY_HEADER_COLLAPSE_ENABLED = booleanPreferencesKey("header_collapse_enabled")
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
-    //  [New] Liquid Glass Effect Toggle (Default On)
+    private val KEY_TOP_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("top_bar_liquid_glass_enabled")
+    private val KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("bottom_bar_liquid_glass_enabled")
+    //  Legacy shared Liquid Glass toggle, kept as migration fallback.
     private val KEY_LIQUID_GLASS_ENABLED = booleanPreferencesKey("liquid_glass_enabled")
     
     // MOVED KEY_LIQUID_GLASS_STYLE down to where enum is defined to avoid forward reference issues if Kotlin 
@@ -722,8 +737,11 @@ object SettingsManager {
     private val KEY_SMART_VISUAL_GUARD_ENABLED = booleanPreferencesKey("smart_visual_guard_enabled")
     //  [新增] 视频卡片统计信息贴封面开关
     private val KEY_COMPACT_VIDEO_STATS_ON_COVER = booleanPreferencesKey("compact_video_stats_on_cover")
+    private val KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER =
+        booleanPreferencesKey("low_quality_home_cover_in_data_saver")
     private val KEY_HOME_COVER_GLASS_BADGES_VISIBLE = booleanPreferencesKey("home_cover_glass_badges_visible")
     private val KEY_HOME_INFO_GLASS_BADGES_VISIBLE = booleanPreferencesKey("home_info_glass_badges_visible")
+    private val KEY_HOME_UP_BADGES_VISIBLE = booleanPreferencesKey("home_up_badges_visible")
     //  [合并] 崩溃追踪同意弹窗
     private val KEY_CRASH_TRACKING_CONSENT_SHOWN = booleanPreferencesKey("crash_tracking_consent_shown")
     private val KEY_LIQUID_GLASS_MODE = intPreferencesKey("liquid_glass_mode")
@@ -760,6 +778,7 @@ object SettingsManager {
             rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
             legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED]
         )
+        val legacyLiquidGlassEnabled = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true
         return HomeSettings(
             displayMode = preferences[KEY_DISPLAY_MODE] ?: 0,
             isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: true,
@@ -769,7 +788,8 @@ object SettingsManager {
             headerBlurMode = headerBlurMode,
             isHeaderCollapseEnabled = preferences[KEY_HEADER_COLLAPSE_ENABLED] ?: true,
             isBottomBarBlurEnabled = preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true,
-            isLiquidGlassEnabled = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true,
+            isTopBarLiquidGlassEnabled = preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: legacyLiquidGlassEnabled,
+            isBottomBarLiquidGlassEnabled = preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: legacyLiquidGlassEnabled,
             liquidGlassStyle = FIXED_LIQUID_GLASS_STYLE,
             liquidGlassMode = FIXED_LIQUID_GLASS_MODE,
             liquidGlassStrength = FIXED_LIQUID_GLASS_STRENGTH,
@@ -782,8 +802,11 @@ object SettingsManager {
             predictiveBackAnimationEnabled = preferences[KEY_PREDICTIVE_BACK_ANIMATION_ENABLED] ?: true,
             smartVisualGuardEnabled = false,
             compactVideoStatsOnCover = preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true,
+            lowQualityHomeCoverInDataSaver =
+                preferences[KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER] ?: false,
             showHomeCoverGlassBadges = preferences[KEY_HOME_COVER_GLASS_BADGES_VISIBLE] ?: true,
             showHomeInfoGlassBadges = preferences[KEY_HOME_INFO_GLASS_BADGES_VISIBLE] ?: true,
+            showHomeUpBadges = preferences[KEY_HOME_UP_BADGES_VISIBLE] ?: true,
             easterEggEnabled = preferences[KEY_EASTER_EGG_ENABLED] ?: false,
             // 保持现有运行时行为：首次未配置时按 false 返回
             crashTrackingConsentShown = preferences[KEY_CRASH_TRACKING_CONSENT_SHOWN] ?: false
@@ -1107,6 +1130,17 @@ object SettingsManager {
         }
     }
 
+    fun getAndroidNativeVariant(context: Context): Flow<AndroidNativeVariant> =
+        context.settingsDataStore.data.map { preferences ->
+            resolveAndroidNativeVariantPreferenceValue(preferences[KEY_ANDROID_NATIVE_VARIANT])
+        }
+
+    suspend fun setAndroidNativeVariant(context: Context, variant: AndroidNativeVariant) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_ANDROID_NATIVE_VARIANT] = variant.value
+        }
+    }
+
     // --- Dynamic Color ---
     fun getDynamicColor(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_DYNAMIC_COLOR] ?: true }
@@ -1422,6 +1456,15 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] = value }
     }
 
+    fun getLowQualityHomeCoverInDataSaver(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER] ?: false }
+
+    suspend fun setLowQualityHomeCoverInDataSaver(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER] = value
+        }
+    }
+
     fun getHomeCoverGlassBadgesVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HOME_COVER_GLASS_BADGES_VISIBLE] ?: true }
 
@@ -1437,6 +1480,15 @@ object SettingsManager {
     suspend fun setHomeInfoGlassBadgesVisible(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_HOME_INFO_GLASS_BADGES_VISIBLE] = value
+        }
+    }
+
+    fun getHomeUpBadgesVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HOME_UP_BADGES_VISIBLE] ?: true }
+
+    suspend fun setHomeUpBadgesVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_UP_BADGES_VISIBLE] = value
         }
     }
 
@@ -1741,6 +1793,13 @@ object SettingsManager {
             preferences[KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED] = value
         }
     }
+
+    fun getSearchDiscoverSectionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] ?: true }
+
+    suspend fun setSearchDiscoverSectionEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] = value }
+    }
     
     //  [新增] --- 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字) ---
     fun getBottomBarLabelMode(context: Context): Flow<Int> = context.settingsDataStore.data
@@ -1835,14 +1894,45 @@ object SettingsManager {
     }
     
     //  [New] --- Liquid Glass Effect ---
-    
+
     private val KEY_LIQUID_GLASS_STYLE = intPreferencesKey("liquid_glass_style")
 
     fun getLiquidGlassEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_LIQUID_GLASS_ENABLED] ?: true }
+        .map { preferences ->
+            val legacy = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true
+            val top = preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: legacy
+            val bottom = preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: legacy
+            top || bottom
+        }
 
     suspend fun setLiquidGlassEnabled(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_LIQUID_GLASS_ENABLED] = value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LIQUID_GLASS_ENABLED] = value
+            preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = value
+            preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = value
+        }
+    }
+
+    fun getTopBarLiquidGlassEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: (preferences[KEY_LIQUID_GLASS_ENABLED] ?: true)
+        }
+
+    suspend fun setTopBarLiquidGlassEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = value
+        }
+    }
+
+    fun getBottomBarLiquidGlassEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: (preferences[KEY_LIQUID_GLASS_ENABLED] ?: true)
+        }
+
+    suspend fun setBottomBarLiquidGlassEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = value
+        }
     }
     
     fun getLiquidGlassStyle(context: Context): Flow<LiquidGlassStyle> = context.settingsDataStore.data
@@ -2863,6 +2953,8 @@ object SettingsManager {
             if (currentVersion < HOME_VISUAL_DEFAULTS_VERSION) {
                 preferences[KEY_BOTTOM_BAR_FLOATING] = true
                 preferences[KEY_LIQUID_GLASS_ENABLED] = true
+                preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = true
+                preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = true
                 preferences[KEY_HEADER_BLUR_ENABLED] = true
                 preferences[KEY_HOME_VISUAL_DEFAULTS_VERSION] = HOME_VISUAL_DEFAULTS_VERSION
             }
@@ -4226,6 +4318,8 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_TOP_BAR_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_LIQUID_GLASS_STYLE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_BLUR_INTENSITY, SettingsShareSection.APPEARANCE),
@@ -4239,6 +4333,7 @@ object SettingsManager {
             ),
             BooleanShareablePreferenceDefinition(KEY_PREDICTIVE_BACK_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_COMPACT_VIDEO_STATS_ON_COVER, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_HOME_UP_BADGES_VISIBLE, SettingsShareSection.APPEARANCE),
 
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             IntShareablePreferenceDefinition(KEY_PLAYBACK_COMPLETION_BEHAVIOR, SettingsShareSection.PLAYBACK),

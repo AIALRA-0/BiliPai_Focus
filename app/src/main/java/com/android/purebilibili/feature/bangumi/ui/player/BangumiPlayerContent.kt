@@ -23,7 +23,11 @@ import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.BangumiDetail
 import com.android.purebilibili.data.model.response.BangumiEpisode
+import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_OPTIONS
+import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_UNFOLLOW
+import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_WATCHING
 import com.android.purebilibili.feature.bangumi.isBangumiFollowed
+import com.android.purebilibili.feature.bangumi.resolveBangumiFollowStatusLabel
 
 /**
  * 番剧播放内容区域
@@ -33,9 +37,10 @@ fun BangumiPlayerContent(
     detail: BangumiDetail,
     currentEpisode: BangumiEpisode,
     onEpisodeClick: (BangumiEpisode) -> Unit,
-    onFollowClick: () -> Unit
+    onFollowStatusSelect: (Int) -> Unit
 ) {
     val isFollowing = isBangumiFollowed(detail.userStatus)
+    var showFollowStatusDialog by remember { mutableStateOf(false) }
     
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -81,7 +86,13 @@ fun BangumiPlayerContent(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Button(
-                    onClick = onFollowClick,
+                    onClick = {
+                        if (isFollowing) {
+                            showFollowStatusDialog = true
+                        } else {
+                            onFollowStatusSelect(BANGUMI_FOLLOW_STATUS_WATCHING)
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     colors = if (isFollowing) {
                         ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -95,7 +106,7 @@ fun BangumiPlayerContent(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (isFollowing) "已追番" else "追番")
+                    Text(resolveBangumiFollowStatusLabel(detail.userStatus))
                 }
             }
         }
@@ -254,6 +265,54 @@ fun BangumiPlayerContent(
                 )
             }
         }
+    }
+
+    if (showFollowStatusDialog) {
+        AlertDialog(
+            onDismissRequest = { showFollowStatusDialog = false },
+            title = { Text("追番状态") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BANGUMI_FOLLOW_STATUS_OPTIONS.forEach { option ->
+                        Surface(
+                            onClick = {
+                                showFollowStatusDialog = false
+                                onFollowStatusSelect(option.status)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (detail.userStatus?.followStatus == option.status) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = option.label,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFollowStatusDialog = false
+                        onFollowStatusSelect(BANGUMI_FOLLOW_STATUS_UNFOLLOW)
+                    }
+                ) {
+                    Text("取消追番")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFollowStatusDialog = false }) {
+                    Text("关闭")
+                }
+            }
+        )
     }
 }
 

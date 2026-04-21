@@ -1,6 +1,8 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -36,5 +38,46 @@ class AppNavigationAppearancePolicyTest {
         assertTrue(appearance.bottomBarBlurEnabled)
         assertEquals(0, appearance.bottomBarLabelMode)
         assertTrue(appearance.bottomBarFloating)
+    }
+
+    @Test
+    fun md3Preset_keepsFloatingBottomBarWhenShellSettingsAreStillDefault() {
+        val appearance = resolveAppNavigationAppearance(
+            homeSettings = HomeSettings(),
+            uiPreset = UiPreset.MD3
+        )
+
+        assertTrue(appearance.bottomBarFloating)
+        assertTrue(appearance.bottomBarBlurEnabled)
+        assertEquals(0, appearance.bottomBarLabelMode)
+    }
+
+    @Test
+    fun md3Preset_preservesExplicitBottomBarShellCustomization() {
+        val appearance = resolveAppNavigationAppearance(
+            homeSettings = HomeSettings(
+                isBottomBarFloating = true,
+                bottomBarLabelMode = 1,
+                isBottomBarBlurEnabled = false
+            ),
+            uiPreset = UiPreset.MD3
+        )
+
+        assertTrue(appearance.bottomBarFloating)
+        assertFalse(appearance.bottomBarBlurEnabled)
+        assertEquals(1, appearance.bottomBarLabelMode)
+    }
+
+    @Test
+    fun md3MiuixPreset_keepsFloatingBottomBarWhenShellSettingsAreDefault() {
+        val appearance = resolveAppNavigationAppearance(
+            homeSettings = HomeSettings(),
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertTrue(appearance.bottomBarFloating)
+        assertTrue(appearance.bottomBarBlurEnabled)
+        assertEquals(0, appearance.bottomBarLabelMode)
     }
 }

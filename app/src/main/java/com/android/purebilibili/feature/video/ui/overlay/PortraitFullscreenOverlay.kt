@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.model.response.VideoshotData
 
 internal fun shouldShowPortraitViewCount(viewCount: Int, compactMode: Boolean): Boolean {
     return viewCount > 0 && !compactMode
@@ -96,6 +97,8 @@ fun PortraitFullscreenOverlay(
     
     // 显示状态
     showControls: Boolean = true,
+    videoshotData: VideoshotData? = null,
+    isPlaybackRecovering: Boolean = false,
     
     // 回调
     onBack: () -> Unit,
@@ -193,13 +196,19 @@ fun PortraitFullscreenOverlay(
                     PortraitBottomContainer(
                         progress = if (progress.duration > 0) progress.current.toFloat() / progress.duration else 0f,
                         duration = progress.duration,
+                        bufferProgress = if (progress.duration > 0L) {
+                            progress.buffered.toFloat() / progress.duration.toFloat()
+                        } else {
+                            0f
+                        },
                         seekPositionMs = seekPositionMs,
                         isSeekScrubbing = isSeekScrubbing,
                         onSeek = onSeek,
                         onSeekStart = onSeekStart,
                         onSeekDragStart = onSeekDragStart,
                         onSeekDragUpdate = onSeekDragUpdate,
-                        onSeekDragCancel = onSeekDragCancel
+                        onSeekDragCancel = onSeekDragCancel,
+                        videoshotData = videoshotData
                     )
                     
                     // 底部输入栏占位 (Input Bar Spacer)
@@ -228,6 +237,36 @@ fun PortraitFullscreenOverlay(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = layoutPolicy.bottomInputLiftDp.dp)
                 )
+
+                AnimatedVisibility(
+                    visible = isPlaybackRecovering,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "正在恢复播放...",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
             }
         }
 

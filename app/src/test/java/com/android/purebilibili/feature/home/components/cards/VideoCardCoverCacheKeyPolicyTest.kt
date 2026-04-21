@@ -14,7 +14,7 @@ class VideoCardCoverCacheKeyPolicyTest {
                 bvid = "BV1ab411",
                 pic = "https://example.com/a.jpg"
             ),
-            isDataSaverActive = false
+            useLowQualityCover = false
         )
 
         assertEquals("cover_BV1ab411_n", key)
@@ -28,7 +28,7 @@ class VideoCardCoverCacheKeyPolicyTest {
                 pic = "https://example.com/live-1.jpg",
                 title = "live one"
             ),
-            isDataSaverActive = false
+            useLowQualityCover = false
         )
         val second = resolveVideoCardCoverCacheKey(
             video = VideoItem(
@@ -36,7 +36,7 @@ class VideoCardCoverCacheKeyPolicyTest {
                 pic = "https://example.com/live-2.jpg",
                 title = "live two"
             ),
-            isDataSaverActive = false
+            useLowQualityCover = false
         )
 
         assertNotEquals(first, second)
@@ -50,7 +50,7 @@ class VideoCardCoverCacheKeyPolicyTest {
                 cid = 777L,
                 title = "fallback"
             ),
-            isDataSaverActive = true
+            useLowQualityCover = true
         )
 
         assertEquals("cover_fallback_99_777_${"fallback".hashCode()}_s", key)

@@ -25,6 +25,8 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isHeaderBlurEnabled)
         assertEquals(HomeHeaderBlurMode.FOLLOW_PRESET, result.headerBlurMode)
         assertTrue(result.isBottomBarBlurEnabled)
+        assertTrue(result.isTopBarLiquidGlassEnabled)
+        assertTrue(result.isBottomBarLiquidGlassEnabled)
         assertTrue(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
@@ -35,6 +37,8 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.predictiveBackAnimationEnabled)
         assertFalse(result.smartVisualGuardEnabled)
         assertTrue(result.compactVideoStatsOnCover)
+        assertFalse(result.lowQualityHomeCoverInDataSaver)
+        assertTrue(result.showHomeUpBadges)
         assertFalse(result.easterEggEnabled)
         assertFalse(result.crashTrackingConsentShown)
     }
@@ -49,7 +53,8 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("header_blur_enabled") to false,
             booleanPreferencesKey("header_collapse_enabled") to false,
             booleanPreferencesKey("bottom_bar_blur_enabled") to false,
-            booleanPreferencesKey("liquid_glass_enabled") to false,
+            booleanPreferencesKey("top_bar_liquid_glass_enabled") to false,
+            booleanPreferencesKey("bottom_bar_liquid_glass_enabled") to false,
             intPreferencesKey("liquid_glass_style") to LiquidGlassStyle.IOS26.value,
             intPreferencesKey("grid_column_count") to 4,
             booleanPreferencesKey("card_animation_enabled") to true,
@@ -58,6 +63,8 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("predictive_back_animation_enabled") to false,
             booleanPreferencesKey("smart_visual_guard_enabled") to false,
             booleanPreferencesKey("compact_video_stats_on_cover") to false,
+            booleanPreferencesKey("low_quality_home_cover_in_data_saver") to true,
+            booleanPreferencesKey("home_up_badges_visible") to false,
             booleanPreferencesKey("easter_egg_enabled") to true,
             booleanPreferencesKey("crash_tracking_consent_shown") to true
         )
@@ -72,6 +79,8 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(HomeHeaderBlurMode.ALWAYS_OFF, result.headerBlurMode)
         assertFalse(result.isHeaderCollapseEnabled)
         assertFalse(result.isBottomBarBlurEnabled)
+        assertFalse(result.isTopBarLiquidGlassEnabled)
+        assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertFalse(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
@@ -84,6 +93,8 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.predictiveBackAnimationEnabled)
         assertFalse(result.smartVisualGuardEnabled)
         assertFalse(result.compactVideoStatsOnCover)
+        assertTrue(result.lowQualityHomeCoverInDataSaver)
+        assertFalse(result.showHomeUpBadges)
         assertTrue(result.easterEggEnabled)
         assertTrue(result.crashTrackingConsentShown)
     }
@@ -131,6 +142,19 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
         assertEquals(0.5f, result.liquidGlassProgress)
+    }
+
+    @Test
+    fun legacySharedLiquidGlassToggle_backfillsTopAndBottomSwitches() {
+        val prefs = mutablePreferencesOf(
+            booleanPreferencesKey("liquid_glass_enabled") to false
+        )
+
+        val result = mapHomeSettingsFromPreferences(prefs)
+
+        assertFalse(result.isTopBarLiquidGlassEnabled)
+        assertFalse(result.isBottomBarLiquidGlassEnabled)
+        assertFalse(result.isLiquidGlassEnabled)
     }
 
     @Test

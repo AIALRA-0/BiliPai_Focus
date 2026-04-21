@@ -100,7 +100,7 @@ class DynamicFocusFollowGroupPolicyTest {
         assertEquals(
             false,
             shouldPrefetchMoreFocusDynamicItems(
-                visibleItemCount = 4,
+                visibleItemCount = 8,
                 hasMore = true,
                 filterEnabled = true,
                 extraPagesFetched = 0
@@ -112,7 +112,7 @@ class DynamicFocusFollowGroupPolicyTest {
                 visibleItemCount = 1,
                 hasMore = true,
                 filterEnabled = true,
-                extraPagesFetched = 3
+                extraPagesFetched = 6
             )
         )
     }

@@ -97,11 +97,13 @@ internal fun HomeCategoryPageContent(
     cardTransitionEnabled: Boolean,
     smartVisualGuardEnabled: Boolean = false,
     isDataSaverActive: Boolean,
+    preferLowQualityCover: Boolean = false,
     compactStatsOnCover: Boolean = true,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     followLoadMoreArmed: Boolean = true,
     onFollowScrollInteraction: () -> Unit = {},
+    showUpBadges: Boolean = true,
     oldContentAnchorBvid: String? = null,
     oldContentStartIndex: Int? = null,
     todayWatchEnabled: Boolean = false,
@@ -229,6 +231,8 @@ internal fun HomeCategoryPageContent(
                     LiveRoomCard(
                         room = room,
                         index = index,
+                        isDataSaverActive = isDataSaverActive,
+                        preferLowQualityCover = preferLowQualityCover,
                         modifier = if (index == 0) firstGridItemModifier else Modifier,
                         onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
                     )
@@ -255,6 +259,8 @@ internal fun HomeCategoryPageContent(
                     LiveRoomCard(
                         room = room,
                         index = index,
+                        isDataSaverActive = isDataSaverActive,
+                        preferLowQualityCover = preferLowQualityCover,
                         modifier = if (categoryState.followedLiveRooms.isEmpty() && index == 0) {
                             firstGridItemModifier
                         } else {
@@ -276,6 +282,7 @@ internal fun HomeCategoryPageContent(
                             error = todayWatchError,
                             collapsed = todayWatchCollapsed,
                             cardConfig = todayWatchCardConfig,
+                            showUpBadges = showUpBadges,
                             onModeChange = onTodayWatchModeChange,
                             onCollapsedChange = onTodayWatchCollapsedChange,
                             onRefresh = onTodayWatchRefresh,
@@ -351,8 +358,11 @@ internal fun HomeCategoryPageContent(
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
+                                        isDataSaverActive = isDataSaverActive,
+                                        preferLowQualityCover = preferLowQualityCover,
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
+                                        showUpBadge = showUpBadges,
                                         showPublishTime = true,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
@@ -381,9 +391,11 @@ internal fun HomeCategoryPageContent(
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
                                         showPublishTime = true,
                                         isDataSaverActive = isDataSaverActive,
+                                        preferLowQualityCover = preferLowQualityCover,
                                         compactStatsOnCover = compactStatsOnCover,
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
+                                        showUpBadge = showUpBadges,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onWatchLater = if (isDynamicDetailCard) null else ({
                                             onWatchLater(video.bvid, resolveWatchLaterAid(video))
@@ -444,6 +456,7 @@ private fun TodayWatchPlanCard(
     error: String?,
     collapsed: Boolean,
     cardConfig: TodayWatchCardUiConfig,
+    showUpBadges: Boolean,
     onModeChange: (TodayWatchMode) -> Unit,
     onCollapsedChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
@@ -702,6 +715,7 @@ private fun TodayWatchPlanCard(
                                         nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                         badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                        showUpBadge = showUpBadges,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                     val explanation = activePlan.explanationByBvid[video.bvid].orEmpty()

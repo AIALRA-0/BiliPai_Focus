@@ -128,4 +128,21 @@ class PlaybackLifecycleCoordinatorTest {
         assertTrue(decision.shouldResumePlayback)
         assertFalse(decision.shouldRestoreVolume)
     }
+
+    @Test
+    fun resumeDecision_kicksForegroundPlaybackWhenBufferingButNotActuallyRunning() {
+        val decision = resolvePlaybackResumeDecision(
+            wasPlaybackActive = false,
+            hasTransientResumeIntent = false,
+            isPlaying = false,
+            playWhenReady = true,
+            playbackState = Player.STATE_BUFFERING,
+            currentVolume = 1f,
+            shouldEnsureAudibleOnForeground = true,
+            isLeavingByNavigation = false
+        )
+
+        assertTrue(decision.shouldResumePlayback)
+        assertFalse(decision.shouldRestoreVolume)
+    }
 }

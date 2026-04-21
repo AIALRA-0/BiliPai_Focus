@@ -28,3 +28,30 @@ internal fun resolveSpaceSelectionChipColors(
         textColor = selectedColors.contentColor
     )
 }
+
+internal fun resolveSpaceFollowButtonColors(
+    isFollowed: Boolean,
+    colorScheme: ColorScheme
+): SpaceSelectionChipColors {
+    return if (isFollowed) {
+        SpaceSelectionChipColors(
+            backgroundColor = colorScheme.secondaryContainer,
+            textColor = colorScheme.onSecondaryContainer
+        )
+    } else {
+        val selectedColors = resolveAdaptivePrimaryAccentColors(colorScheme)
+        SpaceSelectionChipColors(
+            backgroundColor = selectedColors.backgroundColor,
+            textColor = selectedColors.contentColor
+        )
+    }
+}
+
+internal fun resolveSpaceOfficialTagColors(
+    colorScheme: ColorScheme
+): SpaceSelectionChipColors {
+    return SpaceSelectionChipColors(
+        backgroundColor = colorScheme.tertiaryContainer,
+        textColor = colorScheme.onTertiaryContainer
+    )
+}

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.home.components
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BottomBarMiuixStructureTest {
@@ -29,6 +30,35 @@ class BottomBarMiuixStructureTest {
         assertTrue(exportOffsetUses == 2)
         assertTrue(indicatorOffsetUses == 1)
         assertTrue(visibleOffsetUses == 2)
+    }
+
+    @Test
+    fun `android native miuix variant routes to dedicated miuix bottom bar renderer`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+
+        assertTrue(source.contains("val androidNativeVariant = LocalAndroidNativeVariant.current"))
+        assertTrue(source.contains("androidNativeVariant == AndroidNativeVariant.MIUIX"))
+        assertTrue(source.contains("MiuixBottomBar("))
+        assertTrue(source.contains("if (isFloating) {"))
+        assertTrue(source.contains("KernelSuAlignedBottomBar("))
+        assertTrue(source.contains("iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO"))
+        assertTrue(source.contains("private enum class SharedFloatingBottomBarIconStyle"))
+        assertTrue(source.contains("MiuixNavigationBar("))
+        assertTrue(source.contains("MiuixDockedBottomBarItem("))
+    }
+
+    @Test
+    fun `docked miuix bottom bar avoids floating navigation insets`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+        val miuixRendererSource = source
+            .substringAfter("private fun MiuixBottomBar(")
+            .substringBefore("@Composable\nprivate fun MiuixFloatingCapsuleBottomBar(")
+
+        assertTrue(miuixRendererSource.contains("MiuixNavigationBar("))
+        assertTrue(miuixRendererSource.contains("MiuixDockedBottomBarItem("))
+        assertFalse(miuixRendererSource.contains("MiuixNavigationBarItem("))
+        assertFalse(miuixRendererSource.contains("MiuixFloatingNavigationBar("))
+        assertFalse(miuixRendererSource.contains("MiuixFloatingNavigationBarItem("))
     }
 
     private fun loadSource(path: String): String {

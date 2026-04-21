@@ -2,6 +2,7 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
@@ -51,6 +52,15 @@ internal fun buildBangumiPlayUrlParams(
         params["bvid"] = bvid
     }
     return params
+}
+
+internal fun signBangumiPlayUrlParams(
+    params: Map<String, String>,
+    wbiKeys: Pair<String, String>?
+): Map<String, String> {
+    val (imgKey, subKey) = wbiKeys ?: return params
+    if (imgKey.isBlank() || subKey.isBlank()) return params
+    return WbiUtils.sign(params, imgKey, subKey)
 }
 
 internal fun decodeBangumiPlayUrlPayload(
@@ -145,11 +155,7 @@ object BangumiRepository {
                 return@withContext Result.failure(Exception("参数错误: seasonId 和 epId 不能同时为空"))
             }
 
-            var jsonString = responseBody.string()
-            
-            //  [关键修复] 在解析前预处理 JSON，限制 episodes 数组大小
-            // 这是防止 OOM 的核心：在字符串级别截断，避免解析时占用大量内存
-            jsonString = limitEpisodesInJson(jsonString, maxEpisodes = 200)
+            val jsonString = responseBody.string()
             
             // 使用 kotlinx.serialization.json 手动解析
             val json = kotlinx.serialization.json.Json { 
@@ -187,49 +193,6 @@ object BangumiRepository {
     }
     
     /**
-     *  [修复工具] 在 JSON 字符串级别限制 episodes 数组大小
-     * 这是防止 OOM 的关键：在解析前截断超大数组
-     */
-    private fun limitEpisodesInJson(json: String, maxEpisodes: Int): String {
-        try {
-            // 使用 JsonElement 进行轻量级解析和修改
-            val jsonParser = kotlinx.serialization.json.Json { 
-                ignoreUnknownKeys = true 
-            }
-            val jsonElement = jsonParser.parseToJsonElement(json)
-            val jsonObject = jsonElement.jsonObject
-            
-            // 检查 result.episodes 是否存在且过大
-            val result = jsonObject["result"]?.jsonObject ?: return json
-            val episodes = result["episodes"]?.jsonArray ?: return json
-            
-            if (episodes.size <= maxEpisodes) {
-                return json // 不需要截断
-            }
-            
-            android.util.Log.w("BangumiRepo", " 番剧剧集过多 (${episodes.size}集)，截取前 $maxEpisodes 集以防止内存溢出")
-            
-            // 构建新的 episodes 数组 (只保留前 maxEpisodes 个)
-            val limitedEpisodes = kotlinx.serialization.json.JsonArray(episodes.take(maxEpisodes))
-            
-            // 构建新的 result 对象
-            val newResult = kotlinx.serialization.json.JsonObject(result.toMutableMap().apply {
-                put("episodes", limitedEpisodes)
-            })
-            
-            // 构建新的根对象
-            val newJsonObject = kotlinx.serialization.json.JsonObject(jsonObject.toMutableMap().apply {
-                put("result", newResult)
-            })
-            
-            return newJsonObject.toString()
-        } catch (e: Exception) {
-            android.util.Log.w("BangumiRepo", "limitEpisodesInJson 处理失败，返回原 JSON: ${e.message}")
-            return json // 解析失败时返回原 JSON
-        }
-    }
-    
-    /**
      * 获取番剧播放地址
      */
     suspend fun getBangumiPlayUrl(
@@ -241,15 +204,26 @@ object BangumiRepository {
     ): Result<BangumiVideoInfo> = withContext(Dispatchers.IO) {
         try {
             android.util.Log.d("BangumiRepo", "📡 getBangumiPlayUrl: epId=$epId, cid=$cid, seasonId=$seasonId, qn=$qn")
+            val baseParams = buildBangumiPlayUrlParams(
+                epId = epId,
+                cid = cid,
+                qn = qn,
+                bvid = bvid,
+                seasonId = seasonId
+            )
+            val wbiKeys = WbiKeyManager.getWbiKeys().getOrNull()
+                ?: WbiKeyManager.refreshKeys().getOrNull()
+            val signedParams = signBangumiPlayUrlParams(
+                params = baseParams,
+                wbiKeys = wbiKeys
+            )
+            android.util.Log.d(
+                "BangumiRepo",
+                "📡 getBangumiPlayUrl request params: wbiSigned=${signedParams.containsKey("w_rid")}, keys=${signedParams.keys.sorted()}"
+            )
             val response = decodeBangumiPlayUrlPayload(
                 rawJson = api.getBangumiPlayUrl(
-                    buildBangumiPlayUrlParams(
-                        epId = epId,
-                        cid = cid,
-                        qn = qn,
-                        bvid = bvid,
-                        seasonId = seasonId
-                    )
+                    signedParams
                 ).string()
             )
             android.util.Log.d(
@@ -312,6 +286,31 @@ object BangumiRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("BangumiRepo", "unfollowBangumi error: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 更新追番/追剧状态：1=想看，2=在看，3=看过
+     */
+    suspend fun updateBangumiFollowStatus(
+        seasonId: Long,
+        status: Int
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = TokenManager.csrfCache ?: return@withContext Result.failure(Exception("未登录"))
+            val response = api.updateBangumiFollowStatus(
+                seasonId = seasonId,
+                status = status,
+                csrf = csrf
+            )
+            if (response.code == 0) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception("更新追番状态失败: ${response.message}"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BangumiRepo", "updateBangumiFollowStatus error: ${e.message}")
             Result.failure(e)
         }
     }
@@ -398,10 +397,11 @@ object BangumiRepository {
     suspend fun getMyFollowBangumi(
         type: Int = 1,  // 1=追番 2=追剧
         page: Int = 1,
-        pageSize: Int = 30
+        pageSize: Int = 30,
+        vmid: Long? = null
     ): Result<MyFollowBangumiData> = withContext(Dispatchers.IO) {
         try {
-            val mid = TokenManager.midCache ?: return@withContext Result.failure(Exception("未登录"))
+            val mid = vmid?.takeIf { it > 0L } ?: TokenManager.midCache ?: return@withContext Result.failure(Exception("未登录"))
             val response = api.getMyFollowBangumi(
                 vmid = mid,
                 type = type,

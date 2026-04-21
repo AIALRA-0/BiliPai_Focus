@@ -175,8 +175,21 @@ object CommentRepository {
      * @param mode 排序模式:
      * 3=最热(WBI mode=3), 2=最新(legacy sort=0), 4=点赞(legacy sort=1), 1=回复(legacy sort=2)
      */
-    suspend fun getComments(aid: Long, page: Int, ps: Int = 20, mode: Int = 3): Result<ReplyData> = withContext(Dispatchers.IO) {
-        getCommentsForSubject(oid = aid, type = 1, page = page, ps = ps, mode = mode)
+    suspend fun getComments(
+        aid: Long,
+        page: Int,
+        ps: Int = 20,
+        mode: Int = 3,
+        paginationOffset: String? = null
+    ): Result<ReplyData> = withContext(Dispatchers.IO) {
+        getCommentsForSubject(
+            oid = aid,
+            type = 1,
+            page = page,
+            ps = ps,
+            mode = mode,
+            paginationOffset = paginationOffset
+        )
     }
 
     suspend fun getCommentsForSubject(
@@ -184,11 +197,38 @@ object CommentRepository {
         type: Int,
         page: Int,
         ps: Int = 20,
-        mode: Int = 3
+        mode: Int = 3,
+        paginationOffset: String? = null
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
             // 确保 buvid3 已初始化
             VideoRepository.ensureBuvid3()
+
+            if (shouldTryGrpcMainList(page = page, mode = mode, paginationOffset = paginationOffset)) {
+                val grpcResult = CommentGrpcRepository.getMainList(
+                    oid = oid,
+                    type = type,
+                    mode = mode,
+                    nextOffset = paginationOffset
+                )
+                if (grpcResult.isSuccess) {
+                    val grpcData = grpcResult.getOrNull()
+                    if (!shouldFallbackGrpcCommentReadOnMissingLocation(grpcData)) {
+                        Logger.d("CommentRepo", " getComments (gRPC MainList): oid=$oid, type=$type, page=$page, mode=$mode")
+                        return@withContext grpcResult
+                    }
+                    Logger.w(
+                        "CommentRepo",
+                        "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, reason=missing-location"
+                    )
+                } else {
+                    Logger.w(
+                        "CommentRepo",
+                        "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, error=${grpcResult.exceptionOrNull()?.message}"
+                    )
+                }
+            }
+
             val hasSession = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
             val readPlan = resolveCommentReadPlan(hasSession = hasSession)
             val primaryMode = readPlan.primary
@@ -321,11 +361,37 @@ object CommentRepository {
         type: Int,
         rootId: Long,
         page: Int,
-        ps: Int = 20
+        ps: Int = 20,
+        paginationOffset: String? = null
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
             // 确保 buvid3 已初始化
             VideoRepository.ensureBuvid3()
+
+            if (shouldTryGrpcPagedRequest(page = page, paginationOffset = paginationOffset)) {
+                val grpcResult = CommentGrpcRepository.getDetailList(
+                    oid = oid,
+                    type = type,
+                    root = rootId,
+                    nextOffset = paginationOffset
+                )
+                if (grpcResult.isSuccess) {
+                    val grpcData = grpcResult.getOrNull()
+                    if (!shouldFallbackGrpcCommentReadOnMissingLocation(grpcData)) {
+                        Logger.d("CommentRepo", " getSubComments (gRPC DetailList): oid=$oid, type=$type, root=$rootId, page=$page")
+                        return@withContext grpcResult
+                    }
+                    Logger.w(
+                        "CommentRepo",
+                        "getSubComments gRPC fallback to REST: oid=$oid, type=$type, root=$rootId, page=$page, reason=missing-location"
+                    )
+                } else {
+                    Logger.w(
+                        "CommentRepo",
+                        "getSubComments gRPC fallback to REST: oid=$oid, type=$type, root=$rootId, page=$page, error=${grpcResult.exceptionOrNull()?.message}"
+                    )
+                }
+            }
             
             Logger.d("CommentRepo", " getSubComments: oid=$oid, type=$type, rootId=$rootId, page=$page")
             val hasSession = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
@@ -371,6 +437,35 @@ object CommentRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("CommentRepo", " getSubComments exception: oid=$oid, type=$type, ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDialogCommentsForSubject(
+        oid: Long,
+        type: Int,
+        rootId: Long,
+        dialogId: Long,
+        page: Int,
+        paginationOffset: String? = null
+    ): Result<ReplyData> = withContext(Dispatchers.IO) {
+        try {
+            VideoRepository.ensureBuvid3()
+            if (!shouldTryGrpcPagedRequest(page = page, paginationOffset = paginationOffset)) {
+                return@withContext Result.failure(Exception("对话列表缺少分页参数"))
+            }
+            val grpcResult = CommentGrpcRepository.getDialogList(
+                oid = oid,
+                type = type,
+                root = rootId,
+                dialog = dialogId,
+                nextOffset = paginationOffset
+            )
+            if (grpcResult.isSuccess) {
+                Logger.d("CommentRepo", " getDialogComments (gRPC DialogList): oid=$oid, type=$type, root=$rootId, dialog=$dialogId, page=$page")
+            }
+            grpcResult
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -429,7 +524,8 @@ object CommentRepository {
         message: String,
         root: Long = 0,
         parent: Long = 0,
-        pictures: List<ReplyPicture> = emptyList()
+        pictures: List<ReplyPicture> = emptyList(),
+        syncToDynamic: Boolean = false
     ): Result<ReplyItem?> = withContext(Dispatchers.IO) {
         addCommentForSubject(
             oid = aid,
@@ -437,7 +533,8 @@ object CommentRepository {
             message = message,
             root = root,
             parent = parent,
-            pictures = pictures
+            pictures = pictures,
+            syncToDynamic = syncToDynamic
         )
     }
 
@@ -447,7 +544,8 @@ object CommentRepository {
         message: String,
         root: Long = 0,
         parent: Long = 0,
-        pictures: List<ReplyPicture> = emptyList()
+        pictures: List<ReplyPicture> = emptyList(),
+        syncToDynamic: Boolean = false
     ): Result<ReplyItem?> = withContext(Dispatchers.IO) {
         try {
             val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache
@@ -463,6 +561,7 @@ object CommentRepository {
                 root = root.takeIf { it > 0L },
                 parent = parent.takeIf { it > 0L },
                 pictures = picturePayload,
+                syncToDynamic = resolveSyncToDynamicField(syncToDynamic),
                 csrf = csrf
             )
             
@@ -565,6 +664,27 @@ object CommentRepository {
         }
         return commentJson.encodeToString(payload)
     }
+
+    internal fun resolveSyncToDynamicField(syncToDynamic: Boolean): Int? {
+        return if (syncToDynamic) 1 else null
+    }
+
+    internal fun shouldTryGrpcMainList(
+        page: Int,
+        mode: Int,
+        paginationOffset: String?
+    ): Boolean {
+        val supportedMode = mode == CommentGrpcRepository.MODE_HOT || mode == CommentGrpcRepository.MODE_TIME
+        if (!supportedMode) return false
+        return shouldTryGrpcPagedRequest(page = page, paginationOffset = paginationOffset)
+    }
+
+    internal fun shouldTryGrpcPagedRequest(
+        page: Int,
+        paginationOffset: String?
+    ): Boolean {
+        return page <= 1 || !paginationOffset.isNullOrBlank()
+    }
     
     /**
      * [新增] 点赞评论
@@ -652,6 +772,39 @@ object CommentRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun setCommentTop(
+        aid: Long,
+        rpid: Long,
+        isCurrentlyTop: Boolean
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache
+            if (csrf.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("请先登录"))
+            }
+
+            val response = api.setReplyTop(
+                oid = aid,
+                type = 1,
+                rpid = rpid,
+                action = resolveReplyTopActionField(isCurrentlyTop),
+                csrf = csrf
+            )
+
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "置顶操作失败" }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    internal fun resolveReplyTopActionField(isCurrentlyTop: Boolean): Int {
+        return if (isCurrentlyTop) 0 else 1
     }
     
     /**
