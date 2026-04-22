@@ -291,6 +291,7 @@ class DynamicScreenStatePolicyTest {
             currentState = DynamicUiState(items = existing),
             incomingItems = listOf(buildDynamicItem("new_1"), buildDynamicItem("new_2")),
             isRefresh = true,
+            requestType = "all",
             incrementalRefreshEnabled = true,
             hasMore = true
         )
@@ -302,6 +303,27 @@ class DynamicScreenStatePolicyTest {
         assertEquals("old_a", result.incrementalRefreshBoundaryKey)
         assertEquals(2, result.incrementalPrependedCount)
         assertEquals(DynamicFeedErrorSource.NONE, result.errorSource)
+        assertEquals("all", result.timelineRequestType)
+    }
+
+    @Test
+    fun `incremental refresh does not merge items from a different dynamic feed type`() {
+        val result = resolveDynamicFeedStateAfterSuccess(
+            currentState = DynamicUiState(
+                items = listOf(buildDynamicItem("pgc_old")),
+                timelineRequestType = "pgc"
+            ),
+            incomingItems = listOf(buildDynamicItem("all_new")),
+            isRefresh = true,
+            requestType = "all",
+            incrementalRefreshEnabled = true,
+            hasMore = true
+        )
+
+        assertEquals(listOf("all_new"), result.items.map { it.id_str })
+        assertEquals("all", result.timelineRequestType)
+        assertEquals(null, result.incrementalRefreshBoundaryKey)
+        assertEquals(0, result.incrementalPrependedCount)
     }
 
     @Test

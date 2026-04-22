@@ -68,6 +68,8 @@ import kotlinx.coroutines.launch
 
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
+import com.android.purebilibili.feature.dynamic.defaultDynamicTabVisibleIds
+import com.android.purebilibili.feature.dynamic.resolveDynamicVisibleTabIdsAfterToggle
 
 const val GITHUB_URL = OFFICIAL_GITHUB_URL
 
@@ -114,6 +116,8 @@ fun SettingsScreen(
         .collectAsState(initial = false)
     val homeRefreshCount by SettingsManager.getHomeRefreshCount(context)
         .collectAsState(initial = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
+    val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
+        .collectAsState(initial = defaultDynamicTabVisibleIds)
     
     // Local UI State
     var showCacheDialog by remember { mutableStateOf(false) }
@@ -913,6 +917,15 @@ fun SettingsScreen(
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
                         }
                     },
+                    dynamicVisibleTabIds = dynamicVisibleTabIds,
+                    onDynamicTabVisibilityChange = { tabId ->
+                        scope.launch {
+                            SettingsManager.setDynamicTabVisibleTabs(
+                                context,
+                                resolveDynamicVisibleTabIdsAfterToggle(dynamicVisibleTabIds, tabId)
+                            )
+                        }
+                    },
                     homeRefreshCount = homeRefreshCount,
                     onHomeRefreshCountChange = { count ->
                         scope.launch {
@@ -989,6 +1002,15 @@ fun SettingsScreen(
                     onIncrementalTimelineRefreshChange = { enabled ->
                         scope.launch {
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
+                        }
+                    },
+                    dynamicVisibleTabIds = dynamicVisibleTabIds,
+                    onDynamicTabVisibilityChange = { tabId ->
+                        scope.launch {
+                            SettingsManager.setDynamicTabVisibleTabs(
+                                context,
+                                resolveDynamicVisibleTabIdsAfterToggle(dynamicVisibleTabIds, tabId)
+                            )
                         }
                     },
                     homeRefreshCount = homeRefreshCount,
@@ -1134,6 +1156,8 @@ private fun MobileSettingsLayout(
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    dynamicVisibleTabIds: Set<String>,
+    onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
     onHomeRefreshCountChange: (Int) -> Unit
 ) {
@@ -1268,6 +1292,8 @@ private fun MobileSettingsLayout(
                                         onFeedApiTypeChange = onFeedApiTypeChange,
                                         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
                                         onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
+                                        dynamicVisibleTabIds = dynamicVisibleTabIds,
+                                        onDynamicTabVisibilityChange = onDynamicTabVisibilityChange,
                                         homeRefreshCount = homeRefreshCount,
                                         onHomeRefreshCountChange = onHomeRefreshCountChange
                                     )

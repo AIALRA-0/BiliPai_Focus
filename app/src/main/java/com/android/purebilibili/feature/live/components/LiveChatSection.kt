@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,6 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
 import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.live.rememberLiveChromePalette
+import com.android.purebilibili.feature.live.resolveLivePiliPlusChatBubbleTokens
+import com.android.purebilibili.feature.live.resolveLivePiliPlusRoomColorTokens
+import com.android.purebilibili.feature.live.shouldRenderLiveDanmaku
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.Paperplane
 import io.github.alexzhirkevich.cupertino.icons.filled.TextBubble
@@ -219,14 +221,16 @@ private fun ChatMessageItem(
         SuperChatMessageItem(item = item, isOverlay = isOverlay)
         return
     }
+    if (!shouldRenderLiveDanmaku(item.text, item.emoticonUrl)) {
+        return
+    }
     val context = LocalContext.current
     val palette = rememberLiveChromePalette()
-    val darkOverlay = isOverlay && palette.isDark
     var showMenu by remember { mutableStateOf(false) }
-    val bubbleShape = RoundedCornerShape(if (isOverlay) 16.dp else 18.dp)
+    val tokens = resolveLivePiliPlusChatBubbleTokens(isOverlay = isOverlay, isDark = palette.isDark)
+    val bubbleShape = RoundedCornerShape(tokens.cornerRadiusDp.dp)
     val bubbleBackground = when {
-        darkOverlay -> palette.bubble
-        isOverlay -> palette.surface.copy(alpha = 0.96f)
+        isOverlay -> Color.Black.copy(alpha = tokens.backgroundAlpha)
         else -> palette.surfaceMuted
     }
 
@@ -234,82 +238,51 @@ private fun ChatMessageItem(
         Color(0xFFFF7B92)
     } else if (item.isSelf) {
         palette.accentStrong
-    } else if (darkOverlay) {
-        Color.White.copy(alpha = 0.80f)
+    } else if (isOverlay) {
+        Color.White.copy(alpha = tokens.nameAlpha)
     } else {
-        palette.secondaryText
+        palette.primaryText.copy(alpha = tokens.nameAlpha)
     }
-    val bodyColor = if (darkOverlay) Color.White else palette.primaryText
-    val metaColor = if (darkOverlay) Color.White.copy(alpha = 0.62f) else palette.tertiaryText
+    val bodyColor = if (isOverlay) Color.White else palette.primaryText
     val emoticonMap by DanmakuEmoticonMapper.emoticonMap.collectAsState()
-    val replyColor = if (darkOverlay) Color(0xFF8FD5FF) else palette.accent
+    val replyColor = if (isOverlay) Color(0xFF8FD5FF) else palette.accent
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val bubbleWidthFraction = if (isOverlay) 0.90f else 0.86f
         val bubbleModifier = Modifier
-            .widthIn(max = maxWidth * 0.92f)
+            .widthIn(max = maxWidth * bubbleWidthFraction)
             .clip(bubbleShape)
             .background(bubbleBackground)
-            .border(
-                width = 1.dp,
-                color = if (isOverlay) palette.border else Color.Transparent,
-                shape = bubbleShape
-            )
             .clickable(enabled = item.uid > 0L || item.uname.isNotBlank()) { showMenu = true }
-            .padding(horizontal = 14.dp, vertical = if (isOverlay) 9.dp else 10.dp)
+            .padding(horizontal = tokens.horizontalPaddingDp.dp, vertical = tokens.verticalPaddingDp.dp)
 
-        Column(modifier = bubbleModifier) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (item.medalLevel > 0) {
-                    MedalBadge(
-                        name = item.medalName,
-                        level = item.medalLevel,
-                        colorInt = item.medalColor
-                    )
-                }
-                if (item.userLevel > 0) {
-                    UserLevelBadge(level = item.userLevel)
-                }
-                Text(
-                    text = item.uname.ifBlank { "直播观众" },
-                    color = usernameColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (item.dmType > 0) {
-                    Text(
-                        text = "· ${item.dmType}",
-                        color = metaColor,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(6.dp))
-
+        Box(modifier = bubbleModifier) {
             if (item.emoticonUrl != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (item.replyToName.isNotBlank()) {
-                        Text(
-                            text = "@${item.replyToName}",
-                            color = replyColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${item.uname.ifBlank { "直播观众" }}: ",
+                        color = usernameColor,
+                        fontSize = tokens.fontSizeSp.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                     AsyncImage(
                         model = item.emoticonUrl,
                         contentDescription = item.text,
-                        modifier = Modifier.size(46.dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             } else {
-                val annotatedText = remember(item.text, item.replyToName, emoticonMap, replyColor) {
+                val annotatedText = remember(item.text, item.uname, item.replyToName, emoticonMap, replyColor, usernameColor) {
                     val builder = androidx.compose.ui.text.AnnotatedString.Builder()
+                    builder.pushStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            color = usernameColor,
+                            fontSize = tokens.fontSizeSp.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                    builder.append("${item.uname.ifBlank { "直播观众" }}: ")
+                    builder.pop()
                     if (item.replyToName.isNotBlank()) {
                         builder.pushStyle(
                             androidx.compose.ui.text.SpanStyle(
@@ -347,8 +320,8 @@ private fun ChatMessageItem(
                 androidx.compose.foundation.text.BasicText(
                     text = annotatedText,
                     style = TextStyle(
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
+                        fontSize = tokens.fontSizeSp.sp,
+                        lineHeight = 19.sp,
                         color = bodyColor,
                         fontWeight = FontWeight.Medium
                     ),
@@ -468,7 +441,7 @@ private fun SuperChatMessageItem(
     Surface(
         color = bg,
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.fillMaxWidth(if (isOverlay) 0.88f else 1f)
+        modifier = Modifier.fillMaxWidth(if (isOverlay) 0.72f else 0.82f)
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -503,7 +476,7 @@ private fun SuperChatMessageItem(
                     color = Color.White,
                     fontSize = 14.sp,
                     lineHeight = 19.sp,
-                    maxLines = if (isOverlay) 3 else 6,
+                    maxLines = if (isOverlay) 2 else 4,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -584,20 +557,24 @@ private fun ChatInputBar(
     var text by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
     val palette = rememberLiveChromePalette()
-    val darkOverlay = isOverlay && palette.isDark
-    val textColor = if (darkOverlay) Color.White else palette.primaryText
-    val placeholderColor = if (darkOverlay) Color.White.copy(alpha = 0.68f) else palette.secondaryText
-    val fieldColor = if (darkOverlay) palette.bubble else palette.searchField
-    val iconTint = if (darkOverlay) Color.White else palette.secondaryText
+    val colorScheme = MaterialTheme.colorScheme
+    val roomTokens = resolveLivePiliPlusRoomColorTokens(
+        inputOverlayColor = colorScheme.onSurface,
+        inputContentColor = colorScheme.onSurface
+    )
+    val textColor = if (isOverlay) roomTokens.inputContentColor else palette.primaryText
+    val placeholderColor = if (isOverlay) roomTokens.inputContentColor else palette.secondaryText
+    val fieldColor = if (isOverlay) Color.Transparent else palette.searchField
+    val iconTint = if (isOverlay) roomTokens.inputContentColor else palette.secondaryText
     
     Surface(
-        color = if (darkOverlay) palette.surface.copy(alpha = 0.92f) else palette.surfaceElevated,
+        color = if (isOverlay) roomTokens.inputOverlayColor.copy(alpha = roomTokens.inputContainerAlpha) else palette.surfaceElevated,
         shape = if (isOverlay) RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp) else RoundedCornerShape(0.dp),
         tonalElevation = if (isOverlay) 0.dp else 2.dp,
         shadowElevation = 0.dp,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            palette.border
+            if (isOverlay) roomTokens.inputOverlayColor.copy(alpha = 0.10f) else palette.border
         )
     ) {
         Row(
@@ -630,7 +607,7 @@ private fun ChatInputBar(
                     color = textColor,
                     fontSize = 15.sp
                 ),
-                cursorBrush = SolidColor(if (darkOverlay) Color.White else palette.accent),
+                cursorBrush = SolidColor(if (isOverlay) roomTokens.inputContentColor else palette.accent),
                 decorationBox = { innerTextField ->
                     Box(
                         modifier = Modifier
@@ -685,9 +662,9 @@ private fun ChatInputBar(
                 enabled = isEnabled,
                 shape = CircleShape,
                 color = if (isEnabled) {
-                    if (darkOverlay) palette.accent.copy(alpha = 0.82f) else palette.accent
+                    if (isOverlay) roomTokens.inputContentColor.copy(alpha = 0.16f) else palette.accent
                 } else {
-                    if (darkOverlay) Color.White.copy(alpha = 0.10f) else palette.surfaceMuted
+                    if (isOverlay) roomTokens.inputContentColor.copy(alpha = 0.10f) else palette.surfaceMuted
                 },
                 modifier = Modifier.size(38.dp)
             ) {
@@ -695,7 +672,7 @@ private fun ChatInputBar(
                     Icon(
                         imageVector = CupertinoIcons.Filled.Paperplane,
                         contentDescription = "发送",
-                        tint = if (isEnabled) palette.onAccent else iconTint.copy(alpha = 0.48f),
+                        tint = if (isEnabled) roomTokens.inputContentColor else iconTint.copy(alpha = 0.48f),
                         modifier = Modifier.size(20.dp).offset(x = (-2).dp, y = 2.dp) // 视觉居中微调
                     )
                 }

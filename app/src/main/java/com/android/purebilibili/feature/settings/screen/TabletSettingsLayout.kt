@@ -119,6 +119,8 @@ fun TabletSettingsLayout(
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    dynamicVisibleTabIds: Set<String>,
+    onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
     onHomeRefreshCountChange: (Int) -> Unit,
     
@@ -452,6 +454,8 @@ fun TabletSettingsLayout(
                                         onFeedApiTypeChange = onFeedApiTypeChange,
                                         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
                                         onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
+                                        dynamicVisibleTabIds = dynamicVisibleTabIds,
+                                        onDynamicTabVisibilityChange = onDynamicTabVisibilityChange,
                                         homeRefreshCount = homeRefreshCount,
                                         onHomeRefreshCountChange = onHomeRefreshCountChange
                                     )

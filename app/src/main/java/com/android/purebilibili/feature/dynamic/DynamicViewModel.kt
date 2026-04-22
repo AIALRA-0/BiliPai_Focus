@@ -88,6 +88,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     
     //  [修复] 分离时间线和用户页加载锁，避免互相阻塞
     private var isTimelineLoadingLocked = false
+    private var activeTimelineRequestToken: Long = 0L
+    private var timelineInFlightRequests: Int = 0
     private var isUserLoadingLocked = false
     private var userDynamicsJob: Job? = null
     private var activeUserDynamicsRequestToken: Long = 0L
@@ -597,7 +599,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             .putInt(KEY_SELECTED_TAB, resolvedTab)
             .apply()
         if (_selectedUserId.value == null) {
-            DynamicRepository.resetPagination(DynamicFeedScope.DYNAMIC_SCREEN)
+            DynamicRepository.resetPagination(
+                scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                type = resolveDynamicFeedRequestType(resolvedTab)
+            )
             loadDynamicFeed(refresh = true)
         }
     }
@@ -621,7 +626,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     ) {
         //  [修复] 使用加载锁防止并发请求
         if (isTimelineLoadingLocked && !refresh) return
-        isTimelineLoadingLocked = true
+        val requestType = resolveDynamicFeedRequestType(_selectedTab.value)
+        val requestToken = startTimelineRequest()
         
         val requestState = resolveDynamicFeedStateForLoadStart(
             currentState = _uiState.value,
@@ -646,7 +652,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 return
             }
 
-            val requestType = resolveDynamicFeedRequestType(_selectedTab.value)
             val result = DynamicRepository.getDynamicFeed(
                 refresh = refresh,
                 scope = DynamicFeedScope.DYNAMIC_SCREEN,
@@ -655,12 +660,25 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
             result.fold(
                 onSuccess = { items ->
+                    if (!shouldApplyTimelineFeedResult(
+                            currentRequestType = resolveDynamicFeedRequestType(_selectedTab.value),
+                            requestType = requestType,
+                            activeRequestToken = activeTimelineRequestToken,
+                            requestToken = requestToken
+                        )
+                    ) {
+                        return@fold
+                    }
                     val successState = resolveDynamicFeedStateAfterSuccess(
                         currentState = requestState,
                         incomingItems = items,
                         isRefresh = refresh,
+                        requestType = requestType,
                         incrementalRefreshEnabled = incrementalTimelineRefreshEnabled,
-                        hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+                        hasMore = DynamicRepository.hasMoreData(
+                            scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                            type = requestType
+                        )
                     )
                     _uiState.value = successState
                     if (!shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
@@ -669,6 +687,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     rebuildFollowedUsers()
                 },
                 onFailure = { error ->
+                    if (!shouldApplyTimelineFeedResult(
+                            currentRequestType = resolveDynamicFeedRequestType(_selectedTab.value),
+                            requestType = requestType,
+                            activeRequestToken = activeTimelineRequestToken,
+                            requestToken = requestToken
+                        )
+                    ) {
+                        return@fold
+                    }
                     _uiState.value = resolveDynamicFeedStateAfterFailure(
                         currentState = requestState,
                         errorMessage = error.message ?: "加载失败",
@@ -677,7 +704,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 }
             )
         } finally {
-            isTimelineLoadingLocked = false
+            finishTimelineRequest()
         }
     }
     
@@ -693,6 +720,19 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
     private fun dynamicItemKey(item: DynamicItem): String {
         return dynamicFeedItemKey(item)
+    }
+
+    private fun startTimelineRequest(): Long {
+        val nextToken = activeTimelineRequestToken + 1L
+        activeTimelineRequestToken = nextToken
+        timelineInFlightRequests += 1
+        isTimelineLoadingLocked = true
+        return nextToken
+    }
+
+    private fun finishTimelineRequest() {
+        timelineInFlightRequests = (timelineInFlightRequests - 1).coerceAtLeast(0)
+        isTimelineLoadingLocked = timelineInFlightRequests > 0
     }
 
     override fun onCleared() {
@@ -1075,6 +1115,7 @@ data class SidebarUser(
 data class DynamicUiState(
     val items: List<DynamicItem> = emptyList(),
     val userItems: List<DynamicItem> = emptyList(), //  [新增] 选中 UP主的动态
+    val timelineRequestType: String = "all",
     val isLoading: Boolean = false,
     val error: String? = null,
     val userIsLoading: Boolean = false,

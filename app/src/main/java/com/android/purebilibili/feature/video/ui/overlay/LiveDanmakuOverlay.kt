@@ -49,8 +49,10 @@ fun LiveDanmakuOverlay(
     var isStarted by remember { mutableStateOf(false) }
     val danmakuList = remember { mutableListOf<DanmakuData>() }
     val pendingDanmaku = remember { mutableListOf<DanmakuData>() }
+    val pendingItemsBeforeStart = remember { mutableListOf<LiveDanmakuItem>() }
     val maxActiveDanmaku = 160
     val maxPendingDanmaku = 80
+    val maxPendingItemsBeforeStart = 48
 
     AndroidView(
         factory = { ctx ->
@@ -111,6 +113,15 @@ fun LiveDanmakuOverlay(
                         dataChanged = true
                     }
 
+                    if (pendingItemsBeforeStart.isNotEmpty()) {
+                        pendingItemsBeforeStart.forEach { item ->
+                            val danmakuData = createDanmakuData(item, currentTime, context, controller)
+                            pendingDanmaku.add(danmakuData)
+                        }
+                        pendingItemsBeforeStart.clear()
+                        dataChanged = true
+                    }
+
                     if (dataChanged || tick % 10 == 0) {
                         val expireBefore = currentTime - 20_000
                         val iterator = danmakuList.iterator()
@@ -159,7 +170,13 @@ fun LiveDanmakuOverlay(
     LaunchedEffect(danmakuFlow) {
         danmakuFlow.collect { item ->
             try {
-                if (!isStarted) return@collect
+                if (!isStarted || controller == null || startTime == 0L) {
+                    if (pendingItemsBeforeStart.size >= maxPendingItemsBeforeStart) {
+                        pendingItemsBeforeStart.removeAt(0)
+                    }
+                    pendingItemsBeforeStart.add(item)
+                    return@collect
+                }
 
                 // 计算当前相对时间（使用单调时钟，避免系统时间调整导致漂移）
                 val currentTime = SystemClock.elapsedRealtime() - startTime

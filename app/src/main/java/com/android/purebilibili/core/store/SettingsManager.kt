@@ -18,6 +18,7 @@ import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
 import com.android.purebilibili.feature.settings.share.SettingsShareSection
@@ -628,6 +629,8 @@ object SettingsManager {
     //  [新增] 顶部标签自定义 - 顺序和可见性
     private val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
     private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
+    private val KEY_DYNAMIC_TAB_VISIBLE_TABS = stringPreferencesKey("dynamic_tab_visible_tabs")
+    private val KEY_LIVE_FAVORITE_TAGS = stringPreferencesKey("live_favorite_tags")
     
     //  [新增] 开屏壁纸
     private val KEY_SPLASH_WALLPAPER_URI = stringPreferencesKey("splash_wallpaper_uri")
@@ -666,6 +669,7 @@ object SettingsManager {
 
     private const val DEFAULT_TOP_TAB_ORDER = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
     private const val DEFAULT_TOP_TAB_VISIBLE = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
+    private const val DEFAULT_DYNAMIC_TAB_VISIBLE = "all,video,pgc,article,up"
     //  [新增] 模糊效果开关
     private val KEY_HEADER_BLUR_ENABLED = booleanPreferencesKey("header_blur_enabled")
     private val KEY_HOME_HEADER_BLUR_MODE = intPreferencesKey("home_header_blur_mode")
@@ -1682,6 +1686,40 @@ object SettingsManager {
     suspend fun setTopTabVisibleTabs(context: Context, tabs: Set<String>) {
         context.settingsDataStore.edit { prefs ->
             prefs[KEY_TOP_TAB_VISIBLE_TABS] = tabs.joinToString(",")
+        }
+    }
+
+    fun getDynamicTabVisibleTabs(context: Context): Flow<Set<String>> = context.settingsDataStore.data.map { prefs ->
+        val tabsString = prefs[KEY_DYNAMIC_TAB_VISIBLE_TABS] ?: DEFAULT_DYNAMIC_TAB_VISIBLE
+        tabsString.split(",").filter { it.isNotBlank() }.toSet()
+    }
+
+    suspend fun setDynamicTabVisibleTabs(context: Context, tabs: Set<String>) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[KEY_DYNAMIC_TAB_VISIBLE_TABS] = tabs.joinToString(",")
+        }
+    }
+
+    fun getLiveFavoriteTags(context: Context): Flow<List<LiveFavoriteTagEntry>> = context.settingsDataStore.data.map { prefs ->
+        val raw = prefs[KEY_LIVE_FAVORITE_TAGS].orEmpty()
+        if (raw.isBlank()) {
+            emptyList()
+        } else {
+            runCatching { Json.decodeFromString<List<LiveFavoriteTagEntry>>(raw) }.getOrDefault(emptyList())
+        }
+    }
+
+    suspend fun setLiveFavoriteTags(context: Context, tags: List<LiveFavoriteTagEntry>) {
+        val normalized = tags
+            .filter { it.parentAreaId > 0 && it.areaId >= 0 && it.title.isNotBlank() }
+            .distinctBy { it.parentAreaId to it.areaId }
+            .take(12)
+        context.settingsDataStore.edit { prefs ->
+            prefs[KEY_LIVE_FAVORITE_TAGS] = if (normalized.isEmpty()) {
+                ""
+            } else {
+                Json.encodeToString(normalized)
+            }
         }
     }
     
@@ -4149,6 +4187,7 @@ object SettingsManager {
             IntShareablePreferenceDefinition(KEY_TOP_TAB_LABEL_MODE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_ORDER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_BLUR_ENABLED, SettingsShareSection.APPEARANCE),

@@ -13,6 +13,14 @@ sealed class ScreenRoutes(val route: String) {
     object Favorite : ScreenRoutes("favorite")
     object WatchLater : ScreenRoutes("watch_later")  //  [新增] 稍后再看
     object LiveList : ScreenRoutes("live_list")  //  [新增] 直播列表
+    object LiveSearch : ScreenRoutes("live_search")
+    object LiveArea : ScreenRoutes("live_area")
+    object LiveAreaDetail : ScreenRoutes("live_area_detail/{parentAreaId}/{areaId}?title={title}") {
+        fun createRoute(parentAreaId: Int, areaId: Int, title: String): String {
+            return "live_area_detail/$parentAreaId/$areaId?title=${android.net.Uri.encode(title)}"
+        }
+    }
+    object LiveFollowing : ScreenRoutes("live_following")
     
     //  关注列表页面
     object Following : ScreenRoutes("following/{mid}") {

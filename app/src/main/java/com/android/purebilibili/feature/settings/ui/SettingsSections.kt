@@ -46,6 +46,8 @@ import com.android.purebilibili.core.ui.IOSAlertDialog
 import com.android.purebilibili.core.ui.IOSDialogAction
 import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
 import com.android.purebilibili.core.store.MIN_HOME_REFRESH_COUNT
+import com.android.purebilibili.feature.dynamic.allDynamicTabSpecs
+import com.android.purebilibili.feature.dynamic.shouldAllowDynamicTabVisibilityToggleOff
 import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════════
@@ -323,6 +325,8 @@ fun FeedApiSection(
     onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    dynamicVisibleTabIds: Set<String>,
+    onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
     onHomeRefreshCountChange: (Int) -> Unit
 ) {
@@ -331,6 +335,7 @@ fun FeedApiSection(
     val incrementalRefreshTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSGreen, uiPreset)
     val feedIcon = rememberAppDynamicIcon()
     val refreshIcon = rememberAppRefreshIcon()
+    val visibilityIcon = rememberAppVisibilityOffIcon()
     SettingsCardGroup {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -376,12 +381,101 @@ fun FeedApiSection(
             iconTint = incrementalRefreshTint
         )
         SettingsDivider(startIndent = 66.dp)
+        FeedDynamicTabVisibilityItem(
+            icon = visibilityIcon,
+            visibleTabIds = dynamicVisibleTabIds,
+            onTabVisibilityChange = onDynamicTabVisibilityChange,
+            iconTint = feedTint
+        )
+        SettingsDivider(startIndent = 66.dp)
         FeedRefreshCountItem(
             icon = refreshIcon,
             count = homeRefreshCount,
             onCountChange = onHomeRefreshCountChange,
             iconTint = incrementalRefreshTint
         )
+    }
+}
+
+@Composable
+private fun FeedDynamicTabVisibilityItem(
+    icon: ImageVector,
+    visibleTabIds: Set<String>,
+    onTabVisibilityChange: (String) -> Unit,
+    iconTint: Color
+) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .size(visualSpec.iconContainerSizeDp.dp)
+                    .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                    .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "动态栏位显示",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "选择动态页显示哪些栏位，至少保留 1 个。隐藏 UP 后，点侧栏用户会直接打开主页。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+        allDynamicTabSpecs.forEachIndexed { index, tab ->
+            val checked = tab.id in visibleTabIds
+            val enabled = shouldAllowDynamicTabVisibilityToggleOff(
+                currentVisibleTabIds = visibleTabIds,
+                targetTabId = tab.id
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = enabled) { onTabVisibilityChange(tab.id) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = tab.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                AppAdaptiveSwitch(
+                    checked = checked,
+                    onCheckedChange = { onTabVisibilityChange(tab.id) },
+                    enabled = enabled
+                )
+            }
+            if (index != allDynamicTabSpecs.lastIndex) {
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
     }
 }
 

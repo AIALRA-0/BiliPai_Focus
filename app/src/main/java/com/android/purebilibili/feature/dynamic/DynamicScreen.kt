@@ -54,6 +54,7 @@ import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.feature.dynamic.resolveDynamicFeedMaxWidth
 import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserListHorizontalPadding
@@ -62,6 +63,7 @@ import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserList
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
+import com.android.purebilibili.feature.dynamic.components.DynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
@@ -119,16 +121,36 @@ fun DynamicScreen(
     val showHiddenUsers by viewModel.showHiddenUsers.collectAsState()
     val hiddenUserIds by viewModel.hiddenUserIds.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
+    val context = LocalContext.current
 
     //  [新增] 点赞/转发状态
     val likedDynamics by viewModel.likedDynamics.collectAsState()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }  // 存储要转发的动态ID
 
-    // Tab 选择
-    val tabs = listOf("全部", "投稿", "番剧", "专栏", "UP")
-    val isSelectedUserTabActive = remember(selectedTab, selectedUserId) {
-        shouldUseSelectedUserDynamicFeed(
+    val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
+        .collectAsState(initial = defaultDynamicTabVisibleIds)
+    val visibleTabs = remember(dynamicVisibleTabIds) {
+        resolveDynamicVisibleTabs(dynamicVisibleTabIds)
+    }
+    val isUserTabVisible = remember(visibleTabs) {
+        isDynamicUserTabVisible(visibleTabs)
+    }
+    val activeSelectedTab = remember(selectedTab, visibleTabs) {
+        resolveDynamicSelectedTabWithinVisibleTabs(
             selectedTab = selectedTab,
+            visibleTabs = visibleTabs
+        )
+    }
+    val selectedVisibleTabIndex = remember(activeSelectedTab, visibleTabs) {
+        resolveDynamicSelectedVisibleTabIndex(
+            selectedTab = activeSelectedTab,
+            visibleTabs = visibleTabs
+        )
+    }
+    val tabTitles = remember(visibleTabs) { visibleTabs.map { it.title } }
+    val isSelectedUserTabActive = remember(activeSelectedTab, selectedUserId) {
+        shouldUseSelectedUserDynamicFeed(
+            selectedTab = activeSelectedTab,
             selectedUserId = selectedUserId
         )
     }
@@ -149,7 +171,6 @@ fun DynamicScreen(
     val pullRefreshState = rememberPullToRefreshState()
 
     // GIF 图片加载器
-    val context = LocalContext.current
     val gifImageLoader = context.imageLoader
     val shouldShowBackToTop by remember(listState) {
         derivedStateOf {
@@ -168,37 +189,50 @@ fun DynamicScreen(
                 )
         }
     }
-    val handleUserSelection = remember(selectedUserId, selectedTab) {
+    LaunchedEffect(activeSelectedTab, selectedTab) {
+        if (selectedTab != activeSelectedTab) {
+            viewModel.setSelectedTab(activeSelectedTab)
+        }
+    }
+    val handleUserSelection = remember(selectedUserId, activeSelectedTab, isUserTabVisible, onUserClick) {
         { clickedUserId: Long? ->
-            val nextUserId = resolveDynamicSelectedUserIdAfterClick(
-                selectedUserId = selectedUserId,
-                clickedUserId = clickedUserId
-            )
-            val nextTab = resolveDynamicTabAfterUserSelection(
-                selectedUserId = selectedUserId,
-                clickedUserId = clickedUserId,
-                currentTab = selectedTab
-            )
-
-            if (nextUserId == null && nextTab != selectedTab) {
-                viewModel.setSelectedTab(nextTab)
-                viewModel.selectUser(null)
+            if (!isUserTabVisible) {
+                if (clickedUserId != null) {
+                    onUserClick(clickedUserId)
+                }
             } else {
-                viewModel.selectUser(nextUserId)
-                if (nextTab != selectedTab) {
+                val nextUserId = resolveDynamicSelectedUserIdAfterClick(
+                    selectedUserId = selectedUserId,
+                    clickedUserId = clickedUserId
+                )
+                val nextTab = resolveDynamicTabAfterUserSelection(
+                    selectedUserId = selectedUserId,
+                    clickedUserId = clickedUserId,
+                    currentTab = activeSelectedTab
+                )
+
+                if (nextUserId == null && nextTab != activeSelectedTab) {
                     viewModel.setSelectedTab(nextTab)
+                    viewModel.selectUser(null)
+                } else {
+                    viewModel.selectUser(nextUserId)
+                    if (nextTab != activeSelectedTab) {
+                        viewModel.setSelectedTab(nextTab)
+                    }
                 }
             }
         }
     }
     val dynamicTabSwipeModifier = Modifier.dynamicTabSwipe(
-        selectedTab = selectedTab,
-        tabCount = tabs.size,
-        onTabSelected = viewModel::setSelectedTab
+        selectedTab = selectedVisibleTabIndex,
+        tabCount = visibleTabs.size,
+        onTabSelected = { visibleIndex ->
+            visibleTabs.getOrNull(visibleIndex)?.let { viewModel.setSelectedTab(it.logicalIndex) }
+        }
     )
 
     //  [修改] 过滤动态 - 选中用户时使用 userItems
-    val filteredItems = remember(state.items, state.userItems, selectedTab, selectedUserId, isSelectedUserTabActive) {
+    val filteredItems = remember(state.items, state.userItems, activeSelectedTab, selectedUserId, isSelectedUserTabActive) {
         val baseItems = if (isSelectedUserTabActive) {
             resolveSelectedUserVisibleItems(
                 timelineItems = state.items,
@@ -209,7 +243,7 @@ fun DynamicScreen(
             state.items
         }
         var items = baseItems
-        items = when (selectedTab) {
+        items = when (activeSelectedTab) {
             1 -> items.filter(::shouldIncludeDynamicItemInVideoTab)
             2 -> items.filter(::shouldIncludeDynamicItemInPgcTab)
             3 -> items.filter(::shouldIncludeDynamicItemInArticleTab)
@@ -218,11 +252,12 @@ fun DynamicScreen(
         }
         items.distinctBy { it.id_str }
     }
-    val oldContentDividerLabel = remember(selectedTab, tabs) {
-        if (selectedTab == 0) {
+    val oldContentDividerLabel = remember(activeSelectedTab, visibleTabs) {
+        if (activeSelectedTab == 0) {
             "以下是之前的动态"
         } else {
-            "以下是之前的${tabs.getOrElse(selectedTab) { "内容" }}"
+            val tabTitle = visibleTabs.firstOrNull { it.logicalIndex == activeSelectedTab }?.title ?: "内容"
+            "以下是之前的${tabTitle}"
         }
     }
     val oldContentDividerIndex = remember(
@@ -252,8 +287,8 @@ fun DynamicScreen(
     } else {
         state.hasMore
     }
-    val activeLoading = remember(state, selectedUserId, selectedTab, isSelectedUserTabActive) {
-        if (selectedTab == 4 && !isSelectedUserTabActive) {
+    val activeLoading = remember(state, selectedUserId, activeSelectedTab, isSelectedUserTabActive) {
+        if (activeSelectedTab == 4 && !isSelectedUserTabActive) {
             false
         } else {
         resolveDynamicActiveLoadingState(
@@ -262,8 +297,8 @@ fun DynamicScreen(
         )
         }
     }
-    val activeError = remember(state, selectedUserId, selectedTab, isSelectedUserTabActive) {
-        if (selectedTab == 4 && !isSelectedUserTabActive) {
+    val activeError = remember(state, selectedUserId, activeSelectedTab, isSelectedUserTabActive) {
+        if (activeSelectedTab == 4 && !isSelectedUserTabActive) {
             null
         } else {
         resolveDynamicActiveError(
@@ -452,7 +487,7 @@ fun DynamicScreen(
                                 // 使用 Box 包裹，以便 hazeSource 可以应用于列表
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     AnimatedDynamicTabContent(
-                                        selectedTab = selectedTab,
+                                        selectedTab = activeSelectedTab,
                                         modifier = Modifier.fillMaxSize()
                                     ) { animatedTab ->
                                         DynamicList(
@@ -494,9 +529,12 @@ fun DynamicScreen(
 
                                     // 顶栏
                                     DynamicTopBarWithTabs(
-                                    selectedTab = selectedTab,
-                                    tabs = tabs,
-                                    onTabSelected = { tab -> viewModel.setSelectedTab(tab) },
+                                    selectedTab = selectedVisibleTabIndex,
+                                    tabs = tabTitles,
+                                    onTabSelected = { visibleIndex ->
+                                        visibleTabs.getOrNull(visibleIndex)
+                                            ?.let { viewModel.setSelectedTab(it.logicalIndex) }
+                                    },
                                     displayMode = displayMode,
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     hazeState = hazeState, // 传入 hazeState
@@ -533,7 +571,7 @@ fun DynamicScreen(
                              // 使用 Box 包裹
                             Box {
                                  AnimatedDynamicTabContent(
-                                     selectedTab = selectedTab,
+                                     selectedTab = activeSelectedTab,
                                      modifier = Modifier.fillMaxSize()
                                  ) { animatedTab ->
                                      DynamicList(
@@ -590,9 +628,12 @@ fun DynamicScreen(
                                  ) {
                                      // 顶栏 - 移除其自带的模糊，使用透明背景
                                      DynamicTopBarWithTabs(
-                                         selectedTab = selectedTab,
-                                         tabs = tabs,
-                                         onTabSelected = { tab -> viewModel.setSelectedTab(tab) },
+                                         selectedTab = selectedVisibleTabIndex,
+                                         tabs = tabTitles,
+                                         onTabSelected = { visibleIndex ->
+                                             visibleTabs.getOrNull(visibleIndex)
+                                                 ?.let { viewModel.setSelectedTab(it.logicalIndex) }
+                                         },
                                          displayMode = displayMode,
                                          onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                          hazeState = null // 禁用内部模糊，由外层统一处理
@@ -953,41 +994,36 @@ private fun HorizontalUserList(
                             .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .then(
-                                    if (isSelected)
-                                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                    else
-                                        Modifier
-                                )
+                            modifier = Modifier.padding(bottom = resolveDynamicUserLiveBadgeReservedSpace())
                         ) {
-                            AsyncImage(
-                                model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                    .data(user.face.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-
-                            //  在线状态
-                            if (user.isLive) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .size(12.dp)
-                                        .background(androidx.compose.ui.graphics.Color.White, CircleShape)
-                                        .padding(2.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(androidx.compose.ui.graphics.Color.Red, CircleShape)
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (isSelected)
+                                            Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                        else
+                                            Modifier
                                     )
-                                }
+                            ) {
+                                AsyncImage(
+                                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                        .data(user.face.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+
+                            if (shouldShowDynamicUserLiveBadge(user.isLive)) {
+                                DynamicUserLiveBadge(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .offset(y = resolveDynamicUserLiveBadgeReservedSpace() / 2)
+                                )
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))

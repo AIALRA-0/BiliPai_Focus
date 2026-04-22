@@ -35,50 +35,63 @@ internal fun rememberLiveChromePalette(): LiveChromePalette {
     val colorScheme = MaterialTheme.colorScheme
     val isDark = colorScheme.surface.luminance() < 0.45f
     return remember(colorScheme, isDark) {
-        if (isDark) {
-            LiveChromePalette(
-                isDark = true,
-                accent = Color(0xFFE4C06F),
-                accentStrong = Color(0xFFF0D18A),
-                accentSoft = Color(0x33E4C06F),
-                backgroundTop = Color(0xFF120F0C),
-                backgroundBottom = Color(0xFF211B14),
-                surface = Color(0xE628221A),
-                surfaceElevated = Color(0xF2332C22),
-                surfaceMuted = Color(0xCC2C261D),
-                searchField = Color(0xFF2D271E),
-                bubble = Color(0xC9181C23),
-                bubbleStrong = Color(0xDD232A33),
-                border = Color(0x26FFF2D9),
-                scrim = Color(0xBF04070B),
-                primaryText = Color(0xFFF6EFE2),
-                secondaryText = Color(0xFFD2C4AB),
-                tertiaryText = Color(0xFF9C907D),
-                onAccent = Color(0xFF1F180D)
-            )
-        } else {
-            LiveChromePalette(
-                isDark = false,
-                accent = Color(0xFF8C6B27),
-                accentStrong = Color(0xFFA57A25),
-                accentSoft = Color(0x1A8C6B27),
-                backgroundTop = Color(0xFFF8F2E8),
-                backgroundBottom = Color(0xFFF2EBDF),
-                surface = Color(0xF9FFF9F2),
-                surfaceElevated = Color(0xFFF7F0E5),
-                surfaceMuted = Color(0xFFF0E7DA),
-                searchField = Color(0xFFEDE3D4),
-                bubble = Color(0xF8FFFFFF),
-                bubbleStrong = Color(0xFFF8F1E4),
-                border = Color(0x1F5E4630),
-                scrim = Color(0x802F2417),
-                primaryText = Color(0xFF241A11),
-                secondaryText = Color(0xFF655646),
-                tertiaryText = Color(0xFF9A8C7B),
-                onAccent = Color.White
-            )
-        }
+        resolveLiveChromePalette(
+            isDark = isDark,
+            primary = colorScheme.primary,
+            onPrimary = colorScheme.onPrimary,
+            background = colorScheme.background,
+            surface = colorScheme.surface,
+            surfaceContainerLow = colorScheme.surfaceContainerLow,
+            surfaceContainer = colorScheme.surfaceContainer,
+            surfaceContainerHigh = colorScheme.surfaceContainerHigh,
+            surfaceContainerHighest = colorScheme.surfaceContainerHighest,
+            surfaceVariant = colorScheme.surfaceVariant,
+            onBackground = colorScheme.onBackground,
+            onSurface = colorScheme.onSurface,
+            onSurfaceVariant = colorScheme.onSurfaceVariant,
+            outline = colorScheme.outline,
+            outlineVariant = colorScheme.outlineVariant
+        )
     }
+}
+
+internal fun resolveLiveChromePalette(
+    isDark: Boolean,
+    primary: Color,
+    onPrimary: Color,
+    background: Color,
+    surface: Color,
+    surfaceContainerLow: Color,
+    surfaceContainer: Color,
+    surfaceContainerHigh: Color,
+    surfaceContainerHighest: Color,
+    surfaceVariant: Color,
+    onBackground: Color,
+    onSurface: Color,
+    onSurfaceVariant: Color,
+    outline: Color,
+    outlineVariant: Color
+): LiveChromePalette {
+    return LiveChromePalette(
+        isDark = isDark,
+        accent = primary,
+        accentStrong = primary,
+        accentSoft = primary.copy(alpha = if (isDark) 0.24f else 0.16f),
+        backgroundTop = background,
+        backgroundBottom = if (isDark) surface else surfaceContainerLow,
+        surface = surface.copy(alpha = if (isDark) 0.92f else 0.98f),
+        surfaceElevated = if (isDark) surfaceContainerHigh.copy(alpha = 0.96f) else surface,
+        surfaceMuted = if (isDark) surfaceContainer.copy(alpha = 0.92f) else surfaceContainerHighest,
+        searchField = if (isDark) surfaceContainerHigh else surfaceContainerHighest,
+        bubble = if (isDark) surfaceContainerHigh.copy(alpha = 0.82f) else surface.copy(alpha = 0.96f),
+        bubbleStrong = if (isDark) surfaceContainerHighest.copy(alpha = 0.88f) else surfaceVariant,
+        border = outlineVariant.copy(alpha = if (isDark) 0.42f else 0.55f),
+        scrim = Color.Black.copy(alpha = if (isDark) 0.78f else 0.52f),
+        primaryText = onBackground,
+        secondaryText = onSurfaceVariant,
+        tertiaryText = outline,
+        onAccent = onPrimary
+    )
 }
 
 internal fun LiveChromePalette.backgroundBrush(): Brush {
