@@ -46,6 +46,8 @@ import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.feature.dynamic.resolveDynamicUserLiveBadgeReservedSpace
+import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.SidebarUser
 
 /**
@@ -329,41 +331,36 @@ fun SidebarUserItem(
                 }
 
                 Box(
-                    modifier = Modifier
-                        .size(44.dp) // 稍大一点的头像
-                        // 选中态边框
-                        .then(
-                            if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                            else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape) // 自适应描边
-                        )
-                        .padding(2.dp) // 边框与头像间距
+                    modifier = Modifier.padding(bottom = resolveDynamicUserLiveBadgeReservedSpace())
                 ) {
-                    AsyncImage(
-                        model = coil.request.ImageRequest.Builder(LocalContext.current)
-                            .data(faceUrl.ifEmpty { null })
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = user.name,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-
-                //  在线状态指示器（带自适应描边）
-                if (user.isLive) {
                     Box(
                         modifier = Modifier
-                            .size(14.dp)
-                            .align(Alignment.BottomEnd)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape) // 自适应“挖孔”颜色
+                            .size(44.dp) // 稍大一点的头像
+                            // 选中态边框
+                            .then(
+                                if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                            )
                             .padding(2.dp)
                     ) {
-                        Box(
+                        AsyncImage(
+                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                .data(faceUrl.ifEmpty { null })
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = user.name,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color(0xFFFF4081), CircleShape) // 鲜艳的粉红色
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    if (shouldShowDynamicUserLiveBadge(user.isLive)) {
+                        DynamicUserLiveBadge(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .offset(y = resolveDynamicUserLiveBadgeReservedSpace() / 2)
                         )
                     }
                 }

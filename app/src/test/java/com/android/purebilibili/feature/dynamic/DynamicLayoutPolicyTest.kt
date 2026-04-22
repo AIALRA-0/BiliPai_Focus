@@ -45,4 +45,14 @@ class DynamicLayoutPolicyTest {
         assertEquals(68.dp, resolveDynamicSidebarWidth(isExpanded = true))
         assertEquals(60.dp, resolveDynamicSidebarWidth(isExpanded = false))
     }
+
+    @Test
+    fun `dynamic user live badge uses compact themed pill sizing`() {
+        assertEquals(true, shouldShowDynamicUserLiveBadge(isLive = true))
+        assertEquals(false, shouldShowDynamicUserLiveBadge(isLive = false))
+        assertEquals("直播", resolveDynamicUserLiveBadgeLabel())
+        assertEquals(16.dp, resolveDynamicUserLiveBadgeHeight())
+        assertEquals(24.dp, resolveDynamicUserLiveBadgeMinWidth())
+        assertEquals(8.dp, resolveDynamicUserLiveBadgeReservedSpace())
+    }
 }

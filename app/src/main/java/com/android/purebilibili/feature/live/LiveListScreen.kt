@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ArrowOutward
-import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Badge
@@ -272,17 +270,14 @@ fun LiveListScreen(
     }
 
     val windowSizeClass = LocalWindowSizeClass.current
+    val metrics = resolveLivePiliPlusHomeMetrics()
     val contentWidth = if (windowSizeClass.isExpandedScreen) {
         minOf(windowSizeClass.widthDp, 1100.dp)
     } else {
         windowSizeClass.widthDp
     }
     val gridColumns = remember(contentWidth) {
-        if (windowSizeClass.isExpandedScreen) {
-            (contentWidth / 220.dp).toInt().coerceIn(2, 5)
-        } else {
-            2
-        }
+        resolveLivePiliPlusGridColumns(contentWidth.value.toInt(), windowSizeClass.isExpandedScreen)
     }
     val gridBottomPadding = resolveBottomSafeAreaPadding(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
@@ -301,6 +296,7 @@ fun LiveListScreen(
                 .responsiveContentWidth(maxWidth = 1100.dp)
         ) {
             LiveListHeader(
+                metrics = metrics,
                 livingCount = state.livingCount,
                 primaryFace = state.followItems.firstOrNull()?.face.orEmpty(),
                 onBack = onBack,
@@ -335,6 +331,7 @@ fun LiveListScreen(
                             isAreaLoading = state.isAreaLoading,
                             gridColumns = gridColumns,
                             bottomPadding = gridBottomPadding,
+                            metrics = metrics,
                             onLiveClick = onLiveClick,
                             onAreaSelected = viewModel::selectHomeArea,
                             onAreaDetailClick = onAreaDetailClick,
@@ -359,6 +356,7 @@ private fun LiveHomeContent(
     isAreaLoading: Boolean,
     gridColumns: Int,
     bottomPadding: androidx.compose.ui.unit.Dp,
+    metrics: LivePiliPlusHomeMetrics,
     onLiveClick: (Long, String, String) -> Unit,
     onAreaSelected: (Int) -> Unit,
     onAreaDetailClick: (Int, Int, String) -> Unit,
@@ -367,53 +365,35 @@ private fun LiveHomeContent(
 ) {
     val selectedArea = areaList.firstOrNull { it.id == selectedAreaId }
     val contentItems = if (selectedAreaId == 0) recommendItems else areaItems
-    val sectionTitle = selectedArea?.name ?: "推荐直播"
-    val sectionSubtitle = when {
-        selectedAreaId == 0 && recommendItems.isNotEmpty() -> "精选 ${recommendItems.size} 个直播间"
-        selectedAreaId == 0 -> "暂无推荐内容"
-        isAreaLoading -> "正在切换分区"
-        else -> "当前分区直播流"
-    }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(gridColumns),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = bottomPadding),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = metrics.safeSpaceDp.dp,
+            end = metrics.safeSpaceDp.dp,
+            top = metrics.cardSpaceDp.dp,
+            bottom = bottomPadding
+        ),
+        horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
+        verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp)
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LiveHeroSummaryCard(
-                livingCount = livingCount,
-                onFollowingClick = onFollowingClick,
-                onAreaListClick = onAreaListClick
-            )
-        }
         if (followItems.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveSectionHeader(
-                    title = "我的关注",
-                    subtitle = if (livingCount > 0) "$livingCount 人正在直播" else "关注开播动态",
-                    actionLabel = "查看全部",
+                LiveFollowHeader(
+                    livingCount = livingCount,
                     onActionClick = onFollowingClick
                 )
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LiveFollowAvatarRow(
                     items = followItems.take(10),
+                    metrics = metrics,
                     onLiveClick = onLiveClick
                 )
             }
         }
         if (areaList.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LiveSectionHeader(
-                    title = "分区浏览",
-                    subtitle = if (selectedArea == null) "选择一个分区继续浏览" else "当前分区：${selectedArea.name}",
-                    actionLabel = "全部标签",
-                    onActionClick = onAreaListClick
-                )
-            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LiveAreaHomeChipRow(
                     areaList = areaList,
@@ -424,18 +404,12 @@ private fun LiveHomeContent(
             if (!selectedArea?.list.isNullOrEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     LiveAreaChildChipRow(
-                        items = selectedArea?.list.orEmpty(),
+                        items = selectedArea.list.orEmpty(),
                         parentAreaId = selectedAreaId,
                         onAreaDetailClick = onAreaDetailClick
                     )
                 }
             }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LiveSectionHeader(
-                title = sectionTitle,
-                subtitle = sectionSubtitle
-            )
         }
         when {
             isAreaLoading -> item(span = { GridItemSpan(maxLineSpan) }) { LiveListLoadingState() }
@@ -452,6 +426,7 @@ private fun LiveHomeContent(
 
 @Composable
 private fun LiveListHeader(
+    metrics: LivePiliPlusHomeMetrics,
     livingCount: Int,
     primaryFace: String,
     onBack: () -> Unit,
@@ -463,17 +438,17 @@ private fun LiveListHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .padding(horizontal = metrics.safeSpaceDp.dp, vertical = 8.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 onClick = onBack,
-                color = palette.surfaceMuted,
+                color = Color.Transparent,
                 shape = CircleShape,
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -486,11 +461,11 @@ private fun LiveListHeader(
             Surface(
                 onClick = onSearchClick,
                 color = palette.searchField,
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(32.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -509,9 +484,9 @@ private fun LiveListHeader(
             Box {
                 Surface(
                     onClick = onInboxClick,
-                    color = palette.surfaceMuted,
+                    color = Color.Transparent,
                     shape = CircleShape,
-                    modifier = Modifier.size(42.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -538,7 +513,7 @@ private fun LiveListHeader(
                 onClick = onAvatarClick,
                 color = palette.surfaceMuted,
                 shape = CircleShape,
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 if (primaryFace.isNotBlank()) {
                     AsyncImage(
@@ -559,135 +534,53 @@ private fun LiveListHeader(
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = "直播",
-            color = palette.primaryText,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = if (livingCount > 0) {
-                "我的关注里有 $livingCount 位主播正在直播"
-            } else {
-                "探索正在开播的直播间"
-            },
-            color = palette.secondaryText,
-            fontSize = 14.sp
-        )
     }
 }
 
 @Composable
-private fun LiveHeroSummaryCard(
+private fun LiveFollowHeader(
     livingCount: Int,
-    onFollowingClick: () -> Unit,
-    onAreaListClick: () -> Unit
-) {
-    val palette = rememberLiveChromePalette()
-    Surface(
-        shape = RoundedCornerShape(26.dp),
-        color = palette.surfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(1.dp, palette.border)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "直播主场",
-                    color = palette.primaryText,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = if (livingCount > 0) "我的关注里有 $livingCount 位主播正在直播" else "探索正在开播的直播间",
-                    color = palette.secondaryText,
-                    fontSize = 13.sp
-                )
-            }
-            Surface(
-                onClick = onFollowingClick,
-                shape = RoundedCornerShape(18.dp),
-                color = palette.accentSoft
-            ) {
-                Text(
-                    text = if (livingCount > 0) "关注直播" else "我的关注",
-                    color = palette.accentStrong,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                )
-            }
-            Surface(
-                onClick = onAreaListClick,
-                shape = RoundedCornerShape(18.dp),
-                color = palette.surfaceMuted
-            ) {
-                Text(
-                    text = "全部标签",
-                    color = palette.primaryText,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LiveSectionHeader(
-    title: String,
-    subtitle: String,
-    actionLabel: String? = null,
-    onActionClick: (() -> Unit)? = null
+    onActionClick: () -> Unit
 ) {
     val palette = rememberLiveChromePalette()
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
             Text(
-                text = title,
+                text = "我的关注  ",
                 color = palette.primaryText,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
             )
-            Spacer(Modifier.height(4.dp))
             Text(
-                text = subtitle,
+                text = livingCount.toString(),
+                color = palette.accentStrong,
+                fontSize = 13.sp
+            )
+            Text(
+                text = " 人正在直播",
                 color = palette.secondaryText,
                 fontSize = 13.sp
             )
         }
-        if (actionLabel != null && onActionClick != null) {
-            Surface(
-                onClick = onActionClick,
-                color = palette.surfaceMuted,
-                shape = RoundedCornerShape(999.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = actionLabel,
-                        color = palette.primaryText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Outlined.ArrowOutward,
-                        contentDescription = null,
-                        tint = palette.secondaryText,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
+        Row(
+            modifier = Modifier.clickable(onClick = onActionClick),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "查看更多",
+                color = palette.secondaryText,
+                fontSize = 14.sp
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = ">",
+                color = palette.secondaryText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -695,28 +588,25 @@ private fun LiveSectionHeader(
 @Composable
 private fun LiveFollowAvatarRow(
     items: List<LiveRoomItem>,
+    metrics: LivePiliPlusHomeMetrics,
     onLiveClick: (Long, String, String) -> Unit
 ) {
     val palette = rememberLiveChromePalette()
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         items(items, key = { it.roomId }) { item ->
             Column(
                 modifier = Modifier
-                    .width(74.dp)
+                    .width(metrics.followItemExtentDp.dp)
                     .clickable { onLiveClick(item.roomId, item.title, item.uname) },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(contentAlignment = Alignment.BottomEnd) {
+                Box(contentAlignment = Alignment.Center) {
                     Box(
                         modifier = Modifier
-                            .size(70.dp)
+                            .size((metrics.followAvatarSizeDp + 5).dp)
                             .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(palette.accentStrong, palette.accent)
-                                )
-                            )
-                            .padding(3.dp)
+                            .background(palette.accentStrong)
+                            .padding(2.dp)
                     ) {
                         AsyncImage(
                             model = item.face.ifBlank { item.cover },
@@ -728,25 +618,13 @@ private fun LiveFollowAvatarRow(
                                 .background(palette.surface)
                         )
                     }
-                    Surface(
-                        color = palette.accentStrong,
-                        shape = RoundedCornerShape(999.dp),
-                        modifier = Modifier.padding(2.dp)
-                    ) {
-                        Text(
-                            text = "LIVE",
-                            color = palette.onAccent,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = item.uname,
                     color = palette.primaryText,
                     fontSize = 12.sp,
+                    lineHeight = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
@@ -763,24 +641,28 @@ private fun LiveAreaHomeChipRow(
     onAreaSelected: (Int) -> Unit
 ) {
     val palette = rememberLiveChromePalette()
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    val colorScheme = MaterialTheme.colorScheme
+    val chipColors = resolveLivePiliPlusChipColors(
+        selectedContainer = colorScheme.secondaryContainer,
+        selectedContent = colorScheme.onSecondaryContainer,
+        unselectedContent = colorScheme.onSurfaceVariant
+    )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             val selected = selectedAreaId == 0
             Surface(
                 onClick = { onAreaSelected(0) },
-                color = if (selected) palette.accentSoft else palette.surfaceMuted,
+                color = if (selected) chipColors.selectedContainerColor else chipColors.unselectedContainerColor,
                 shape = RoundedCornerShape(999.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    color = if (selected) palette.accent.copy(alpha = 0.45f) else palette.border
-                )
+                border = null
             ) {
                 Text(
                     text = "推荐",
-                    color = if (selected) palette.accentStrong else palette.primaryText,
-                    fontSize = 13.sp,
+                    color = if (selected) chipColors.selectedContentColor else chipColors.unselectedContentColor,
+                    fontSize = 14.sp,
+                    lineHeight = 14.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                 )
             }
         }
@@ -788,30 +670,19 @@ private fun LiveAreaHomeChipRow(
             val selected = area.id == selectedAreaId
             Surface(
                 onClick = { onAreaSelected(area.id) },
-                color = if (selected) palette.accentSoft else palette.surfaceMuted,
+                color = if (selected) chipColors.selectedContainerColor else chipColors.unselectedContainerColor,
                 shape = RoundedCornerShape(999.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    color = if (selected) palette.accent.copy(alpha = 0.45f) else palette.border
-                )
+                border = null
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (selected) {
-                        Icon(
-                            imageVector = Icons.Outlined.GridView,
-                            contentDescription = null,
-                            tint = palette.accent,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
                     Text(
                         text = area.name,
-                        color = if (selected) palette.accentStrong else palette.primaryText,
-                        fontSize = 13.sp,
+                        color = if (selected) chipColors.selectedContentColor else chipColors.unselectedContentColor,
+                        fontSize = 14.sp,
+                        lineHeight = 14.sp,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                     )
                 }
@@ -826,8 +697,13 @@ private fun LiveAreaChildChipRow(
     parentAreaId: Int,
     onAreaDetailClick: (Int, Int, String) -> Unit
 ) {
-    val palette = rememberLiveChromePalette()
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    val colorScheme = MaterialTheme.colorScheme
+    val chipColors = resolveLivePiliPlusChipColors(
+        selectedContainer = colorScheme.secondaryContainer,
+        selectedContent = colorScheme.onSecondaryContainer,
+        unselectedContent = colorScheme.onSurfaceVariant
+    )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(items, key = { it.id }) { child ->
             Surface(
                 onClick = {
@@ -837,15 +713,16 @@ private fun LiveAreaChildChipRow(
                         child.name
                     )
                 },
-                color = palette.surfaceMuted,
+                color = chipColors.unselectedContainerColor,
                 shape = RoundedCornerShape(999.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, palette.border)
+                border = null
             ) {
                 Text(
                     text = child.name,
-                    color = palette.primaryText,
+                    color = chipColors.unselectedContentColor,
                     fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    lineHeight = 13.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                 )
             }
         }
@@ -929,28 +806,27 @@ private fun EmptyState(message: String) {
 @Composable
 private fun LiveRoomCard(
     item: LiveRoomItem,
-    accentBrush: Brush? = null,
     onClick: () -> Unit
 ) {
     val palette = rememberLiveChromePalette()
+    val metrics = resolveLivePiliPlusHomeMetrics()
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(metrics.cardRadiusDp.dp),
         color = palette.surfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(1.dp, palette.border),
+        border = null,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 238.dp)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 10f)
+                    .aspectRatio(metrics.coverAspectRatio)
                     .then(
                         if (sharedTransitionScope != null && animatedVisibilityScope != null) {
                             with(sharedTransitionScope) {
@@ -983,104 +859,52 @@ private fun LiveRoomCard(
                             )
                         )
                 )
-                Surface(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(999.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                accentBrush ?: Brush.horizontalGradient(
-                                    listOf(palette.accentStrong, palette.accent)
-                                ),
-                                RoundedCornerShape(999.dp)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            text = "LIVE",
-                            color = palette.onAccent,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.4.sp
-                        )
-                    }
-                }
-                if (item.areaName.isNotBlank()) {
-                    Surface(
-                        color = palette.scrim.copy(alpha = if (palette.isDark) 0.52f else 0.42f),
-                        shape = RoundedCornerShape(999.dp),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = item.areaName,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
-                }
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = item.areaName.ifBlank { "直播间" },
                         color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "${formatLiveViewerCount(item.online)}人气",
+                        text = "${formatLiveViewerCount(item.online)}人看过",
                         color = Color.White,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
             Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .height(90.dp)
+                    .padding(start = 5.dp, top = 8.dp, end = 5.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = item.title,
                     color = palette.primaryText,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 24.sp,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    lineHeight = 22.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        model = item.face.ifBlank { item.cover },
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(palette.surfaceMuted)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = item.uname,
-                        color = palette.secondaryText,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = item.uname,
+                    color = palette.secondaryText,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

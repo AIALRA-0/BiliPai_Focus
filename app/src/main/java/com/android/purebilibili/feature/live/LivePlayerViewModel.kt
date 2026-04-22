@@ -716,7 +716,7 @@ class LivePlayerViewModel : ViewModel() {
     private suspend fun preloadLiveRoomMessages(roomId: Long) {
         val prefetchedSuperChats = mutableListOf<LiveDanmakuItem>()
         LiveRepository.getLiveDanmakuHistory(roomId).onSuccess { items ->
-            items.forEach { seed ->
+            items.filter { shouldRenderLiveDanmaku(it.text, it.emoticonUrl) }.forEach { seed ->
                 _danmakuFlow.tryEmit(
                     LiveDanmakuItem(
                         text = seed.text,

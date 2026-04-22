@@ -26,6 +26,16 @@ internal fun resolveDynamicSidebarWidth(isExpanded: Boolean): Dp {
     return if (isExpanded) 68.dp else 60.dp
 }
 
+internal fun shouldShowDynamicUserLiveBadge(isLive: Boolean): Boolean = isLive
+
+internal fun resolveDynamicUserLiveBadgeLabel(): String = "直播"
+
+internal fun resolveDynamicUserLiveBadgeHeight(): Dp = 16.dp
+
+internal fun resolveDynamicUserLiveBadgeMinWidth(): Dp = 24.dp
+
+internal fun resolveDynamicUserLiveBadgeReservedSpace(): Dp = 8.dp
+
 internal fun resolveDynamicCardOuterPadding(): Dp = 0.dp
 
 internal fun resolveDynamicCardContentPadding(): Dp = 12.dp

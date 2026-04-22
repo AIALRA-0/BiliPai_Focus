@@ -120,6 +120,7 @@ fun LivePlayerScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val palette = rememberLiveChromePalette()
+    val roomColorTokens = resolveLivePiliPlusRoomColorTokens()
     
     // 状态
     var showQualityMenu by remember { mutableStateOf(false) }
@@ -150,7 +151,7 @@ fun LivePlayerScreen(
     val anchorInfo = successState?.anchorInfo ?: AnchorInfo()
     val isPortraitLive = roomInfo.isPortrait
     val liveRoomTitle = roomInfo.title.ifBlank { title }
-    val liveCoverForUi = roomInfo.cover.ifBlank { roomInfo.background }
+    val liveCoverForUi = roomInfo.background.ifBlank { roomInfo.cover }
     val currentQualityDesc = successState
         ?.qualityList
         ?.find { it.qn == successState.currentQuality }
@@ -171,9 +172,7 @@ fun LivePlayerScreen(
     )
     val liveSubtitle = remember(roomInfo, anchorInfo) {
         listOf(
-            anchorInfo.uname,
             roomInfo.watchedText,
-            roomInfo.onlineRankText,
             formatLiveDuration(roomInfo.liveStartTime)
         ).filter { it.isNotBlank() }.joinToString(" · ")
     }
@@ -777,7 +776,7 @@ fun LivePlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(palette.backgroundBrush())
+                    .background(roomColorTokens.baseBackgroundColor)
             ) {
                 if (liveCoverForUi.isNotBlank()) {
                     AsyncImage(
@@ -786,7 +785,7 @@ fun LivePlayerScreen(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer(alpha = 0.42f)
+                            .graphicsLayer(alpha = roomColorTokens.backdropImageAlpha)
                     )
                 }
                 playerContent()
@@ -818,7 +817,7 @@ fun LivePlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(palette.backgroundBrush())
+                    .background(roomColorTokens.baseBackgroundColor)
             ) {
                 LiveRoomBackdrop(
                     imageUrl = liveCoverForUi,
@@ -959,8 +958,8 @@ private fun LiveRoomBackdrop(
     imageUrl: String,
     modifier: Modifier = Modifier
 ) {
-    val palette = rememberLiveChromePalette()
-    Box(modifier = modifier.background(palette.backgroundBrush())) {
+    val tokens = resolveLivePiliPlusRoomColorTokens()
+    Box(modifier = modifier.background(tokens.baseBackgroundColor)) {
         if (imageUrl.isNotBlank()) {
             AsyncImage(
                 model = imageUrl,
@@ -968,22 +967,9 @@ private fun LiveRoomBackdrop(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer(alpha = 0.84f)
+                    .graphicsLayer(alpha = tokens.backdropImageAlpha)
             )
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            palette.scrim.copy(alpha = if (palette.isDark) 0.08f else 0.04f),
-                            palette.scrim.copy(alpha = if (palette.isDark) 0.20f else 0.12f),
-                            palette.scrim.copy(alpha = if (palette.isDark) 0.40f else 0.22f)
-                        )
-                    )
-                )
-        )
     }
 }
 
@@ -1180,6 +1166,7 @@ private fun LivePortraitOverlayAppBar(
         AsyncImage(
             model = anchorInfo.face,
             contentDescription = null,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(34.dp)
                 .clip(CircleShape)
