@@ -62,4 +62,18 @@ class VideoProgressDisplayPolicyTest {
         assertEquals(0.15f, state.progressFraction, 0.0001f)
         assertTrue(state.showProgressBar)
     }
+
+    @Test
+    fun `resolveVideoDisplayProgressState treats default negative progress without history metadata as unknown`() {
+        val state = resolveVideoDisplayProgressState(
+            serverProgressSec = -1,
+            durationSec = 600,
+            localPositionMs = 0L,
+            viewAt = 0L
+        )
+
+        assertEquals(0, state.progressSec)
+        assertEquals(0f, state.progressFraction, 0.0001f)
+        assertFalse(state.showProgressBar)
+    }
 }

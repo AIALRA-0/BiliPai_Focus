@@ -86,8 +86,9 @@ import com.android.purebilibili.feature.home.policy.shouldHandleHomeVerticalPreS
 import com.android.purebilibili.feature.home.policy.reduceHomeBottomBarListScroll
 import com.android.purebilibili.feature.home.policy.resolveHomeBottomBarBaseVisibility
 import com.android.purebilibili.feature.home.policy.resolveHomeHeaderOffsetForSettledPage
+import com.android.purebilibili.feature.home.policy.resolveHomePagerSettledAction
 import com.android.purebilibili.feature.home.policy.shouldAnimateHomePagerToCategory
-import com.android.purebilibili.feature.home.policy.shouldSwitchHomeCategoryFromPager
+import com.android.purebilibili.feature.home.policy.HomePagerSettledAction
 import com.android.purebilibili.feature.home.policy.shouldUseInitialHomePagerSnap
 //  从 cards 子包导入卡片组件
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -295,22 +296,38 @@ fun HomeScreen(
             .distinctUntilChanged()
             .collect { (page, scrolling) ->
                 val currentCategoryIndex = resolveHomeTopTabIndex(state.currentCategory, topCategories)
-                if (!shouldSwitchHomeCategoryFromPager(
+                when (resolveHomePagerSettledAction(
                         hasSyncedPagerWithState = hasSyncedPagerWithState,
                         pagerCurrentPage = page,
                         pagerScrolling = scrolling,
-                        currentCategoryIndex = currentCategoryIndex
+                        currentCategoryIndex = currentCategoryIndex,
+                        settledCategory = resolveHomeCategoryForTopTab(
+                            index = page,
+                            topCategories = topCategories
+                        )
                     )
                 ) {
-                    return@collect
+                    HomePagerSettledAction.NONE -> return@collect
+                    HomePagerSettledAction.OPEN_LIVE_PAGE -> {
+                        val returnPage = currentCategoryIndex
+                            .takeIf { it >= 0 && it != page }
+                            ?: topCategories.indexOfFirst { it != HomeCategory.LIVE }
+                                .takeIf { it >= 0 }
+                            ?: 0
+                        programmaticPageSwitchInProgress = true
+                        pagerState.scrollToPage(returnPage)
+                        programmaticPageSwitchInProgress = false
+                        onLiveListClick()
+                    }
+                    HomePagerSettledAction.SWITCH_CATEGORY -> {
+                        viewModel.switchCategory(
+                            resolveHomeCategoryForTopTab(
+                                index = page,
+                                topCategories = topCategories
+                            )
+                        )
+                    }
                 }
-
-                viewModel.switchCategory(
-                    resolveHomeCategoryForTopTab(
-                        index = page,
-                        topCategories = topCategories
-                    )
-                )
             }
     }
 

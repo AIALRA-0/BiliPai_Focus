@@ -23,6 +23,11 @@ class VideoCardHistoryProgressPolicyTest {
     }
 
     @Test
+    fun `non history card should hide progress bar for default completed sentinel without watch record`() {
+        assertFalse(shouldShowVideoCardHistoryProgressBar(viewAt = 0L, durationSec = 120, progressSec = -1))
+    }
+
+    @Test
     fun `finished progress should render full width`() {
         assertEquals(1f, resolveVideoCardHistoryProgressFraction(progressSec = -1, durationSec = 120), 0.0001f)
     }

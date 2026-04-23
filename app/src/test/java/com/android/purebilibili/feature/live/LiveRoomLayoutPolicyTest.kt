@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.live
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class LiveRoomLayoutPolicyTest {
 
@@ -39,6 +41,41 @@ class LiveRoomLayoutPolicyTest {
         )
 
         assertEquals(LiveRoomLayoutMode.LandscapeOverlay, mode)
+    }
+
+    @Test
+    fun `landscape modes expose chat toggle`() {
+        assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeSplit))
+        assertTrue(shouldShowLiveChatToggle(LiveRoomLayoutMode.LandscapeOverlay))
+        assertFalse(shouldShowLiveChatToggle(LiveRoomLayoutMode.PortraitPanel))
+    }
+
+    @Test
+    fun `split mode and overlay mode use different chat containers`() {
+        assertTrue(
+            shouldShowLiveSplitChatPanel(
+                layoutMode = LiveRoomLayoutMode.LandscapeSplit,
+                isChatVisible = true
+            )
+        )
+        assertFalse(
+            shouldShowLiveSplitChatPanel(
+                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
+                isChatVisible = true
+            )
+        )
+        assertTrue(
+            shouldShowLiveLandscapeChatOverlay(
+                layoutMode = LiveRoomLayoutMode.LandscapeOverlay,
+                isChatVisible = true
+            )
+        )
+        assertFalse(
+            shouldShowLiveLandscapeChatOverlay(
+                layoutMode = LiveRoomLayoutMode.LandscapeSplit,
+                isChatVisible = true
+            )
+        )
     }
 
     @Test

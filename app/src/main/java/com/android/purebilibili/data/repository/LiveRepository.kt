@@ -102,7 +102,8 @@ object LiveRepository {
         parentAreaId: Int,
         areaId: Int = 0,
         page: Int = 1,
-        sortType: String = "online"
+        sortType: String = "online",
+        areaTitle: String = ""
     ): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
         try {
             val resp = api.getLiveSecondAreaList(
@@ -113,8 +114,38 @@ object LiveRepository {
             )
             if (resp.code == 0) {
                 Result.success(resp.data?.list ?: emptyList())
+            } else if (shouldFallbackLiveAreaRooms(code = resp.code, message = resp.message)) {
+                val fallbackResp = api.getLiveList(
+                    parentAreaId = parentAreaId,
+                    page = page,
+                    pageSize = 100,
+                    sortType = sortType
+                )
+                if (fallbackResp.code == 0) {
+                    val filteredRooms = filterFallbackLiveAreaRooms(
+                        rooms = fallbackResp.data?.getAllRooms() ?: emptyList(),
+                        areaTitle = areaTitle
+                    )
+                    Result.success(filteredRooms)
+                } else {
+                    Result.failure(
+                        Exception(
+                            resolveLiveAreaRoomsErrorMessage(
+                                code = fallbackResp.code,
+                                message = fallbackResp.message
+                            )
+                        )
+                    )
+                }
             } else {
-                Result.failure(Exception(resp.message.ifBlank { "获取分区直播失败" }))
+                Result.failure(
+                    Exception(
+                        resolveLiveAreaRoomsErrorMessage(
+                            code = resp.code,
+                            message = resp.message
+                        )
+                    )
+                )
             }
         } catch (e: Exception) {
             Result.failure(e)

@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import com.android.purebilibili.data.model.response.LiveAreaChild
 import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.data.repository.LiveRepository
@@ -59,7 +60,8 @@ fun LiveAreaDetailScreen(
         LiveRepository.getAreaRooms(
             parentAreaId = parentAreaId,
             areaId = areaId,
-            sortType = sortType
+            sortType = sortType,
+            areaTitle = title
         ).onSuccess {
             rooms = it
             isLoading = false
@@ -150,6 +152,14 @@ fun LiveAreaDetailScreen(
             }
             error != null -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(text = error ?: "", color = palette.secondaryText)
+            }
+            rooms.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "暂无该标签直播",
+                    color = palette.secondaryText,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
             }
             else -> {
                 LazyVerticalGrid(

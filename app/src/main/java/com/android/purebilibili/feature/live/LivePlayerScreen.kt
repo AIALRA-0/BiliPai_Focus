@@ -63,6 +63,7 @@ import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.model.response.LiveQuality
+import com.android.purebilibili.feature.live.components.LandscapeChatOverlay
 import com.android.purebilibili.feature.live.components.LiveChatSection
 import com.android.purebilibili.feature.live.components.LiveContributionRankSheet
 import com.android.purebilibili.feature.live.components.LivePlayerControls
@@ -170,6 +171,21 @@ fun LivePlayerScreen(
         isFullscreen = isFullscreen,
         isPortraitLive = isPortraitLive
     )
+    val showChatToggle = remember(liveLayoutMode) {
+        shouldShowLiveChatToggle(liveLayoutMode)
+    }
+    val showSplitChatPanel = remember(liveLayoutMode, isChatVisible) {
+        shouldShowLiveSplitChatPanel(
+            layoutMode = liveLayoutMode,
+            isChatVisible = isChatVisible
+        )
+    }
+    val showLandscapeChatOverlay = remember(liveLayoutMode, isChatVisible) {
+        shouldShowLiveLandscapeChatOverlay(
+            layoutMode = liveLayoutMode,
+            isChatVisible = isChatVisible
+        )
+    }
     val liveSubtitle = remember(roomInfo, anchorInfo) {
         listOf(
             roomInfo.watchedText,
@@ -596,7 +612,7 @@ fun LivePlayerScreen(
                 // 侧边栏开关
                 isChatVisible = isChatVisible,
                 onToggleChat = { isChatVisible = !isChatVisible },
-                showChatToggle = false,
+                showChatToggle = showChatToggle,
                 // 弹幕开关
                 isDanmakuEnabled = successState?.isDanmakuEnabled ?: true,
                 onToggleDanmaku = { viewModel.toggleDanmaku() },
@@ -745,19 +761,24 @@ fun LivePlayerScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .weight(1.25f)
+                                .weight(if (showSplitChatPanel) 1.25f else 1f)
                                 .fillMaxHeight()
-                                .padding(bottom = 12.dp, end = 10.dp)
+                                .padding(
+                                    bottom = 12.dp,
+                                    end = if (showSplitChatPanel) 10.dp else 0.dp
+                                )
                         ) {
                             playerContent()
                         }
-                        LiveLandscapeChatPanel(
-                            modifier = Modifier
-                                .weight(0.95f)
-                                .fillMaxHeight()
-                                .padding(bottom = 12.dp)
-                        ) {
-                            interactionContent(false)
+                        if (showSplitChatPanel) {
+                            LiveLandscapeChatPanel(
+                                modifier = Modifier
+                                    .weight(0.95f)
+                                    .fillMaxHeight()
+                                    .padding(bottom = 12.dp)
+                            ) {
+                                interactionContent(false)
+                            }
                         }
                     }
                 }
@@ -770,6 +791,26 @@ fun LivePlayerScreen(
                     .background(Color.Black)
             ) {
                 playerContent()
+                if (showLandscapeChatOverlay) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .fillMaxWidth(0.34f)
+                            .fillMaxHeight(0.58f)
+                            .padding(end = 16.dp, bottom = 18.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color.Black.copy(alpha = 0.18f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            Color.White.copy(alpha = 0.12f)
+                        )
+                    ) {
+                        LandscapeChatOverlay(
+                            danmakuFlow = viewModel.danmakuFlow,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
             }
         }
         LiveRoomLayoutMode.PortraitVerticalOverlay -> {
