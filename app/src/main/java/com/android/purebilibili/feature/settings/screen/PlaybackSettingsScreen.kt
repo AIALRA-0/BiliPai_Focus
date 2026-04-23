@@ -1209,11 +1209,11 @@ fun PlaybackSettingsContent(
                         IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChartBar,
-                            title = "观看人数",
+                            title = "卡片与视频页观看人数",
                             subtitle = if (showOnlineCount) {
-                                "显示“xx人正在看”信息"
+                                "首页、搜索等视频卡片和视频页显示“xx人正在看”"
                             } else {
-                                "关闭后隐藏观看人数展示"
+                                "关闭后隐藏卡片和视频页的观看人数展示"
                             },
                             checked = showOnlineCount,
                             onCheckedChange = {

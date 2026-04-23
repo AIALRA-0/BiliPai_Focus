@@ -80,6 +80,8 @@ data class FavoriteData(
     val bv_id: String = "",
     val bvid: String = "",
     val duration: Int = 0,
+    val progress: Int = 0,
+    val view_at: Long = 0,
     val upper: Upper? = null,
     val cnt_info: CntInfo? = null,
     val ugc: FavoriteUgc? = null
@@ -110,7 +112,9 @@ data class FavoriteData(
             pic = cover,
             owner = Owner(mid = upper?.mid ?: 0, name = upper?.name ?: "", face = upper?.face ?: ""),
             stat = Stat(view = cnt_info?.play ?: 0, danmaku = cnt_info?.danmaku ?: 0),
-            duration = duration
+            duration = duration,
+            progress = progress,
+            view_at = view_at
         )
     }
 }

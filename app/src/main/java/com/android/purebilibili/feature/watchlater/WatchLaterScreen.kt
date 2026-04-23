@@ -363,6 +363,7 @@ fun WatchLaterScreen(
     val hazeState = rememberRecoverableHazeState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val context = LocalContext.current
+    val showOnlineCount by SettingsManager.getShowOnlineCount(context).collectAsState(initial = false)
     val windowSizeClass = LocalWindowSizeClass.current
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = true)
@@ -597,6 +598,7 @@ fun WatchLaterScreen(
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         showPublishTime = true,
+                                        showOnlineCount = showOnlineCount,
                                         dismissMenuText = "\uD83D\uDDD1\uFE0F 删除",
                                         // 触发 Thanos 响指动画 (开始消散)
                                         onDismiss = if (isBatchMode) null else ({ viewModel.startVideoDissolve(item.bvid) }),

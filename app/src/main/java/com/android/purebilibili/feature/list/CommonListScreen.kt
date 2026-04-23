@@ -169,6 +169,7 @@ fun CommonListScreen(
     // Fix: 手机端(Compact)使用较小的最小宽度以保证2列显示 (360dp / 170dp = 2.1 -> 2列)
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
+    val showOnlineCount by SettingsManager.getShowOnlineCount(context).collectAsState(initial = false)
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
     val uiPreset = LocalUiPreset.current
     val androidNativeVariant = LocalAndroidNativeVariant.current
@@ -585,6 +586,7 @@ fun CommonListScreen(
                                 cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                                 cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                                 cardMotionTier = cardMotionTier,
+                                showOnlineCount = showOnlineCount,
                                 videoCardAppearance = videoCardAppearance,
                                 onVideoClick = { bvid, cid, coverUrl ->
                                     playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
@@ -620,6 +622,7 @@ fun CommonListScreen(
                             cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                             cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                             cardMotionTier = cardMotionTier,
+                            showOnlineCount = showOnlineCount,
                             videoCardAppearance = videoCardAppearance,
                             onVideoClick = { bvid, cid, coverUrl ->
                                 playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
@@ -646,6 +649,7 @@ fun CommonListScreen(
                         cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                         cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                         cardMotionTier = cardMotionTier,
+                        showOnlineCount = showOnlineCount,
                         videoCardAppearance = videoCardAppearance,
                         onVideoClick = { bvid, cid, coverUrl ->
                             if (favoriteViewModel != null) {
@@ -1025,6 +1029,7 @@ private fun CommonListContent(
     cardAnimationEnabled: Boolean,
     cardTransitionEnabled: Boolean,
     cardMotionTier: MotionTier,
+    showOnlineCount: Boolean,
     videoCardAppearance: CommonListVideoCardAppearance,
     onVideoClick: (String, Long, String) -> Unit,
     onCollectionClick: ((Long, Long, String) -> Unit)? = null,
@@ -1176,6 +1181,7 @@ private fun CommonListContent(
                                     blurEnabled = videoCardAppearance.blurEnabled,
                                     showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
                                     showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
+                                    showOnlineCount = showOnlineCount,
                                     onClick = { _, _ ->
                                         if (historyBatchMode) {
                                             onHistoryToggleSelect?.invoke(historyKey)

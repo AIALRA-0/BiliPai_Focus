@@ -80,6 +80,7 @@ fun StoryVideoCard(
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
     showDurationBadge: Boolean = true,
+    showOnlineCount: Boolean = false,
     showPublishTime: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
@@ -115,6 +116,10 @@ fun StoryVideoCard(
     val premiumBadgeLabel = remember(video.rights) {
         resolveVideoPremiumBadgeLabel(video.rights)
     }
+    val onlineCount = rememberVideoCardOnlineCount(
+        video = video,
+        showOnlineCount = showOnlineCount
+    )
     val useLowQualityCover = isDataSaverActive && preferLowQualityCover
     val coverUrl = remember(video.bvid, useLowQualityCover) {
         FormatUtils.resolveVideoCoverUrl(
@@ -551,6 +556,26 @@ fun StoryVideoCard(
                                  )
                              }
                          }
+                    }
+
+                    if (onlineCount.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.Eye,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = onlineCount,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

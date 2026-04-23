@@ -38,8 +38,7 @@ internal fun resolveVideoDisplayProgressState(
         else -> (resolvedProgress.toFloat() / durationSec.toFloat()).coerceIn(0f, 1f)
     }
 
-    val showProgressBar = viewAt > 0L &&
-        durationSec > 0 &&
+    val showProgressBar = durationSec > 0 &&
         (resolvedProgress == -1 || resolvedProgress > 0)
 
     return VideoProgressDisplayState(

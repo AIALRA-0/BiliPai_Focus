@@ -6,12 +6,13 @@ import com.android.purebilibili.feature.list.resolveVideoDisplayProgressState
 internal fun resolveVideoCardHistoryProgressState(
     viewAt: Long,
     durationSec: Int,
-    progressSec: Int
+    progressSec: Int,
+    localPositionMs: Long = 0L
 ): VideoProgressDisplayState {
     return resolveVideoDisplayProgressState(
         serverProgressSec = progressSec,
         durationSec = durationSec,
-        localPositionMs = 0L,
+        localPositionMs = localPositionMs,
         viewAt = viewAt
     )
 }
@@ -19,12 +20,14 @@ internal fun resolveVideoCardHistoryProgressState(
 internal fun shouldShowVideoCardHistoryProgressBar(
     viewAt: Long,
     durationSec: Int,
-    progressSec: Int
+    progressSec: Int,
+    localPositionMs: Long = 0L
 ): Boolean {
     return resolveVideoCardHistoryProgressState(
         viewAt = viewAt,
         durationSec = durationSec,
-        progressSec = progressSec
+        progressSec = progressSec,
+        localPositionMs = localPositionMs
     ).showProgressBar
 }
 

@@ -35,9 +35,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher_3d"
+        android:icon="@mipmap/ic_launcher_bilipai"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_3d_round"
+        android:roundIcon="@mipmap/ic_launcher_bilipai_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.PureBiliBili"
         android:usesCleartextTraffic="true"
@@ -257,13 +257,12 @@
             </intent-filter>
         </activity-alias>
 
-
         <activity-alias
-            android:name=".MainActivityAliasRetro"
+            android:name=".MainActivityAliasBiliPai"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_retro"
-            android:roundIcon="@mipmap/ic_launcher_retro_round"
+            android:icon="@mipmap/ic_launcher_bilipai"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter android:priority="1">
@@ -278,20 +277,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher_flat"
             android:roundIcon="@mipmap/ic_launcher_flat_round"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityAliasFlatMaterial"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_flat_material"
-            android:roundIcon="@mipmap/ic_launcher_flat_material_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter android:priority="1">

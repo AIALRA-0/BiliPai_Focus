@@ -983,15 +983,14 @@ fun AppearanceSettingsContent(
                         title = "应用图标",
                         value = when(state.appIcon) {
                             // 🎀 二次元少女系列
+                            "BiliPai", "icon_bilipai" -> "BiliPai"
                             "Yuki" -> "比心少女"
                             "Anime", "icon_anime" -> "蓝发电视"
                             "Headphone" -> "耳机少女"
                             // 经典系列
                             "3D", "icon_3d" -> "3D立体"
                             "Blue", "icon_blue" -> "经典蓝"
-                            "Retro", "icon_retro" -> "复古怀旧"
                             "Flat", "icon_flat" -> "扁平现代"
-                            "Flat Material", "icon_flat_material" -> "扁平材质"
                             "Neon", "icon_neon" -> "霓虹"
                             "Telegram Blue", "icon_telegram_blue" -> "纸飞机蓝"
                             "Telegram Blue Coin", "icon_telegram_blue_coin" -> "蓝币电视"
@@ -1282,11 +1281,11 @@ fun AppearanceSettingsContent(
                         IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChartBar,
-                            title = "视频页观看人数",
+                            title = "卡片与视频页观看人数",
                             subtitle = if (showOnlineCount) {
-                                "普通视频页和播放器控制层显示“xx人正在看”"
+                                "首页、搜索等视频卡片和视频页显示“xx人正在看”"
                             } else {
-                                "关闭后不展示同时观看人数"
+                                "关闭后隐藏卡片和视频页的同时观看人数"
                             },
                             checked = showOnlineCount,
                             onCheckedChange = {

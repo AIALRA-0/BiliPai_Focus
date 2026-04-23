@@ -113,6 +113,7 @@ fun CategoryScreen(
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
         initial = HomeSettings()
     )
+    val showOnlineCount by SettingsManager.getShowOnlineCount(context).collectAsState(initial = false)
     val displayMode = homeSettings.displayMode
     
     // 📐 [Tablet Adaptation] Calculate adaptive columns
@@ -220,6 +221,7 @@ fun CategoryScreen(
                                     animationEnabled = homeSettings.cardAnimationEnabled,
                                     motionTier = cardMotionTier,
                                     transitionEnabled = homeSettings.cardTransitionEnabled,
+                                    showOnlineCount = showOnlineCount,
                                     onClick = { bvid, _ -> onVideoClick(bvid, video.id, video.pic) }
                                 )
                             }
@@ -231,6 +233,7 @@ fun CategoryScreen(
                                     animationEnabled = homeSettings.cardAnimationEnabled,
                                     motionTier = cardMotionTier,
                                     transitionEnabled = homeSettings.cardTransitionEnabled,
+                                    showOnlineCount = showOnlineCount,
                                     onClick = { bvid, _ -> onVideoClick(bvid, video.id, video.pic) }
                                 )
                             }
