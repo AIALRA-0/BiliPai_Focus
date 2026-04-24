@@ -92,17 +92,24 @@ internal fun resolveVideoCommentSheetHostContent(
 }
 
 internal fun resolveVideoCommentSheetHostHeightFraction(
+    hostContent: VideoCommentSheetHostContent = VideoCommentSheetHostContent.MAIN_LIST,
     mainSheetVisible: Boolean,
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0
 ): Float {
-    return if (mainSheetVisible) {
-        MAIN_COMMENT_SHEET_HEIGHT_FRACTION
-    } else {
-        resolveVideoSubReplySheetMaxHeightFraction(
-            screenHeightPx = screenHeightPx,
-            topReservedPx = topReservedPx
-        )
+    return when (hostContent) {
+        VideoCommentSheetHostContent.MAIN_LIST -> MAIN_COMMENT_SHEET_HEIGHT_FRACTION
+        VideoCommentSheetHostContent.THREAD_DETAIL -> {
+            if (mainSheetVisible && topReservedPx <= 0) {
+                MAIN_COMMENT_SHEET_HEIGHT_FRACTION
+            } else {
+                resolveVideoSubReplySheetMaxHeightFraction(
+                    screenHeightPx = screenHeightPx,
+                    topReservedPx = topReservedPx
+                )
+            }
+        }
+        VideoCommentSheetHostContent.HIDDEN -> 0f
     }
 }
 
@@ -169,6 +176,7 @@ fun VideoCommentSheetHost(
     )
     val hostVisible = hostContent != VideoCommentSheetHostContent.HIDDEN
     val sheetHeightFraction = resolveVideoCommentSheetHostHeightFraction(
+        hostContent = hostContent,
         mainSheetVisible = mainSheetVisible,
         screenHeightPx = screenHeightPx,
         topReservedPx = topReservedPx

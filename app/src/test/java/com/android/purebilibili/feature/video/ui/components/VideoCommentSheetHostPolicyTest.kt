@@ -65,12 +65,39 @@ class VideoCommentSheetHostPolicyTest {
         assertEquals(
             0.55f,
             resolveVideoCommentSheetHostHeightFraction(
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL,
                 mainSheetVisible = false,
                 screenHeightPx = 1000,
                 topReservedPx = 450
             )
         )
         assertEquals(0f, resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = false))
+    }
+
+    @Test
+    fun `embedded thread detail should cover comment content below reserved player area`() {
+        assertEquals(
+            0.55f,
+            resolveVideoCommentSheetHostHeightFraction(
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL,
+                mainSheetVisible = true,
+                screenHeightPx = 1000,
+                topReservedPx = 450
+            )
+        )
+    }
+
+    @Test
+    fun `embedded portrait pager thread detail keeps main sheet height without top reserve`() {
+        assertEquals(
+            0.60f,
+            resolveVideoCommentSheetHostHeightFraction(
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL,
+                mainSheetVisible = true,
+                screenHeightPx = 1000,
+                topReservedPx = 0
+            )
+        )
     }
 
     @Test
