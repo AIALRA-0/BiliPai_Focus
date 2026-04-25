@@ -26,6 +26,7 @@ import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -48,6 +49,9 @@ class CategoryViewModel : ViewModel() {
     
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+
+    private val _hasMoreState = MutableStateFlow(true)
+    val hasMoreState = _hasMoreState.asStateFlow()
     
     private var currentTid: Int = 0
     private var currentPage: Int = 1
@@ -58,6 +62,7 @@ class CategoryViewModel : ViewModel() {
         currentTid = tid
         currentPage = 1
         hasMore = true
+        _hasMoreState.value = true
         _videos.value = emptyList()
         loadVideos()
     }
@@ -73,9 +78,11 @@ class CategoryViewModel : ViewModel() {
                 .onSuccess { newVideos ->
                     if (newVideos.isEmpty()) {
                         hasMore = false
+                        _hasMoreState.value = false
                     } else {
                         _videos.value = _videos.value + newVideos
                         currentPage++
+                        _hasMoreState.value = true
                     }
                 }
                 .onFailure { e ->
@@ -106,6 +113,7 @@ fun CategoryScreen(
     val videos by viewModel.videos.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val hasMore by viewModel.hasMoreState.collectAsState()
     val gridState = rememberLazyGridState()
     val context = LocalContext.current
     
@@ -150,15 +158,21 @@ fun CategoryScreen(
     }
     
     // 滚动到底部时加载更多
-    val shouldLoadMore = remember {
+    val shouldLoadMore = remember(gridState, videos.size, isLoading, hasMore) {
         derivedStateOf {
-            val lastVisibleItem = gridState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index >= videos.size - 4
+            shouldLoadMorePaginatedContent(
+                totalItems = gridState.layoutInfo.totalItemsCount,
+                lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                contentItemCount = videos.size,
+                isLoading = isLoading,
+                hasMore = hasMore,
+                preloadThreshold = 4
+            )
         }
     }
     
-    LaunchedEffect(shouldLoadMore.value) {
-        if (shouldLoadMore.value && !isLoading) {
+    LaunchedEffect(shouldLoadMore.value, hasMore, isLoading, videos.size) {
+        if (shouldLoadMore.value) {
             viewModel.loadMore()
         }
     }

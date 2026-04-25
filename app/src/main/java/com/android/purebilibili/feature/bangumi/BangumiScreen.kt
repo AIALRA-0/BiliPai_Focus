@@ -41,6 +41,7 @@ import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.theme.iOSYellow
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.BangumiFilter
@@ -273,15 +274,23 @@ private fun BangumiPiliPlusHomeContent(
     val gridState = rememberLazyGridState()
     val hasMore = (listState as? BangumiListState.Success)?.hasMore == true
 
-    LaunchedEffect(gridState, hasMore) {
-        snapshotFlow {
-            val layoutInfo = gridState.layoutInfo
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleItem >= layoutInfo.totalItemsCount - 6
-        }.collect { shouldLoad ->
-            if (shouldLoad && hasMore) {
-                onLoadMore()
-            }
+    val shouldLoadMore by remember(gridState, hasMore, listState) {
+        derivedStateOf {
+            val contentItemCount = (listState as? BangumiListState.Success)?.items?.size ?: 0
+            shouldLoadMorePaginatedContent(
+                totalItems = gridState.layoutInfo.totalItemsCount,
+                lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                contentItemCount = contentItemCount,
+                isLoading = false,
+                hasMore = hasMore,
+                preloadThreshold = 6
+            )
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore, hasMore, listState) {
+        if (shouldLoadMore) {
+            onLoadMore()
         }
     }
 
@@ -1106,15 +1115,22 @@ private fun BangumiSearchGrid(
 ) {
     val gridState = rememberLazyGridState()
     
-    LaunchedEffect(gridState) {
-        snapshotFlow {
-            val layoutInfo = gridState.layoutInfo
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleItem >= layoutInfo.totalItemsCount - 4
-        }.collect { shouldLoad ->
-            if (shouldLoad && hasMore) {
-                onLoadMore()
-            }
+    val shouldLoadMore by remember(gridState, hasMore, items.size) {
+        derivedStateOf {
+            shouldLoadMorePaginatedContent(
+                totalItems = gridState.layoutInfo.totalItemsCount,
+                lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                contentItemCount = items.size,
+                isLoading = false,
+                hasMore = hasMore,
+                preloadThreshold = 4
+            )
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore, hasMore, items.size) {
+        if (shouldLoadMore) {
+            onLoadMore()
         }
     }
     

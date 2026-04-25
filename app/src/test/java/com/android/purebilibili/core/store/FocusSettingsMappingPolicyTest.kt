@@ -25,6 +25,7 @@ class FocusSettingsMappingPolicyTest {
         assertFalse(result.showVideoRelatedVideosSection)
         assertTrue(result.showHistoryClearAllAction)
         assertFalse(result.showSearchHotSection)
+        assertTrue(result.showSearchDiscoverSection)
     }
 
     @Test
@@ -37,7 +38,8 @@ class FocusSettingsMappingPolicyTest {
             booleanPreferencesKey("focus_video_related_videos_section_visible") to true,
             booleanPreferencesKey("focus_follow_group_filtering_enabled") to false,
             booleanPreferencesKey("focus_history_clear_all_action_enabled") to false,
-            booleanPreferencesKey("search_hot_section_enabled") to true
+            booleanPreferencesKey("search_hot_section_enabled") to true,
+            booleanPreferencesKey("search_discover_section_enabled") to false
         )
 
         val result = SettingsManager.mapFocusSettingsFromPreferences(prefs)
@@ -50,6 +52,7 @@ class FocusSettingsMappingPolicyTest {
         assertTrue(result.showVideoRelatedVideosSection)
         assertFalse(result.showHistoryClearAllAction)
         assertTrue(result.showSearchHotSection)
+        assertFalse(result.showSearchDiscoverSection)
     }
 }
 

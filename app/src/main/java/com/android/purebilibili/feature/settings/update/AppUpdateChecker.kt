@@ -271,55 +271,56 @@ object AppUpdateChecker {
         ) < 0
     }
 
-    internal fun parseVersionParts(version: String): List<Int> {
-        if (version.isBlank()) return emptyList()
-        return version
-            .split('.')
-            .mapNotNull { part -> part.toIntOrNull() }
-    }
+internal fun parseVersionParts(version: String): List<Int> {
+    if (version.isBlank()) return emptyList()
+    return version
+        .split('.')
+        .mapNotNull { part -> part.toIntOrNull() }
+}
 
-    private data class ParsedVersion(
-        val numericParts: List<Int>,
-        val stabilityRank: Int,
-        val qualifierNumber: Int
-    )
+private data class ParsedVersion(
+    val numericParts: List<Int>,
+    val qualifiers: List<ParsedVersionQualifier>
+)
 
-    private fun parseComparableVersion(version: String): ParsedVersion {
-        val normalized = normalizeVersion(version)
-        val match = Regex(
-            pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc|focus)[\s._-]*(\d+)?)?$""",
-            option = RegexOption.IGNORE_CASE
-        ).matchEntire(normalized)
-        if (match != null) {
-            val numeric = parseVersionParts(match.groupValues[1])
-            val qualifier = match.groupValues[2].lowercase()
-            val qualifierNumber = match.groupValues[3].toIntOrNull() ?: 0
-            val stabilityRank = when (qualifier) {
-                "alpha" -> 0
-                "beta" -> 1
-                "rc" -> 2
-                "focus" -> 4
-                else -> 3
-            }
-            return ParsedVersion(
-                numericParts = numeric,
-                stabilityRank = stabilityRank,
-                qualifierNumber = qualifierNumber
+private data class ParsedVersionQualifier(
+    val name: String,
+    val rank: Int,
+    val number: Int
+)
+
+private fun parseComparableVersion(version: String): ParsedVersion {
+    val normalized = normalizeVersion(version)
+    val numericPrefix = normalized
+        .takeWhile { it.isDigit() || it == '.' }
+        .trimEnd('.')
+    val suffix = normalized.removePrefix(numericPrefix)
+    val qualifiers = Regex(
+        pattern = """(?i)(alpha|beta|rc|focus)[\s._-]*(\d+)?"""
+    ).findAll(suffix)
+        .map { match ->
+            val name = match.groupValues[1].lowercase()
+            ParsedVersionQualifier(
+                name = name,
+                rank = when (name) {
+                    "alpha" -> 0
+                    "beta" -> 1
+                    "rc" -> 2
+                    "focus" -> 4
+                    else -> 3
+                },
+                number = match.groupValues[2].toIntOrNull() ?: 0
             )
         }
+        .toList()
+    return ParsedVersion(
+        numericParts = parseVersionParts(numericPrefix),
+        qualifiers = qualifiers
+    )
+}
 
-        val numericPrefix = normalized
-            .takeWhile { it.isDigit() || it == '.' }
-            .trimEnd('.')
-        return ParsedVersion(
-            numericParts = parseVersionParts(numericPrefix),
-            stabilityRank = 3,
-            qualifierNumber = 0
-        )
-    }
-
-    private fun compareVersions(localVersion: String, remoteVersion: String): Int {
-        val local = parseComparableVersion(localVersion)
+private fun compareVersions(localVersion: String, remoteVersion: String): Int {
+    val local = parseComparableVersion(localVersion)
         val remote = parseComparableVersion(remoteVersion)
         val maxSize = maxOf(local.numericParts.size, remote.numericParts.size)
         for (index in 0 until maxSize) {
@@ -329,11 +330,26 @@ object AppUpdateChecker {
                 return localPart.compareTo(remotePart)
             }
         }
-        if (local.stabilityRank != remote.stabilityRank) {
-            return local.stabilityRank.compareTo(remote.stabilityRank)
+    val maxQualifierCount = maxOf(local.qualifiers.size, remote.qualifiers.size)
+    for (index in 0 until maxQualifierCount) {
+        val localQualifier = local.qualifiers.getOrNull(index)
+        val remoteQualifier = remote.qualifiers.getOrNull(index)
+        if (localQualifier == null && remoteQualifier == null) break
+        if (localQualifier == null) {
+            return if (remoteQualifier?.name == "focus") -1 else 1
         }
-        return local.qualifierNumber.compareTo(remote.qualifierNumber)
+        if (remoteQualifier == null) {
+            return if (localQualifier.name == "focus") 1 else -1
+        }
+        if (localQualifier.rank != remoteQualifier.rank) {
+            return localQualifier.rank.compareTo(remoteQualifier.rank)
+        }
+        if (localQualifier.number != remoteQualifier.number) {
+            return localQualifier.number.compareTo(remoteQualifier.number)
+        }
     }
+    return 0
+}
 
     private fun isPrereleaseVersion(version: String): Boolean {
         val normalized = normalizeVersion(version).lowercase()

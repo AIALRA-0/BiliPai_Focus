@@ -36,7 +36,7 @@
 
 | 类别 | 入口 |
 | --- | --- |
-| 开始使用 | [下载 Releases](https://github.com/jay3-yy/BiliPai/releases) · [更新日志](CHANGELOG.md) |
+| 开始使用 | [下载 Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [更新日志](CHANGELOG.md) |
 | 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 

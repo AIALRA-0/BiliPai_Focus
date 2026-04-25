@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.data.model.response.DynamicItem
 
 internal const val DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE = 8
@@ -107,20 +108,44 @@ internal fun shouldShowDynamicNoMoreFooter(
     return !hasMore && activeItemsCount > 0
 }
 
+internal data class DynamicVisiblePaginationState(
+    val visibleHasMore: Boolean,
+    val continuationAllowed: Boolean
+)
+
+internal fun resolveDynamicVisiblePaginationState(
+    visibleItemCount: Int,
+    sourceHasMore: Boolean,
+    minimumVisibleItemCountBeforePause: Int = DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE
+): DynamicVisiblePaginationState {
+    val minimumVisibleCount = minimumVisibleItemCountBeforePause.coerceAtLeast(1)
+    return DynamicVisiblePaginationState(
+        visibleHasMore = sourceHasMore || visibleItemCount > 0,
+        continuationAllowed = sourceHasMore || visibleItemCount < minimumVisibleCount
+    )
+}
+
 internal fun shouldLoadMoreDynamicFeed(
     totalItems: Int,
     lastVisibleItemIndex: Int,
     visibleItemCount: Int,
     isLoading: Boolean,
-    hasMore: Boolean,
+    sourceHasMore: Boolean,
+    visibleHasMore: Boolean = true,
+    continuationAllowed: Boolean = true,
     minimumVisibleItemCountBeforePause: Int = 0,
     preloadThreshold: Int = 3
 ): Boolean {
-    if (visibleItemCount <= 0) return false
-    if (isLoading || !hasMore) return false
-    if (visibleItemCount < minimumVisibleItemCountBeforePause.coerceAtLeast(0)) return true
-    if (totalItems <= 0) return false
-    return lastVisibleItemIndex >= totalItems - preloadThreshold.coerceAtLeast(1)
+    if (!visibleHasMore || !continuationAllowed) return false
+    return shouldLoadMorePaginatedContent(
+        totalItems = totalItems,
+        lastVisibleItemIndex = lastVisibleItemIndex,
+        contentItemCount = visibleItemCount,
+        isLoading = isLoading,
+        hasMore = sourceHasMore,
+        preloadThreshold = preloadThreshold,
+        minimumVisibleItemCountBeforePause = minimumVisibleItemCountBeforePause
+    )
 }
 
 internal fun shouldShowDynamicCommentSheet(selectedDynamicId: String?): Boolean {
@@ -228,8 +253,6 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         error = null,
         errorSource = DynamicFeedErrorSource.NONE,
         hasMore = hasMore,
-        sourceHasMore = hasMore,
-        timelineRequestType = requestType,
         sourceHasMore = hasMore,
         timelineRequestType = requestType,
         incrementalRefreshBoundaryKey = boundary.boundaryKey,

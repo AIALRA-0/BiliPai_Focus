@@ -4593,7 +4593,10 @@ private fun DetachedVideoCommentThreadHost(
         upMid = commentState.upMid,
         expectedReplyCount = commentState.replyCount,
         emoteMap = successState?.emoteMap ?: emptyMap(),
-        onRootCommentClick = { viewModel.openRootCommentComposer() },
+        onRootCommentClick = {
+            viewModel.clearReplyingTo()
+            viewModel.showCommentInputDialog()
+        },
         onReplyClick = { replyItem ->
             android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
             viewModel.setReplyingTo(replyItem)

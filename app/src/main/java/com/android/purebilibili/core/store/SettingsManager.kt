@@ -397,7 +397,8 @@ data class FocusSettings(
     val enableFollowGroupFiltering: Boolean = true,
     val showVideoRelatedVideosSection: Boolean = false,
     val showHistoryClearAllAction: Boolean = true,
-    val showSearchHotSection: Boolean = false
+    val showSearchHotSection: Boolean = false,
+    val showSearchDiscoverSection: Boolean = true
 )
 
 data class PlayerInteractionSettings(
@@ -866,7 +867,8 @@ object SettingsManager {
             enableFollowGroupFiltering = preferences[KEY_FOCUS_FOLLOW_GROUP_FILTERING_ENABLED] ?: true,
             showVideoRelatedVideosSection = preferences[KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE] ?: false,
             showHistoryClearAllAction = preferences[KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED] ?: true,
-            showSearchHotSection = preferences[KEY_SEARCH_HOT_SECTION_ENABLED] ?: false
+            showSearchHotSection = preferences[KEY_SEARCH_HOT_SECTION_ENABLED] ?: false,
+            showSearchDiscoverSection = preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] ?: true
         )
     }
 
@@ -4389,7 +4391,7 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_SEARCH_HOT_SECTION_ENABLED, SettingsShareSection.NAVIGATION),
-            StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_SEARCH_DISCOVER_SECTION_ENABLED, SettingsShareSection.NAVIGATION),
             StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.APPEARANCE),

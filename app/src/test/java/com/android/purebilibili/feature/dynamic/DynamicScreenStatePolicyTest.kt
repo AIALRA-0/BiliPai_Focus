@@ -47,7 +47,7 @@ class DynamicScreenStatePolicyTest {
                 lastVisibleItemIndex = 0,
                 visibleItemCount = 0,
                 isLoading = false,
-                hasMore = true
+                sourceHasMore = true
             )
         )
     }
@@ -60,7 +60,7 @@ class DynamicScreenStatePolicyTest {
                 lastVisibleItemIndex = 5,
                 visibleItemCount = 3,
                 isLoading = false,
-                hasMore = true
+                sourceHasMore = true
             )
         )
     }
@@ -73,10 +73,47 @@ class DynamicScreenStatePolicyTest {
                 lastVisibleItemIndex = 1,
                 visibleItemCount = 3,
                 isLoading = false,
-                hasMore = true,
+                sourceHasMore = true,
                 minimumVisibleItemCountBeforePause = DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE
             )
         )
+    }
+
+    @Test
+    fun shouldLoadMoreDynamicFeed_blocksWhenVisibleContinuationIsSuppressed() {
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                totalItems = 6,
+                lastVisibleItemIndex = 5,
+                visibleItemCount = 4,
+                isLoading = false,
+                sourceHasMore = true,
+                visibleHasMore = false,
+                continuationAllowed = true
+            )
+        )
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                totalItems = 6,
+                lastVisibleItemIndex = 5,
+                visibleItemCount = 4,
+                isLoading = false,
+                sourceHasMore = true,
+                visibleHasMore = true,
+                continuationAllowed = false
+            )
+        )
+    }
+
+    @Test
+    fun resolveDynamicVisiblePaginationState_keepsContinuationOpenWhileSourceStillHasMore() {
+        val result = resolveDynamicVisiblePaginationState(
+            visibleItemCount = 2,
+            sourceHasMore = true
+        )
+
+        assertTrue(result.visibleHasMore)
+        assertTrue(result.continuationAllowed)
     }
 
     @Test

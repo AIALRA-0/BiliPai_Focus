@@ -313,7 +313,7 @@ fun DynamicScreen(
     }
 
     //  [修改] 判断是否加载更多（区分全部动态和用户动态）
-    val currentHasMore = if (isSelectedUserTabActive) {
+    val currentSourceHasMore = if (isSelectedUserTabActive) {
         state.hasUserMore && (
             state.userItems.isNotEmpty() ||
                 state.userIsLoading ||
@@ -321,6 +321,16 @@ fun DynamicScreen(
         )
     } else {
         state.sourceHasMore
+    }
+    val currentVisibleHasMore = if (isSelectedUserTabActive) {
+        state.hasUserMore || state.userItems.isNotEmpty()
+    } else {
+        state.visibleHasMore
+    }
+    val currentContinuationAllowed = if (isSelectedUserTabActive) {
+        state.hasUserMore
+    } else {
+        state.continuationAllowed
     }
     val activeLoading = remember(state, selectedUserId, activeSelectedTab, isSelectedUserTabActive) {
         if (activeSelectedTab == 4 && !isSelectedUserTabActive) {
@@ -381,7 +391,9 @@ fun DynamicScreen(
                 lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
                 visibleItemCount = filteredItems.size,
                 isLoading = activeLoading,
-                hasMore = currentHasMore,
+                sourceHasMore = currentSourceHasMore,
+                visibleHasMore = currentVisibleHasMore,
+                continuationAllowed = currentContinuationAllowed,
                 minimumVisibleItemCountBeforePause = if (isSelectedUserTabActive) {
                     0
                 } else {
@@ -547,7 +559,7 @@ fun DynamicScreen(
                                         state = state,
                                         activeLoading = activeLoading,
                                         activeError = activeError,
-                                        hasMore = currentHasMore,
+                                        hasMore = currentSourceHasMore,
                                         selectedTab = animatedTab,
                                         isSelectedUserTabActive = isSelectedUserTabActive,
                                         filteredItems = filteredItems,
@@ -586,7 +598,6 @@ fun DynamicScreen(
                                             .hazeSource(hazeState)
                                     )
                                 }
-
                                 // 顶栏
                                 DynamicTopBarWithTabs(
                                     selectedTab = selectedVisibleTabIndex,
@@ -642,7 +653,7 @@ fun DynamicScreen(
                                      state = state,
                                      activeLoading = activeLoading,
                                      activeError = activeError,
-                                     hasMore = currentHasMore,
+                                     hasMore = currentSourceHasMore,
                                      selectedTab = animatedTab,
                                      isSelectedUserTabActive = isSelectedUserTabActive,
                                      filteredItems = filteredItems,
@@ -682,7 +693,6 @@ fun DynamicScreen(
                                          .hazeSource(hazeState)
                                  )
                              }
-
                              // 顶部区域：顶栏 + 横向用户列表
                              Column(modifier = Modifier.align(Alignment.TopCenter)) {
                                  // 获取模糊设置

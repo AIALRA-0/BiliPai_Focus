@@ -188,12 +188,20 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             val result = SearchRepository.getSuggest(keyword)
             result.onSuccess { suggestions ->
                 if (keyword != _uiState.value.query) return@onSuccess
-                _uiState.update {
-                    it.copy(
-                        suggestions = suggestions
-                            .map { tag -> tag.toSearchSuggestionUiModel() }
-                            .take(8)
+                val safeSuggestions = runCatching {
+                    suggestions
+                        .map { tag -> tag.toSearchSuggestionUiModel() }
+                        .take(8)
+                }.getOrElse { error ->
+                    com.android.purebilibili.core.util.Logger.e(
+                        "SearchVM",
+                        "Failed to map search suggestions",
+                        error
                     )
+                    emptyList()
+                }
+                _uiState.update {
+                    it.copy(suggestions = safeSuggestions)
                 }
             }.onFailure {
                 if (keyword != _uiState.value.query) return@onFailure

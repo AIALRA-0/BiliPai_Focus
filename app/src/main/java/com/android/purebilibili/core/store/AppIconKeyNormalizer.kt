@@ -1,6 +1,8 @@
 package com.android.purebilibili.core.store
 
 const val DEFAULT_APP_ICON_KEY = "icon_3d"
+private const val APP_ICON_COMPONENT_PACKAGE_NAME = "com.android.purebilibili"
+private const val APP_ICON_COMPAT_ALIAS_CLASS_NAME = "$APP_ICON_COMPONENT_PACKAGE_NAME.MainActivityAlias3D"
 
 private val CANONICAL_APP_ICON_KEYS = setOf(
     "icon_3d",
@@ -62,7 +64,7 @@ fun resolveAppIconLauncherAlias(packageName: String, rawKey: String?): String {
     val normalizedKey = normalizeAppIconKey(rawKey)
     val aliasSuffix = LAUNCHER_ALIAS_SUFFIX_BY_KEY[normalizedKey]
         ?: LAUNCHER_ALIAS_SUFFIX_BY_KEY.getValue(DEFAULT_APP_ICON_KEY)
-    return "$packageName.$aliasSuffix"
+    return "$APP_ICON_COMPONENT_PACKAGE_NAME.$aliasSuffix"
 }
 
 fun allManagedAppIconLauncherAliases(packageName: String): Set<String> {

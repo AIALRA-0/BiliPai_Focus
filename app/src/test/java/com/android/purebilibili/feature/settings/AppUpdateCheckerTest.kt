@@ -56,6 +56,20 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `alpha focus subversion should compare within same prerelease version`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3", "8.0.0-Alpha3-focus.1"))
+        assertTrue(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.1", "8.0.0-Alpha3-focus.2"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.2", "8.0.0-Alpha3-focus.1"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.2", "8.0.0-Alpha3"))
+    }
+
+    @Test
+    fun `stable release should stay newer than prerelease sibling even with focus suffix`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.2", "8.0.0"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("8.0.0", "8.0.0-Alpha3-focus.2"))
+    }
+
+    @Test
     fun `selectLatestReleaseCandidate should allow prerelease when current version is beta`() {
         val release = AppUpdateChecker.selectLatestReleaseCandidate(
             rawReleaseJson = """

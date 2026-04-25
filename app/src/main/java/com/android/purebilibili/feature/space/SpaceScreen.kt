@@ -93,6 +93,7 @@ import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RAT
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FollowBangumiItem
@@ -606,18 +607,21 @@ private fun SpaceContent(
         gridState,
         selectedMainTab,
         selectedContributionTab,
+        state.videos.size,
         state.isLoadingMore,
         state.hasMoreVideos
     ) {
         derivedStateOf {
-            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val totalItems = gridState.layoutInfo.totalItemsCount
             selectedMainTab == SpaceMainTab.CONTRIBUTION &&
                 selectedContributionTab.subTab in setOf(SpaceSubTab.VIDEO, SpaceSubTab.CHARGING_VIDEO) &&
-                state.hasMoreVideos &&
-                !state.isLoadingMore &&
-                totalItems > 0 &&
-                lastVisible >= totalItems - 6
+                shouldLoadMorePaginatedContent(
+                    totalItems = gridState.layoutInfo.totalItemsCount,
+                    lastVisibleItemIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                    contentItemCount = state.videos.size,
+                    isLoading = state.isLoadingMore,
+                    hasMore = state.hasMoreVideos,
+                    preloadThreshold = 6
+                )
         }
     }
     val playVideoFromSpace: (String) -> Unit = play@{ bvid ->

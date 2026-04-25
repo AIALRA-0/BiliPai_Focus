@@ -39,6 +39,7 @@ import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
 import com.android.purebilibili.core.ui.components.UpBadgeName
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -61,12 +62,17 @@ internal fun shouldLoadMoreHomeCategoryContent(
     requireUserScrollObservation: Boolean = false,
     userScrollObserved: Boolean = true
 ): Boolean {
-    if (!autoLoadMoreEnabled) return false
-    if (requireUserScrollObservation && !userScrollObserved) return false
-    if (contentItemCount <= 0) return false
-    if (isLoading || !hasMore) return false
-    if (totalItems <= 0) return false
-    return lastVisibleItemIndex >= totalItems - preloadThreshold.coerceAtLeast(1)
+    return shouldLoadMorePaginatedContent(
+        totalItems = totalItems,
+        lastVisibleItemIndex = lastVisibleItemIndex,
+        contentItemCount = contentItemCount,
+        isLoading = isLoading,
+        hasMore = hasMore,
+        autoLoadMoreEnabled = autoLoadMoreEnabled,
+        preloadThreshold = preloadThreshold,
+        requireUserScrollObservation = requireUserScrollObservation,
+        userScrollObserved = userScrollObserved
+    )
 }
 
 internal fun hasObservedFollowLoadMoreScroll(

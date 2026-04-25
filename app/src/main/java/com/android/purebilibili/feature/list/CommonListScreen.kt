@@ -86,6 +86,7 @@ import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.VideoGridItemSkeleton
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import com.android.purebilibili.core.util.LocalWindowSizeClass
@@ -285,6 +286,18 @@ fun CommonListScreen(
         ?: androidx.compose.runtime.remember {
             androidx.compose.runtime.mutableStateOf(SeasonSeriesDetailViewModel.FavoriteDetailProgressState())
         }
+    val favoriteHasMore by favoriteViewModel?.hasMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val favoriteIsLoadingMore by favoriteViewModel?.isLoadingMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val historyHasMore by historyViewModel?.hasMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val historyIsLoadingMore by historyViewModel?.isLoadingMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val seasonDetailHasMore by seasonSeriesDetailViewModel?.hasMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val seasonDetailIsLoadingMore by seasonSeriesDetailViewModel?.isLoadingMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var favoriteBrowseSection by rememberSaveable { androidx.compose.runtime.mutableStateOf(FavoriteBrowseSection.OWNED) }
     LaunchedEffect(foldersState.size, subscribedFoldersState.size) {
         favoriteBrowseSection = when {
@@ -301,6 +314,25 @@ fun CommonListScreen(
         hasHistoryViewModel = historyViewModel != null,
         hasSeasonSeriesDetailViewModel = seasonSeriesDetailViewModel != null
     )
+    val paginationSnapshot = remember(
+        loadMoreOwner,
+        favoriteHasMore,
+        favoriteIsLoadingMore,
+        historyHasMore,
+        historyIsLoadingMore,
+        seasonDetailHasMore,
+        seasonDetailIsLoadingMore
+    ) {
+        resolveCommonListPaginationSnapshot(
+            owner = loadMoreOwner,
+            favoriteHasMore = favoriteHasMore,
+            favoriteIsLoadingMore = favoriteIsLoadingMore,
+            historyHasMore = historyHasMore,
+            historyIsLoadingMore = historyIsLoadingMore,
+            seasonDetailHasMore = seasonDetailHasMore,
+            seasonDetailIsLoadingMore = seasonDetailIsLoadingMore
+        )
+    }
     val favoriteContentMode = resolveFavoriteContentMode(
         isFavoritePage = favoriteViewModel != null && !isSubscribedBrowse,
         folderCount = foldersState.size
@@ -600,8 +632,10 @@ fun CommonListScreen(
                                 onVideoClick = { bvid, cid, coverUrl ->
                                     playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
                                 },
-                                onCollectionClick = onCollectionClick,
+                            onCollectionClick = onCollectionClick,
                             onLoadMore = { favoriteVm.loadMoreForFolder(page) },
+                            hasMore = true,
+                            isLoadingMore = false,
                             onUnfavorite = if (folderUiState.canRemoveItems) {
                                 { video -> favoriteVm.removeVideo(video) }
                             } else {
@@ -638,6 +672,8 @@ fun CommonListScreen(
                             },
                             onCollectionClick = onCollectionClick,
                             onLoadMore = { favoriteVm.loadMoreForFolder(0) },
+                            hasMore = true,
+                            isLoadingMore = false,
                             onUnfavorite = if (folderUiState.canRemoveItems) {
                                 { video -> favoriteVm.removeVideo(video) }
                             } else {
@@ -676,6 +712,8 @@ fun CommonListScreen(
                                 CommonListLoadMoreOwner.NONE -> Unit
                             }
                         },
+                        hasMore = paginationSnapshot.hasMore,
+                        isLoadingMore = paginationSnapshot.isLoadingMore,
                         onUnfavorite = if (favoriteViewModel != null) { 
                             { favoriteViewModel.removeVideo(it) } 
                         } else null,
@@ -1043,6 +1081,8 @@ private fun CommonListContent(
     onVideoClick: (String, Long, String) -> Unit,
     onCollectionClick: ((Long, Long, String) -> Unit)? = null,
     onLoadMore: () -> Unit,
+    hasMore: Boolean = true,
+    isLoadingMore: Boolean = false,
     onUnfavorite: ((com.android.purebilibili.data.model.response.VideoItem) -> Unit)?,
     historyDeleteSession: HistoryDeleteSession? = null,
     historyBatchMode: Boolean = false,
@@ -1098,15 +1138,25 @@ private fun CommonListContent(
              }
         } else {
             // 自动加载更多
-            val shouldLoadMore = androidx.compose.runtime.remember(resolvedGridState) {
+            val shouldLoadMore = androidx.compose.runtime.remember(
+                resolvedGridState,
+                filteredItems.size,
+                hasMore,
+                isLoadingMore,
+                isLoading
+            ) {
                 androidx.compose.runtime.derivedStateOf {
-                    val layoutInfo = resolvedGridState.layoutInfo
-                    val total = layoutInfo.totalItemsCount
-                    val last = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                    total > 0 && last >= total - 4
+                    shouldLoadMorePaginatedContent(
+                        totalItems = resolvedGridState.layoutInfo.totalItemsCount,
+                        lastVisibleItemIndex = resolvedGridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                        contentItemCount = filteredItems.size,
+                        isLoading = isLoading || isLoadingMore,
+                        hasMore = hasMore,
+                        preloadThreshold = 4
+                    )
                 }
             }
-            LaunchedEffect(shouldLoadMore.value) {
+            LaunchedEffect(shouldLoadMore.value, hasMore, isLoading, isLoadingMore, filteredItems.size) {
                 if (shouldLoadMore.value) onLoadMore()
             }
 
@@ -1399,12 +1449,16 @@ private fun FavoriteSubscribedFolderList(
         return
     }
 
-    val shouldLoadMore = androidx.compose.runtime.remember {
+    val shouldLoadMore = androidx.compose.runtime.remember(listState, folders.size, hasMore, isLoadingMore) {
         androidx.compose.runtime.derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val total = layoutInfo.totalItemsCount
-            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            total > 0 && lastVisible >= total - 3
+            shouldLoadMorePaginatedContent(
+                totalItems = listState.layoutInfo.totalItemsCount,
+                lastVisibleItemIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                contentItemCount = folders.size,
+                isLoading = isLoadingMore,
+                hasMore = hasMore,
+                preloadThreshold = 3
+            )
         }
     }
     LaunchedEffect(shouldLoadMore.value, hasMore, isLoadingMore) {

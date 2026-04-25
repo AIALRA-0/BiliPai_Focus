@@ -69,4 +69,75 @@ class SearchScreenPolicyTest {
             )
         )
     }
+
+    @Test
+    fun activeSearchResultCount_followsCurrentSearchType() {
+        val state = SearchUiState(
+            searchType = com.android.purebilibili.data.model.response.SearchType.LIVE,
+            searchResults = List(5) { com.android.purebilibili.data.model.response.VideoItem() },
+            upResults = List(4) { com.android.purebilibili.data.model.response.SearchUpItem() },
+            bangumiResults = List(3) { com.android.purebilibili.data.model.response.BangumiSearchItem() },
+            liveResults = List(2) { com.android.purebilibili.data.model.response.LiveRoomSearchItem() }
+        )
+
+        assertEquals(2, resolveSearchActiveResultCount(state))
+    }
+
+    @Test
+    fun searchResultPagination_usesSharedTailTriggerRules() {
+        assertTrue(
+            shouldLoadMoreSearchResults(
+                totalItems = 12,
+                lastVisibleItemIndex = 11,
+                resultItemCount = 10,
+                isLoadingMore = false,
+                hasMoreResults = true
+            )
+        )
+        assertFalse(
+            shouldLoadMoreSearchResults(
+                totalItems = 12,
+                lastVisibleItemIndex = 11,
+                resultItemCount = 10,
+                isLoadingMore = true,
+                hasMoreResults = true
+            )
+        )
+    }
+
+    @Test
+    fun autoFocus_onlyRequestsOnceForBlankUnfocusedSearchField() {
+        assertTrue(
+            shouldRequestSearchAutoFocus(
+                autoFocusEnabled = true,
+                query = "",
+                isFocused = false,
+                autoFocusConsumed = false
+            )
+        )
+        assertFalse(
+            shouldRequestSearchAutoFocus(
+                autoFocusEnabled = true,
+                query = "测试",
+                isFocused = false,
+                autoFocusConsumed = false
+            )
+        )
+        assertFalse(
+            shouldRequestSearchAutoFocus(
+                autoFocusEnabled = true,
+                query = "",
+                isFocused = true,
+                autoFocusConsumed = false
+            )
+        )
+        assertFalse(
+            shouldRequestSearchAutoFocus(
+                autoFocusEnabled = true,
+                query = "",
+                isFocused = false,
+                autoFocusConsumed = true
+            )
+        )
+    }
 }

@@ -192,11 +192,21 @@ fun FocusSettingsScreen(
                 IOSGroup {
                     IOSSwitchItem(
                         icon = Icons.Outlined.Search,
-                        title = "显示热门搜索",
-                        subtitle = "保留搜索联想、搜索发现、搜索结果和历史记录",
+                        title = "显示大家都在搜",
+                        subtitle = "只控制搜索首页的热搜关键词区块，不影响联想、发现、结果和历史记录",
                         checked = settings.showSearchHotSection,
                         onCheckedChange = { enabled ->
                             scope.launch { SettingsManager.setSearchHotSectionEnabled(context, enabled) }
+                        }
+                    )
+                    IOSDivider(startIndent = 66.dp)
+                    IOSSwitchItem(
+                        icon = Icons.Outlined.Search,
+                        title = "显示搜索发现",
+                        subtitle = "只控制搜索首页的发现关键词区块，不影响联想、热搜、结果和历史记录",
+                        checked = settings.showSearchDiscoverSection,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, enabled) }
                         }
                     )
                 }

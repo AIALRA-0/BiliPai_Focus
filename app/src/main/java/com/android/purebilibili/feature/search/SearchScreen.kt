@@ -96,6 +96,7 @@ import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
 import kotlinx.coroutines.launch
@@ -105,6 +106,37 @@ internal fun shouldShowSearchHotSection(
     hotItemCount: Int,
     hotSearchEnabled: Boolean
 ): Boolean = hotSearchEnabled && hotItemCount > 0
+
+internal fun resolveSearchActiveResultCount(
+    state: SearchUiState
+): Int {
+    return when (state.searchType) {
+        com.android.purebilibili.data.model.response.SearchType.VIDEO -> state.searchResults.size
+        com.android.purebilibili.data.model.response.SearchType.UP -> state.upResults.size
+        com.android.purebilibili.data.model.response.SearchType.BANGUMI,
+        com.android.purebilibili.data.model.response.SearchType.MEDIA_FT -> state.bangumiResults.size
+        com.android.purebilibili.data.model.response.SearchType.LIVE -> state.liveResults.size
+        com.android.purebilibili.data.model.response.SearchType.ARTICLE -> state.articleResults.size
+    }
+}
+
+internal fun shouldLoadMoreSearchResults(
+    totalItems: Int,
+    lastVisibleItemIndex: Int,
+    resultItemCount: Int,
+    isLoadingMore: Boolean,
+    hasMoreResults: Boolean,
+    preloadThreshold: Int = 3
+): Boolean {
+    return shouldLoadMorePaginatedContent(
+        totalItems = totalItems,
+        lastVisibleItemIndex = lastVisibleItemIndex,
+        contentItemCount = resultItemCount,
+        isLoading = isLoadingMore,
+        hasMore = hasMoreResults,
+        preloadThreshold = preloadThreshold
+    )
+}
 
 internal fun shouldShowSearchHotHeader(
     hotItemCount: Int,
@@ -225,6 +257,18 @@ internal fun resolveSearchSubmitKeyword(
     return suggestedKeyword.trim()
 }
 
+internal fun shouldRequestSearchAutoFocus(
+    autoFocusEnabled: Boolean,
+    query: String,
+    isFocused: Boolean,
+    autoFocusConsumed: Boolean
+): Boolean {
+    return autoFocusEnabled &&
+        query.isBlank() &&
+        !isFocused &&
+        !autoFocusConsumed
+}
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
@@ -305,7 +349,7 @@ fun SearchScreen(
         )
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
-    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = true)
+    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = false)
     val discoverSectionEnabled by SettingsManager.getSearchDiscoverSectionEnabled(context).collectAsState(initial = true)
     val liquidGlassEnabled by SettingsManager.getLiquidGlassEnabled(context).collectAsState(initial = true)
     val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
@@ -424,6 +468,57 @@ fun SearchScreen(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         extraBottomPadding = 16.dp
     )
+    val activeSearchResultCount = remember(
+        state.searchType,
+        state.searchResults,
+        state.upResults,
+        state.bangumiResults,
+        state.liveResults,
+        state.articleResults
+    ) {
+        resolveSearchActiveResultCount(state)
+    }
+    val shouldLoadMoreSearchPage by remember(
+        state.searchType,
+        state.hasMoreResults,
+        state.isLoadingMore,
+        activeSearchResultCount,
+        resultGridState,
+        resultListState
+    ) {
+        derivedStateOf {
+            if (state.searchType == com.android.purebilibili.data.model.response.SearchType.VIDEO) {
+                shouldLoadMoreSearchResults(
+                    totalItems = resultGridState.layoutInfo.totalItemsCount,
+                    lastVisibleItemIndex = resultGridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                    resultItemCount = activeSearchResultCount,
+                    isLoadingMore = state.isLoadingMore,
+                    hasMoreResults = state.hasMoreResults
+                )
+            } else {
+                shouldLoadMoreSearchResults(
+                    totalItems = resultListState.layoutInfo.totalItemsCount,
+                    lastVisibleItemIndex = resultListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                    resultItemCount = activeSearchResultCount,
+                    isLoadingMore = state.isLoadingMore,
+                    hasMoreResults = state.hasMoreResults
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(
+        shouldLoadMoreSearchPage,
+        state.searchType,
+        state.currentPage,
+        state.hasMoreResults,
+        state.isLoadingMore,
+        activeSearchResultCount
+    ) {
+        if (shouldLoadMoreSearchPage) {
+            viewModel.loadMoreResults()
+        }
+    }
 
     AdaptiveScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -539,12 +634,6 @@ fun SearchScreen(
                                             onClick = { bvid, _ -> onVideoClick(bvid, 0) }
                                         )
                                         
-                                        //  [新增] 无限滚动触发：当滚动到最后几个 item 时加载更多
-                                        if (index == state.searchResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
-                                            LaunchedEffect(state.currentPage) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
                                     }
                                     
                                     // [新增] 空状态提示 (提示可能被屏蔽)
@@ -644,11 +733,6 @@ fun SearchScreen(
                                             appearance = genericResultCardAppearance,
                                             onClick = { onUpClick(upItem.mid) }
                                         )
-                                        if (index == state.upResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
-                                            LaunchedEffect(state.currentPage, state.searchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
                                     }
                                     
                                      // [新增] 空状态提示
@@ -736,11 +820,6 @@ fun SearchScreen(
                                                 }
                                             }
                                         )
-                                        if (index == state.bangumiResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
-                                            LaunchedEffect(state.currentPage, state.searchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
                                     }
 
                                     if (state.isLoadingMore) {
@@ -797,11 +876,6 @@ fun SearchScreen(
                                             appearance = genericResultCardAppearance,
                                             onClick = { onLiveClick(liveItem.roomid, liveItem.title, liveItem.uname) }
                                         )
-                                        if (index == state.liveResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
-                                            LaunchedEffect(state.currentPage, state.searchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
                                     }
                                     
                                     // [新增] 空状态提示
@@ -883,11 +957,6 @@ fun SearchScreen(
                                             appearance = genericResultCardAppearance,
                                             onClick = { onArticleClick(articleItem.id, articleItem.title) }
                                         )
-                                        if (index == state.articleResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
-                                            LaunchedEffect(state.currentPage, state.searchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
                                     }
 
                                     if (!state.isSearching && state.articleResults.isEmpty() && state.error == null && emptyStateCopy != null) {
@@ -1059,17 +1128,24 @@ fun SearchTopBar(
     val clearIcon = rememberAppClearIcon()
     //  Focus 状态追踪
     var isFocused by remember { mutableStateOf(false) }
+    var autoFocusConsumed by rememberSaveable { mutableStateOf(false) }
     
     //  自动聚焦并弹出键盘
-    LaunchedEffect(autoFocusEnabled, query) {
-        if (autoFocusEnabled && query.isEmpty()) {
-            kotlinx.coroutines.delay(60)
-            runCatching {
-                focusRequester.requestFocus()
-            }.onFailure { e ->
-                com.android.purebilibili.core.util.Logger.e("SearchScreen", "Failed to auto focus search field", e)
-            }
+    LaunchedEffect(autoFocusEnabled, query, isFocused) {
+        if (query.isNotBlank()) {
+            autoFocusConsumed = true
+            return@LaunchedEffect
         }
+        if (!shouldRequestSearchAutoFocus(autoFocusEnabled, query, isFocused, autoFocusConsumed)) {
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(60)
+        runCatching {
+            focusRequester.requestFocus()
+        }.onFailure { e ->
+            com.android.purebilibili.core.util.Logger.e("SearchScreen", "Failed to auto focus search field", e)
+        }
+        autoFocusConsumed = true
     }
     
     //  边框宽度动画

@@ -330,4 +330,30 @@ class PlaybackSeekControllerTest {
             )
         )
     }
+
+    @Test
+    fun stalePendingSeek_eventuallyClearsAndFallsBackToRealPlaybackPosition() {
+        val commitResult = finishPlaybackSeekInteraction(
+            state = updatePlaybackSeekInteraction(
+                state = startPlaybackSeekInteraction(
+                    state = syncPlaybackSeekSession(
+                        state = PlaybackSeekSessionState(),
+                        playbackPositionMs = 10_000L
+                    )
+                ),
+                positionMs = 24_000L
+            ),
+            currentTimeMs = 1_000L
+        )
+
+        val synced = syncPlaybackSeekSession(
+            state = commitResult.state,
+            playbackPositionMs = 18_500L,
+            currentTimeMs = 1_000L + SEEK_SESSION_STALE_TIMEOUT_MS + 1L
+        )
+
+        assertEquals(18_500L, synced.sliderPositionMs)
+        assertNull(synced.pendingSeekPositionMs)
+        assertNull(synced.pendingSeekCreatedAtMs)
+    }
 }

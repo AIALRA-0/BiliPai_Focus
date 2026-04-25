@@ -916,9 +916,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     } else {
                         hydrateFocusedTimelineIfNeeded(successState)
                     }
-                    _uiState.value = nextState
+                    _uiState.value = enrichTimelineContinuationState(nextState)
                     if (!shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
-                        saveDynamicCache(nextState.items)
+                        saveDynamicCache(_uiState.value.items)
                     }
                     rebuildFollowedUsers()
                 },
@@ -989,6 +989,30 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         return hydratedState.copy(
             hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
             sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
+        )
+    }
+
+    private fun enrichTimelineContinuationState(
+        currentState: DynamicUiState
+    ): DynamicUiState {
+        if (shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
+            return currentState.copy(
+                visibleHasMore = currentState.sourceHasMore || currentState.items.isNotEmpty(),
+                continuationAllowed = currentState.sourceHasMore
+            )
+        }
+        val visibleItemCount = filterDynamicItemsByFocusFollowGroups(
+            items = currentState.items,
+            config = focusGroups,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        ).size
+        val paginationState = resolveDynamicVisiblePaginationState(
+            visibleItemCount = visibleItemCount,
+            sourceHasMore = currentState.sourceHasMore
+        )
+        return currentState.copy(
+            visibleHasMore = paginationState.visibleHasMore,
+            continuationAllowed = paginationState.continuationAllowed
         )
     }
     
@@ -1426,6 +1450,8 @@ data class DynamicUiState(
     val userError: String? = null,
     val hasMore: Boolean = true,
     val sourceHasMore: Boolean = true,
+    val visibleHasMore: Boolean = true,
+    val continuationAllowed: Boolean = true,
     val hasUserMore: Boolean = true, //  [新增] UP主动态是否有更多
     val incrementalRefreshBoundaryKey: String? = null,
     val incrementalPrependedCount: Int = 0,
