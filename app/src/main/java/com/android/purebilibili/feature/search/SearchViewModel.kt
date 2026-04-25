@@ -20,10 +20,12 @@ import com.android.purebilibili.data.repository.SearchOrderSort
 import com.android.purebilibili.data.repository.SearchUpOrder
 import com.android.purebilibili.data.repository.SearchUserType
 import com.android.purebilibili.data.repository.shouldApplySearchResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -684,9 +686,14 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun loadHistory() {
         viewModelScope.launch {
-            searchDao.getAll().collect { history ->
-                _uiState.update { it.copy(historyList = history) }
-            }
+            searchDao.getAll()
+                .catch { e ->
+                    com.android.purebilibili.core.util.Logger.e("SearchVM", "Failed to load search history", e)
+                    _uiState.update { it.copy(historyList = emptyList()) }
+                }
+                .collect { history ->
+                    _uiState.update { it.copy(historyList = history) }
+                }
         }
     }
 
@@ -740,29 +747,47 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun saveHistory(keyword: String) {
         viewModelScope.launch {
-            //  隐私无痕模式检查：如果启用则跳过保存搜索历史
-            val context = getApplication<android.app.Application>()
-            if (com.android.purebilibili.core.store.SettingsManager.isPrivacyModeEnabledSync(context)) {
-                com.android.purebilibili.core.util.Logger.d("SearchVM", " Privacy mode enabled, skipping search history save")
-                return@launch
+            try {
+                //  隐私无痕模式检查：如果启用则跳过保存搜索历史
+                val context = getApplication<android.app.Application>()
+                if (com.android.purebilibili.core.store.SettingsManager.isPrivacyModeEnabledSync(context)) {
+                    com.android.purebilibili.core.util.Logger.d("SearchVM", " Privacy mode enabled, skipping search history save")
+                    return@launch
+                }
+
+                //  使用 keyword 主键，重复搜索自动更新时间戳
+                searchDao.insert(SearchHistory(keyword = keyword, timestamp = System.currentTimeMillis()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                com.android.purebilibili.core.util.Logger.e("SearchVM", "Failed to save search history", e)
             }
-            
-            //  使用 keyword 主键，重复搜索自动更新时间戳
-            searchDao.insert(SearchHistory(keyword = keyword, timestamp = System.currentTimeMillis()))
         }
     }
 
     fun deleteHistory(history: SearchHistory) {
         viewModelScope.launch {
-            searchDao.delete(history)
-            refreshDiscover()
+            try {
+                searchDao.delete(history)
+                refreshDiscover()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                com.android.purebilibili.core.util.Logger.e("SearchVM", "Failed to delete search history", e)
+            }
         }
     }
 
     fun clearHistory() {
         viewModelScope.launch {
-            searchDao.clearAll()
-            refreshDiscover()
+            try {
+                searchDao.clearAll()
+                refreshDiscover()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                com.android.purebilibili.core.util.Logger.e("SearchVM", "Failed to clear search history", e)
+            }
         }
     }
     

@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.overlay
 import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -643,20 +644,17 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun centerPlaybackButtonStyle_keepsReadableWhiteGlyphAcrossThemes() {
-        val darkStyle = resolveCenterPlaybackButtonStyle(isDarkTheme = true)
-        val lightStyle = resolveCenterPlaybackButtonStyle(isDarkTheme = false)
+    fun centerPlaybackButton_usesThemeTintedNativeIconWithoutContainerShadow() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/PlaybackButtonComponents.kt")
+            .readText()
 
-        assertTrue(darkStyle.containerColor.alpha > lightStyle.containerColor.alpha)
-        assertTrue(darkStyle.innerColor != lightStyle.innerColor)
-        assertEquals(Color.White, darkStyle.iconTint)
-        assertEquals(Color.White, lightStyle.iconTint)
-    }
-
-    @Test
-    fun playbackGlyphOpticalOffset_onlyShiftsPlayIcon() {
-        assertEquals(0f, resolvePlaybackGlyphHorizontalBias(isPlaying = true))
-        assertTrue(resolvePlaybackGlyphHorizontalBias(isPlaying = false) > 0f)
+        assertTrue(source.contains("IconButton("))
+        assertTrue(source.contains("Icons.Filled.Pause"))
+        assertTrue(source.contains("Icons.Filled.PlayArrow"))
+        assertTrue(source.contains("tint = MaterialTheme.colorScheme.primary"))
+        assertFalse(source.contains("Surface("))
+        assertFalse(source.contains("BorderStroke("))
+        assertFalse(source.contains(".background("))
     }
 
     @Test

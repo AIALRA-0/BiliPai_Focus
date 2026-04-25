@@ -288,6 +288,27 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `buildReplyCommentImageSpec carries author message and qr url`() {
+        val spec = buildReplyCommentImageSpec(
+            ReplyItem(
+                oid = 100L,
+                rpid = 777L,
+                member = ReplyMember(uname = "评论者"),
+                content = ReplyContent(message = "保存这条评论"),
+                like = 12,
+                ctime = 1_700_000_000L
+            ),
+            generatedAtMillis = 1_700_000_100_000L
+        )
+
+        assertEquals("评论者", spec.authorName)
+        assertEquals("保存这条评论", spec.message)
+        assertEquals("https://www.bilibili.com/video/av100?comment_on=1&comment_root_id=777", spec.qrUrl)
+        assertTrue(spec.footerText.contains("识别二维码"))
+        assertTrue(spec.metadataText.contains("12赞"))
+    }
+
+    @Test
     fun `collectRenderableEmoteKeys only keeps used and mapped tokens`() {
         val emoteMap = mapOf(
             "[doge]" to "url_doge",

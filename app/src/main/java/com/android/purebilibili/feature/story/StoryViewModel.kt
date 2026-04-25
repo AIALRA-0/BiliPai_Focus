@@ -41,7 +41,7 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
                     isLoading = false
                 )
                 if (items.isNotEmpty()) {
-                    lastAid = items.last().playerArgs?.aid ?: 0
+                    lastAid = resolveNextStoryFeedAid(previousAid = lastAid, items = items)
                     
                     //  调试日志：输出第一个视频的详细信息
                     val firstItem = items.first()
@@ -70,14 +70,18 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
             val result = StoryRepository.getStoryFeed(aid = lastAid)
             result.onSuccess { newItems ->
                 val currentItems = _uiState.value.items
+                val mergedItems = mergeStoryFeedItems(
+                    existingItems = currentItems,
+                    newItems = newItems
+                )
                 _uiState.value = _uiState.value.copy(
-                    items = currentItems + newItems,
+                    items = mergedItems,
                     isLoading = false
                 )
                 if (newItems.isNotEmpty()) {
-                    lastAid = newItems.last().playerArgs?.aid ?: 0
+                    lastAid = resolveNextStoryFeedAid(previousAid = lastAid, items = newItems)
                 }
-                Logger.d("StoryVM", " 加载更多: ${newItems.size} 个视频")
+                Logger.d("StoryVM", " 加载更多: ${newItems.size} 个视频，新增 ${mergedItems.size - currentItems.size} 个")
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(isLoading = false)
             }

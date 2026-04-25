@@ -29,8 +29,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
@@ -104,6 +106,7 @@ internal fun HomeCategoryPageContent(
     followLoadMoreArmed: Boolean = true,
     onFollowScrollInteraction: () -> Unit = {},
     showUpBadges: Boolean = true,
+    showDurationBadges: Boolean = true,
     oldContentAnchorBvid: String? = null,
     oldContentStartIndex: Int? = null,
     todayWatchEnabled: Boolean = false,
@@ -132,6 +135,10 @@ internal fun HomeCategoryPageContent(
     modifier: Modifier = Modifier,
 ) {
     val scrollLiteModeEnabled = false
+    val context = LocalContext.current
+    val showOnlineCount by SettingsManager
+        .getShowOnlineCount(context)
+        .collectAsState(initial = false)
     TrackScrollJank(
         scrollableState = gridState,
         stateName = "home:feed:${category.name.lowercase()}"
@@ -363,6 +370,8 @@ internal fun HomeCategoryPageContent(
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
                                         showUpBadge = showUpBadges,
+                                        showDurationBadge = showDurationBadges,
+                                        showOnlineCount = showOnlineCount,
                                         showPublishTime = true,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
@@ -396,6 +405,8 @@ internal fun HomeCategoryPageContent(
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
                                         showUpBadge = showUpBadges,
+                                        showDurationBadge = showDurationBadges,
+                                        showOnlineCount = showOnlineCount,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onWatchLater = if (isDynamicDetailCard) null else ({
                                             onWatchLater(video.bvid, resolveWatchLaterAid(video))

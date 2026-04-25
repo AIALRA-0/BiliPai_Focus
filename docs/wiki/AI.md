@@ -96,3 +96,73 @@ Maintained periodically, but still subject to freshness limits; reference only.
 - 当前行为必须在 Kotlin 或 Gradle 文件中核验。
 - If a linked path changes, update this file after the tree changes.
 - 如果链接路径变更，应在仓库树变更后更新本文件。
+
+## BiliPai Skill Defaults / BiliPai 默认 Skill 组合
+
+Use the lowest-overhead skill set that matches the task.
+默认使用覆盖任务且开销最低的 skill 组合。
+
+### Recommended Always-On Set / 推荐常驻组合
+
+| Skill | Default Role | When to Prefer |
+| --- | --- | --- |
+| `android-jetpack-compose-expert` | primary UI architecture skill | Compose screen structure, state hoisting, navigation, recomposition, list performance |
+| `android-native-dev` | Android platform and build fallback | Material 3, adaptive layout, accessibility, Gradle, build or device troubleshooting |
+| `android-emulator-qa` | verification skill, enable on demand | emulator flow checks, screenshot capture, adb-driven UI validation, regression reproduction |
+
+### Selection Rules / 选择规则
+
+1. If the task changes a Compose screen, start with `android-jetpack-compose-expert`.
+1. 如果任务修改 Compose 页面，优先使用 `android-jetpack-compose-expert`。
+2. If the task also touches build config, resources, adaptive behavior, accessibility, or Android platform behavior, add `android-native-dev`.
+2. 如果任务还涉及构建配置、资源、自适应布局、无障碍或 Android 平台行为，再补充 `android-native-dev`。
+3. If the task changes gestures, overlays, player UI, settings flows, or any interaction that should be checked on device or emulator, add `android-emulator-qa` for verification.
+3. 如果任务涉及手势、浮层、播放器 UI、设置流程，或任何需要在设备/模拟器上确认的交互，再补充 `android-emulator-qa` 做验证。
+4. Do not default to heavy multi-phase workflow skills in this repository unless explicitly requested by the user.
+4. 本仓库默认不要启用高开销多阶段 workflow skill，除非用户明确要求。
+
+### Task Mapping / 任务映射
+
+| Task Type | Preferred Skill |
+| --- | --- |
+| screen refactor / 页面重构 | `android-jetpack-compose-expert` |
+| state or ViewModel flow cleanup / 状态流与 ViewModel 梳理 | `android-jetpack-compose-expert` |
+| navigation or route wiring / 导航与路由接线 | `android-jetpack-compose-expert` |
+| Material 3 or MIUIX style alignment / Material 3 或 MIUIX 风格对齐 | `android-native-dev` |
+| accessibility or touch target review / 无障碍与触控目标检查 | `android-native-dev` |
+| Gradle, manifest, install, build failure / Gradle、Manifest、安装、构建故障 | `android-native-dev` |
+| emulator reproduction / 模拟器复现 | `android-emulator-qa` |
+| player overlay, feed scroll, gesture regression / 播放器浮层、信息流滚动、手势回归 | `android-emulator-qa` |
+
+### BiliPai-Specific Triggers / BiliPai 专用触发词
+
+- Use `android-jetpack-compose-expert` for prompts like:
+- 对以下提示优先使用 `android-jetpack-compose-expert`：
+  `优化这个 Compose 页面`
+  `拆分这个大 Screen`
+  `减少重组`
+  `整理 ViewModel 到无状态 UI`
+  `修这个列表卡顿`
+- Use `android-native-dev` for prompts like:
+- 对以下提示优先使用 `android-native-dev`：
+  `修复 assembleDebug`
+  `检查 Material 3`
+  `适配平板`
+  `看一下无障碍`
+  `处理 edge-to-edge / IME / insets`
+- Use `android-emulator-qa` for prompts like:
+- 对以下提示优先使用 `android-emulator-qa`：
+  `帮我在模拟器走一遍流程`
+  `复现这个 UI bug`
+  `截一张当前页面图`
+  `验证播放器返回前后台`
+  `确认设置页交互`
+
+### Scope Notes / 范围说明
+
+- `android-jetpack-compose-expert` should lead feature UI work under `app/src/main/java/com/android/purebilibili/feature/`.
+- `android-jetpack-compose-expert` 主要负责 `app/src/main/java/com/android/purebilibili/feature/` 下的功能 UI 工作。
+- `android-native-dev` is the default secondary skill for module, build, manifest, resource, and platform-level concerns.
+- `android-native-dev` 是模块、构建、Manifest、资源和平台级问题的默认辅助 skill。
+- `android-emulator-qa` is verification-oriented; do not use it as the primary implementation skill.
+- `android-emulator-qa` 偏验证，不应作为主要实现 skill。

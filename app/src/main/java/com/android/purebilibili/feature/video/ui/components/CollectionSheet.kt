@@ -46,11 +46,16 @@ fun CollectionSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val allEpisodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
-    val isSubscribed by SettingsManager
-        .isCollectionSubscribed(context, ugcSeason.id)
-        .collectAsState(initial = false)
+    val collectionSubscriptionId = remember(ugcSeason) { resolveCollectionSubscriptionId(ugcSeason) }
+    val currentAid = remember(allEpisodes, currentBvid, currentCid) {
+        resolveCurrentUgcEpisodeAid(
+            episodes = allEpisodes,
+            currentBvid = currentBvid,
+            currentCid = currentCid
+        )
+    }
     val sortMode by SettingsManager
-        .getCollectionSortMode(context, ugcSeason.id)
+        .getCollectionSortMode(context, collectionSubscriptionId)
         .collectAsState(initial = CollectionSortMode.ASCENDING)
     val sortedEpisodes = remember(allEpisodes, sortMode, currentBvid, currentCid) {
         sortCollectionEpisodes(
@@ -100,21 +105,12 @@ fun CollectionSheet(
                     )
                 }
 
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            SettingsManager.toggleCollectionSubscription(context, ugcSeason.id)
-                        }
-                    },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = if (isSubscribed) "已订阅" else "订阅",
-                        color = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                CollectionSubscriptionButton(
+                    collectionId = collectionSubscriptionId,
+                    currentBvid = currentBvid,
+                    currentAid = currentAid,
+                    fontSize = 13.sp
+                )
 
                 IconButton(onClick = onDismiss) {
                     Icon(
@@ -147,7 +143,7 @@ fun CollectionSheet(
                     onScaleChange = { index ->
                         sortModes.getOrNull(index)?.let { nextMode ->
                             scope.launch {
-                                SettingsManager.setCollectionSortMode(context, ugcSeason.id, nextMode)
+                                SettingsManager.setCollectionSortMode(context, collectionSubscriptionId, nextMode)
                             }
                         }
                     }

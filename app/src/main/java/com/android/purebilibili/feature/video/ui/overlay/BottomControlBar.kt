@@ -133,6 +133,17 @@ internal fun resolveSeekPreviewTargetPositionMs(
     }
 }
 
+internal fun resolveSeekDragCommitPositionMs(
+    dragStartPositionMs: Long,
+    latestDragPositionMs: Long
+): Long {
+    return if (latestDragPositionMs >= 0L) {
+        latestDragPositionMs
+    } else {
+        dragStartPositionMs.coerceAtLeast(0L)
+    }
+}
+
 internal fun resolveProgressFraction(
     positionMs: Long,
     durationMs: Long
@@ -150,6 +161,10 @@ internal fun resolveSeekPositionFromTouch(
     val fraction = (touchX / containerWidthPx).coerceIn(0f, 1f)
     return (durationMs.toFloat() * fraction).roundToInt().toLong().coerceIn(0L, durationMs)
 }
+
+internal fun shouldCancelSeekDragOnPointerInputCompletion(
+    dragInProgress: Boolean
+): Boolean = dragInProgress
 
 data class LandscapeDanmakuPlaceholderPolicy(
     val maxLines: Int,
@@ -1004,6 +1019,11 @@ fun VideoProgressBar(
 ) {
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentOnSeekStart by rememberUpdatedState(onSeekStart)
+    val currentOnSeekDragStart by rememberUpdatedState(onSeekDragStart)
+    val currentOnSeekDragUpdate by rememberUpdatedState(onSeekDragUpdate)
+    val currentOnSeekDragCancel by rememberUpdatedState(onSeekDragCancel)
     LaunchedEffect(displayPositionMs, isSeekScrubbing) {
         if (!isSeekScrubbing) {
             dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
@@ -1126,41 +1146,60 @@ fun VideoProgressBar(
                             durationMs = duration
                         )
                         dragTargetPositionMs = targetPositionMs
-                        onSeekStart()
-                        onSeekDragStart(targetPositionMs)
-                        onSeekDragUpdate(targetPositionMs)
-                        onSeek(targetPositionMs)
+                        currentOnSeekStart()
+                        currentOnSeekDragStart(targetPositionMs)
+                        currentOnSeekDragUpdate(targetPositionMs)
+                        currentOnSeek(targetPositionMs)
                     }
                 }
                 .pointerInput(duration) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val targetPositionMs = resolveSeekPositionFromTouch(
-                                touchX = offset.x,
-                                containerWidthPx = size.width.toFloat(),
-                                durationMs = duration
-                            )
-                            dragTargetPositionMs = targetPositionMs
-                            onSeekStart()
-                            onSeekDragStart(targetPositionMs)
-                        },
-                        onDrag = { change, _ ->
-                            change.consume()
-                            val targetPositionMs = resolveSeekPositionFromTouch(
-                                touchX = change.position.x,
-                                containerWidthPx = size.width.toFloat(),
-                                durationMs = duration
-                            )
-                            dragTargetPositionMs = targetPositionMs
-                            onSeekDragUpdate(targetPositionMs)
-                        },
-                        onDragEnd = {
-                            onSeek(dragTargetPositionMs)
-                        },
-                        onDragCancel = {
-                            onSeekDragCancel()
+                    var dragInProgress = false
+                    try {
+                        var dragStartPositionMs = displayPositionMs.coerceAtLeast(0L)
+                        var latestDragPositionMs = dragStartPositionMs
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                val targetPositionMs = resolveSeekPositionFromTouch(
+                                    touchX = offset.x,
+                                    containerWidthPx = size.width.toFloat(),
+                                    durationMs = duration
+                                )
+                                dragInProgress = true
+                                dragStartPositionMs = targetPositionMs
+                                latestDragPositionMs = targetPositionMs
+                                dragTargetPositionMs = targetPositionMs
+                                currentOnSeekStart()
+                                currentOnSeekDragStart(targetPositionMs)
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val targetPositionMs = resolveSeekPositionFromTouch(
+                                    touchX = change.position.x,
+                                    containerWidthPx = size.width.toFloat(),
+                                    durationMs = duration
+                                )
+                                latestDragPositionMs = targetPositionMs
+                                dragTargetPositionMs = targetPositionMs
+                                currentOnSeekDragUpdate(targetPositionMs)
+                            },
+                            onDragEnd = {
+                                val commitPositionMs = resolveSeekDragCommitPositionMs(
+                                    dragStartPositionMs = dragStartPositionMs,
+                                    latestDragPositionMs = latestDragPositionMs
+                                )
+                                dragInProgress = false
+                                currentOnSeek(commitPositionMs)
+                            },
+                            onDragCancel = {
+                                dragInProgress = false
+                                currentOnSeekDragCancel()
+                            }
+                        )
+                    } finally {
+                        if (shouldCancelSeekDragOnPointerInputCompletion(dragInProgress)) {
+                            currentOnSeekDragCancel()
                         }
-                    )
+                    }
                 },
             contentAlignment = Alignment.CenterStart
         ) {

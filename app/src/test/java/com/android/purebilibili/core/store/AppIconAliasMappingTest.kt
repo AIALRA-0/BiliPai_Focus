@@ -11,12 +11,12 @@ class AppIconAliasMappingTest {
         val packageName = "com.android.purebilibili"
 
         assertEquals(
-            "com.android.purebilibili.MainActivityAliasFlatMaterial",
-            resolveAppIconLauncherAlias(packageName, "icon_flat_material")
+            "com.android.purebilibili.MainActivityAliasBiliPai",
+            resolveAppIconLauncherAlias(packageName, "icon_bilipai")
         )
         assertEquals(
-            "com.android.purebilibili.MainActivityAliasFlatMaterial",
-            resolveAppIconLauncherAlias(packageName, "Flat Material")
+            "com.android.purebilibili.MainActivityAliasBiliPai",
+            resolveAppIconLauncherAlias(packageName, "BiliPai")
         )
         assertEquals(
             "com.android.purebilibili.MainActivityAliasHeadphone",
@@ -29,9 +29,20 @@ class AppIconAliasMappingTest {
     }
 
     @Test
-    fun allManagedAppIconLauncherAliases_containsFlatMaterialAndHeadphone() {
+    fun resolveAppIconLauncherAlias_keepsStableComponentNamespaceForDebugBuilds() {
+        assertEquals(
+            "com.android.purebilibili.MainActivityAlias3DLauncher",
+            resolveAppIconLauncherAlias("com.android.purebilibili.debug", "icon_3d")
+        )
+    }
+
+    @Test
+    fun allManagedAppIconLauncherAliases_containsBiliPaiAndHeadphone_withoutRemovedAliases() {
         val aliases = allManagedAppIconLauncherAliases("com.android.purebilibili")
-        assertTrue(aliases.contains("com.android.purebilibili.MainActivityAliasFlatMaterial"))
+        assertTrue(aliases.contains("com.android.purebilibili.MainActivityAliasBiliPai"))
         assertTrue(aliases.contains("com.android.purebilibili.MainActivityAliasHeadphone"))
+        assertTrue(aliases.contains("com.android.purebilibili.MainActivityAlias3D"))
+        kotlin.test.assertFalse(aliases.contains("com.android.purebilibili.MainActivityAliasFlatMaterial"))
+        kotlin.test.assertFalse(aliases.contains("com.android.purebilibili.MainActivityAliasRetro"))
     }
 }

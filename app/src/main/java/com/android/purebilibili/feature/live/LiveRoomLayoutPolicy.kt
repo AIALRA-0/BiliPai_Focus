@@ -28,6 +28,27 @@ fun resolveLiveRoomLayoutMode(
     }
 }
 
+fun shouldShowLiveChatToggle(
+    layoutMode: LiveRoomLayoutMode
+): Boolean {
+    return layoutMode == LiveRoomLayoutMode.LandscapeSplit ||
+        layoutMode == LiveRoomLayoutMode.LandscapeOverlay
+}
+
+fun shouldShowLiveSplitChatPanel(
+    layoutMode: LiveRoomLayoutMode,
+    isChatVisible: Boolean
+): Boolean {
+    return layoutMode == LiveRoomLayoutMode.LandscapeSplit && isChatVisible
+}
+
+fun shouldShowLiveLandscapeChatOverlay(
+    layoutMode: LiveRoomLayoutMode,
+    isChatVisible: Boolean
+): Boolean {
+    return layoutMode == LiveRoomLayoutMode.LandscapeOverlay && isChatVisible
+}
+
 fun formatLiveDuration(
     liveStartTimeSeconds: Long,
     nowMillis: Long = System.currentTimeMillis()

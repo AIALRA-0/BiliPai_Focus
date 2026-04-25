@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.ui.section
 
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -48,6 +49,37 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun bottomGestureExclusion_allowsLandscapeCenterDragWhenProgressPreviewIsHidden() {
+        val visibleControlExclusionPx = resolveVideoPlayerBottomGestureExclusionHeightDp(
+            controlBarBottomPaddingDp = 14,
+            progressSpacingDp = 10,
+            progressContainerHeightDp = 40,
+            controlRowHeightDp = 40,
+            extraBufferDp = 12
+        ).toFloat()
+
+        assertFalse(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 210f,
+                containerHeightPx = 360f,
+                edgeSafeZonePx = 48f,
+                bottomGestureExclusionPx = visibleControlExclusionPx
+            )
+        )
+    }
+
+    @Test
+    fun bottomGestureExclusion_usesVisibleProgressHeightInVideoPlayerSection() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt")
+            .readText()
+
+        assertTrue(
+            source.contains("progressContainerHeightDp = videoProgressBarLayoutPolicy.baseHeightWithChapterDp"),
+            "Background drag exclusion should use the visible idle progress bar height; the expanded preview height is only visible while the progress bar itself is scrubbing."
+        )
+    }
+
+    @Test
     fun dragStart_ignoresProgressPreviewZoneAboveBottomControls() {
         assertTrue(
             shouldIgnoreVideoPlayerDragStart(
@@ -66,6 +98,42 @@ class VideoPlayerSectionPolicyTest {
             resolveGestureSeekableDurationMs(
                 playbackDurationMs = 0L,
                 fallbackDurationMs = 120_000L
+            )
+        )
+    }
+
+    @Test
+    fun relativeSeekTarget_clampsBackwardAtZero() {
+        assertEquals(
+            0L,
+            resolveRelativeSeekTargetPosition(
+                currentPositionMs = 3_000L,
+                deltaMs = -10_000L,
+                durationMs = 120_000L
+            )
+        )
+    }
+
+    @Test
+    fun relativeSeekTarget_clampsForwardAtKnownDuration() {
+        assertEquals(
+            120_000L,
+            resolveRelativeSeekTargetPosition(
+                currentPositionMs = 118_000L,
+                deltaMs = 10_000L,
+                durationMs = 120_000L
+            )
+        )
+    }
+
+    @Test
+    fun relativeSeekTarget_keepsOpenEndedStreamsUnclamped() {
+        assertEquals(
+            65_000L,
+            resolveRelativeSeekTargetPosition(
+                currentPositionMs = 55_000L,
+                deltaMs = 10_000L,
+                durationMs = 0L
             )
         )
     }
@@ -764,38 +832,74 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
-    fun longPressSpeedLock_onlyTriggersForUpwardSwipePastThreshold() {
+    fun longPressSpeedLock_triggersOnlyInTopOrBottomTargetZone() {
         assertTrue(
-            shouldLockLongPressSpeedBySwipe(
+            shouldLockLongPressSpeedInTargetZone(
                 isLongPressing = true,
                 alreadyLocked = false,
-                totalDragDistanceY = -96f,
-                thresholdPx = 80f
+                currentPointerY = 72f,
+                containerHeightPx = 1_000f,
+                lockZoneHeightPx = 120f
+            )
+        )
+        assertTrue(
+            shouldLockLongPressSpeedInTargetZone(
+                isLongPressing = true,
+                alreadyLocked = false,
+                currentPointerY = 928f,
+                containerHeightPx = 1_000f,
+                lockZoneHeightPx = 120f
             )
         )
         assertFalse(
-            shouldLockLongPressSpeedBySwipe(
+            shouldLockLongPressSpeedInTargetZone(
                 isLongPressing = true,
                 alreadyLocked = false,
-                totalDragDistanceY = -40f,
-                thresholdPx = 80f
+                currentPointerY = 260f,
+                containerHeightPx = 1_000f,
+                lockZoneHeightPx = 120f
             )
         )
         assertFalse(
-            shouldLockLongPressSpeedBySwipe(
+            shouldLockLongPressSpeedInTargetZone(
                 isLongPressing = true,
                 alreadyLocked = true,
-                totalDragDistanceY = -120f,
-                thresholdPx = 80f
+                currentPointerY = 80f,
+                containerHeightPx = 1_000f,
+                lockZoneHeightPx = 120f
             )
         )
         assertFalse(
-            shouldLockLongPressSpeedBySwipe(
+            shouldLockLongPressSpeedInTargetZone(
                 isLongPressing = false,
                 alreadyLocked = false,
-                totalDragDistanceY = -120f,
-                thresholdPx = 80f
+                currentPointerY = 80f,
+                containerHeightPx = 1_000f,
+                lockZoneHeightPx = 120f
             )
+        )
+        assertFalse(
+            shouldLockLongPressSpeedInTargetZone(
+                isLongPressing = true,
+                alreadyLocked = false,
+                currentPointerY = 80f,
+                containerHeightPx = 0f,
+                lockZoneHeightPx = 120f
+            )
+        )
+    }
+
+    @Test
+    fun longPressSpeedDrag_usesSingleLongPressDragGestureDetector() {
+        val source = loadVideoPlayerSectionSource()
+
+        assertTrue(
+            source.contains("detectDragGesturesAfterLongPress("),
+            "Long-press speed drag must be handled by the same gesture detector that owns the long press."
+        )
+        assertFalse(
+            source.contains("onLongPress ="),
+            "detectTapGestures long-press handling consumes post-long-press moves before drag locking can see them."
         )
     }
 
@@ -819,6 +923,14 @@ class VideoPlayerSectionPolicyTest {
                 longPressSpeedLocked = false
             )
         )
+    }
+
+    private fun loadVideoPlayerSectionSource(): String {
+        val sourceFile = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"),
+            File("src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt")
+        ).first { it.exists() }
+        return sourceFile.readText()
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.home.policy
 
+import com.android.purebilibili.feature.home.HomeCategory
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -40,6 +42,45 @@ class HomePagerSyncPolicyTest {
         )
 
         assertTrue(shouldSwitch)
+    }
+
+    @Test
+    fun pagerSettledAction_routesToLivePage_whenSettledCategoryIsLive() {
+        val action = resolveHomePagerSettledAction(
+            hasSyncedPagerWithState = true,
+            pagerCurrentPage = 2,
+            pagerScrolling = false,
+            currentCategoryIndex = 1,
+            settledCategory = HomeCategory.LIVE
+        )
+
+        assertEquals(HomePagerSettledAction.OPEN_LIVE_PAGE, action)
+    }
+
+    @Test
+    fun pagerSettledAction_switchesCategory_forRegularSettledCategory() {
+        val action = resolveHomePagerSettledAction(
+            hasSyncedPagerWithState = true,
+            pagerCurrentPage = 2,
+            pagerScrolling = false,
+            currentCategoryIndex = 1,
+            settledCategory = HomeCategory.POPULAR
+        )
+
+        assertEquals(HomePagerSettledAction.SWITCH_CATEGORY, action)
+    }
+
+    @Test
+    fun pagerSettledAction_isNone_whenPagerShouldNotSync() {
+        val action = resolveHomePagerSettledAction(
+            hasSyncedPagerWithState = true,
+            pagerCurrentPage = 1,
+            pagerScrolling = false,
+            currentCategoryIndex = 1,
+            settledCategory = HomeCategory.LIVE
+        )
+
+        assertEquals(HomePagerSettledAction.NONE, action)
     }
 
     @Test

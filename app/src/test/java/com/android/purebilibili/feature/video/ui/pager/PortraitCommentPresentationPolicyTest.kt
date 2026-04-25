@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.math.abs
 
 class PortraitCommentPresentationPolicyTest {
 
@@ -25,6 +26,50 @@ class PortraitCommentPresentationPolicyTest {
     @Test
     fun `video detail should route thread detail inside existing comment sheet when embedded path is enabled`() {
         assertTrue(shouldOpenPortraitCommentThreadDetail(useEmbeddedPresentation = true))
+    }
+
+    @Test
+    fun `portrait thread detail keeps main sheet presentation even if parent sheet flag is false`() {
+        assertTrue(
+            resolvePortraitCommentHostMainSheetVisible(
+                commentSheetVisible = false,
+                subReplyVisible = true
+            )
+        )
+    }
+
+    @Test
+    fun `portrait player shrinks while comment sheet is expanded`() {
+        assertEquals(0.58f, resolvePortraitCommentExpandedPlayerScale(commentSheetVisible = true))
+        assertEquals(1f, resolvePortraitCommentExpandedPlayerScale(commentSheetVisible = false))
+        assertTrue(
+            abs(
+                resolvePortraitCommentExpandedPlayerScale(commentVisibilityProgress = 0.5f) - 0.79f
+            ) < 0.001f
+        )
+    }
+
+    @Test
+    fun `comment drag progress follows sheet offset`() {
+        assertEquals(1f, resolvePortraitCommentVisibilityProgress(sheetOffsetPx = 0f, sheetHeightPx = 600f))
+        assertEquals(0.5f, resolvePortraitCommentVisibilityProgress(sheetOffsetPx = 300f, sheetHeightPx = 600f))
+        assertEquals(0f, resolvePortraitCommentVisibilityProgress(sheetOffsetPx = 900f, sheetHeightPx = 600f))
+    }
+
+    @Test
+    fun `comment drag dismiss triggers after threshold`() {
+        assertFalse(
+            shouldDismissPortraitCommentSheetByDrag(
+                sheetOffsetPx = 100f,
+                sheetHeightPx = 600f
+            )
+        )
+        assertTrue(
+            shouldDismissPortraitCommentSheetByDrag(
+                sheetOffsetPx = 180f,
+                sheetHeightPx = 600f
+            )
+        )
     }
 
     @Test

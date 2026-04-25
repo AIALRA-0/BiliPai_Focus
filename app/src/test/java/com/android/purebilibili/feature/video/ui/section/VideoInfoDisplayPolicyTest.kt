@@ -119,6 +119,31 @@ class VideoInfoDisplayPolicyTest {
     }
 
     @Test
+    fun videoDetailOnlineCountTextRequiresSettingAndLoadedValue() {
+        assertEquals(
+            "123人正在看",
+            resolveVideoDetailOnlineCountText(
+                showOnlineCount = true,
+                onlineCount = " 123人正在看 "
+            )
+        )
+        assertEquals(
+            "",
+            resolveVideoDetailOnlineCountText(
+                showOnlineCount = false,
+                onlineCount = "123人正在看"
+            )
+        )
+        assertEquals(
+            "",
+            resolveVideoDetailOnlineCountText(
+                showOnlineCount = true,
+                onlineCount = " "
+            )
+        )
+    }
+
+    @Test
     fun dynamicPublishTimeRow_usesDynamicLabelForOrdinaryVideos() {
         assertEquals(
             "动态发布 2小时前",

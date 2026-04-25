@@ -18,6 +18,24 @@ internal fun buildSponsorBlockHttpClient(baseClient: OkHttpClient): OkHttpClient
         .build()
 }
 
+internal fun buildSponsorBlockSegmentsUrl(
+    baseUrl: String,
+    bvid: String,
+    cid: Long = 0L,
+    categories: List<String> = SponsorCategory.ALL_SKIP_CATEGORIES
+): String {
+    val params = buildList {
+        add("videoID=$bvid")
+        if (cid > 0L) {
+            add("cid=$cid")
+        }
+        categories.forEach { category ->
+            add("category=$category")
+        }
+    }
+    return "$baseUrl/skipSegments?${params.joinToString("&")}"
+}
+
 /**
  * 空降助手 (BilibiliSponsorBlock) 数据仓库
  * API 文档: https://github.com/hanydd/BilibiliSponsorBlock/wiki/API
@@ -42,12 +60,17 @@ object SponsorBlockRepository {
      */
     suspend fun getSegments(
         bvid: String,
+        cid: Long = 0L,
         categories: List<String> = SponsorCategory.ALL_SKIP_CATEGORIES
     ): List<SponsorSegment> = withContext(Dispatchers.IO) {
         try {
             // 构建 URL，添加类别参数
-            val categoryParams = categories.joinToString("&") { "category=$it" }
-            val url = "$BASE_URL/skipSegments?videoID=$bvid&$categoryParams"
+            val url = buildSponsorBlockSegmentsUrl(
+                baseUrl = BASE_URL,
+                bvid = bvid,
+                cid = cid,
+                categories = categories
+            )
             
             val request = Request.Builder()
                 .url(url)
@@ -59,7 +82,7 @@ object SponsorBlockRepository {
             
             when (response.code) {
                 200 -> {
-                    val body = response.body?.string() ?: return@withContext emptyList()
+                    val body = response.body.string()
                     val segments = json.decodeFromString<List<SponsorSegment>>(body)
                     android.util.Log.d(TAG, "获取到 ${segments.size} 个空降片段 for $bvid")
                     segments.filter { it.isSkipType } // 只返回跳过类型的片段

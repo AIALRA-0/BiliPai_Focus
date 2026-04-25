@@ -18,8 +18,13 @@ class VideoCardHistoryProgressPolicyTest {
     }
 
     @Test
-    fun `non history card should not show progress bar`() {
-        assertFalse(shouldShowVideoCardHistoryProgressBar(viewAt = 0L, durationSec = 120, progressSec = 20))
+    fun `non history card should show progress bar when progress exists`() {
+        assertTrue(shouldShowVideoCardHistoryProgressBar(viewAt = 0L, durationSec = 120, progressSec = 20))
+    }
+
+    @Test
+    fun `non history card should hide progress bar for default completed sentinel without watch record`() {
+        assertFalse(shouldShowVideoCardHistoryProgressBar(viewAt = 0L, durationSec = 120, progressSec = -1))
     }
 
     @Test

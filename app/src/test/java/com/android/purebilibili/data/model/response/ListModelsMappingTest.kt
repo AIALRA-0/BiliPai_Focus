@@ -1,9 +1,16 @@
 package com.android.purebilibili.data.model.response
 
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ListModelsMappingTest {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
 
     @Test
     fun `recommend item toVideoItem keeps pubdate`() {
@@ -37,5 +44,27 @@ class ListModelsMappingTest {
         val videoItem = item.toVideoItem()
 
         assertEquals(1_731_111_111L, videoItem.pubdate)
+    }
+
+    @Test
+    fun `video relation response decodes season favorite state`() {
+        val payload = """
+            {
+              "code": 0,
+              "message": "0",
+              "data": {
+                "attention": false,
+                "favorite": false,
+                "season_fav": true,
+                "like": false,
+                "dislike": false,
+                "coin": 0
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<VideoRelationResponse>(payload)
+
+        assertTrue(response.data?.seasonFav == true)
     }
 }

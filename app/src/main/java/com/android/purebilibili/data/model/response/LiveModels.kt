@@ -226,6 +226,13 @@ data class LiveAreaChild(
 )
 
 @Serializable
+data class LiveFavoriteTagEntry(
+    val parentAreaId: Int = 0,
+    val areaId: Int = 0,
+    val title: String = ""
+)
+
+@Serializable
 data class LiveSecondAreaResponse(
     val code: Int = 0,
     val message: String = "",
@@ -237,6 +244,34 @@ data class LiveSecondAreaData(
     val list: List<LiveRoom>? = null,
     @SerialName("has_more") val hasMore: Int = 0,
     val count: Int = 0
+)
+
+@Serializable
+data class LiveContributionRankResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: LiveContributionRankData? = null
+)
+
+@Serializable
+data class LiveContributionRankData(
+    val item: List<LiveContributionRankItem>? = null
+)
+
+@Serializable
+data class LiveContributionRankItem(
+    val uid: Long = 0,
+    val name: String = "",
+    val face: String = "",
+    val rank: Int = 0,
+    val score: Int = 0,
+    @SerialName("medal_info") val medalInfo: LiveContributionMedalInfo? = null
+)
+
+@Serializable
+data class LiveContributionMedalInfo(
+    @SerialName("medal_name") val medalName: String = "",
+    val level: Int = 0
 )
 
 // --- 直播间初始化/详情 Response ---

@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.download
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.android.purebilibili.data.model.response.getBestAudio
+import com.android.purebilibili.data.model.response.getBestVideo
+import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -229,7 +232,7 @@ object DownloadManager {
         
         // 1. 下载视频流 (如果不是仅音频模式)
         if (!task.isAudioOnly) {
-            downloadFile(task.videoUrl, videoFile, task.id) { progress ->
+            downloadFileWithUrlRefresh(task, isVideoStream = true, file = videoFile) { progress ->
                 // 如果不仅音频，总进度 = (video + audio) / 2
                 updateTask(task.id, persist = false) {
                     it.copy(videoProgress = progress, progress = (progress + it.audioProgress) / 2)
@@ -240,7 +243,7 @@ object DownloadManager {
         }
         
         // 2. 下载音频流
-        downloadFile(task.audioUrl, audioFile, task.id) { progress ->
+        downloadFileWithUrlRefresh(task, isVideoStream = false, file = audioFile) { progress ->
             updateTask(task.id, persist = false) {
                 val totalProgress = if (task.isAudioOnly) progress else (it.videoProgress + progress) / 2
                 it.copy(audioProgress = progress, progress = totalProgress)
@@ -339,6 +342,41 @@ object DownloadManager {
         }
 
         downloadFileSingleThread(url, file, cookieString, taskId, plan, onProgress)
+    }
+
+    private suspend fun downloadFileWithUrlRefresh(
+        task: DownloadTask,
+        isVideoStream: Boolean,
+        file: File,
+        onProgress: (Float) -> Unit
+    ) {
+        var activeTask = task
+        var initialUrl = if (isVideoStream) activeTask.videoUrl else activeTask.audioUrl
+        if (initialUrl.isBlank()) {
+            activeTask = refreshTaskDownloadUrls(activeTask)
+            initialUrl = if (isVideoStream) activeTask.videoUrl else activeTask.audioUrl
+        }
+        if (initialUrl.isBlank()) {
+            throw IllegalStateException(if (isVideoStream) "视频地址为空" else "音频地址为空")
+        }
+
+        try {
+            downloadFile(initialUrl, file, task.id, onProgress)
+        } catch (error: Exception) {
+            if (!shouldRefreshDownloadUrlAfterFailure(error)) throw error
+
+            val refreshedTask = refreshTaskDownloadUrls(activeTask)
+            val refreshedUrl = if (isVideoStream) refreshedTask.videoUrl else refreshedTask.audioUrl
+            if (refreshedUrl.isBlank() || refreshedUrl == initialUrl) {
+                throw error
+            }
+
+            com.android.purebilibili.core.util.Logger.w(
+                "DownloadManager",
+                "🔄 Download URL expired, retrying with refreshed source: task=${task.id}, stream=${if (isVideoStream) "video" else "audio"}"
+            )
+            downloadFile(refreshedUrl, file, task.id, onProgress)
+        }
     }
     
     /**
@@ -600,10 +638,56 @@ object DownloadManager {
         update: (DownloadTask) -> DownloadTask
     ) {
         val current = _tasks.value[taskId] ?: return
-        val updated = update(current)
+        val updated = sanitizeDownloadTask(update(current))
         _tasks.value = _tasks.value + (taskId to updated)
         if (persist && shouldPersistDownloadTaskUpdate(current, updated)) {
             saveTasks()
+        }
+    }
+
+    private fun shouldRefreshDownloadUrlAfterFailure(error: Throwable): Boolean {
+        val message = error.message?.lowercase().orEmpty()
+        return message.contains("http 403") || message.contains("forbidden")
+    }
+
+    private suspend fun refreshTaskDownloadUrls(task: DownloadTask): DownloadTask {
+        return try {
+            val requestedQuality = task.quality.takeIf { it > 0 } ?: 64
+            val playUrlData = VideoRepository.getPlayUrlData(task.bvid, task.cid, requestedQuality)
+                ?: return task
+            val refreshedAudioUrl = playUrlData.dash?.getBestAudio()?.getValidUrl().orEmpty()
+            val refreshedVideoUrl = if (task.isAudioOnly) {
+                ""
+            } else {
+                playUrlData.dash?.getBestVideo(task.quality)?.getValidUrl().orEmpty()
+            }
+
+            val refreshedTask = when {
+                task.isAudioOnly && refreshedAudioUrl.isNotBlank() -> {
+                    task.copy(audioUrl = refreshedAudioUrl)
+                }
+                !task.isAudioOnly && refreshedVideoUrl.isNotBlank() && refreshedAudioUrl.isNotBlank() -> {
+                    task.copy(videoUrl = refreshedVideoUrl, audioUrl = refreshedAudioUrl)
+                }
+                else -> task
+            }
+
+            if (refreshedTask != task) {
+                updateTask(task.id, persist = false) {
+                    it.copy(
+                        videoUrl = refreshedTask.videoUrl,
+                        audioUrl = refreshedTask.audioUrl
+                    )
+                }
+            }
+            refreshedTask
+        } catch (error: Exception) {
+            com.android.purebilibili.core.util.Logger.w(
+                "DownloadManager",
+                "⚠️ Failed to refresh download URLs for task=${task.id}",
+                error
+            )
+            task
         }
     }
 

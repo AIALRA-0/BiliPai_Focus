@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
@@ -22,6 +21,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +44,7 @@ import coil.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.BilibiliUrlParser
+import com.android.purebilibili.core.util.rememberStoragePermissionState
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -69,6 +70,7 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.components.UserUpBadge
+import kotlinx.coroutines.launch
 
 private val EMOTE_TOKEN_PATTERN = """\[(.*?)\]""".toRegex()
 private const val COMMENT_INLINE_UP_BADGE_ID = "comment_inline_up_badge"
@@ -87,6 +89,7 @@ internal val COMMENT_INLINE_BVID_PATTERN =
 internal val COMMENT_VOTE_PATTERN = Regex("""\{vote:(\d+)\}""")
 internal const val COLLAPSED_SUB_REPLY_PREVIEW_LIMIT = 3
 const val COMMENT_PICTURE_TAG_PREFIX = "comment_picture_"
+const val COMMENT_ACTION_BUTTON_TAG_PREFIX = "comment_action_button_"
 const val COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX = "comment_sub_reply_preview_"
 const val COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX = "comment_view_all_replies_"
 
@@ -281,19 +284,8 @@ internal fun buildReplyCommentShareText(item: ReplyItem): String {
     }
 }
 
-internal fun shareReplyComment(context: android.content.Context, item: ReplyItem) {
-    val shareText = buildReplyCommentShareText(item)
-    if (shareText.isBlank()) return
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "保存评论")
-        putExtra(Intent.EXTRA_TEXT, shareText)
-    }
-    runCatching {
-        context.startActivity(Intent.createChooser(intent, "保存评论"))
-    }.onFailure {
-        Toast.makeText(context, "无法打开保存面板", Toast.LENGTH_SHORT).show()
-    }
+internal fun resolveReplyCommentImageSaveToast(success: Boolean): String {
+    return if (success) "评论图片已保存到相册" else "保存评论图片失败"
 }
 
 internal data class ReplyVideoReference(
@@ -792,6 +784,7 @@ fun ReplyItemView(
 ) {
     val appearance = rememberVideoCommentAppearance()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val isUpComment = upMid > 0 && item.mid == upMid
     val showAncillaryDecorations = shouldShowReplyAncillaryDecorations(lightweightMode)
     val showIdentityDecorations = shouldShowReplyIdentityDecorations()
@@ -903,7 +896,33 @@ fun ReplyItemView(
     var showActionSheet by remember(item.rpid) { mutableStateOf(false) }
     var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
     var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
+    var pendingSaveReply by remember(item.rpid) { mutableStateOf<ReplyItem?>(null) }
     val copyText = remember(item.content.message) { item.content.message.trim() }
+    fun launchSaveReplyCommentImage(reply: ReplyItem) {
+        scope.launch {
+            val success = saveReplyCommentImageToGallery(context, reply)
+            Toast.makeText(
+                context,
+                resolveReplyCommentImageSaveToast(success),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+    val storagePermission = rememberStoragePermissionState { granted ->
+        val pending = pendingSaveReply
+        pendingSaveReply = null
+        if (granted && pending != null) {
+            launchSaveReplyCommentImage(pending)
+        }
+    }
+    fun requestSaveReplyCommentImage() {
+        if (storagePermission.isGranted) {
+            launchSaveReplyCommentImage(item)
+        } else {
+            pendingSaveReply = item
+            storagePermission.request()
+        }
+    }
 
     if (showActionSheet) {
         ReplyActionSheet(
@@ -918,7 +937,7 @@ fun ReplyItemView(
                 showFreeCopyDialog = true
             },
             onSave = {
-                shareReplyComment(context, item)
+                requestSaveReplyCommentImage()
             },
             onReply = {
                 onReplyClick?.invoke() ?: onSubClick(item)
@@ -1268,6 +1287,20 @@ fun ReplyItemView(
                             .padding(top = 2.dp)
                     )
                 }
+            }
+
+            IconButton(
+                onClick = { showActionSheet = true },
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("$COMMENT_ACTION_BUTTON_TAG_PREFIX${item.rpid}")
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "评论操作",
+                    tint = appearance.actionTint,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
         

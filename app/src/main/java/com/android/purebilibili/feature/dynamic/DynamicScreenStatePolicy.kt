@@ -57,6 +57,18 @@ internal fun resolveDynamicSelectedTab(
     return savedTab?.takeIf { it in 0 until tabCount } ?: 0
 }
 
+internal fun resolveDynamicSwipeTargetTab(
+    currentTab: Int,
+    tabCount: Int,
+    dragDistancePx: Float,
+    thresholdPx: Float = 96f
+): Int? {
+    if (tabCount <= 0 || currentTab !in 0 until tabCount) return null
+    if (kotlin.math.abs(dragDistancePx) < thresholdPx) return null
+    val target = if (dragDistancePx < 0f) currentTab + 1 else currentTab - 1
+    return target.takeIf { it in 0 until tabCount && it != currentTab }
+}
+
 internal fun resolveDynamicFeedRequestType(selectedTab: Int): String {
     return when (selectedTab) {
         1 -> "video"
@@ -175,12 +187,16 @@ internal fun resolveDynamicFeedStateAfterSuccess(
     currentState: DynamicUiState,
     incomingItems: List<DynamicItem>,
     isRefresh: Boolean,
+    requestType: String,
     incrementalRefreshEnabled: Boolean,
     hasMore: Boolean
 ): DynamicUiState {
     val currentItems = currentState.items
+    val canUseIncrementalRefresh = isRefresh &&
+        incrementalRefreshEnabled &&
+        currentState.timelineRequestType == requestType
     val mergedItems = when {
-        isRefresh && incrementalRefreshEnabled -> prependDistinctByKey(
+        canUseIncrementalRefresh -> prependDistinctByKey(
             existing = currentItems,
             incoming = incomingItems,
             keySelector = ::dynamicFeedItemKey
@@ -193,7 +209,7 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         )
     }
     val boundary = when {
-        isRefresh && incrementalRefreshEnabled -> resolveIncrementalRefreshBoundary(
+        canUseIncrementalRefresh -> resolveIncrementalRefreshBoundary(
             existingKeys = currentItems.map(::dynamicFeedItemKey),
             mergedKeys = mergedItems.map(::dynamicFeedItemKey)
         )
@@ -213,6 +229,9 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         errorSource = DynamicFeedErrorSource.NONE,
         hasMore = hasMore,
         sourceHasMore = hasMore,
+        timelineRequestType = requestType,
+        sourceHasMore = hasMore,
+        timelineRequestType = requestType,
         incrementalRefreshBoundaryKey = boundary.boundaryKey,
         incrementalPrependedCount = boundary.prependedCount
     )

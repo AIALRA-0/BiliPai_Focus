@@ -372,6 +372,12 @@ fun AppearanceSettingsContent(
     val homeUpBadgesVisible by SettingsManager
         .getHomeUpBadgesVisible(context)
         .collectAsState(initial = true)
+    val homeVideoDurationBadgesVisible by SettingsManager
+        .getHomeVideoDurationBadgesVisible(context)
+        .collectAsState(initial = true)
+    val showOnlineCount by SettingsManager
+        .getShowOnlineCount(context)
+        .collectAsState(initial = false)
     val showMd3DynamicColorControl =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showThemeColorPicker = !state.dynamicColor
@@ -977,15 +983,14 @@ fun AppearanceSettingsContent(
                         title = "应用图标",
                         value = when(state.appIcon) {
                             // 🎀 二次元少女系列
+                            "BiliPai", "icon_bilipai" -> "BiliPai"
                             "Yuki" -> "比心少女"
                             "Anime", "icon_anime" -> "蓝发电视"
                             "Headphone" -> "耳机少女"
                             // 经典系列
                             "3D", "icon_3d" -> "3D立体"
                             "Blue", "icon_blue" -> "经典蓝"
-                            "Retro", "icon_retro" -> "复古怀旧"
                             "Flat", "icon_flat" -> "扁平现代"
-                            "Flat Material", "icon_flat_material" -> "扁平材质"
                             "Neon", "icon_neon" -> "霓虹"
                             "Telegram Blue", "icon_telegram_blue" -> "纸飞机蓝"
                             "Telegram Blue Coin", "icon_telegram_blue_coin" -> "蓝币电视"
@@ -1221,6 +1226,24 @@ fun AppearanceSettingsContent(
 
                         IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Clock,
+                            title = "首页视频时长",
+                            subtitle = if (homeVideoDurationBadgesVisible) {
+                                "推荐视频封面右下角显示时长"
+                            } else {
+                                "隐藏推荐视频封面的时长，减少封面占用"
+                            },
+                            checked = homeVideoDurationBadgesVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeVideoDurationBadgesVisible(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSGreen
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
                             icon = CupertinoIcons.Default.Tag,
                             title = "信息区玻璃样式",
                             subtitle = if (homeInfoGlassBadgesVisible) {
@@ -1253,6 +1276,24 @@ fun AppearanceSettingsContent(
                                 }
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ChartBar,
+                            title = "卡片与视频页观看人数",
+                            subtitle = if (showOnlineCount) {
+                                "首页、搜索等视频卡片和视频页显示“xx人正在看”"
+                            } else {
+                                "关闭后隐藏卡片和视频页的同时观看人数"
+                            },
+                            checked = showOnlineCount,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setShowOnlineCount(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
                         
                         // 网格列数设置 (仅在双列网格模式下显示)

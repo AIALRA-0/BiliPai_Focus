@@ -54,6 +54,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
@@ -145,6 +146,7 @@ import com.android.purebilibili.feature.video.playback.session.PlaybackSeekSessi
 import com.android.purebilibili.feature.video.playback.session.SEEK_PLAYBACK_RECOVERY_DELAY_MS
 import com.android.purebilibili.feature.video.playback.session.shouldAttemptPlaybackRecoveryAfterSeek
 import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekInteraction
+import com.android.purebilibili.feature.video.playback.session.commitPlaybackSeekInteraction
 import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekInteraction
 import com.android.purebilibili.feature.video.playback.session.shouldUsePlaybackSeekSessionPosition
 import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekInteraction
@@ -392,7 +394,7 @@ fun VideoPlayerSection(
         resolveVideoPlayerBottomGestureExclusionHeightDp(
             controlBarBottomPaddingDp = bottomControlBarLayoutPolicy.bottomPaddingDp,
             progressSpacingDp = bottomControlBarLayoutPolicy.progressSpacingDp,
-            progressContainerHeightDp = videoProgressBarLayoutPolicy.draggingContainerHeightDp,
+            progressContainerHeightDp = videoProgressBarLayoutPolicy.baseHeightWithChapterDp,
             controlRowHeightDp = bottomControlBarLayoutPolicy.playButtonSizeDp
         )
     }
@@ -822,6 +824,96 @@ fun VideoPlayerSection(
     val danmakuManager = rememberDanmakuManager()
     val overlayDrawerHazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
 
+    fun commitExplicitSeek(positionMs: Long) {
+        val commitResult = commitPlaybackSeekInteraction(
+            state = sharedSeekSession,
+            player = playerState.player,
+            positionMs = positionMs
+        )
+        sharedSeekSession = commitResult.state
+        seekPlayerFromUserAction(
+            player = playerState.player,
+            positionMs = commitResult.committedPositionMs,
+            shouldResumePlaybackOverride = commitResult.shouldResumePlayback
+        )
+        danmakuManager.seekTo(commitResult.committedPositionMs)
+        onUserSeek(commitResult.committedPositionMs)
+    }
+
+    fun startLongPressSpeedGesture() {
+        if (
+            !shouldEnableLongPressSpeedGesture(
+                isScreenLocked = isScreenLocked,
+                scale = scale,
+                isMultiTouchActive = isMultiTouchActive
+            )
+        ) {
+            return
+        }
+        val player = playerState.player
+        val startDecision = resolveLongPressSpeedStartDecision(
+            currentPlaybackParameters = player.playbackParameters,
+            previousOriginalPlaybackParameters = originalPlaybackParameters,
+            longPressSpeedLocked = longPressSpeedLocked,
+            requestedSpeed = longPressSpeed,
+            currentAudioQuality = currentAudioQuality
+        )
+        originalPlaybackParameters = startDecision.originalPlaybackParameters
+        if (startDecision.clearExistingLock) {
+            longPressSpeedLocked = false
+        }
+        effectiveLongPressSpeed = startDecision.targetPlaybackParameters.speed
+        player.playbackParameters = startDecision.targetPlaybackParameters
+        if (
+            shouldShowHiResLongPressCompatHint(
+                requestedSpeed = longPressSpeed,
+                effectiveSpeed = effectiveLongPressSpeed,
+                hasShownHint = hasShownHiResCompatHint
+            )
+        ) {
+            hasShownHiResCompatHintLocally = true
+            Toast.makeText(
+                context,
+                "Hi-Res 音源长按倍速最高 1.5x，以降低失真",
+                Toast.LENGTH_SHORT
+            ).show()
+            settingsScope.launch {
+                com.android.purebilibili.core.store.SettingsManager
+                    .setHiResLongPressCompatHintShown(context, true)
+            }
+        }
+        isLongPressing = true
+        totalDragDistanceY = 0f
+        longPressSpeedFeedbackVisible = true
+        com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
+            "⏩ LongPress: speed ${effectiveLongPressSpeed}x (requested=${longPressSpeed}x, audio=$currentAudioQuality)"
+        }
+    }
+
+    fun finishLongPressSpeedGesture(gestureEnded: Boolean) {
+        if (!isLongPressing) return
+        if (
+            shouldRestorePlaybackParametersAfterLongPressRelease(
+                wasLongPressing = isLongPressing,
+                longPressSpeedLocked = longPressSpeedLocked,
+                gestureEnded = gestureEnded
+            )
+        ) {
+            playerState.player.playbackParameters = originalPlaybackParameters
+        }
+        isLongPressing = false
+        longPressSpeedFeedbackVisible = false
+        totalDragDistanceY = 0f
+        totalDragDistanceX = 0f
+        com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
+            if (longPressSpeedLocked) {
+                "🔒 LongPress locked: speed ${lockedLongPressSpeed}x"
+            } else {
+                "⏹️ LongPress released: speed ${originalPlaybackParameters.speed}x"
+            }
+        }
+    }
+
     var rootModifier = Modifier
         .fillMaxSize()
         .clipToBounds()
@@ -1154,13 +1246,14 @@ fun VideoPlayerSection(
                                     return@detectDragGestures
                                 }
                                 totalDragDistanceY += dragAmount.y
-                                val lockThresholdPx = LONG_PRESS_SPEED_LOCK_THRESHOLD_DP.dp.toPx()
+                                val lockZoneHeightPx = LONG_PRESS_SPEED_LOCK_ZONE_HEIGHT_DP.dp.toPx()
                                 if (
-                                    shouldLockLongPressSpeedBySwipe(
+                                    shouldLockLongPressSpeedInTargetZone(
                                         isLongPressing = isLongPressing,
                                         alreadyLocked = longPressSpeedLocked,
-                                        totalDragDistanceY = totalDragDistanceY,
-                                        thresholdPx = lockThresholdPx
+                                        currentPointerY = change.position.y,
+                                        containerHeightPx = size.height.toFloat(),
+                                        lockZoneHeightPx = lockZoneHeightPx
                                     )
                                 ) {
                                     longPressSpeedLocked = true
@@ -1317,12 +1410,65 @@ fun VideoPlayerSection(
                     )
                 }
             }
-            //  点击/双击/长按手势在拖拽之后处理
+            //  长按倍速和拖动锁定必须在同一个手势探测器内处理。
+            .pointerInput(
+                longPressSpeed,
+                isScreenLocked,
+                currentAudioQuality,
+                hasShownHiResCompatHint,
+                scale,
+                isMultiTouchActive
+            ) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        startLongPressSpeedGesture()
+                    },
+                    onDragEnd = {
+                        finishLongPressSpeedGesture(gestureEnded = true)
+                    },
+                    onDragCancel = {
+                        finishLongPressSpeedGesture(gestureEnded = true)
+                    },
+                    onDrag = { change, dragAmount ->
+                        if (
+                            !shouldEnableLongPressSpeedGesture(
+                                isScreenLocked = isScreenLocked,
+                                scale = scale,
+                                isMultiTouchActive = isMultiTouchActive
+                            )
+                        ) {
+                            change.consume()
+                            return@detectDragGesturesAfterLongPress
+                        }
+                        totalDragDistanceY += dragAmount.y
+                        val lockZoneHeightPx = LONG_PRESS_SPEED_LOCK_ZONE_HEIGHT_DP.dp.toPx()
+                        if (
+                            shouldLockLongPressSpeedInTargetZone(
+                                isLongPressing = isLongPressing,
+                                alreadyLocked = longPressSpeedLocked,
+                                currentPointerY = change.position.y,
+                                containerHeightPx = size.height.toFloat(),
+                                lockZoneHeightPx = lockZoneHeightPx
+                            )
+                        ) {
+                            longPressSpeedLocked = true
+                            lockedLongPressSpeed = effectiveLongPressSpeed
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            Toast.makeText(
+                                context,
+                                "已锁定 ${effectiveLongPressSpeed}x",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        change.consume()
+                    }
+                )
+            }
+            //  点击/双击手势在拖拽之后处理
             .pointerInput(
                 seekForwardSeconds,
                 seekBackwardSeconds,
                 doubleTapSeekEnabled,
-                longPressSpeed,
                 isScreenLocked
             ) {
                 detectTapGestures(
@@ -1332,56 +1478,6 @@ fun VideoPlayerSection(
                             showControls = !showControls  // 显示/隐藏解锁按钮
                         } else {
                             showControls = !showControls
-                        }
-                    },
-                    onLongPress = {
-                        if (
-                            !shouldEnableLongPressSpeedGesture(
-                                isScreenLocked = isScreenLocked,
-                                scale = scale,
-                                isMultiTouchActive = isMultiTouchActive
-                            )
-                        ) {
-                            return@detectTapGestures
-                        }
-                        //  长按开始：保存原速度并应用长按倍速
-                        val player = playerState.player
-                        val startDecision = resolveLongPressSpeedStartDecision(
-                            currentPlaybackParameters = player.playbackParameters,
-                            previousOriginalPlaybackParameters = originalPlaybackParameters,
-                            longPressSpeedLocked = longPressSpeedLocked,
-                            requestedSpeed = longPressSpeed,
-                            currentAudioQuality = currentAudioQuality
-                        )
-                        originalPlaybackParameters = startDecision.originalPlaybackParameters
-                        if (startDecision.clearExistingLock) {
-                            longPressSpeedLocked = false
-                        }
-                        effectiveLongPressSpeed = startDecision.targetPlaybackParameters.speed
-                        player.playbackParameters = startDecision.targetPlaybackParameters
-                        if (
-                            shouldShowHiResLongPressCompatHint(
-                                requestedSpeed = longPressSpeed,
-                                effectiveSpeed = effectiveLongPressSpeed,
-                                hasShownHint = hasShownHiResCompatHint
-                            )
-                        ) {
-                            hasShownHiResCompatHintLocally = true
-                            Toast.makeText(
-                                context,
-                                "Hi-Res 音源长按倍速最高 1.5x，以降低失真",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            settingsScope.launch {
-                                com.android.purebilibili.core.store.SettingsManager
-                                    .setHiResLongPressCompatHintShown(context, true)
-                            }
-                        }
-                        isLongPressing = true
-                        totalDragDistanceY = 0f
-                        longPressSpeedFeedbackVisible = true
-                        com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
-                            "⏩ LongPress: speed ${effectiveLongPressSpeed}x (requested=${longPressSpeed}x, audio=$currentAudioQuality)"
                         }
                     },
                     onDoubleTap = { offset ->
@@ -1404,9 +1500,12 @@ fun VideoPlayerSection(
                                 // 右侧 1/3：快进
                                 offset.x > screenWidth * 2 / 3 -> {
                                     val seekMs = seekForwardSeconds * 1000L
-                                    val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
-                                    seekPlayerFromUserAction(player, newPos)
-                                    danmakuManager.seekTo(newPos)
+                                    val newPos = resolveRelativeSeekTargetPosition(
+                                        currentPositionMs = player.currentPosition,
+                                        deltaMs = seekMs,
+                                        durationMs = player.duration
+                                    )
+                                    commitExplicitSeek(newPos)
                                     seekFeedbackText = "+${seekForwardSeconds}s"
                                     seekFeedbackVisible = true
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
@@ -1416,9 +1515,12 @@ fun VideoPlayerSection(
                                 // 左侧 1/3：后退
                                 offset.x < screenWidth / 3 -> {
                                     val seekMs = seekBackwardSeconds * 1000L
-                                    val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
-                                    seekPlayerFromUserAction(player, newPos)
-                                    danmakuManager.seekTo(newPos)
+                                    val newPos = resolveRelativeSeekTargetPosition(
+                                        currentPositionMs = player.currentPosition,
+                                        deltaMs = -seekMs,
+                                        durationMs = player.duration
+                                    )
+                                    commitExplicitSeek(newPos)
                                     seekFeedbackText = "-${seekBackwardSeconds}s"
                                     seekFeedbackVisible = true
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
@@ -1438,32 +1540,6 @@ fun VideoPlayerSection(
                             togglePlayerPlaybackFromUserAction(player)
                             com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
                                 "⏯️ DoubleTap (Seek Disabled): toggle play/pause"
-                            }
-                        }
-                    },
-                    onPress = { offset ->
-                        //  等待手指抬起
-                        val released = tryAwaitRelease()
-                        //  如果之前是长按状态，松开时恢复原速度
-                        if (released && isLongPressing) {
-                            if (
-                                shouldRestorePlaybackParametersAfterLongPressRelease(
-                                    wasLongPressing = isLongPressing,
-                                    longPressSpeedLocked = longPressSpeedLocked,
-                                    gestureEnded = true
-                                )
-                            ) {
-                                playerState.player.playbackParameters = originalPlaybackParameters
-                            }
-                            isLongPressing = false
-                            longPressSpeedFeedbackVisible = false
-                            totalDragDistanceY = 0f
-                            com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
-                                if (longPressSpeedLocked) {
-                                    "🔒 LongPress locked: speed ${lockedLongPressSpeed}x"
-                                } else {
-                                    "⏹️ LongPress released: speed ${originalPlaybackParameters.speed}x"
-                                }
                             }
                         }
                     }
@@ -3123,6 +3199,30 @@ fun VideoPlayerSection(
             }
         }
         
+        AnimatedVisibility(
+            visible = isLongPressing && !longPressSpeedLocked && !isInPipMode,
+            modifier = Modifier.matchParentSize(),
+            enter = fadeIn(animationSpec = tween(gestureMotionSpec.longPressHintDurationMillis)),
+            exit = fadeOut(animationSpec = tween(gestureMotionSpec.longPressHintDurationMillis))
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                val zoneModifier = Modifier
+                    .fillMaxWidth()
+                    .height(LONG_PRESS_SPEED_LOCK_ZONE_HEIGHT_DP.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.36f)
+                    )
+                Box(
+                    modifier = zoneModifier.align(Alignment.TopCenter)
+                )
+                Box(
+                    modifier = zoneModifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
+
         //  长按倍速提示（透明背景 + 快进箭头动画，整个长按期间持续显示）
         AnimatedVisibility(
             visible = isLongPressing && !isInPipMode,
@@ -3212,7 +3312,7 @@ fun VideoPlayerSection(
                     text = if (longPressSpeedLocked) {
                         "已锁定 ${effectiveLongPressSpeed}x"
                     } else {
-                        "${effectiveLongPressSpeed}x 上滑锁定"
+                        "${effectiveLongPressSpeed}x 拖至上下区域锁定"
                     },
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium.copy(

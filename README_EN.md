@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-21 · Synced to v7.9.6 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Version-7.9.6-fb7299?style=flat-square" alt="Version">
+    <sub>Last updated: 2026-04-25 · Synced to v8.0.0 Alpha3 Focus.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  </p>
+  
+  <p align="center">
+    <img src="https://img.shields.io/badge/Version-8.0.0%20Alpha3-focus.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -430,12 +430,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.9.1 · 2026-04-17)
+### Latest (v8.0.0 Alpha3 · 2026-04-25)
 
-- 🎞️ Fixed occasional aspect-ratio glitches and black bars when entering immersive portrait playback from tablet landscape.
-- ⏱️ Fixed the seek preview getting stuck after repeated progress-bar drags.
-- 🌙 Updated keep-screen-on behavior so the screen can sleep normally before playback starts, while paused, and after playback ends.
-- ✨ Added shared-element coverage for UP space season/series videos and improved theme adaptation for parts of the space UI.
+- 💬 Comment menus can save first-level and nested replies as QR-code images.
+- 🖼️ Image preview text can be hidden while inspecting large images.
+- 🎬 Improved player seek, progress dragging, mini-player scrubbing, and long-press speed locking.
+- 📱 Portrait nested replies now keep the compact player layout, with better danmaku placement by video ratio.
 
 ---
 

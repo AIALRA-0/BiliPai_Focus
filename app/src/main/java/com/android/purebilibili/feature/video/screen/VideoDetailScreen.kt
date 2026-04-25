@@ -111,6 +111,7 @@ import com.android.purebilibili.feature.video.ui.components.PagesSelector
 // Imports for moved classes
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
+import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
@@ -2215,7 +2216,8 @@ fun VideoDetailScreen(
                         shouldUseCompactInlinePortraitPlayerForCommentTab(
                             useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
                             selectedTabIndex = selectedVideoContentTabIndex,
-                            isPortraitFullscreen = isPortraitFullscreen
+                            isPortraitFullscreen = isPortraitFullscreen,
+                            isCommentThreadVisible = subReplyState.visible
                         )
                     var introFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
                     var introFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
@@ -2726,6 +2728,7 @@ fun VideoDetailScreen(
                                                         onRetryAiSummary = { viewModel.retryAiSummary() },
                                                         bgmInfo = success.bgmInfo,
                                                         onBgmClick = onBgmClick,
+                                                        onlineCount = success.onlineCount,
                                                         ownerFollowerCount = success.ownerFollowerCount,
                                                         ownerVideoCount = success.ownerVideoCount,
                                                         showUpBadge = homeUpBadgesVisible,
@@ -3601,38 +3604,24 @@ fun VideoDetailScreen(
         }
         
         val successState = uiState as? PlayerUiState.Success
-        if (shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout)) {
-            VideoCommentSheetHost(
-                mainSheetVisible = false,
-                onDismiss = { commentViewModel.closeSubReply() },
-                commentViewModel = commentViewModel,
-                aid = successState?.info?.aid ?: 0L,
-                upMid = commentState.upMid,
-                expectedReplyCount = commentState.replyCount,
-                emoteMap = successState?.emoteMap ?: emptyMap(),
-                onRootCommentClick = {
-                    viewModel.clearReplyingTo()
-                    viewModel.showCommentInputDialog()
-                },
-                onReplyClick = { replyItem ->
-                    android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
-                    viewModel.setReplyingTo(replyItem)
-                    viewModel.showCommentInputDialog()
-                },
-                onUserClick = onUpClick,
-                onVideoClick = { targetVideoId ->
-                    navigateToRelatedVideo(targetVideoId, null)
-                },
-                onSearchKeywordClick = onSearchKeywordClick,
-                screenHeightPx = screenHeightPx,
-                topReservedPx = danmakuDialogTopReservePx,
-                onTimestampClick = { positionMs ->
-                    seekPlayerFromUserAction(playerState.player, positionMs)
-                    commentViewModel.closeSubReply()
-                },
-                maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L }
-            )
-        }
+        DetachedVideoCommentThreadHost(
+            visible = shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout),
+            successState = successState,
+            commentState = commentState,
+            commentViewModel = commentViewModel,
+            viewModel = viewModel,
+            onUpClick = onUpClick,
+            onNavigateToRelatedVideo = { targetVideoId ->
+                navigateToRelatedVideo(targetVideoId, null)
+            },
+            onSearchKeywordClick = onSearchKeywordClick,
+            screenHeightPx = screenHeightPx,
+            topReservedPx = danmakuDialogTopReservePx,
+            onTimestampClick = { positionMs ->
+                seekPlayerFromUserAction(playerState.player, positionMs)
+                commentViewModel.closeSubReply()
+            }
+        )
 
         // 📁 收藏夹选择弹窗
         if (showFavoriteFolderDialog) {
@@ -4306,6 +4295,13 @@ internal fun shouldShowDetachedVideoCommentThreadHost(
     return !useTabletLayout
 }
 
+internal fun resolveVideoDetailCommentThreadHostMainSheetVisible(
+    useEmbeddedPresentation: Boolean,
+    subReplyVisible: Boolean
+): Boolean {
+    return useEmbeddedPresentation && subReplyVisible
+}
+
 internal fun shouldApplyPhoneAutoRotatePolicy(
     useTabletLayout: Boolean
 ): Boolean {
@@ -4565,6 +4561,52 @@ private fun readSystemAutoRotateEnabled(context: Context): Boolean {
             Settings.System.ACCELEROMETER_ROTATION
         ) == 1
     }.getOrDefault(true)
+}
+
+@Composable
+private fun DetachedVideoCommentThreadHost(
+    visible: Boolean,
+    successState: PlayerUiState.Success?,
+    commentState: CommentUiState,
+    commentViewModel: VideoCommentViewModel,
+    viewModel: PlayerViewModel,
+    onUpClick: (Long) -> Unit,
+    onNavigateToRelatedVideo: (String) -> Unit,
+    onSearchKeywordClick: (String) -> Unit,
+    screenHeightPx: Int,
+    topReservedPx: Int,
+    onTimestampClick: (Long) -> Unit
+) {
+    if (!visible) return
+
+    val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
+
+    VideoCommentSheetHost(
+        mainSheetVisible = resolveVideoDetailCommentThreadHostMainSheetVisible(
+            useEmbeddedPresentation = com.android.purebilibili.feature.video.ui.pager
+                .shouldUseEmbeddedVideoSubReplyPresentation(),
+            subReplyVisible = subReplyState.visible
+        ),
+        onDismiss = { commentViewModel.closeSubReply() },
+        commentViewModel = commentViewModel,
+        aid = successState?.info?.aid ?: 0L,
+        upMid = commentState.upMid,
+        expectedReplyCount = commentState.replyCount,
+        emoteMap = successState?.emoteMap ?: emptyMap(),
+        onRootCommentClick = { viewModel.openRootCommentComposer() },
+        onReplyClick = { replyItem ->
+            android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
+            viewModel.setReplyingTo(replyItem)
+            viewModel.showCommentInputDialog()
+        },
+        onUserClick = onUpClick,
+        onVideoClick = onNavigateToRelatedVideo,
+        onSearchKeywordClick = onSearchKeywordClick,
+        screenHeightPx = screenHeightPx,
+        topReservedPx = topReservedPx,
+        onTimestampClick = onTimestampClick,
+        maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L }
+    )
 }
 
 internal fun resolveVideoDetailExitRequestedOrientation(

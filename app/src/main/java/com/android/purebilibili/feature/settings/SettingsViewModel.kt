@@ -583,7 +583,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
             val targetAlias = resolveAppIconLauncherAlias(packageName, normalizedIconKey)
             val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
-            val compatAlias = "${packageName}.MainActivityAlias3D"
             
             android.util.Log.d("SettingsViewModel", "Switching icon to: $iconKey -> $normalizedIconKey -> $targetAlias")
             
@@ -594,12 +593,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 
                 pm.setComponentEnabledSetting(
                     android.content.ComponentName(packageName, targetAlias),
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    android.content.pm.PackageManager.DONT_KILL_APP
-                )
-                // 保留兼容入口（无 Launcher 图标），避免历史 IDE 运行配置启动失败
-                pm.setComponentEnabledSetting(
-                    android.content.ComponentName(packageName, compatAlias),
                     android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                     android.content.pm.PackageManager.DONT_KILL_APP
                 )

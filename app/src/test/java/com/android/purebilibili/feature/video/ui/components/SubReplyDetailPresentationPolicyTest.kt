@@ -97,6 +97,34 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
+    fun `list scroll reset key changes when entering conversation mode`() {
+        assertEquals(
+            SubReplyDetailListScrollResetKey(
+                rootReplyId = 1L,
+                conversationMode = false,
+                firstConversationReplyId = null
+            ),
+            resolveSubReplyDetailListScrollResetKey(
+                rootReplyId = 1L,
+                effectiveConversationMode = false,
+                visibleReplies = listOf(buildReply(rpid = 10, message = "回复 @甲：第一条"))
+            )
+        )
+        assertEquals(
+            SubReplyDetailListScrollResetKey(
+                rootReplyId = 1L,
+                conversationMode = true,
+                firstConversationReplyId = 10L
+            ),
+            resolveSubReplyDetailListScrollResetKey(
+                rootReplyId = 1L,
+                effectiveConversationMode = true,
+                visibleReplies = listOf(buildReply(rpid = 10, message = "回复 @甲：第一条"))
+            )
+        )
+    }
+
+    @Test
     fun `auxiliary label should prefer garb card number when available`() {
         assertEquals(
             "NO.013992",

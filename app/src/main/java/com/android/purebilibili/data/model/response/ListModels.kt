@@ -98,6 +98,25 @@ data class HasLikedResponse(
     val data: Int = 0
 )
 
+// --- 0.3.1 视频交互关系响应 ---
+@Serializable
+data class VideoRelationResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: VideoRelationData? = null
+)
+
+@Serializable
+data class VideoRelationData(
+    val attention: Boolean = false,
+    val favorite: Boolean = false,
+    @SerialName("season_fav")
+    val seasonFav: Boolean = false,
+    val like: Boolean = false,
+    val dislike: Boolean = false,
+    val coin: Int = 0
+)
+
 // --- 0.4 投币状态响应 ---
 @Serializable
 data class HasCoinedResponse(

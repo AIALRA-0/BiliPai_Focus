@@ -10,6 +10,7 @@ import com.android.purebilibili.feature.video.danmaku.createFaceOcclusionDetecto
 import com.android.purebilibili.feature.video.danmaku.detectFaceOcclusionRegions
 import com.android.purebilibili.feature.video.danmaku.installFaceOcclusionModule
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
@@ -34,7 +35,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -46,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,15 +97,56 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
 private const val AUTO_HIDE_DELAY = 4000L
+private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
+private const val VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 90
 
 // Keep for backward compatibility, maps to new GestureMode
 enum class FullscreenGestureMode { None, Brightness, Volume, Seek }
+
+internal fun resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp(): Int {
+    return VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP
+}
+
+internal fun resolveFullscreenPendingGestureSeekPosition(
+    currentPositionMs: Long,
+    pendingSeekPositionMs: Long?
+): Long? {
+    val targetPositionMs = pendingSeekPositionMs ?: return null
+    return if (
+        shouldHoldPlaybackTransitionPosition(
+            playerPositionMs = currentPositionMs,
+            transitionPositionMs = targetPositionMs
+        )
+    ) {
+        targetPositionMs
+    } else {
+        null
+    }
+}
 
 internal fun shouldRebindFullscreenSurfaceOnResume(
     hasPlayerView: Boolean,
     hasPlayer: Boolean
 ): Boolean {
     return hasPlayerView && hasPlayer
+}
+
+internal fun shouldStartFullscreenDragGesture(
+    gesturesEnabled: Boolean,
+    showControls: Boolean,
+    startY: Float,
+    screenHeight: Float,
+    statusBarExclusionZonePx: Float,
+    visibleTopControlsHeightPx: Float,
+    visibleBottomControlsHeightPx: Float
+): Boolean {
+    if (!gesturesEnabled || screenHeight <= 0f) return false
+    if (startY < statusBarExclusionZonePx) return false
+    if (!showControls) return true
+
+    val topControlsBottom = visibleTopControlsHeightPx.coerceAtLeast(statusBarExclusionZonePx)
+    val bottomControlsTop = (screenHeight - visibleBottomControlsHeightPx).coerceAtLeast(0f)
+    return startY >= topControlsBottom && startY <= bottomControlsTop
 }
 
 /**
@@ -236,6 +279,7 @@ fun FullscreenPlayerOverlay(
     var currentProgress by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    var pendingGestureSeekPositionMs by remember { mutableStateOf<Long?>(null) }
     val currentClockText by produceState(initialValue = formatCurrentClock(), hostLifecycleStarted) {
         if (!hostLifecycleStarted) {
             value = formatCurrentClock()
@@ -364,6 +408,10 @@ fun FullscreenPlayerOverlay(
                     fallbackDurationMs = miniPlayerManager.duration
                 )
                 currentPosition = it.currentPosition
+                pendingGestureSeekPositionMs = resolveFullscreenPendingGestureSeekPosition(
+                    currentPositionMs = currentPosition,
+                    pendingSeekPositionMs = pendingGestureSeekPositionMs
+                )
                 if (gestureMode != FullscreenGestureMode.Seek && duration > 0L) {
                     currentProgress = (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                 }
@@ -401,11 +449,18 @@ fun FullscreenPlayerOverlay(
     
     // [问题8修复] 状态栏排除区域高度（像素）
     val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
+    val visibleTopControlsHeightPx = with(density) {
+        VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP.dp.toPx()
+    }
+    val visibleBottomControlsHeightPx = with(density) {
+        resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp().dp.toPx()
+    }
     val overlayHazeState = rememberRecoverableHazeState()
     val displayedProgressState = remember(
         currentPosition,
         duration,
         seekPreviewPosition,
+        pendingGestureSeekPositionMs,
         gestureMode,
         player?.bufferedPosition
     ) {
@@ -416,7 +471,8 @@ fun FullscreenPlayerOverlay(
                 buffered = player?.bufferedPosition ?: 0L
             ),
             previewPositionMs = seekPreviewPosition,
-            previewActive = gestureMode == FullscreenGestureMode.Seek
+            previewActive = gestureMode == FullscreenGestureMode.Seek,
+            playbackTransitionPositionMs = pendingGestureSeekPositionMs
         )
     }
     
@@ -448,6 +504,7 @@ fun FullscreenPlayerOverlay(
                                 FullscreenDoubleTapAction.SeekBackward -> {
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (p.currentPosition - seekMs).coerceAtLeast(0L)
+                                    pendingGestureSeekPositionMs = newPos
                                     seekPlayerFromUserAction(p, newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
@@ -460,6 +517,7 @@ fun FullscreenPlayerOverlay(
                                     } else {
                                         target
                                     }
+                                    pendingGestureSeekPositionMs = newPos
                                     seekPlayerFromUserAction(p, newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
@@ -471,16 +529,27 @@ fun FullscreenPlayerOverlay(
                     }
                 )
             }
-            .pointerInput(gesturesEnabled, fullscreenSwipeSeekSeconds) {
-                if (!gesturesEnabled) return@pointerInput
+            .pointerInput(gesturesEnabled, fullscreenSwipeSeekSeconds, showControls) {
+                if (!gesturesEnabled) {
+                    return@pointerInput
+                }
                 
                 val screenWidth = size.width.toFloat()
                 val screenHeight = size.height.toFloat()
+                var dragGestureActive = false
                 
                 detectDragGestures(
                     onDragStart = { offset ->
-                        // [问题8修复] 排除状态栏区域的手势触发
-                        if (offset.y < statusBarExclusionZonePx) {
+                        dragGestureActive = shouldStartFullscreenDragGesture(
+                            gesturesEnabled = gesturesEnabled,
+                            showControls = showControls,
+                            startY = offset.y,
+                            screenHeight = screenHeight,
+                            statusBarExclusionZonePx = statusBarExclusionZonePx,
+                            visibleTopControlsHeightPx = visibleTopControlsHeightPx,
+                            visibleBottomControlsHeightPx = visibleBottomControlsHeightPx
+                        )
+                        if (!dragGestureActive) {
                             gestureMode = FullscreenGestureMode.None
                             return@detectDragGestures
                         }
@@ -508,6 +577,7 @@ fun FullscreenPlayerOverlay(
                     },
                     onDragEnd = {
                         if (
+                            dragGestureActive &&
                             gestureMode == FullscreenGestureMode.Seek &&
                             shouldCommitGestureSeek(
                                 currentPositionMs = gestureSeekStartPosition,
@@ -515,14 +585,20 @@ fun FullscreenPlayerOverlay(
                             )
                         ) {
                             player?.let {
+                                pendingGestureSeekPositionMs = seekPreviewPosition
                                 seekPlayerFromUserAction(it, seekPreviewPosition)
                                 danmakuManager.seekTo(seekPreviewPosition)
                             }
                         }
+                        dragGestureActive = false
                         gestureMode = FullscreenGestureMode.None
                     },
-                    onDragCancel = { gestureMode = FullscreenGestureMode.None },
+                    onDragCancel = {
+                        dragGestureActive = false
+                        gestureMode = FullscreenGestureMode.None
+                    },
                     onDrag = { change, dragAmount ->
+                        if (!dragGestureActive) return@detectDragGestures
                         change.consume()
                         when (gestureMode) {
                             FullscreenGestureMode.Brightness -> {
@@ -932,19 +1008,16 @@ fun FullscreenPlayerOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            //  [新增] 左下角播放/暂停按钮
-                            Surface(
+                            IconButton(
                                 onClick = {
                                     lastInteractionTime = System.currentTimeMillis()
                                     player?.let { togglePlayerPlaybackFromUserAction(it) }
                                 },
-                                shape = CircleShape,
-                                color = Color.Transparent
                             ) {
                                 Icon(
-                                    imageVector = if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
+                                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                     contentDescription = if (isPlaying) "暂停" else "播放",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -984,6 +1057,7 @@ fun FullscreenPlayerOverlay(
                                     )
                                     val newPosition = (dragProgress * seekableDuration).toLong()
                                     player?.let {
+                                        pendingGestureSeekPositionMs = newPosition
                                         seekPlayerFromUserAction(it, newPosition)
                                         danmakuManager.seekTo(newPosition)
                                     }

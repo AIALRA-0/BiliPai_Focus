@@ -54,6 +54,13 @@ internal fun shouldShowInlineOwnerIdentity(showOwnerAvatar: Boolean): Boolean {
     return !showOwnerAvatar
 }
 
+internal fun resolveVideoDetailOnlineCountText(
+    showOnlineCount: Boolean,
+    onlineCount: String
+): String {
+    return if (showOnlineCount) onlineCount.trim() else ""
+}
+
 internal fun shouldEmphasizePrecisePublishTime(
     partitionName: String,
     title: String

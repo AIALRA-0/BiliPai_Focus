@@ -49,6 +49,16 @@ internal fun normalizeSponsorSegments(
     return segments
         .asSequence()
         .filter { segment -> segment.isSkipType && segment.endTimeMs > segment.startTimeMs }
+        .groupBy { segment -> segment.category }
+        .values
+        .mapNotNull { candidates ->
+            candidates.maxWithOrNull(
+                compareBy<SponsorSegment> { it.locked }
+                    .thenBy { it.votes }
+                    .thenByDescending { it.startTimeMs }
+                    .thenByDescending { it.endTimeMs }
+            )
+        }
         .sortedWith(compareBy<SponsorSegment> { it.startTimeMs }.thenBy { it.endTimeMs })
         .toList()
 }
@@ -156,7 +166,7 @@ class SponsorBlockPlugin : PlayerPlugin {
         
         // 加载片段数据
         try {
-            segments = normalizeSponsorSegments(SponsorBlockRepository.getSegments(bvid))
+            segments = normalizeSponsorSegments(SponsorBlockRepository.getSegments(bvid, cid = cid))
             progressMarkers = resolveSponsorProgressMarkers(
                 segments = segments,
                 markerMode = config.markerMode

@@ -14,6 +14,45 @@ internal fun shouldOpenPortraitCommentThreadDetail(
     useEmbeddedPresentation: Boolean
 ): Boolean = true
 
+internal fun resolvePortraitCommentHostMainSheetVisible(
+    commentSheetVisible: Boolean,
+    subReplyVisible: Boolean
+): Boolean = commentSheetVisible || subReplyVisible
+
+private const val PORTRAIT_COMMENT_SHEET_PLAYER_SCALE = 0.58f
+
+internal fun resolvePortraitCommentExpandedPlayerScale(
+    commentSheetVisible: Boolean
+): Float {
+    return resolvePortraitCommentExpandedPlayerScale(
+        commentVisibilityProgress = if (commentSheetVisible) 1f else 0f
+    )
+}
+
+internal fun resolvePortraitCommentExpandedPlayerScale(
+    commentVisibilityProgress: Float
+): Float {
+    val clampedProgress = commentVisibilityProgress.coerceIn(0f, 1f)
+    return 1f - ((1f - PORTRAIT_COMMENT_SHEET_PLAYER_SCALE) * clampedProgress)
+}
+
+internal fun resolvePortraitCommentVisibilityProgress(
+    sheetOffsetPx: Float,
+    sheetHeightPx: Float
+): Float {
+    if (sheetHeightPx <= 0f) return 1f
+    return (1f - (sheetOffsetPx.coerceAtLeast(0f) / sheetHeightPx)).coerceIn(0f, 1f)
+}
+
+internal fun shouldDismissPortraitCommentSheetByDrag(
+    sheetOffsetPx: Float,
+    sheetHeightPx: Float,
+    dismissThresholdFraction: Float = 0.22f
+): Boolean {
+    if (sheetHeightPx <= 0f) return false
+    return sheetOffsetPx >= sheetHeightPx * dismissThresholdFraction.coerceAtLeast(0f)
+}
+
 internal fun resolveVideoSubReplySheetMaxHeightFraction(
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0

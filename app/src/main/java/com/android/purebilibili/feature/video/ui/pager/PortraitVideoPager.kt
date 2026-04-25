@@ -56,8 +56,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -126,8 +128,10 @@ import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
 import com.android.purebilibili.feature.video.player.resolveHandleAudioFocusByPolicy
+import com.android.purebilibili.feature.video.ui.section.FOREGROUND_SURFACE_RECOVERY_DELAY_MS
 import com.android.purebilibili.feature.video.ui.section.resolveLongPressPlaybackParameters
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
+import com.android.purebilibili.feature.video.ui.section.shouldKickPlaybackAfterSurfaceRecovery
 import com.android.purebilibili.feature.video.viewmodel.PlaybackEndAction
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
@@ -160,6 +164,11 @@ internal data class PortraitVideoInteractionUiState(
 
 internal enum class PortraitFavoriteAction {
     OpenFavoriteFolders
+}
+
+internal enum class PortraitDanmakuSurfaceMode {
+    VideoViewport,
+    Page
 }
 
 /**
@@ -205,6 +214,7 @@ fun PortraitVideoPager(
     val danmakuEnabled = danmakuSettings.enabled
     val danmakuOpacity = danmakuSettings.opacity
     val danmakuFontScale = danmakuSettings.fontScale
+    val effectiveDanmakuFontScale = resolvePortraitDanmakuReadableFontScale(danmakuFontScale)
     val danmakuSpeed = danmakuSettings.speed
     val danmakuDisplayArea = danmakuSettings.displayArea
     val danmakuMergeDuplicates = danmakuSettings.mergeDuplicates
@@ -832,6 +842,7 @@ fun PortraitVideoPager(
     LaunchedEffect(
         danmakuOpacity,
         danmakuFontScale,
+        effectiveDanmakuFontScale,
         danmakuSpeed,
         danmakuDisplayArea,
         danmakuMergeDuplicates,
@@ -845,7 +856,7 @@ fun PortraitVideoPager(
     ) {
         danmakuManager.updateSettings(
             opacity = danmakuOpacity,
-            fontScale = danmakuFontScale,
+            fontScale = effectiveDanmakuFontScale,
             speed = danmakuSpeed,
             displayArea = danmakuDisplayArea,
             mergeDuplicates = danmakuMergeDuplicates,
@@ -974,6 +985,7 @@ private fun VideoPageItem(
     onRequestVideoChange: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
@@ -1079,6 +1091,65 @@ private fun VideoPageItem(
         rebindPlayerSurfaceIfNeeded(playerView = view, player = exoPlayer)
     }
 
+    DisposableEffect(
+        lifecycleOwner,
+        exoPlayer,
+        playerViewRef,
+        isCurrentPage,
+        isPlayerReadyForThisVideo
+    ) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event != androidx.lifecycle.Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
+            val view = playerViewRef
+            if (
+                !shouldRecoverPortraitPagerSurfaceOnResume(
+                    isCurrentPage = isCurrentPage,
+                    isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+                    hasPlayerView = view != null
+                )
+            ) {
+                return@LifecycleEventObserver
+            }
+
+            view?.let { playerView ->
+                rebindPlayerSurfaceIfNeeded(playerView = playerView, player = exoPlayer)
+            }
+            scope.launch {
+                delay(FOREGROUND_SURFACE_RECOVERY_DELAY_MS)
+                val retryView = playerViewRef ?: return@launch
+                if (
+                    !shouldRecoverPortraitPagerSurfaceOnResume(
+                        isCurrentPage = isCurrentPage,
+                        isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+                        hasPlayerView = true
+                    )
+                ) {
+                    return@launch
+                }
+
+                rebindPlayerSurfaceIfNeeded(playerView = retryView, player = exoPlayer)
+                if (
+                    shouldKickPlaybackAfterSurfaceRecovery(
+                        playWhenReady = exoPlayer.playWhenReady,
+                        isPlaying = exoPlayer.isPlaying,
+                        playbackState = exoPlayer.playbackState
+                    )
+                ) {
+                    exoPlayer.play()
+                }
+                danmakuManager.recoverAfterForeground(
+                    positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
+                    playWhenReady = exoPlayer.playWhenReady,
+                    playbackState = exoPlayer.playbackState
+                )
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val title = if (item is ViewInfo) item.title else (item as RelatedVideo).title
     val cover = if (item is ViewInfo) item.pic else (item as RelatedVideo).pic
     val authorName = if (item is ViewInfo) item.owner.name else (item as RelatedVideo).owner.name
@@ -1099,6 +1170,14 @@ private fun VideoPageItem(
     var showDetailSheet by remember { mutableStateOf(false) }
     var detailSheetUpOnlyMode by remember { mutableStateOf(false) }
     var isOverlayVisible by remember { mutableStateOf(true) }
+    var commentSheetVisibilityProgress by remember { mutableFloatStateOf(0f) }
+    val commentExpandedPlayerScale by animateFloatAsState(
+        targetValue = resolvePortraitCommentExpandedPlayerScale(
+            commentVisibilityProgress = commentSheetVisibilityProgress
+        ),
+        animationSpec = tween(durationMillis = 260),
+        label = "portrait_comment_player_scale"
+    )
 
     // 进度状态 (从播放器获取)
     var progressState by remember(bvid, initialDuration, initialProgressPositionMs) {
@@ -1424,6 +1503,30 @@ private fun VideoPageItem(
                 )
             }
     ) {
+        val mediaLayerModifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = commentExpandedPlayerScale
+                scaleY = commentExpandedPlayerScale
+                transformOrigin = TransformOrigin(0.5f, 0f)
+            }
+        val danmakuSurfaceMode = resolvePortraitDanmakuSurfaceMode(currentVideoAspect)
+        val viewportTransformModifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = panX
+                translationY = panY
+            }
+        val pageDanmakuModifier = mediaLayerModifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = panX
+                translationY = panY
+            }
+
         // [核心逻辑]
         // 始终保留 AndroidView 以确保 Surface 准备就绪，但只有当播放器加载了当前视频时才将其绑定或显示
         // 否则显示封面
@@ -1431,19 +1534,12 @@ private fun VideoPageItem(
         if (isCurrentPage && isPlayerReadyForThisVideo) {
             PortraitVideoViewportContainer(
                 currentVideoAspect = currentVideoAspect,
-                modifier = Modifier.fillMaxSize(),
+                modifier = mediaLayerModifier,
                 fillContainer = resolvePortraitPagerFillContainer()
             ) {
                 key(currentPlayingBvid, bvid) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                translationX = panX
-                                translationY = panY
-                            }
+                        modifier = viewportTransformModifier
                     ) {
                         AndroidView(
                             factory = { ctx ->
@@ -1471,41 +1567,35 @@ private fun VideoPageItem(
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        if (danmakuEnabled) {
-                            AndroidView(
-                                factory = { ctx ->
-                                    FaceOcclusionDanmakuContainer(ctx).apply {
-                                        setMasks(faceVisualMasks)
-                                        setVideoViewport(
-                                            videoWidth = exoPlayer.videoSize.width,
-                                            videoHeight = exoPlayer.videoSize.height,
-                                            resizeMode = resolvePortraitPagerResizeMode()
-                                        )
-                                        danmakuManager.attachView(danmakuView())
-                                    }
-                                },
-                                update = { container ->
-                                    container.setMasks(faceVisualMasks)
-                                    container.setVideoViewport(
-                                        videoWidth = exoPlayer.videoSize.width,
-                                        videoHeight = exoPlayer.videoSize.height,
-                                        resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode()
-                                    )
-                                    val view = container.danmakuView()
-                                    if (view.width > 0 && view.height > 0) {
-                                        val sizeTag = "${view.width}x${view.height}"
-                                        if (view.tag != sizeTag) {
-                                            view.tag = sizeTag
-                                            danmakuManager.attachView(view)
-                                        }
-                                    }
-                                },
+                        if (danmakuEnabled && danmakuSurfaceMode == PortraitDanmakuSurfaceMode.VideoViewport) {
+                            PortraitDanmakuOverlay(
+                                danmakuManager = danmakuManager,
+                                faceVisualMasks = faceVisualMasks,
+                                videoWidth = exoPlayer.videoSize.width,
+                                videoHeight = exoPlayer.videoSize.height,
+                                resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode(),
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
                 }
             }
+        }
+
+        if (
+            isCurrentPage &&
+            isPlayerReadyForThisVideo &&
+            danmakuEnabled &&
+            danmakuSurfaceMode == PortraitDanmakuSurfaceMode.Page
+        ) {
+            PortraitDanmakuOverlay(
+                danmakuManager = danmakuManager,
+                faceVisualMasks = faceVisualMasks,
+                videoWidth = exoPlayer.videoSize.width,
+                videoHeight = exoPlayer.videoSize.height,
+                resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode(),
+                modifier = pageDanmakuModifier
+            )
         }
 
         // 封面图 (在加载中、未匹配到视频、或未开始播放时显示)
@@ -1518,9 +1608,7 @@ private fun VideoPageItem(
         
         if (showCover) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
+                modifier = mediaLayerModifier.background(Color.Black)
             ) {
                 if (shouldUseViewportBoundPortraitCover(
                         isCurrentPage = isCurrentPage,
@@ -2016,7 +2104,13 @@ private fun VideoPageItem(
 
         PortraitCommentSheet(
             visible = showCommentSheet,
-            onDismiss = { showCommentSheet = false },
+            onDismiss = {
+                showCommentSheet = false
+                commentSheetVisibilityProgress = 0f
+            },
+            onVisibilityProgressChange = { progress ->
+                commentSheetVisibilityProgress = progress
+            },
             commentViewModel = commentViewModel,
             aid = aid,
             upMid = authorMid,
@@ -2059,7 +2153,12 @@ private fun VideoPageItem(
                 emotePackages = emotePackages,
                 currentVideoPositionMsProvider = { exoPlayer.currentPosition.coerceAtLeast(0L) },
                 onSend = { message, imageUris, syncToDynamic ->
-                    viewModel.sendComment(message, imageUris, syncToDynamic)
+                    viewModel.sendComment(
+                        inputMessage = message,
+                        imageUris = imageUris,
+                        syncToDynamic = syncToDynamic,
+                        targetAid = aid
+                    )
                     viewModel.hideCommentInputDialog()
                 }
             )
@@ -2121,13 +2220,13 @@ internal fun resolvePortraitVideoInteractionUiState(
     sharedState: PlayerUiState.Success?,
     localOverride: PortraitVideoInteractionOverride? = null
 ): PortraitVideoInteractionUiState {
-    val shouldUseSharedState = sharedState?.info?.bvid == targetBvid
-    return if (shouldUseSharedState && sharedState != null) {
+    val currentSharedState = sharedState?.takeIf { it.info.bvid == targetBvid }
+    return if (currentSharedState != null) {
         PortraitVideoInteractionUiState(
-            isLiked = sharedState.isLiked,
-            isFavorited = sharedState.isFavorited,
-            likeCount = sharedState.info.stat.like,
-            favoriteCount = sharedState.info.stat.favorite
+            isLiked = currentSharedState.isLiked,
+            isFavorited = currentSharedState.isFavorited,
+            likeCount = currentSharedState.info.stat.like,
+            favoriteCount = currentSharedState.info.stat.favorite
         )
     } else {
         PortraitVideoInteractionUiState(
@@ -2139,7 +2238,60 @@ internal fun resolvePortraitVideoInteractionUiState(
     }
 }
 
+@Composable
+private fun PortraitDanmakuOverlay(
+    danmakuManager: DanmakuManager,
+    faceVisualMasks: List<FaceOcclusionVisualMask>,
+    videoWidth: Int,
+    videoHeight: Int,
+    resizeMode: Int,
+    modifier: Modifier = Modifier
+) {
+    AndroidView(
+        factory = { ctx ->
+            FaceOcclusionDanmakuContainer(ctx).apply {
+                setMasks(faceVisualMasks)
+                setVideoViewport(
+                    videoWidth = videoWidth,
+                    videoHeight = videoHeight,
+                    resizeMode = resizeMode
+                )
+                danmakuManager.attachView(danmakuView())
+            }
+        },
+        update = { container ->
+            container.setMasks(faceVisualMasks)
+            container.setVideoViewport(
+                videoWidth = videoWidth,
+                videoHeight = videoHeight,
+                resizeMode = resizeMode
+            )
+            val view = container.danmakuView()
+            if (view.width > 0 && view.height > 0) {
+                val sizeTag = "${view.width}x${view.height}"
+                if (view.tag != sizeTag) {
+                    view.tag = sizeTag
+                    danmakuManager.attachView(view)
+                }
+            }
+        },
+        modifier = modifier
+    )
+}
+
 internal fun resolvePortraitPagerRepeatMode(): Int = Player.REPEAT_MODE_OFF
+
+internal fun resolvePortraitDanmakuSurfaceMode(currentVideoAspect: Float): PortraitDanmakuSurfaceMode {
+    return if (currentVideoAspect > 1f) {
+        PortraitDanmakuSurfaceMode.Page
+    } else {
+        PortraitDanmakuSurfaceMode.VideoViewport
+    }
+}
+
+internal fun resolvePortraitDanmakuReadableFontScale(fontScale: Float): Float {
+    return (fontScale * 1.18f).coerceIn(0.3f, 2.0f)
+}
 
 internal data class PortraitVideoViewportSize(
     val width: Int,

@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +56,17 @@ data class IconOption(val key: String, val name: String, val desc: String, val i
 // 分组定义
 data class IconGroup(val title: String, val icons: List<IconOption>)
 
+internal fun resolveIconSettingsContainerColor(
+    background: Color,
+    surfaceVariant: Color
+): Color {
+    return lerp(
+        background.copy(alpha = 1f),
+        surfaceVariant.copy(alpha = 1f),
+        0.3f
+    ).copy(alpha = 1f)
+}
+
 // This function was implicitly requested to be moved here.
 // Assuming its content based on common patterns for such a function.
 fun getIconGroups(): List<IconGroup> {
@@ -63,6 +75,7 @@ fun getIconGroups(): List<IconGroup> {
             title = "精选",
             icons = listOf(
                 IconOption("icon_3d", "3D立体", "全新3D设计", R.mipmap.ic_launcher_3d_foreground),
+                IconOption("icon_bilipai", "BiliPai", "全新品牌图标", R.mipmap.ic_launcher_bilipai_round),
                 IconOption("Yuki", "比心少女", "经典二次元", R.mipmap.ic_launcher_round),
                 IconOption("icon_anime", "蓝发电视", "bilibili风格", R.mipmap.ic_launcher_anime),
                 IconOption("Headphone", "耳机少女", "经典头像", R.mipmap.ic_launcher_headphone)
@@ -72,10 +85,8 @@ fun getIconGroups(): List<IconGroup> {
             title = "经典设计",
             icons = listOf(
                 IconOption("icon_blue", "经典蓝", "纯净蓝色", R.mipmap.ic_launcher_blue_round),
-                IconOption("icon_retro", "复古", "怀旧电视", R.mipmap.ic_launcher_retro_round),
                 IconOption("icon_neon", "霓虹", "赛博朋克", R.mipmap.ic_launcher_neon_round),
                 IconOption("icon_flat", "扁平", "现代极简", R.mipmap.ic_launcher_flat_round),
-                IconOption("icon_flat_material", "扁平材质", "细节质感", R.mipmap.ic_launcher_flat_material_round),
             )
         ),
         IconGroup(
@@ -121,7 +132,10 @@ fun IconSettingsScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), // iOS 分组背景色风格
+        containerColor = resolveIconSettingsContainerColor(
+            background = MaterialTheme.colorScheme.background,
+            surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+        ),
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         IconSettingsContent(

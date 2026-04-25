@@ -9,6 +9,8 @@ import kotlin.random.Random
 import kotlin.math.abs
 
 private const val PORTRAIT_RECOMMENDATION_PREFETCH_THRESHOLD = 1
+private const val PORTRAIT_RECENT_DIVERSITY_WINDOW_SIZE = 12
+private const val PORTRAIT_MAX_RECENT_ITEMS_PER_OWNER = 2
 private val PORTRAIT_RECOMMENDATION_STOP_WORDS = setOf(
     "视频", "合集", "最新", "一个", "我们", "你们", "今天", "真的", "这个",
     "竖屏", "横屏", "官方", "完整版", "全集", "合集版"
@@ -148,7 +150,11 @@ internal fun mergePortraitRecommendationAppendItems(
             candidate.bvid != currentBvid &&
             candidate.bvid !in existingBvids &&
             appended.none { it.bvid == candidate.bvid } &&
-            accepted.none { existing -> arePortraitRecommendationsContentSimilar(existing, candidate) }
+            accepted.none { existing -> arePortraitRecommendationsContentSimilar(existing, candidate) } &&
+            !violatesPortraitRecentOwnerDiversity(
+                acceptedRecommendations = accepted,
+                candidate = candidate
+            )
 
         if (canAppend) {
             appended += candidate
@@ -210,6 +216,20 @@ internal fun shufflePortraitRecommendations(
         arranged += remaining.removeAt(candidateIndex)
     }
     return arranged
+}
+
+private fun violatesPortraitRecentOwnerDiversity(
+    acceptedRecommendations: List<RelatedVideo>,
+    candidate: RelatedVideo,
+    recentWindowSize: Int = PORTRAIT_RECENT_DIVERSITY_WINDOW_SIZE,
+    maxRecentItemsPerOwner: Int = PORTRAIT_MAX_RECENT_ITEMS_PER_OWNER
+): Boolean {
+    val ownerMid = candidate.owner.mid
+    if (ownerMid <= 0L) return false
+    val recentOwnerCount = acceptedRecommendations
+        .takeLast(recentWindowSize.coerceAtLeast(1))
+        .count { it.owner.mid == ownerMid }
+    return recentOwnerCount >= maxRecentItemsPerOwner.coerceAtLeast(1)
 }
 
 internal fun toRelatedVideoForPortraitRecommendation(item: VideoItem): RelatedVideo? {
@@ -326,6 +346,14 @@ internal fun snapshotPortraitPageBvids(
             else -> null
         }
     }.toSet()
+}
+
+internal fun shouldRecoverPortraitPagerSurfaceOnResume(
+    isCurrentPage: Boolean,
+    isPlayerReadyForThisVideo: Boolean,
+    hasPlayerView: Boolean
+): Boolean {
+    return isCurrentPage && isPlayerReadyForThisVideo && hasPlayerView
 }
 
 internal fun toViewInfoForPortraitDetail(related: RelatedVideo): ViewInfo {

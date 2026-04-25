@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.data.model.response.UgcEpisode
+import com.android.purebilibili.data.model.response.UgcSeason
+import com.android.purebilibili.data.model.response.UgcSection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -65,5 +67,29 @@ class CollectionEpisodePolicyTest {
         assertEquals("正序", resolveCollectionSortLabel(CollectionSortMode.ASCENDING))
         assertEquals("倒序", resolveCollectionSortLabel(CollectionSortMode.DESCENDING))
         assertEquals("最近", resolveCollectionSortLabel(CollectionSortMode.RECENT))
+    }
+
+    @Test
+    fun `subscription id falls back to section season id when season id is missing`() {
+        val season = UgcSeason(
+            id = 0L,
+            sections = listOf(UgcSection(season_id = 725909L))
+        )
+
+        assertEquals(725909L, resolveCollectionSubscriptionId(season))
+    }
+
+    @Test
+    fun `current episode aid prefers exact bvid cid match`() {
+        val result = resolveCurrentUgcEpisodeAid(
+            episodes = listOf(
+                UgcEpisode(aid = 10L, bvid = "BV1", cid = 11L),
+                UgcEpisode(aid = 20L, bvid = "BV1", cid = 22L)
+            ),
+            currentBvid = "BV1",
+            currentCid = 22L
+        )
+
+        assertEquals(20L, result)
     }
 }

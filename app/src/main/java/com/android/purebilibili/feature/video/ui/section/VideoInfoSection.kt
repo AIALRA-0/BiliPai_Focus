@@ -166,6 +166,8 @@ fun VideoTitleWithDesc(
     info: ViewInfo,
     videoTags: List<VideoTag> = emptyList(),  //  视频标签
     bgmInfo: BgmInfo? = null, // [新增] BGM 信息
+    onlineCount: String = "",
+    showOnlineCount: Boolean = true,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     animateLayout: Boolean = true,
     onBgmClick: (BgmInfo) -> Unit = {}
@@ -182,6 +184,12 @@ fun VideoTitleWithDesc(
         shouldEmphasizePrecisePublishTime(
             partitionName = info.tname,
             title = info.title
+        )
+    }
+    val onlineCountText = remember(showOnlineCount, onlineCount) {
+        resolveVideoDetailOnlineCountText(
+            showOnlineCount = showOnlineCount,
+            onlineCount = onlineCount
         )
     }
     
@@ -301,6 +309,20 @@ fun VideoTitleWithDesc(
                     modifier = danmakuModifier
                 )
 
+            }
+            if (onlineCountText.isNotBlank()) {
+                Text(
+                    text = "  •  ",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+                Text(
+                    text = onlineCountText,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             // [新增] 显示 BVID 并支持点击复制
             Spacer(Modifier.width(8.dp))

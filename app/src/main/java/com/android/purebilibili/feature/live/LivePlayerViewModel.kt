@@ -116,8 +116,14 @@ class LivePlayerViewModel : ViewModel() {
     val uiState = _uiState.asStateFlow()
     
     // 直播弹幕流 (UI 观察此流进行渲染)
-    private val _danmakuFlow = MutableSharedFlow<LiveDanmakuItem>(extraBufferCapacity = 100)
+    private val _danmakuFlow = MutableSharedFlow<LiveDanmakuItem>(
+        replay = 48,
+        extraBufferCapacity = 120
+    )
     val danmakuFlow = _danmakuFlow.asSharedFlow()
+
+    private val _superChatItems = MutableStateFlow<List<LiveDanmakuItem>>(emptyList())
+    val superChatItems = _superChatItems.asStateFlow()
     
     private var danmakuClient: com.android.purebilibili.core.network.socket.LiveDanmakuClient? = null
     private var danmakuCollectJob: Job? = null
@@ -708,8 +714,9 @@ class LivePlayerViewModel : ViewModel() {
     }
 
     private suspend fun preloadLiveRoomMessages(roomId: Long) {
+        val prefetchedSuperChats = mutableListOf<LiveDanmakuItem>()
         LiveRepository.getLiveDanmakuHistory(roomId).onSuccess { items ->
-            items.forEach { seed ->
+            items.filter { shouldRenderLiveDanmaku(it.text, it.emoticonUrl) }.forEach { seed ->
                 _danmakuFlow.tryEmit(
                     LiveDanmakuItem(
                         text = seed.text,
@@ -727,17 +734,20 @@ class LivePlayerViewModel : ViewModel() {
         }
         LiveRepository.getLiveSuperChatMessages(roomId).onSuccess { items ->
             items.forEach { seed ->
-                _danmakuFlow.tryEmit(
-                    LiveDanmakuItem(
-                        text = seed.message,
-                        uid = seed.uid,
-                        uname = seed.uname,
-                        isSuperChat = true,
-                        superChatPrice = seed.price,
-                        superChatBackgroundColor = seed.backgroundColor
-                    )
+                val item = LiveDanmakuItem(
+                    text = seed.message,
+                    uid = seed.uid,
+                    uname = seed.uname,
+                    isSuperChat = true,
+                    superChatPrice = seed.price,
+                    superChatBackgroundColor = seed.backgroundColor
                 )
+                prefetchedSuperChats += item
+                _danmakuFlow.tryEmit(item)
             }
+        }
+        if (prefetchedSuperChats.isNotEmpty()) {
+            _superChatItems.value = prefetchedSuperChats
         }
     }
     
@@ -941,17 +951,17 @@ class LivePlayerViewModel : ViewModel() {
         val background = data.optInt("background_bottom_color", 0)
             .takeIf { it != 0 }
             ?: data.optInt("background_color", 0)
-        _danmakuFlow.tryEmit(
-            LiveDanmakuItem(
-                text = message,
-                color = 16777215,
-                uid = uid,
-                uname = uname,
-                isSuperChat = true,
-                superChatPrice = price,
-                superChatBackgroundColor = background
-            )
+        val item = LiveDanmakuItem(
+            text = message,
+            color = 16777215,
+            uid = uid,
+            uname = uname,
+            isSuperChat = true,
+            superChatPrice = price,
+            superChatBackgroundColor = background
         )
+        _superChatItems.value = listOf(item) + _superChatItems.value
+        _danmakuFlow.tryEmit(item)
     }
 
     private fun updateRoomWatchedText(data: JSONObject?) {
@@ -992,6 +1002,7 @@ class LivePlayerViewModel : ViewModel() {
         super.onCleared()
         danmakuCollectJob?.cancel()
         danmakuClient?.disconnect()
+        _superChatItems.value = emptyList()
         CrashReporter.markLiveSessionEnd("view_model_cleared")
     }
 }

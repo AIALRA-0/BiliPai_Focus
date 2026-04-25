@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.data.model.response.UgcEpisode
+import com.android.purebilibili.data.model.response.UgcSeason
 
 enum class CollectionSortMode(val label: String) {
     ASCENDING("正序"),
@@ -67,4 +68,27 @@ internal fun resolveCollectionSortLabel(sortMode: CollectionSortMode): String {
         CollectionSortMode.DESCENDING -> "倒序"
         CollectionSortMode.RECENT -> "最近"
     }
+}
+
+internal fun resolveCollectionSubscriptionId(ugcSeason: UgcSeason): Long {
+    if (ugcSeason.id > 0L) return ugcSeason.id
+    return ugcSeason.sections
+        .firstOrNull { section -> section.season_id > 0L }
+        ?.season_id
+        ?: 0L
+}
+
+internal fun resolveCurrentUgcEpisodeAid(
+    episodes: List<UgcEpisode>,
+    currentBvid: String,
+    currentCid: Long
+): Long {
+    if (currentBvid.isBlank()) return 0L
+    if (currentCid > 0L) {
+        val exactEpisode = episodes.firstOrNull { episode ->
+            episode.bvid == currentBvid && episode.cid == currentCid
+        }
+        if (exactEpisode != null) return exactEpisode.aid
+    }
+    return episodes.firstOrNull { episode -> episode.bvid == currentBvid }?.aid ?: 0L
 }

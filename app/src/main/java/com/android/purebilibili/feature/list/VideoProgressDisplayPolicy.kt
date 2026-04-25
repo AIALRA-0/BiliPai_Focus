@@ -16,7 +16,8 @@ internal fun resolveVideoDisplayProgressState(
 ): VideoProgressDisplayState {
     val normalizedServer = normalizeServerProgressSec(
         progressSec = serverProgressSec,
-        durationSec = durationSec
+        durationSec = durationSec,
+        viewAt = viewAt
     )
     val normalizedLocal = normalizeLocalProgressSec(
         localPositionMs = localPositionMs,
@@ -38,8 +39,7 @@ internal fun resolveVideoDisplayProgressState(
         else -> (resolvedProgress.toFloat() / durationSec.toFloat()).coerceIn(0f, 1f)
     }
 
-    val showProgressBar = viewAt > 0L &&
-        durationSec > 0 &&
+    val showProgressBar = durationSec > 0 &&
         (resolvedProgress == -1 || resolvedProgress > 0)
 
     return VideoProgressDisplayState(
@@ -51,9 +51,12 @@ internal fun resolveVideoDisplayProgressState(
 
 private fun normalizeServerProgressSec(
     progressSec: Int,
-    durationSec: Int
+    durationSec: Int,
+    viewAt: Long
 ): Int {
-    if (progressSec == -1) return -1
+    // `VideoItem.progress` defaults to -1 for many feed items that have no history metadata.
+    // Only treat -1 as "completed" when the item actually carries a playback record.
+    if (progressSec == -1) return if (viewAt > 0L) -1 else 0
     if (durationSec <= 0) return progressSec.coerceAtLeast(0)
     if (progressSec <= 0) return progressSec.coerceAtLeast(0)
 

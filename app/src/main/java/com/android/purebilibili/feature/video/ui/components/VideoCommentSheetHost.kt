@@ -3,8 +3,11 @@ package com.android.purebilibili.feature.video.ui.components
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,11 +40,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.onSizeChanged
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.ui.bottomSheetContentEnterTransition
 import com.android.purebilibili.core.ui.bottomSheetContentExitTransition
@@ -55,11 +62,14 @@ import com.android.purebilibili.feature.video.screen.CommentUrlNavigationTarget
 import com.android.purebilibili.feature.video.screen.resolveCommentUrlNavigationTarget
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetMaxHeightFraction
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetScrimAlpha
+import com.android.purebilibili.feature.video.ui.pager.resolvePortraitCommentVisibilityProgress
+import com.android.purebilibili.feature.video.ui.pager.shouldDismissPortraitCommentSheetByDrag
 import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitCommentReplyComposer
 import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitCommentThreadDetail
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private const val MAIN_COMMENT_SHEET_HEIGHT_FRACTION = 0.60f
 private const val MAIN_COMMENT_SHEET_SCRIM_ALPHA = 0.5f
@@ -82,17 +92,24 @@ internal fun resolveVideoCommentSheetHostContent(
 }
 
 internal fun resolveVideoCommentSheetHostHeightFraction(
+    hostContent: VideoCommentSheetHostContent = VideoCommentSheetHostContent.MAIN_LIST,
     mainSheetVisible: Boolean,
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0
 ): Float {
-    return if (mainSheetVisible) {
-        MAIN_COMMENT_SHEET_HEIGHT_FRACTION
-    } else {
-        resolveVideoSubReplySheetMaxHeightFraction(
-            screenHeightPx = screenHeightPx,
-            topReservedPx = topReservedPx
-        )
+    return when (hostContent) {
+        VideoCommentSheetHostContent.MAIN_LIST -> MAIN_COMMENT_SHEET_HEIGHT_FRACTION
+        VideoCommentSheetHostContent.THREAD_DETAIL -> {
+            if (mainSheetVisible && topReservedPx <= 0) {
+                MAIN_COMMENT_SHEET_HEIGHT_FRACTION
+            } else {
+                resolveVideoSubReplySheetMaxHeightFraction(
+                    screenHeightPx = screenHeightPx,
+                    topReservedPx = topReservedPx
+                )
+            }
+        }
+        VideoCommentSheetHostContent.HIDDEN -> 0f
     }
 }
 
@@ -124,6 +141,7 @@ internal fun shouldDismissVideoCommentSheetHostOnBackdropTap(
 fun VideoCommentSheetHost(
     mainSheetVisible: Boolean,
     onDismiss: () -> Unit,
+    onMainSheetVisibilityProgressChange: (Float) -> Unit = {},
     commentViewModel: VideoCommentViewModel,
     aid: Long,
     upMid: Long = 0,
@@ -158,6 +176,7 @@ fun VideoCommentSheetHost(
     )
     val hostVisible = hostContent != VideoCommentSheetHostContent.HIDDEN
     val sheetHeightFraction = resolveVideoCommentSheetHostHeightFraction(
+        hostContent = hostContent,
         mainSheetVisible = mainSheetVisible,
         screenHeightPx = screenHeightPx,
         topReservedPx = topReservedPx
@@ -173,6 +192,34 @@ fun VideoCommentSheetHost(
     val uiPreset = LocalUiPreset.current
     val motionSpec = remember(uiPreset) { resolveAdaptiveBottomSheetMotionSpec(uiPreset) }
     val appearance = rememberVideoCommentAppearance()
+    var isDraggingMainSheet by remember { mutableStateOf(false) }
+    var mainSheetDragTargetOffsetPx by remember { mutableStateOf(0f) }
+    var mainSheetMeasuredHeightPx by remember { mutableStateOf(0f) }
+    val mainSheetDragOffsetPx by animateFloatAsState(
+        targetValue = mainSheetDragTargetOffsetPx,
+        animationSpec = tween(durationMillis = if (isDraggingMainSheet) 0 else 180),
+        label = "video_comment_main_sheet_offset"
+    )
+    val mainSheetVisibilityProgress = remember(
+        hostContent,
+        mainSheetVisible,
+        mainSheetDragOffsetPx,
+        mainSheetMeasuredHeightPx
+    ) {
+        when {
+            hostContent == VideoCommentSheetHostContent.MAIN_LIST && mainSheetVisible ->
+                resolvePortraitCommentVisibilityProgress(
+                    sheetOffsetPx = mainSheetDragOffsetPx,
+                    sheetHeightPx = mainSheetMeasuredHeightPx
+                )
+            hostContent == VideoCommentSheetHostContent.THREAD_DETAIL -> 1f
+            else -> 0f
+        }
+    }
+
+    LaunchedEffect(mainSheetVisible, hostContent, mainSheetVisibilityProgress) {
+        onMainSheetVisibilityProgressChange(mainSheetVisibilityProgress)
+    }
 
     var fallbackPreviewVisible by remember { mutableStateOf(false) }
     var fallbackPreviewImages by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -307,6 +354,43 @@ fun VideoCommentSheetHost(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(sheetHeightFraction)
+                        .onSizeChanged { size ->
+                            mainSheetMeasuredHeightPx = size.height.toFloat()
+                        }
+                        .offset { IntOffset(x = 0, y = mainSheetDragOffsetPx.roundToInt()) }
+                        .pointerInput(mainSheetVisible, hostContent, mainSheetMeasuredHeightPx) {
+                            if (!mainSheetVisible || hostContent != VideoCommentSheetHostContent.MAIN_LIST) {
+                                return@pointerInput
+                            }
+                            detectVerticalDragGestures(
+                                onDragStart = {
+                                    isDraggingMainSheet = true
+                                },
+                                onVerticalDrag = { change, dragAmount ->
+                                    if (dragAmount > 0f || mainSheetDragTargetOffsetPx > 0f) {
+                                        change.consume()
+                                        mainSheetDragTargetOffsetPx =
+                                            (mainSheetDragTargetOffsetPx + dragAmount).coerceAtLeast(0f)
+                                    }
+                                },
+                                onDragEnd = {
+                                    isDraggingMainSheet = false
+                                    if (
+                                        shouldDismissPortraitCommentSheetByDrag(
+                                            sheetOffsetPx = mainSheetDragTargetOffsetPx,
+                                            sheetHeightPx = mainSheetMeasuredHeightPx
+                                        )
+                                    ) {
+                                        onDismiss()
+                                    }
+                                    mainSheetDragTargetOffsetPx = 0f
+                                },
+                                onDragCancel = {
+                                    isDraggingMainSheet = false
+                                    mainSheetDragTargetOffsetPx = 0f
+                                }
+                            )
+                        }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

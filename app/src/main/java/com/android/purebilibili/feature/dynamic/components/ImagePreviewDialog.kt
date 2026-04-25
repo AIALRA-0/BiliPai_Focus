@@ -229,6 +229,7 @@ private fun ImagePreviewOverlayContent(
     var dismissImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var activeZoomScale by remember { mutableFloatStateOf(1f) }
     var isVerticalDismissDragging by remember { mutableStateOf(false) }
+    var imagePreviewTextVisible by remember(textContent) { mutableStateOf(true) }
     val verticalDismissOffsetYPx = remember { androidx.compose.animation.core.Animatable(0f) }
 
     fun handleImageSaveResult(success: Boolean) {
@@ -636,8 +637,12 @@ private fun ImagePreviewOverlayContent(
                     totalPages = images.size
                 )
                 val textPlacement = textContent?.placement ?: ImagePreviewTextPlacement.OVERLAY_BOTTOM
+                val shouldShowResolvedText = shouldShowImagePreviewText(
+                    hasText = resolvedText != null,
+                    textVisible = imagePreviewTextVisible
+                )
 
-                if (resolvedText != null && textPlacement == ImagePreviewTextPlacement.OVERLAY_BOTTOM) {
+                if (resolvedText != null && shouldShowResolvedText && textPlacement == ImagePreviewTextPlacement.OVERLAY_BOTTOM) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -653,6 +658,10 @@ private fun ImagePreviewOverlayContent(
                                 translationY = with(density) { textTransform.translateYDp.dp.toPx() }
                                 cameraDistance = 10f * density.density
                                 transformOrigin = TransformOrigin(0.5f, 1f)
+                            }
+                            .clickable {
+                                imagePreviewTextVisible =
+                                    resolveImagePreviewTextVisibilityAfterToggle(imagePreviewTextVisible)
                             }
                     ) {
                         Box(
@@ -792,7 +801,7 @@ private fun ImagePreviewOverlayContent(
                         contentAlignment = Alignment.Center
                     ) {
                         when {
-                            resolvedText != null && textPlacement == ImagePreviewTextPlacement.TOP_BAR -> {
+                            resolvedText != null && shouldShowResolvedText && textPlacement == ImagePreviewTextPlacement.TOP_BAR -> {
                                 Box(
                                     modifier = Modifier.graphicsLayer {
                                         alpha = textTransform.alpha
@@ -875,6 +884,29 @@ private fun ImagePreviewOverlayContent(
                                 )
                             }
                         }
+                    }
+
+                    if (resolvedText != null) {
+                        FilledIconButton(
+                            onClick = {
+                                imagePreviewTextVisible =
+                                    resolveImagePreviewTextVisibilityAfterToggle(imagePreviewTextVisible)
+                            },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.Black.copy(0.5f)
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (imagePreviewTextVisible) {
+                                    CupertinoIcons.Outlined.EyeSlash
+                                } else {
+                                    CupertinoIcons.Outlined.Eye
+                                },
+                                contentDescription = if (imagePreviewTextVisible) "隐藏图片文字" else "显示图片文字",
+                                tint = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
                     
                     //  下载按钮

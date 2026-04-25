@@ -41,6 +41,7 @@ class HomeSettingsStoreParityTest {
         assertTrue(result.showHomeCoverGlassBadges)
         assertTrue(result.showHomeInfoGlassBadges)
         assertTrue(result.showHomeUpBadges)
+        assertTrue(result.showHomeVideoDurationBadges)
     }
 
     @Test
@@ -48,7 +49,8 @@ class HomeSettingsStoreParityTest {
         val prefs = mutablePreferencesOf(
             booleanPreferencesKey("home_cover_glass_badges_visible") to false,
             booleanPreferencesKey("home_info_glass_badges_visible") to false,
-            booleanPreferencesKey("home_up_badges_visible") to false
+            booleanPreferencesKey("home_up_badges_visible") to false,
+            booleanPreferencesKey("home_video_duration_badges_visible") to false
         )
 
         val result = mapHomeSettingsFromPreferences(prefs)
@@ -56,5 +58,6 @@ class HomeSettingsStoreParityTest {
         assertEquals(false, result.showHomeCoverGlassBadges)
         assertEquals(false, result.showHomeInfoGlassBadges)
         assertEquals(false, result.showHomeUpBadges)
+        assertEquals(false, result.showHomeVideoDurationBadges)
     }
 }

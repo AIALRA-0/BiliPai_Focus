@@ -1,13 +1,14 @@
 package com.android.purebilibili.feature.download
 
 internal fun normalizeRestoredDownloadTask(task: DownloadTask): DownloadTask {
-    return when (task.status) {
+    val normalizedStatusTask = when (task.status) {
         DownloadStatus.QUEUED,
         DownloadStatus.PENDING,
         DownloadStatus.DOWNLOADING,
         DownloadStatus.MERGING -> task.copy(status = DownloadStatus.QUEUED)
         else -> task
     }
+    return sanitizeDownloadTask(normalizedStatusTask)
 }
 
 internal fun shouldPersistDownloadTaskUpdate(

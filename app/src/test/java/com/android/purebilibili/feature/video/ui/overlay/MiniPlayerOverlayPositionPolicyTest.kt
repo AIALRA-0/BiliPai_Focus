@@ -88,4 +88,61 @@ class MiniPlayerOverlayPositionPolicyTest {
             )
         )
     }
+
+    @Test
+    fun seekTarget_usesStableDragStartPosition() {
+        assertEquals(
+            51_000L,
+            resolveMiniPlayerSeekTargetPosition(
+                dragStartPositionMs = 30_000L,
+                dragDeltaPx = 120f,
+                miniPlayerWidthPx = 400f,
+                durationMs = 70_000L
+            )
+        )
+    }
+
+    @Test
+    fun seekTarget_clampsToDuration() {
+        assertEquals(
+            70_000L,
+            resolveMiniPlayerSeekTargetPosition(
+                dragStartPositionMs = 65_000L,
+                dragDeltaPx = 300f,
+                miniPlayerWidthPx = 400f,
+                durationMs = 70_000L
+            )
+        )
+        assertEquals(
+            0L,
+            resolveMiniPlayerSeekTargetPosition(
+                dragStartPositionMs = 5_000L,
+                dragDeltaPx = -300f,
+                miniPlayerWidthPx = 400f,
+                durationMs = 70_000L
+            )
+        )
+    }
+
+    @Test
+    fun seekTarget_ignoresInvalidWidthOrDuration() {
+        assertEquals(
+            30_000L,
+            resolveMiniPlayerSeekTargetPosition(
+                dragStartPositionMs = 30_000L,
+                dragDeltaPx = 120f,
+                miniPlayerWidthPx = 0f,
+                durationMs = 70_000L
+            )
+        )
+        assertEquals(
+            0L,
+            resolveMiniPlayerSeekTargetPosition(
+                dragStartPositionMs = 30_000L,
+                dragDeltaPx = 120f,
+                miniPlayerWidthPx = 400f,
+                durationMs = 0L
+            )
+        )
+    }
 }

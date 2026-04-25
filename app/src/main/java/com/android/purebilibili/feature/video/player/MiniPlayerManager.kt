@@ -302,9 +302,8 @@ internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
     return when (normalizedKey) {
         "icon_blue" -> R.mipmap.ic_launcher_blue
         "icon_neon" -> R.mipmap.ic_launcher_neon
-        "icon_retro" -> R.mipmap.ic_launcher_retro
         "icon_flat" -> R.mipmap.ic_launcher_flat
-        "icon_flat_material" -> R.mipmap.ic_launcher_flat_material
+        "icon_bilipai" -> R.mipmap.ic_launcher_bilipai
         "icon_anime" -> R.mipmap.ic_launcher_anime
         "icon_telegram_blue" -> R.mipmap.ic_launcher_telegram_blue
         "icon_telegram_blue_coin" -> R.mipmap.ic_launcher_telegram_blue_coin

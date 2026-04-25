@@ -423,60 +423,69 @@ object SearchRepository {
         }
     }
 
-    //  获取搜索发现（优先官方推荐流，失败时退回热搜/联想）
+    //  获取搜索发现（优先最近搜索/关注 UP，再补官方推荐和热搜）
     suspend fun getSearchRecommend(historyKeywords: List<String>): Result<List<HotItem>> = withContext(Dispatchers.IO) {
-        try {
+        val fallbackKeywords = listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰")
+        val historySuggestions = try {
+            val lastKeyword = historyKeywords.firstOrNull()
+            if (!lastKeyword.isNullOrBlank()) {
+                val response = api.getSearchSuggest(lastKeyword)
+                response.result?.tag
+                    ?.mapNotNull { tag ->
+                        tag.term.ifBlank { tag.value.ifBlank { tag.name } }
+                            .replace(Regex("<.*?>"), "")
+                            .trim()
+                            .takeIf { it.isNotBlank() && it != lastKeyword }
+                    }
+                    ?.take(8)
+                    .orEmpty()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val followedUpNames = try {
+            val navResponse = navApi.getNavInfo()
+            val mid = navResponse.data?.mid ?: 0L
+            if (navResponse.data?.isLogin == true && mid > 0L) {
+                navApi.getFollowings(mid, pn = 1, ps = 20)
+                    .data
+                    ?.list
+                    ?.mapNotNull { user -> user.uname.trim().takeIf { it.isNotBlank() } }
+                    .orEmpty()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val officialItems = try {
             val recommendResponse = api.getSearchRecommend()
             if (recommendResponse.code == 0) {
-                val recommendList = recommendResponse.data?.list
+                recommendResponse.data?.list
                     ?.filter { item -> item.keyword.isNotBlank() || item.show_name.isNotBlank() }
                     ?: emptyList()
-                if (recommendList.isNotEmpty()) {
-                    return@withContext Result.success(recommendList)
-                }
+            } else {
+                emptyList()
             }
-
-            if (historyKeywords.isNotEmpty()) {
-                val lastKeyword = historyKeywords.firstOrNull()
-                if (!lastKeyword.isNullOrBlank()) {
-                    val response = api.getSearchSuggest(lastKeyword)
-                    val suggestions = response.result?.tag
-                        ?.mapNotNull { tag ->
-                            tag.term.ifBlank { tag.value.ifBlank { null } }
-                        }
-                        ?.filter { it != lastKeyword }
-                        ?.take(10)
-                    
-                    if (!suggestions.isNullOrEmpty()) {
-                        return@withContext Result.success(
-                            suggestions.map { keyword ->
-                                HotItem(
-                                    keyword = keyword,
-                                    show_name = keyword,
-                                    recommend_reason = "与最近搜索相关"
-                                )
-                            }
-                        )
-                    }
-                }
-            }
-            
-            val trending = getTrendingKeywords(limit = 12).getOrNull()?.allItems?.shuffled()?.take(10).orEmpty()
-            if (trending.isNotEmpty()) {
-                return@withContext Result.success(trending)
-            }
-            
-            Result.success(
-                listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰")
-                    .map { keyword -> HotItem(keyword = keyword, show_name = keyword) }
-            )
         } catch (e: Exception) {
-            e.printStackTrace()
-            Result.success(
-                listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰")
-                    .map { keyword -> HotItem(keyword = keyword, show_name = keyword) }
-            )
+            emptyList()
         }
+
+        val trendingItems = getTrendingKeywords(limit = 12).getOrNull()?.allItems?.shuffled()?.take(10).orEmpty()
+        val items = buildSearchRecommendItems(
+            historySuggestionKeywords = historySuggestions,
+            followedUpNames = followedUpNames,
+            officialItems = officialItems,
+            trendingItems = trendingItems,
+            fallbackKeywords = fallbackKeywords,
+            limit = 10
+        )
+
+        Result.success(items)
     }
 
     private suspend fun signWithWbi(params: Map<String, String>): Map<String, String> {

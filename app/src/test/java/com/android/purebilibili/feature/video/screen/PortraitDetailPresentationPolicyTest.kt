@@ -147,6 +147,26 @@ class PortraitDetailPresentationPolicyTest {
     }
 
     @Test
+    fun inlinePortraitPlayer_compactsWhenCommentThreadDetailIsVisible() {
+        assertTrue(
+            shouldUseCompactInlinePortraitPlayerForCommentTab(
+                useOfficialInlinePortraitDetailExperience = true,
+                selectedTabIndex = 0,
+                isPortraitFullscreen = false,
+                isCommentThreadVisible = true
+            )
+        )
+        assertFalse(
+            shouldUseCompactInlinePortraitPlayerForCommentTab(
+                useOfficialInlinePortraitDetailExperience = false,
+                selectedTabIndex = 0,
+                isPortraitFullscreen = false,
+                isCommentThreadVisible = true
+            )
+        )
+    }
+
+    @Test
     fun inlinePortraitPlayer_compactsWhenIntroHasScrolledDown() {
         assertTrue(
             shouldUseCompactInlinePortraitPlayerForIntroScroll(

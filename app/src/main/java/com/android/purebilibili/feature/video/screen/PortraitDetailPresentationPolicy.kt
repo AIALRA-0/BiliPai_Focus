@@ -74,10 +74,11 @@ internal fun resolvePortraitFullscreenButtonAction(
 internal fun shouldUseCompactInlinePortraitPlayerForCommentTab(
     useOfficialInlinePortraitDetailExperience: Boolean,
     selectedTabIndex: Int,
-    isPortraitFullscreen: Boolean
+    isPortraitFullscreen: Boolean,
+    isCommentThreadVisible: Boolean = false
 ): Boolean {
     return useOfficialInlinePortraitDetailExperience &&
-        selectedTabIndex == 1 &&
+        (selectedTabIndex == 1 || isCommentThreadVisible) &&
         !isPortraitFullscreen
 }
 

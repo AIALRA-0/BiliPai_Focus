@@ -26,6 +26,17 @@ class DownloadTaskPresentationPolicyTest {
         assertNull(resolveDownloadTaskSecondaryText(task))
     }
 
+    @Test
+    fun invalidProgress_usesSanitizedPercentForDisplay() {
+        val task = baseTask.copy(
+            progress = Float.POSITIVE_INFINITY,
+            videoProgress = 0.25f,
+            audioProgress = 0.75f
+        )
+
+        assertEquals(50, resolveDownloadTaskProgressPercent(task))
+    }
+
     private val baseTask = DownloadTask(
         bvid = "BV1episode",
         cid = 100L,

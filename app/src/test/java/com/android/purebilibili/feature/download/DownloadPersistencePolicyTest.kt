@@ -37,6 +37,22 @@ class DownloadPersistencePolicyTest {
     }
 
     @Test
+    fun normalizeRestoredDownloadTask_sanitizesNonFiniteProgressValues() {
+        val normalized = normalizeRestoredDownloadTask(
+            baseTask.copy(
+                progress = Float.POSITIVE_INFINITY,
+                videoProgress = 0.4f,
+                audioProgress = 0.6f
+            )
+        )
+
+        assertFalse(normalized.progress.isInfinite())
+        assertEquals(0.5f, normalized.progress)
+        assertEquals(0.4f, normalized.videoProgress)
+        assertEquals(0.6f, normalized.audioProgress)
+    }
+
+    @Test
     fun shouldPersistDownloadTaskUpdate_ignoresProgressOnlyChanges() {
         val updated = baseTask.copy(progress = 0.5f, videoProgress = 0.4f, audioProgress = 0.6f)
 

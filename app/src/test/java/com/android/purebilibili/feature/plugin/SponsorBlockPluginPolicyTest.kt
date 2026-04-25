@@ -27,6 +27,63 @@ class SponsorBlockPluginPolicyTest {
     }
 
     @Test
+    fun normalizeSponsorSegments_keepsBestVotedSegmentPerCategory() {
+        val normalized = normalizeSponsorSegments(
+            listOf(
+                sponsorSegment(
+                    uuid = "bad_intro",
+                    startSeconds = 3f,
+                    endSeconds = 20f,
+                    category = SponsorCategory.INTRO,
+                    votes = -2
+                ),
+                sponsorSegment(
+                    uuid = "good_intro",
+                    startSeconds = 6f,
+                    endSeconds = 10f,
+                    category = SponsorCategory.INTRO,
+                    votes = 18
+                ),
+                sponsorSegment(
+                    uuid = "sponsor",
+                    startSeconds = 40f,
+                    endSeconds = 55f,
+                    category = SponsorCategory.SPONSOR,
+                    votes = 4
+                )
+            )
+        )
+
+        assertEquals(listOf("good_intro", "sponsor"), normalized.map { it.UUID })
+    }
+
+    @Test
+    fun normalizeSponsorSegments_prefersLockedSegmentWithinSameCategory() {
+        val normalized = normalizeSponsorSegments(
+            listOf(
+                sponsorSegment(
+                    uuid = "popular_intro",
+                    startSeconds = 5f,
+                    endSeconds = 12f,
+                    category = SponsorCategory.INTRO,
+                    votes = 20,
+                    locked = 0
+                ),
+                sponsorSegment(
+                    uuid = "locked_intro",
+                    startSeconds = 6f,
+                    endSeconds = 11f,
+                    category = SponsorCategory.INTRO,
+                    votes = 5,
+                    locked = 1
+                )
+            )
+        )
+
+        assertEquals(listOf("locked_intro"), normalized.map { it.UUID })
+    }
+
+    @Test
     fun resolveSponsorProgressMarkers_sponsorOnlyKeepsSponsorCategory() {
         val markers = resolveSponsorProgressMarkers(
             segments = listOf(
@@ -92,13 +149,17 @@ class SponsorBlockPluginPolicyTest {
         uuid: String,
         startSeconds: Float,
         endSeconds: Float,
-        category: String
+        category: String,
+        votes: Int = 0,
+        locked: Int = 0
     ): SponsorSegment {
         return SponsorSegment(
             segment = listOf(startSeconds, endSeconds),
             UUID = uuid,
             category = category,
-            actionType = SponsorActionType.SKIP
+            actionType = SponsorActionType.SKIP,
+            locked = locked,
+            votes = votes
         )
     }
 }

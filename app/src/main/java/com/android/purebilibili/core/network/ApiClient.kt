@@ -392,6 +392,11 @@ interface BilibiliApi {
         @Query("room_id") roomId: Long
     ): ResponseBody
 
+    @GET("https://api.live.bilibili.com/xlive/general-interface/v1/rank/queryContributionRank")
+    suspend fun getLiveContributionRank(
+        @QueryMap params: Map<String, String>
+    ): LiveContributionRankResponse
+
 
     // ==================== 视频播放模块 ====================
     @GET("x/web-interface/view")
@@ -736,6 +741,12 @@ interface BilibiliApi {
     suspend fun checkFavoured(
         @Query("aid") aid: Long
     ): FavouredResponse
+
+    @GET("x/web-interface/archive/relation")
+    suspend fun getVideoRelation(
+        @Query("aid") aid: Long? = null,
+        @Query("bvid") bvid: String? = null
+    ): VideoRelationResponse
     
     //  [新增] 关注/取关 UP 主
     @retrofit2.http.FormUrlEncoded
@@ -762,6 +773,22 @@ interface BilibiliApi {
         @retrofit2.http.Field("type") type: Int = 2,               // 资源类型 2=视频
         @retrofit2.http.Field("add_media_ids") addIds: String = "", // 添加到的收藏夹 ID
         @retrofit2.http.Field("del_media_ids") delIds: String = "", // 从收藏夹移除
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/v3/fav/season/fav")
+    suspend fun favoriteSeason(
+        @retrofit2.http.Field("platform") platform: String = "web",
+        @retrofit2.http.Field("season_id") seasonId: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/v3/fav/season/unfav")
+    suspend fun unfavoriteSeason(
+        @retrofit2.http.Field("platform") platform: String = "web",
+        @retrofit2.http.Field("season_id") seasonId: Long,
         @retrofit2.http.Field("csrf") csrf: String
     ): SimpleApiResponse
     

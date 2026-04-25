@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class VideoProgressBarPolicyTest {
 
@@ -65,6 +67,28 @@ class VideoProgressBarPolicyTest {
     }
 
     @Test
+    fun dragCommitPosition_usesLatestDragTarget() {
+        assertEquals(
+            54_000L,
+            resolveSeekDragCommitPositionMs(
+                dragStartPositionMs = 18_000L,
+                latestDragPositionMs = 54_000L
+            )
+        )
+    }
+
+    @Test
+    fun dragCommitPosition_allowsDraggingBackToStart() {
+        assertEquals(
+            0L,
+            resolveSeekDragCommitPositionMs(
+                dragStartPositionMs = 18_000L,
+                latestDragPositionMs = 0L
+            )
+        )
+    }
+
+    @Test
     fun progressFraction_clampsOutsideBounds() {
         assertEquals(0f, resolveProgressFraction(positionMs = -1L, durationMs = 60_000L))
         assertEquals(1f, resolveProgressFraction(positionMs = 80_000L, durationMs = 60_000L))
@@ -79,6 +103,25 @@ class VideoProgressBarPolicyTest {
                 containerWidthPx = 200f,
                 durationMs = 60_000L
             )
+        )
+    }
+
+    @Test
+    fun progressBarPointerCancellation_cancelsOnlyActiveDragInteraction() {
+        assertEquals(true, shouldCancelSeekDragOnPointerInputCompletion(dragInProgress = true))
+        assertEquals(false, shouldCancelSeekDragOnPointerInputCompletion(dragInProgress = false))
+    }
+
+    @Test
+    fun progressBarDragHandler_cleansUpActiveDragWhenPointerInputIsCancelled() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/BottomControlBar.kt")
+            .readText()
+
+        assertTrue(
+            source.contains("finally") &&
+                source.contains("shouldCancelSeekDragOnPointerInputCompletion(dragInProgress)") &&
+                source.contains("currentOnSeekDragCancel()"),
+            "Progress bar drag handling must cancel an active seek scrub if the pointerInput coroutine is cancelled before onDragEnd/onDragCancel."
         )
     }
 }

@@ -158,6 +158,7 @@ fun MiniPlayerOverlay(
     // 进度拖动状态
     var isDraggingProgress by remember { mutableStateOf(false) }
     var dragProgressDelta by remember { mutableFloatStateOf(0f) }
+    var dragProgressStartPosition by remember { mutableLongStateOf(0L) }
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
     
     // 位置拖动状态
@@ -368,13 +369,14 @@ fun MiniPlayerOverlay(
                             .fillMaxSize()
                             .clip(RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp))
                             //  视频区域：左右滑动调节进度（直播模式禁用）
-                            .pointerInput(miniPlayerManager.isLiveMode, miniPlayerWidthPx, duration, currentPosition, touchSlopPx) {
+                            .pointerInput(miniPlayerManager.isLiveMode, miniPlayerWidthPx, duration, touchSlopPx) {
                                 detectDragGestures(
                                     onDragStart = {
                                         contentDragIntent = MiniPlayerContentDragIntent.UNDECIDED
                                         contentDragTotalX = 0f
                                         contentDragTotalY = 0f
                                         dragProgressDelta = 0f
+                                        dragProgressStartPosition = currentPosition.coerceAtLeast(0L)
                                         showControls = true
                                         lastInteractionTime = System.currentTimeMillis()
                                     },
@@ -382,12 +384,17 @@ fun MiniPlayerOverlay(
                                         when (contentDragIntent) {
                                             MiniPlayerContentDragIntent.SEEK -> {
                                                 if (abs(dragProgressDelta) > 10f) {
-                                                    val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
-                                                    val newPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
+                                                    val newPosition = resolveMiniPlayerSeekTargetPosition(
+                                                        dragStartPositionMs = dragProgressStartPosition,
+                                                        dragDeltaPx = dragProgressDelta,
+                                                        miniPlayerWidthPx = miniPlayerWidthPx,
+                                                        durationMs = duration
+                                                    )
                                                     player?.let { seekPlayerFromUserAction(it, newPosition) }
                                                 }
                                                 isDraggingProgress = false
                                                 dragProgressDelta = 0f
+                                                dragProgressStartPosition = 0L
                                             }
                                             MiniPlayerContentDragIntent.MOVE -> {
                                                 isDraggingPosition = false
@@ -403,6 +410,7 @@ fun MiniPlayerOverlay(
                                         isDraggingProgress = false
                                         isDraggingPosition = false
                                         dragProgressDelta = 0f
+                                        dragProgressStartPosition = 0L
                                         contentDragIntent = MiniPlayerContentDragIntent.UNDECIDED
                                         contentDragTotalX = 0f
                                         contentDragTotalY = 0f
@@ -421,7 +429,8 @@ fun MiniPlayerOverlay(
                                             if (contentDragIntent == MiniPlayerContentDragIntent.SEEK) {
                                                 isDraggingProgress = true
                                                 dragProgressDelta = 0f
-                                                seekPreviewPosition = currentPosition
+                                                dragProgressStartPosition = currentPosition.coerceAtLeast(0L)
+                                                seekPreviewPosition = dragProgressStartPosition
                                             } else if (contentDragIntent == MiniPlayerContentDragIntent.MOVE) {
                                                 isDraggingPosition = true
                                             }
@@ -430,8 +439,12 @@ fun MiniPlayerOverlay(
                                         when (contentDragIntent) {
                                             MiniPlayerContentDragIntent.SEEK -> {
                                                 dragProgressDelta += dragAmount.x
-                                                val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
-                                                seekPreviewPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
+                                                seekPreviewPosition = resolveMiniPlayerSeekTargetPosition(
+                                                    dragStartPositionMs = dragProgressStartPosition,
+                                                    dragDeltaPx = dragProgressDelta,
+                                                    miniPlayerWidthPx = miniPlayerWidthPx,
+                                                    durationMs = duration
+                                                )
                                                 currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                                             }
                                             MiniPlayerContentDragIntent.MOVE -> {

@@ -64,6 +64,7 @@ import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataShar
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
 import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
+import com.android.purebilibili.feature.video.controller.PlaybackProgressManager
 import com.android.purebilibili.feature.video.ui.section.resolvePublishTimeRowText
 import com.android.purebilibili.feature.video.ui.section.shouldEmphasizePrecisePublishTime
 //  [预览播放] 相关引用已移除
@@ -148,6 +149,8 @@ fun ElegantVideoCard(
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
+    showDurationBadge: Boolean = true,
+    showOnlineCount: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
@@ -160,6 +163,10 @@ fun ElegantVideoCard(
 ) {
     val haptic = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val playbackProgressManager = remember(context) {
+        PlaybackProgressManager.getInstance(context)
+    }
     
     //  [HIG] 动态圆角 - 12dp 标准
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -203,11 +210,17 @@ fun ElegantVideoCard(
             showInfoGlassBadges = showInfoGlassBadges
         )
     }
-    val historyProgressState = remember(video.view_at, video.duration, video.progress) {
+    val historyProgressState = remember(video.bvid, video.cid, video.view_at, video.duration, video.progress, refreshKey) {
+        val localPositionMs = if (video.bvid.isNotBlank()) {
+            playbackProgressManager.getCachedPosition(video.bvid, video.cid)
+        } else {
+            0L
+        }
         resolveVideoCardHistoryProgressState(
             viewAt = video.view_at,
             durationSec = video.duration,
-            progressSec = video.progress
+            progressSec = video.progress,
+            localPositionMs = localPositionMs
         )
     }
     val showHistoryProgressBar = historyProgressState.showProgressBar
@@ -235,6 +248,10 @@ fun ElegantVideoCard(
     val premiumBadgeLabel = remember(video.rights) {
         resolveVideoPremiumBadgeLabel(video.rights)
     }
+    val onlineCount = rememberVideoCardOnlineCount(
+        video = video,
+        showOnlineCount = showOnlineCount
+    )
     val publishTimeRowText = remember(showPublishTime, video.pubdate, video.title) {
         if (!showPublishTime) {
             ""
@@ -566,10 +583,32 @@ fun ElegantVideoCard(
                         }
                     }
 
+                    if (onlineCount.isNotEmpty()) {
+                        HomeVideoBadgePill(
+                            style = badgeStylePolicy.coverStyle,
+                            shape = RoundedCornerShape(999.dp),
+                            containerColor = coverPillColors.containerColor,
+                            borderColor = coverPillColors.borderColor
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.Eye,
+                                contentDescription = null,
+                                modifier = Modifier.size(10.dp),
+                                tint = Color.White.copy(alpha = 0.90f)
+                            )
+                            Text(
+                                text = onlineCount,
+                                color = Color.White.copy(alpha = 0.90f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.weight(1f))
 
                     //  时长标签 (与播放量/评论数同行对齐)
-                    if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
+                    if (showDurationBadge && badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
                         Surface(
                             shape = RoundedCornerShape(smallCornerRadius),
                             color = emphasizedCoverPillColors.containerColor,
@@ -595,7 +634,7 @@ fun ElegantVideoCard(
                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
-                    } else {
+                    } else if (showDurationBadge) {
                         Text(
                             text = durationText,
                             color = Color.White,
@@ -615,7 +654,7 @@ fun ElegantVideoCard(
                 }
             } else {
                 //  非贴封面模式时，时长标签仍独立显示在右下角
-                if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
+                if (showDurationBadge && badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -644,7 +683,7 @@ fun ElegantVideoCard(
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
-                } else {
+                } else if (showDurationBadge) {
                     Text(
                         text = durationText,
                         color = Color.White,
@@ -991,6 +1030,28 @@ fun ElegantVideoCard(
                         )
                         Text(
                             text = FormatUtils.formatStat(commentCount.toLong()),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                if (onlineCount.isNotEmpty()) {
+                    HomeVideoBadgePill(
+                        style = badgeStylePolicy.infoStyle,
+                        shape = RoundedCornerShape(999.dp),
+                        containerColor = inlinePillColors.containerColor,
+                        borderColor = inlinePillColors.borderColor
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Outlined.Eye,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = onlineCount,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium

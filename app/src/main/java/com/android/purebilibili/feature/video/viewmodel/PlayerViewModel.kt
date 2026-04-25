@@ -261,6 +261,13 @@ internal fun resolveFavoriteFolderDialogTargetAid(
     return requestedAid?.takeIf { it > 0L } ?: currentAid?.takeIf { it > 0L }
 }
 
+internal fun resolveCommentSendTargetAid(
+    requestedAid: Long?,
+    currentAid: Long?
+): Long? {
+    return requestedAid?.takeIf { it > 0L } ?: currentAid?.takeIf { it > 0L }
+}
+
 internal fun shouldSyncFavoriteFolderUiState(
     targetAid: Long?,
     currentAid: Long?
@@ -2513,6 +2520,14 @@ class PlayerViewModel : ViewModel() {
     
     fun retry() {
         val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
+        val fallbackResumePositionMs = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val resumePlaybackAfterRetry = exoPlayer?.let { player ->
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying
+            )
+        } ?: true
+        val currentAudioLang = (_uiState.value as? PlayerUiState.Success)?.currentAudioLang
         
         //  检查当前错误类型，如果是全局冷却则清除所有冷却
         val currentState = _uiState.value
@@ -2526,7 +2541,13 @@ class PlayerViewModel : ViewModel() {
         
         PlayUrlCache.invalidate(bvid, currentCid)
         playbackSessionStore.clearCurrentMedia()
-        loadVideo(bvid, autoPlay = true) // Retry should auto-play
+        loadVideo(
+            bvid = bvid,
+            autoPlay = resumePlaybackAfterRetry,
+            cid = currentCid,
+            audioLang = currentAudioLang,
+            fallbackResumePositionMs = fallbackResumePositionMs
+        )
     }
 
     /**
@@ -2539,6 +2560,13 @@ class PlayerViewModel : ViewModel() {
         }
 
         val bvid = current.info.bvid.takeIf { it.isNotBlank() } ?: return
+        val fallbackResumePositionMs = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val resumePlaybackAfterRetry = exoPlayer?.let { player ->
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying
+            )
+        } ?: true
         playbackSessionStore.blockVideoCodec(AV1_CODEC_KEY)
         PlaybackCooldownManager.clearForVideo(bvid)
         PlayUrlCache.invalidate(bvid, current.info.cid)
@@ -2548,9 +2576,11 @@ class PlayerViewModel : ViewModel() {
             bvid = bvid,
             aid = current.info.aid,
             force = true,
-            autoPlay = true,
+            autoPlay = resumePlaybackAfterRetry,
             audioLang = current.currentAudioLang,
-            videoCodecOverride = AVC_CODEC_KEY
+            videoCodecOverride = AVC_CODEC_KEY,
+            cid = current.info.cid,
+            fallbackResumePositionMs = fallbackResumePositionMs
         )
     }
     
@@ -2578,6 +2608,12 @@ class PlayerViewModel : ViewModel() {
         val nextAudioUrl = current.allAudioUrls.getOrNull(nextIndex)
         
         val currentPos = exoPlayer?.currentPosition ?: 0L
+        val playWhenReadyAfterSwitch = exoPlayer?.let { player ->
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying
+            )
+        } ?: true
         
         viewModelScope.launch {
             Logger.d("PlayerVM", "📡 切换线路: ${current.currentCdnIndex + 1} → ${nextIndex + 1}")
@@ -2587,7 +2623,8 @@ class PlayerViewModel : ViewModel() {
                 videoUrl = nextVideoUrl,
                 audioUrl = nextAudioUrl,
                 adaptiveDashSource = null,
-                startPositionMs = currentPos
+                startPositionMs = currentPos,
+                playWhenReady = playWhenReadyAfterSwitch
             )
             
             // 更新状态
@@ -2618,6 +2655,12 @@ class PlayerViewModel : ViewModel() {
         val nextAudioUrl = current.allAudioUrls.getOrNull(index)
         
         val currentPos = exoPlayer?.currentPosition ?: 0L
+        val playWhenReadyAfterSwitch = exoPlayer?.let { player ->
+            resolvePlaybackIntentForSourceReplacement(
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying
+            )
+        } ?: true
         
         viewModelScope.launch {
             Logger.d("PlayerVM", "📡 切换到线路: ${index + 1}")
@@ -2626,7 +2669,8 @@ class PlayerViewModel : ViewModel() {
                 videoUrl = nextVideoUrl,
                 audioUrl = nextAudioUrl,
                 adaptiveDashSource = null,
-                startPositionMs = currentPos
+                startPositionMs = currentPos,
+                playWhenReady = playWhenReadyAfterSwitch
             )
             
             _uiState.value = current.copy(
@@ -3161,12 +3205,17 @@ class PlayerViewModel : ViewModel() {
     fun sendComment(
         inputMessage: String? = null,
         imageUris: List<Uri> = emptyList(),
-        syncToDynamic: Boolean = false
+        syncToDynamic: Boolean = false,
+        targetAid: Long? = null
     ) {
         if (inputMessage != null) {
             _commentInput.value = inputMessage
         }
-        val current = _uiState.value as? PlayerUiState.Success ?: return
+        val current = _uiState.value as? PlayerUiState.Success
+        val sendAid = resolveCommentSendTargetAid(
+            requestedAid = targetAid,
+            currentAid = current?.info?.aid
+        ) ?: return
         val message = _commentInput.value.trim()
         
         if (message.isEmpty()) {
@@ -3186,7 +3235,7 @@ class PlayerViewModel : ViewModel() {
             val pictures = picturesResult.getOrElse { uploadError ->
                 Logger.e(
                     "PlayerVM",
-                    "Comment image upload failed: aid=${current.info.aid}, imageCount=${imageUris.size}, message=${uploadError.message}",
+                    "Comment image upload failed: aid=$sendAid, imageCount=${imageUris.size}, message=${uploadError.message}",
                     uploadError
                 )
                 toast(uploadError.message ?: "图片上传失败")
@@ -3196,7 +3245,7 @@ class PlayerViewModel : ViewModel() {
             
             com.android.purebilibili.data.repository.CommentRepository
                 .addComment(
-                    aid = current.info.aid,
+                    aid = sendAid,
                     message = message,
                     root = root,
                     parent = parent,
@@ -3214,7 +3263,7 @@ class PlayerViewModel : ViewModel() {
                 .onFailure { error ->
                     Logger.e(
                         "PlayerVM",
-                        "Comment send failed: aid=${current.info.aid}, root=$root, parent=$parent, pictureCount=${pictures.size}, message=${error.message}",
+                        "Comment send failed: aid=$sendAid, root=$root, parent=$parent, pictureCount=${pictures.size}, message=${error.message}",
                         error
                     )
                     toast(error.message ?: "发送失败")

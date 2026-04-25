@@ -32,13 +32,6 @@ data class DebugStatRow(
     val value: String
 )
 
-data class CenterPlaybackButtonStyle(
-    val containerColor: Color,
-    val innerColor: Color,
-    val borderColor: Color,
-    val iconTint: Color
-)
-
 internal enum class CenterLoadingReason {
     QUALITY_SWITCH,
     SEEK_BUFFERING
@@ -238,26 +231,6 @@ internal fun resolvePlaybackActionNoResponseSignal(
         title = "检测到点击无响应",
         message = "用户点击${actionLabel}后播放器状态没有及时变化，可以一键导出诊断日志。"
     )
-}
-
-internal fun resolveCenterPlaybackButtonStyle(
-    isDarkTheme: Boolean
-): CenterPlaybackButtonStyle {
-    return if (isDarkTheme) {
-        CenterPlaybackButtonStyle(
-            containerColor = Color.Black.copy(alpha = 0.44f),
-            innerColor = Color.White.copy(alpha = 0.16f),
-            borderColor = Color.White.copy(alpha = 0.22f),
-            iconTint = Color.White
-        )
-    } else {
-        CenterPlaybackButtonStyle(
-            containerColor = Color.Black.copy(alpha = 0.28f),
-            innerColor = Color.Black.copy(alpha = 0.18f),
-            borderColor = Color.Black.copy(alpha = 0.16f),
-            iconTint = Color.White
-        )
-    }
 }
 
 internal fun resolveCenterLoadingUiState(

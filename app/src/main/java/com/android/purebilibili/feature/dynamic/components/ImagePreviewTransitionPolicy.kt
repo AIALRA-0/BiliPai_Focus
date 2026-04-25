@@ -326,6 +326,15 @@ internal fun resolveImagePreviewTextTransform(pageOffsetFraction: Float): ImageP
     )
 }
 
+internal fun shouldShowImagePreviewText(
+    hasText: Boolean,
+    textVisible: Boolean
+): Boolean = hasText && textVisible
+
+internal fun resolveImagePreviewTextVisibilityAfterToggle(currentVisible: Boolean): Boolean {
+    return !currentVisible
+}
+
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction
 }

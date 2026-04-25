@@ -51,3 +51,18 @@ internal fun resolveMiniPlayerContentDragIntent(
         MiniPlayerContentDragIntent.MOVE
     }
 }
+
+internal fun resolveMiniPlayerSeekTargetPosition(
+    dragStartPositionMs: Long,
+    dragDeltaPx: Float,
+    miniPlayerWidthPx: Float,
+    durationMs: Long
+): Long {
+    val safeDurationMs = durationMs.coerceAtLeast(0L)
+    if (safeDurationMs <= 0L) return 0L
+    val safeStartPositionMs = dragStartPositionMs.coerceIn(0L, safeDurationMs)
+    if (miniPlayerWidthPx <= 0f) return safeStartPositionMs
+
+    val seekDeltaMs = (dragDeltaPx / miniPlayerWidthPx * safeDurationMs).toLong()
+    return (safeStartPositionMs + seekDeltaMs).coerceIn(0L, safeDurationMs)
+}

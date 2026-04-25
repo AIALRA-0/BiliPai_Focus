@@ -359,18 +359,18 @@ internal fun resolveHomeTopTabRowHeight(
     if (uiPreset == UiPreset.MD3) {
         if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
             return if (showIconAndText) {
-                if (isTabFloating) 54.dp else 50.dp
+                if (isTabFloating) 60.dp else 56.dp
             } else {
-                if (isTabFloating) 50.dp else 46.dp
+                if (isTabFloating) 54.dp else 48.dp
             }
         }
         return if (showIconAndText) {
-            if (isTabFloating) 56.dp else 52.dp
+            if (isTabFloating) 62.dp else 60.dp
         } else {
-            if (isTabFloating) 48.dp else 44.dp
+            if (isTabFloating) 52.dp else 48.dp
         }
     }
-    return if (isTabFloating) 56.dp else 46.dp
+    return resolveIosTopTabRowHeight(isTabFloating)
 }
 
 internal fun resolveHomeTopSearchRowHorizontalPadding(
@@ -493,6 +493,17 @@ internal fun resolveHomeTopUnifiedPanelInnerPadding(
     } else {
         8.dp
     }
+}
+
+internal fun shouldRenderHomeTopUnifiedPanelChrome(
+    searchHeightDp: Float,
+    tabHeightDp: Float,
+    integratedCollapsedTopBar: Boolean,
+    minVisibleHeightDp: Float = 0.5f
+): Boolean {
+    return integratedCollapsedTopBar ||
+        searchHeightDp > minVisibleHeightDp ||
+        tabHeightDp > minVisibleHeightDp
 }
 
 internal fun resolveHomeTopUnifiedPanelCornerRadius(
@@ -637,11 +648,16 @@ internal fun resolveHomeTopContinuousSlabHeight(
     tabRowHeight: Dp,
     renderMode: HomeTopChromeRenderMode,
     uiPreset: UiPreset = UiPreset.IOS,
-    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
+    hasVisibleTopContent: Boolean = true
 ): Dp {
     if (renderMode != HomeTopChromeRenderMode.BLUR) return 0.dp
     return if (uiPreset == UiPreset.MD3) {
-        statusBarHeight + resolveHomeTopContinuousSlabOverlap(uiPreset, androidNativeVariant)
+        statusBarHeight + if (hasVisibleTopContent) {
+            resolveHomeTopContinuousSlabOverlap(uiPreset, androidNativeVariant)
+        } else {
+            0.dp
+        }
     } else {
         statusBarHeight + searchBarHeight + tabRowHeight
     }
@@ -1554,7 +1570,12 @@ fun iOSHomeHeader(
             tabRowHeight = currentTabHeight,
             renderMode = effectiveContinuousSlabRenderMode,
             uiPreset = uiPreset,
-            androidNativeVariant = androidNativeVariant
+            androidNativeVariant = androidNativeVariant,
+            hasVisibleTopContent = shouldRenderHomeTopUnifiedPanelChrome(
+                searchHeightDp = currentSearchHeight.value,
+                tabHeightDp = currentTabHeight.value,
+                integratedCollapsedTopBar = integratedCollapsedTopBar
+            )
         )
     }
     val effectiveTopPanelChromeRenderMode = if (integratedCollapsedTopBar) {
@@ -1567,6 +1588,11 @@ fun iOSHomeHeader(
             effectiveTopPanelChromeRenderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP ||
                 effectiveTopPanelChromeRenderMode == HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
         )
+    val renderUnifiedTopPanelChrome = shouldRenderHomeTopUnifiedPanelChrome(
+        searchHeightDp = currentSearchHeight.value,
+        tabHeightDp = currentTabHeight.value,
+        integratedCollapsedTopBar = integratedCollapsedTopBar
+    )
     val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
         currentTabHeightDp = currentTabHeight.value,
         tabAlpha = tabAlpha,
@@ -1634,29 +1660,37 @@ fun iOSHomeHeader(
                             Modifier
                                 .padding(horizontal = unifiedPanelHorizontalPadding)
                                 .clip(unifiedPanelShape)
-                                .homeTopChromeSurface(
-                                    renderMode = effectiveTopPanelChromeRenderMode,
-                                    shape = unifiedPanelShape,
-                                    surfaceColor = headerChromeColors.containerColor,
-                                    hazeState = hazeState,
-                                    backdrop = backdrop,
-                                    liquidStyle = liquidStyle,
-                                    liquidGlassTuning = liquidGlassTuning,
-                                    motionTier = motionTier,
-                                    isScrolling = topChromeMotionPolicy.isScrolling,
-                                    isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
-                                    forceLowBlurBudget = forceLowBlurBudget,
-                                    preferFlatGlass = resolveHomeTopWideChromePreferFlatGlass(
-                                        effectiveTopPanelChromeRenderMode
-                                    )
+                                .then(
+                                    if (renderUnifiedTopPanelChrome) {
+                                        Modifier.homeTopChromeSurface(
+                                            renderMode = effectiveTopPanelChromeRenderMode,
+                                            shape = unifiedPanelShape,
+                                            surfaceColor = headerChromeColors.containerColor,
+                                            hazeState = hazeState,
+                                            backdrop = backdrop,
+                                            liquidStyle = liquidStyle,
+                                            liquidGlassTuning = liquidGlassTuning,
+                                            motionTier = motionTier,
+                                            isScrolling = topChromeMotionPolicy.isScrolling,
+                                            isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
+                                            forceLowBlurBudget = forceLowBlurBudget,
+                                            preferFlatGlass = resolveHomeTopWideChromePreferFlatGlass(
+                                                effectiveTopPanelChromeRenderMode
+                                            )
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
                                 )
                                 .then(
-                                    if (integratedCollapsedTopBar) {
-                                        Modifier
-                                    } else if (useUnifiedLiquidChrome) {
-                                        Modifier
-                                    } else {
+                                    if (
+                                        renderUnifiedTopPanelChrome &&
+                                        !integratedCollapsedTopBar &&
+                                        !useUnifiedLiquidChrome
+                                    ) {
                                         Modifier.border(0.8.dp, headerChromeColors.borderColor, unifiedPanelShape)
+                                    } else {
+                                        Modifier
                                     }
                                 )
                         } else {
@@ -1665,6 +1699,7 @@ fun iOSHomeHeader(
                     )
             ) {
                 if (
+                    renderUnifiedTopPanelChrome &&
                     useUnifiedTopPanel &&
                     !integratedCollapsedTopBar &&
                     !useUnifiedLiquidChrome
@@ -1687,7 +1722,11 @@ fun iOSHomeHeader(
                             if (useUnifiedTopPanel) {
                                 Modifier.padding(
                                     horizontal = if (integratedCollapsedTopBar) 0.dp else unifiedPanelInnerPadding,
-                                    vertical = unifiedPanelInnerPadding
+                                    vertical = if (renderUnifiedTopPanelChrome) {
+                                        unifiedPanelInnerPadding
+                                    } else {
+                                        0.dp
+                                    }
                                 )
                             } else {
                                 Modifier
@@ -1705,16 +1744,16 @@ fun iOSHomeHeader(
                             .clip(androidx.compose.ui.graphics.RectangleShape)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(searchBarHeightDp)
-                                .padding(
-                                    horizontal = if (useUnifiedTopPanel) {
-                                        0.dp
-                                    } else {
-                                        resolveHomeTopSearchRowHorizontalPadding(uiPreset, androidNativeVariant)
-                                    }
-                                ),
+	                            modifier = Modifier
+	                                .fillMaxWidth()
+	                                .height(searchBarHeightDp)
+	                                .padding(
+	                                    horizontal = if (useUnifiedTopPanel) {
+	                                        0.dp
+	                                    } else {
+	                                        resolveHomeTopSearchRowHorizontalPadding(uiPreset, androidNativeVariant)
+	                                    }
+	                                ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(

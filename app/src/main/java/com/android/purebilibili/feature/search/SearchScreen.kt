@@ -342,6 +342,7 @@ fun SearchScreen(
         )
     }
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)
+    val showOnlineCount by SettingsManager.getShowOnlineCount(context).collectAsState(initial = false)
     val isSearchResultsScrolling by remember(historyListState, resultGridState, resultListState) {
         derivedStateOf {
             historyListState.isScrollInProgress ||
@@ -531,6 +532,7 @@ fun SearchScreen(
                                             blurEnabled = videoCardAppearance.blurEnabled,
                                             showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
                                             showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
+                                            showOnlineCount = showOnlineCount,
                                             modifier = Modifier,
                                             //  [交互优化] 传递 onWatchLater 用于显示菜单选项
                                             onWatchLater = { viewModel.addToWatchLater(video.bvid, video.id) },
@@ -1062,7 +1064,11 @@ fun SearchTopBar(
     LaunchedEffect(autoFocusEnabled, query) {
         if (autoFocusEnabled && query.isEmpty()) {
             kotlinx.coroutines.delay(60)
-            focusRequester.requestFocus()
+            runCatching {
+                focusRequester.requestFocus()
+            }.onFailure { e ->
+                com.android.purebilibili.core.util.Logger.e("SearchScreen", "Failed to auto focus search field", e)
+            }
         }
     }
     

@@ -1,9 +1,11 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +41,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +60,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.rememberStoragePermissionState
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
@@ -68,6 +72,7 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
 import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import io.github.alexzhirkevich.cupertino.icons.outlined.Trash
+import kotlinx.coroutines.launch
 
 const val SUB_REPLY_DETAIL_HEADER_TAG = "subreply_detail_header"
 const val SUB_REPLY_DETAIL_CLOSE_TAG = "subreply_detail_close"
@@ -92,6 +97,12 @@ internal data class SubReplyAuxiliaryBadgeVisualSpec(
     val imageLabelSpacingDp: Int,
     val labelFontSizeSp: Int,
     val labelLineHeightSp: Int
+)
+
+internal data class SubReplyDetailListScrollResetKey(
+    val rootReplyId: Long,
+    val conversationMode: Boolean,
+    val firstConversationReplyId: Long?
 )
 
 internal typealias SubReplyDetailAppearance = VideoCommentAppearance
@@ -177,6 +188,22 @@ internal fun resolveSubReplyConversationItems(
                 ))
     }
     return filtered.ifEmpty { listOf(anchorReply) }.distinctBy { it.rpid }
+}
+
+internal fun resolveSubReplyDetailListScrollResetKey(
+    rootReplyId: Long,
+    effectiveConversationMode: Boolean,
+    visibleReplies: List<ReplyItem>
+): SubReplyDetailListScrollResetKey {
+    return SubReplyDetailListScrollResetKey(
+        rootReplyId = rootReplyId,
+        conversationMode = effectiveConversationMode,
+        firstConversationReplyId = if (effectiveConversationMode) {
+            visibleReplies.firstOrNull()?.rpid
+        } else {
+            null
+        }
+    )
 }
 
 internal fun resolveSubReplyAuxiliaryLabel(item: ReplyItem): String? {
@@ -303,6 +330,17 @@ internal fun SubReplyDetailContent(
     }
     val localConversationMode = conversationAnchor != null
     val effectiveConversationMode = isConversationMode || localConversationMode
+    val listScrollResetKey = remember(
+        rootReply.rpid,
+        effectiveConversationMode,
+        visibleReplies
+    ) {
+        resolveSubReplyDetailListScrollResetKey(
+            rootReplyId = rootReply.rpid,
+            effectiveConversationMode = effectiveConversationMode,
+            visibleReplies = visibleReplies
+        )
+    }
     val shouldLoadMore by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -315,6 +353,9 @@ internal fun SubReplyDetailContent(
     }
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) onLoadMore()
+    }
+    LaunchedEffect(listScrollResetKey) {
+        listState.scrollToItem(0)
     }
 
     Column(
@@ -592,11 +633,38 @@ private fun SubReplyDetailItem(
         appearance.primaryTextColor
     }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val copyToClipboard = rememberClipboardCopyHandler()
     var showActionSheet by remember(item.rpid) { mutableStateOf(false) }
     var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
     var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
+    var pendingSaveReply by remember(item.rpid) { mutableStateOf<ReplyItem?>(null) }
     val copyText = remember(item.content.message) { item.content.message.trim() }
+    fun launchSaveReplyCommentImage(reply: ReplyItem) {
+        scope.launch {
+            val success = saveReplyCommentImageToGallery(context, reply)
+            Toast.makeText(
+                context,
+                resolveReplyCommentImageSaveToast(success),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+    val storagePermission = rememberStoragePermissionState { granted ->
+        val pending = pendingSaveReply
+        pendingSaveReply = null
+        if (granted && pending != null) {
+            launchSaveReplyCommentImage(pending)
+        }
+    }
+    fun requestSaveReplyCommentImage() {
+        if (storagePermission.isGranted) {
+            launchSaveReplyCommentImage(item)
+        } else {
+            pendingSaveReply = item
+            storagePermission.request()
+        }
+    }
 
     if (showActionSheet) {
         ReplyActionSheet(
@@ -605,7 +673,9 @@ private fun SubReplyDetailItem(
             onDismiss = { showActionSheet = false },
             onCopyAll = { copyToClipboard(copyText, "评论内容") },
             onFreeCopy = { showFreeCopyDialog = true },
-            onSave = { shareReplyComment(context, item) },
+            onSave = {
+                requestSaveReplyCommentImage()
+            },
             onReply = onReplyClick,
             onReport = { showReportDialog = true },
             onToggleTop = {},
@@ -705,6 +775,21 @@ private fun SubReplyDetailItem(
                             item = item,
                             auxiliaryLabel = auxiliaryLabel,
                             appearance = appearance
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { showActionSheet = true },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .testTag("$COMMENT_ACTION_BUTTON_TAG_PREFIX${item.rpid}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = "评论操作",
+                            tint = appearance.actionTint,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }

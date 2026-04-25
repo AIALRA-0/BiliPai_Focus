@@ -67,4 +67,24 @@ class PlayerViewModelContextPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `comment send should prefer explicitly requested aid`() {
+        assertTrue(
+            resolveCommentSendTargetAid(
+                requestedAid = 2002L,
+                currentAid = 1001L
+            ) == 2002L
+        )
+    }
+
+    @Test
+    fun `comment send should fall back to current aid when request missing`() {
+        assertTrue(
+            resolveCommentSendTargetAid(
+                requestedAid = null,
+                currentAid = 1001L
+            ) == 1001L
+        )
+    }
 }

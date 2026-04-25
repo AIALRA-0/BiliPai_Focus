@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-21 · 文档已同步至 v7.9.6（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Version-7.9.6-fb7299?style=flat-square" alt="Version">
+    <sub>最后更新：2026-04-25 · 文档已同步至 v8.0.0 Alpha3 Focus.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  </p>
+  
+  <p align="center">
+    <img src="https://img.shields.io/badge/Version-8.0.0%20Alpha3-focus.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -572,12 +572,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.9.1 · 2026-04-17)
+### 最近更新 (v8.0.0 Alpha3 · 2026-04-25)
 
-- 🎞️ 修复平板横屏进入竖屏沉浸播放时画面比例偶发异常、留黑边的问题。
-- ⏱️ 修复进度条反复拖动时预览图偶发卡住的问题。
-- 🌙 调整视频页常亮策略，未开始播放、暂停和播放结束后允许自动息屏。
-- ✨ 补齐 UP 主空间合集/系列视频共享元素过渡，并完善部分深浅色主题适配。
+- 💬 评论更多菜单支持将一级/二级评论保存为带二维码图片。
+- 🖼️ 图片预览可隐藏随图文字，减少查看大图时的遮挡。
+- 🎬 优化播放器 seek、进度条拖拽、小窗快进和长按倍速锁定。
+- 📱 竖屏二级评论沿用播放器收缩表现，弹幕显示更贴合视频比例。
 
 ### 历史版本
 

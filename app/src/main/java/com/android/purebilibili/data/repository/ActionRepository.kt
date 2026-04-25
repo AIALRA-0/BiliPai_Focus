@@ -6,6 +6,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
+private const val FAVORITE_SEASON_PATH = "x/v3/fav/season/fav"
+private const val UNFAVORITE_SEASON_PATH = "x/v3/fav/season/unfav"
+private const val COLLECTION_SUBSCRIPTION_PLATFORM = "web"
+
+internal data class CollectionSubscriptionRequest(
+    val path: String,
+    val seasonId: Long,
+    val platform: String,
+    val csrf: String
+)
+
+internal fun buildCollectionSubscriptionRequest(
+    seasonId: Long,
+    subscribe: Boolean,
+    csrf: String
+): CollectionSubscriptionRequest {
+    return CollectionSubscriptionRequest(
+        path = if (subscribe) FAVORITE_SEASON_PATH else UNFAVORITE_SEASON_PATH,
+        seasonId = seasonId,
+        platform = COLLECTION_SUBSCRIPTION_PLATFORM,
+        csrf = csrf
+    )
+}
+
 /**
  * 用户操作相关 Repository
  * - 关注/取关 UP 主
@@ -168,6 +192,90 @@ object ActionRepository {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ActionRepository", "favoriteVideo failed", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    /**
+     * 订阅/取消订阅 UGC 合集。
+     *
+     * 对齐 PiliPlus:
+     * - 订阅: /x/v3/fav/season/fav
+     * - 取消订阅: /x/v3/fav/season/unfav
+     * - 表单字段: platform=web, season_id, csrf
+     */
+    suspend fun setCollectionSubscription(
+        seasonId: Long,
+        subscribe: Boolean
+    ): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (seasonId <= 0L) {
+                    return@withContext Result.failure(Exception("合集 ID 无效"))
+                }
+                val csrf = TokenManager.csrfCache ?: ""
+                if (csrf.isEmpty()) {
+                    return@withContext Result.failure(Exception("请先登录"))
+                }
+                val request = buildCollectionSubscriptionRequest(
+                    seasonId = seasonId,
+                    subscribe = subscribe,
+                    csrf = csrf
+                )
+                val response = if (subscribe) {
+                    api.favoriteSeason(
+                        platform = request.platform,
+                        seasonId = request.seasonId,
+                        csrf = request.csrf
+                    )
+                } else {
+                    api.unfavoriteSeason(
+                        platform = request.platform,
+                        seasonId = request.seasonId,
+                        csrf = request.csrf
+                    )
+                }
+
+                if (response.code == 0) {
+                    Result.success(subscribe)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "操作失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ActionRepository", "setCollectionSubscription failed", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    /**
+     * 查询当前视频所在合集是否已订阅。
+     *
+     * B 站的合集订阅状态来自 archive/relation 的 season_fav 字段。
+     */
+    suspend fun checkCollectionSubscriptionStatus(
+        bvid: String,
+        aid: Long = 0L
+    ): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val normalizedBvid = bvid.trim().takeIf { it.isNotEmpty() }
+                val normalizedAid = aid.takeIf { it > 0L }
+                if (normalizedBvid == null && normalizedAid == null) {
+                    return@withContext Result.failure(Exception("缺少视频标识"))
+                }
+                val response = api.getVideoRelation(
+                    aid = normalizedAid,
+                    bvid = normalizedBvid
+                )
+                if (response.code == 0) {
+                    Result.success(response.data?.seasonFav ?: false)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "状态获取失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ActionRepository", "checkCollectionSubscriptionStatus failed", e)
                 Result.failure(e)
             }
         }

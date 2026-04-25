@@ -71,4 +71,36 @@ class FavoriteModelsMappingTest {
         val item = requireNotNull(response.data?.medias).first().toVideoItem()
         assertEquals("BV1CZ4y1T7gC", item.bvid)
     }
+
+    @Test
+    fun `toVideoItem keeps favorite playback progress metadata`() {
+        val response = json.decodeFromString<FavoriteResourceResponse>(
+            """
+            {
+              "code": 0,
+              "data": {
+                "medias": [
+                  {
+                    "id": 371494037,
+                    "bvid": "BV1CZ4y1T7gC",
+                    "title": "test",
+                    "cover": "https://example.com/cover.jpg",
+                    "duration": 546,
+                    "progress": 123,
+                    "view_at": 1712345678,
+                    "ugc": {
+                      "first_cid": 216576581
+                    }
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        )
+
+        val item = requireNotNull(response.data?.medias).first().toVideoItem()
+
+        assertEquals(123, item.progress)
+        assertEquals(1712345678L, item.view_at)
+    }
 }

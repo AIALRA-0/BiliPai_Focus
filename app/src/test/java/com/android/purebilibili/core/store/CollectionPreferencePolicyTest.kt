@@ -47,4 +47,10 @@ class CollectionPreferencePolicyTest {
 
         assertEquals(setOf("99"), result)
     }
+
+    @Test
+    fun `set collection subscription mirrors remote subscribed state`() {
+        assertEquals(setOf("42"), setCollectionSubscription(emptySet(), 42L, true))
+        assertEquals(setOf("99"), setCollectionSubscription(setOf("42", "99"), 42L, false))
+    }
 }

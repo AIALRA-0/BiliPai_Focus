@@ -233,7 +233,7 @@ private fun DownloadTaskItem(
                             }
                             DownloadStatus.DOWNLOADING, DownloadStatus.MERGING -> {
                                 CircularProgressIndicator(
-                                    progress = { task.progress },
+                                    progress = { resolveDownloadTaskProgress(task) },
                                     modifier = Modifier.size(32.dp),
                                     color = Color.White,
                                     strokeWidth = 3.dp
@@ -309,7 +309,7 @@ private fun DownloadTaskItem(
                 val statusText = when (task.status) {
                     DownloadStatus.QUEUED -> "排队中..."
                     DownloadStatus.PENDING -> "等待中..."
-                    DownloadStatus.DOWNLOADING -> "下载中 ${(task.progress * 100).toInt()}%"
+                    DownloadStatus.DOWNLOADING -> "下载中 ${resolveDownloadTaskProgressPercent(task)}%"
                     DownloadStatus.MERGING -> "处理中..."
                     DownloadStatus.COMPLETED -> "已完成"
                     DownloadStatus.PAUSED -> "已暂停"

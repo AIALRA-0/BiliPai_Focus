@@ -46,4 +46,13 @@ class ImagePreviewVisualPolicyTest {
         assertEquals(0f, start.backdropAlpha)
         assertEquals(1f, end.backdropAlpha)
     }
+
+    @Test
+    fun `caption visibility should be shown by default and hide after toggle`() {
+        assertTrue(shouldShowImagePreviewText(hasText = true, textVisible = true))
+        assertEquals(false, resolveImagePreviewTextVisibilityAfterToggle(currentVisible = true))
+        assertEquals(true, resolveImagePreviewTextVisibilityAfterToggle(currentVisible = false))
+        assertEquals(false, shouldShowImagePreviewText(hasText = true, textVisible = false))
+        assertEquals(false, shouldShowImagePreviewText(hasText = false, textVisible = true))
+    }
 }

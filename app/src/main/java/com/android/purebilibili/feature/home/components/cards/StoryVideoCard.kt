@@ -79,6 +79,8 @@ fun StoryVideoCard(
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
+    showDurationBadge: Boolean = true,
+    showOnlineCount: Boolean = false,
     showPublishTime: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
@@ -114,6 +116,10 @@ fun StoryVideoCard(
     val premiumBadgeLabel = remember(video.rights) {
         resolveVideoPremiumBadgeLabel(video.rights)
     }
+    val onlineCount = rememberVideoCardOnlineCount(
+        video = video,
+        showOnlineCount = showOnlineCount
+    )
     val useLowQualityCover = isDataSaverActive && preferLowQualityCover
     val coverUrl = remember(video.bvid, useLowQualityCover) {
         FormatUtils.resolveVideoCoverUrl(
@@ -294,7 +300,7 @@ fun StoryVideoCard(
             }
             
             //  时长标签 (保留在封面上)
-            if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
+            if (showDurationBadge && badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -322,7 +328,7 @@ fun StoryVideoCard(
                             .padding(horizontal = 6.dp, vertical = 3.dp)
                     )
                 }
-            } else {
+            } else if (showDurationBadge) {
                 Text(
                     text = durationText,
                     color = Color.White,
@@ -550,6 +556,26 @@ fun StoryVideoCard(
                                  )
                              }
                          }
+                    }
+
+                    if (onlineCount.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.Eye,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = onlineCount,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

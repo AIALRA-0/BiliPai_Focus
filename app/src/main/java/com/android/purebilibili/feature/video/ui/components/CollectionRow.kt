@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -22,8 +23,6 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronForward
 import io.github.alexzhirkevich.cupertino.icons.outlined.Folder
 import io.github.alexzhirkevich.cupertino.icons.outlined.SquareAndArrowUp
-import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.launch
 
 /**
  *  视频合集展示行
@@ -38,16 +37,20 @@ fun CollectionRow(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val isSubscribed by SettingsManager
-        .isCollectionSubscribed(context, ugcSeason.id)
-        .collectAsState(initial = false)
+    val collectionSubscriptionId = remember(ugcSeason) { resolveCollectionSubscriptionId(ugcSeason) }
+    val allEpisodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
+    val currentAid = remember(allEpisodes, currentBvid, currentCid) {
+        resolveCurrentUgcEpisodeAid(
+            episodes = allEpisodes,
+            currentBvid = currentBvid,
+            currentCid = currentCid
+        )
+    }
     val sortMode by SettingsManager
-        .getCollectionSortMode(context, ugcSeason.id)
+        .getCollectionSortMode(context, collectionSubscriptionId)
         .collectAsState(initial = CollectionSortMode.ASCENDING)
 
     // 计算当前视频在合集中的位置
-    val allEpisodes = ugcSeason.sections.flatMap { it.episodes }
     val currentIndex = resolveCurrentUgcEpisodeIndex(
         episodes = allEpisodes,
         currentBvid = currentBvid,
@@ -131,21 +134,12 @@ fun CollectionRow(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            TextButton(
-                onClick = {
-                    scope.launch {
-                        SettingsManager.toggleCollectionSubscription(context, ugcSeason.id)
-                    }
-                },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = if (isSubscribed) "已订阅" else "订阅",
-                    color = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            CollectionSubscriptionButton(
+                collectionId = collectionSubscriptionId,
+                currentBvid = currentBvid,
+                currentAid = currentAid,
+                fontSize = 12.sp
+            )
 
             //  分享按钮
             IconButton(

@@ -411,6 +411,56 @@ class PortraitPagerSwitchPolicyTest {
     }
 
     @Test
+    fun mergePortraitRecommendationAppendItems_limitsDominantRecentOwner() {
+        val appendItems = mergePortraitRecommendationAppendItems(
+            currentBvid = "BV_CURRENT",
+            existingBvids = setOf("BV_CURRENT", "BV_EXISTING_1", "BV_EXISTING_2"),
+            existingRecommendations = listOf(
+                related("BV_EXISTING_1", ownerMid = 9L, title = "厨房收纳技巧"),
+                related("BV_EXISTING_2", ownerMid = 9L, title = "阳台植物养护")
+            ),
+            fetchedRecommendations = listOf(
+                related("BV_SAME_OWNER", ownerMid = 9L, title = "周末城市散步"),
+                related("BV_OTHER_OWNER", ownerMid = 20L, title = "猫咪睡觉观察")
+            )
+        )
+
+        assertEquals(listOf("BV_OTHER_OWNER"), appendItems.map { it.bvid })
+    }
+
+    @Test
+    fun portraitPagerSurfaceRecovery_runsOnlyForCurrentForegroundVideo() {
+        assertTrue(
+            shouldRecoverPortraitPagerSurfaceOnResume(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasPlayerView = true
+            )
+        )
+        assertFalse(
+            shouldRecoverPortraitPagerSurfaceOnResume(
+                isCurrentPage = false,
+                isPlayerReadyForThisVideo = true,
+                hasPlayerView = true
+            )
+        )
+        assertFalse(
+            shouldRecoverPortraitPagerSurfaceOnResume(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = false,
+                hasPlayerView = true
+            )
+        )
+        assertFalse(
+            shouldRecoverPortraitPagerSurfaceOnResume(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasPlayerView = false
+            )
+        )
+    }
+
+    @Test
     fun shufflePortraitRecommendations_isStableForSameSeed() {
         val source = listOf(
             related("BV_A"),

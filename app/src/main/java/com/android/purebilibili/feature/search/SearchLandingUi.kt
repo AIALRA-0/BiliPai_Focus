@@ -25,12 +25,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,9 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -61,6 +66,62 @@ internal fun resolveSearchKeywordSectionToggleLabel(enabled: Boolean): String {
 
 internal fun resolveSearchKeywordSectionHiddenText(title: String): String {
     return "已隐藏$title"
+}
+
+internal fun shouldUseOriginalSearchDiscoverStyle(
+    showTrendingAction: Boolean
+): Boolean = !showTrendingAction
+
+internal fun resolveSearchKeywordSectionColumns(
+    requestedColumns: Int,
+    showTrendingAction: Boolean
+): Int {
+    val safeColumns = requestedColumns.coerceAtLeast(1)
+    return if (shouldUseOriginalSearchDiscoverStyle(showTrendingAction)) 2 else safeColumns
+}
+
+internal fun resolveSearchDiscoverOriginalSubtitle(
+    subtitle: String?
+): String? {
+    val normalized = subtitle?.trim().orEmpty()
+    if (normalized.isBlank()) return null
+    return if (
+        normalized.contains("更新") ||
+        normalized.contains("分钟前") ||
+        normalized.contains("小时前") ||
+        normalized.contains("天前")
+    ) {
+        normalized
+    } else {
+        null
+    }
+}
+
+internal data class SearchDiscoverOriginalCellColors(
+    val containerColor: Color,
+    val titleColor: Color,
+    val subtitleColor: Color,
+    val borderColor: Color
+)
+
+internal fun resolveSearchDiscoverOriginalCellColors(
+    colorScheme: androidx.compose.material3.ColorScheme
+): SearchDiscoverOriginalCellColors {
+    return if (colorScheme.background.luminance() > 0.5f) {
+        SearchDiscoverOriginalCellColors(
+            containerColor = colorScheme.primary.copy(alpha = 0.08f),
+            titleColor = colorScheme.onSurface,
+            subtitleColor = colorScheme.primary.copy(alpha = 0.58f),
+            borderColor = colorScheme.primary.copy(alpha = 0.12f)
+        )
+    } else {
+        SearchDiscoverOriginalCellColors(
+            containerColor = colorScheme.primary.copy(alpha = 0.18f),
+            titleColor = colorScheme.onSurface,
+            subtitleColor = colorScheme.primary.copy(alpha = 0.72f),
+            borderColor = colorScheme.primary.copy(alpha = 0.22f)
+        )
+    }
 }
 
 @Composable
@@ -268,32 +329,42 @@ private fun SearchKeywordSection(
     onToggleEnabled: (() -> Unit)? = null,
     onOpenTrending: (() -> Unit)? = null
 ) {
-    val safeColumns = columns.coerceAtLeast(1)
+    val useOriginalDiscoverStyle = shouldUseOriginalSearchDiscoverStyle(showTrendingAction)
+    val safeColumns = resolveSearchKeywordSectionColumns(columns, showTrendingAction)
     Column {
         SearchKeywordSectionHeader(
             title = title,
             enabled = enabled,
+            useOriginalDiscoverStyle = useOriginalDiscoverStyle,
             showTrendingAction = showTrendingAction,
             onToggleEnabled = onToggleEnabled,
             onOpenTrending = onOpenTrending,
             onRefresh = onRefresh
         )
         if (enabled && items.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(if (useOriginalDiscoverStyle) 12.dp else 10.dp))
             Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(if (useOriginalDiscoverStyle) 12.dp else 6.dp)
             ) {
                 items.chunked(safeColumns).forEach { rowItems ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(if (useOriginalDiscoverStyle) 12.dp else 12.dp)
                     ) {
                         rowItems.forEach { item ->
-                            SearchKeywordCell(
-                                item = item,
-                                modifier = Modifier.weight(1f),
-                                onClick = { onKeywordClick(item.keyword) }
-                            )
+                            if (useOriginalDiscoverStyle) {
+                                SearchDiscoverOriginalCell(
+                                    item = item,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onKeywordClick(item.keyword) }
+                                )
+                            } else {
+                                SearchKeywordCell(
+                                    item = item,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { onKeywordClick(item.keyword) }
+                                )
+                            }
                         }
                         repeat(safeColumns - rowItems.size) {
                             Spacer(modifier = Modifier.weight(1f))
@@ -316,11 +387,60 @@ private fun SearchKeywordSection(
 private fun SearchKeywordSectionHeader(
     title: String,
     enabled: Boolean,
+    useOriginalDiscoverStyle: Boolean,
     showTrendingAction: Boolean,
     onRefresh: () -> Unit,
     onToggleEnabled: (() -> Unit)?,
     onOpenTrending: (() -> Unit)?
 ) {
+    if (useOriginalDiscoverStyle) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                )
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (enabled) {
+                    IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "刷新搜索发现",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                if (onToggleEnabled != null) {
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(18.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f))
+                    )
+                    IconButton(onClick = onToggleEnabled, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            imageVector = if (enabled) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            contentDescription = if (enabled) "隐藏搜索发现" else "显示搜索发现",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+        return
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -376,6 +496,59 @@ private fun SearchKeywordSectionHeader(
                     label = { Text(resolveSearchKeywordSectionToggleLabel(enabled)) }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchDiscoverOriginalCell(
+    item: SearchKeywordUiModel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val colors = resolveSearchDiscoverOriginalCellColors(colorScheme)
+    val displaySubtitle = remember(item.subtitle) {
+        resolveSearchDiscoverOriginalSubtitle(item.subtitle)
+    }
+    Surface(
+        modifier = modifier,
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = colors.containerColor,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.borderColor),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = buildAnnotatedString {
+                    append(item.title)
+                    if (!displaySubtitle.isNullOrBlank()) {
+                        pushStyle(
+                            SpanStyle(
+                                color = colors.subtitleColor,
+                                fontWeight = FontWeight.Normal
+                            )
+                        )
+                        append(" · ")
+                        append(displaySubtitle)
+                        pop()
+                    }
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.titleColor
+                )
+            )
         }
     }
 }

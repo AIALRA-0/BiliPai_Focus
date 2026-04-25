@@ -105,6 +105,28 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun phoneCommentThreadHost_usesMainSheetPresentationWhenEmbeddedPathIsEnabled() {
+        assertTrue(
+            resolveVideoDetailCommentThreadHostMainSheetVisible(
+                useEmbeddedPresentation = true,
+                subReplyVisible = true
+            )
+        )
+        assertFalse(
+            resolveVideoDetailCommentThreadHostMainSheetVisible(
+                useEmbeddedPresentation = true,
+                subReplyVisible = false
+            )
+        )
+        assertFalse(
+            resolveVideoDetailCommentThreadHostMainSheetVisible(
+                useEmbeddedPresentation = false,
+                subReplyVisible = true
+            )
+        )
+    }
+
+    @Test
     fun systemMultiWindowFullscreenPolicy_restoresMainWindowBeforeEnteringFullscreen() {
         assertTrue(
             shouldRestoreMainWindowBeforeEnteringFullscreen(
