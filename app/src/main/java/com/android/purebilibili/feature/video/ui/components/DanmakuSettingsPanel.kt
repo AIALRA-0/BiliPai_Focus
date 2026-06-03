@@ -6,11 +6,9 @@ import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
 import com.android.purebilibili.feature.video.danmaku.mergeDanmakuBlockRuleSections
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
 import com.android.purebilibili.feature.video.danmaku.partitionDanmakuBlockRules
-import com.android.purebilibili.feature.video.danmaku.resolveFaceOcclusionModuleUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -266,20 +264,21 @@ fun DanmakuSettingsPanel(
     staticDanmakuToScroll: Boolean = false,
     massiveMode: Boolean = false,
     mergeDuplicates: Boolean = true,
+    duplicateMergeWindowMs: Int = 500,
+    duplicateMergeCountThreshold: Int = 2,
     allowScroll: Boolean = true,
     allowTop: Boolean = true,
     allowBottom: Boolean = true,
     allowColorful: Boolean = true,
     allowSpecial: Boolean = true,
+    hideInteractiveCommands: Boolean = false,
     showBlockRuleEditor: Boolean = false,
-    showSmartOcclusionSection: Boolean = true,
+    showSmartOcclusionSection: Boolean = false,
     showSyncSection: Boolean = false,
     blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
     fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     syncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
-    smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
-    smartOcclusionDownloadProgress: Int? = null,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
     onFontWeightChange: (Int) -> Unit = {},
@@ -293,16 +292,18 @@ fun DanmakuSettingsPanel(
     onStaticDanmakuToScrollChange: (Boolean) -> Unit = {},
     onMassiveModeChange: (Boolean) -> Unit = {},
     onMergeDuplicatesChange: (Boolean) -> Unit = {},
+    onDuplicateMergeWindowMsChange: (Int) -> Unit = {},
+    onDuplicateMergeCountThresholdChange: (Int) -> Unit = {},
     onAllowScrollChange: (Boolean) -> Unit = {},
     onAllowTopChange: (Boolean) -> Unit = {},
     onAllowBottomChange: (Boolean) -> Unit = {},
     onAllowColorfulChange: (Boolean) -> Unit = {},
     onAllowSpecialChange: (Boolean) -> Unit = {},
+    onHideInteractiveCommandsChange: (Boolean) -> Unit = {},
     onBlockRulesRawChange: (String) -> Unit = {},
     onSmartOcclusionChange: (Boolean) -> Unit = {},
     onFullscreenWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     onSyncNowClick: () -> Unit = {},
-    onSmartOcclusionDownloadClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var showBlockManager by remember { mutableStateOf(false) }
@@ -332,13 +333,13 @@ fun DanmakuSettingsPanel(
             fullscreenWidthMode = fullscreenWidthMode
         )
     }
-    val moduleUiState = remember(smartOcclusionModuleState, smartOcclusionDownloadProgress) {
-        resolveFaceOcclusionModuleUiState(
-            state = smartOcclusionModuleState,
-            progressPercent = smartOcclusionDownloadProgress
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnClickOutside = false
         )
-    }
-    val overlayContent: @Composable () -> Unit = {
+    ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = when (layoutPolicy.anchor) {
@@ -800,58 +801,51 @@ fun DanmakuSettingsPanel(
                             )
                         }
                     }
-    
-                    Spacer(modifier = Modifier.height(16.dp))
 
-                    if (showSmartOcclusionSection) {
+                    if (mergeDuplicates) {
+                        Spacer(modifier = Modifier.height(12.dp))
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = panelColors.itemColor,
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = "人脸模型",
-                                        color = panelColors.titleColor,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = moduleUiState.statusText,
-                                        color = panelColors.supportingColor,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                if (moduleUiState.showAction) {
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Button(
-                                        onClick = onSmartOcclusionDownloadClick,
-                                        enabled = moduleUiState.isActionEnabled,
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Text(
-                                            text = moduleUiState.actionText,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                DanmakuSliderItem(
+                                    label = "合并窗口",
+                                    value = duplicateMergeWindowMs.toFloat(),
+                                    valueRange = 100f..3000f,
+                                    steps = 28,
+                                    displayValue = { "${it.roundToInt()}ms" },
+                                    onValueChange = { onDuplicateMergeWindowMsChange(it.roundToInt()) },
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle,
+                                    resetValue = 500f,
+                                    tickCount = 6
+                                )
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                DanmakuSliderItem(
+                                    label = "计数阈值",
+                                    value = duplicateMergeCountThreshold.toFloat(),
+                                    valueRange = 2f..10f,
+                                    steps = 7,
+                                    displayValue = { "${it.roundToInt()} 条" },
+                                    onValueChange = {
+                                        onDuplicateMergeCountThresholdChange(it.roundToInt())
+                                    },
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle,
+                                    resetValue = 2f,
+                                    tickCount = 5
+                                )
                             }
                         }
+                    }
     
-                        Spacer(modifier = Modifier.height(16.dp))
-    
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (showSmartOcclusionSection) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = panelColors.itemColor,
@@ -948,6 +942,13 @@ fun DanmakuSettingsPanel(
                                 label = "高级弹幕",
                                 checked = allowSpecial,
                                 onCheckedChange = onAllowSpecialChange,
+                                colors = panelColors,
+                                fullscreenStyle = isFullscreenStyle
+                            )
+                            DanmakuFilterSwitchRow(
+                                label = "视频内互动提示",
+                                checked = !hideInteractiveCommands,
+                                onCheckedChange = { onHideInteractiveCommandsChange(!it) },
                                 showDivider = false,
                                 colors = panelColors,
                                 fullscreenStyle = isFullscreenStyle
@@ -1007,7 +1008,7 @@ fun DanmakuSettingsPanel(
                                     text = if (totalBlockRuleCount > 0) {
                                         "已维护 $totalBlockRuleCount 条规则，修改后立即生效"
                                     } else {
-                                        "每行一个，支持关键词、正则与 UID(hash)：regex:xxx / re:xxx / /xxx/ / uid:xxx"
+                                        "每行一个，也可粘贴 JSON：keywords / regex / userHashes"
                                     },
                                     color = panelColors.supportingColor,
                                     fontSize = 11.sp
@@ -1042,20 +1043,6 @@ fun DanmakuSettingsPanel(
                 }
             }
         }
-    }
-
-    if (isFullscreen) {
-        Dialog(
-            onDismissRequest = onDismiss,
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnClickOutside = false
-            )
-        ) {
-            overlayContent()
-        }
-    } else {
-        overlayContent()
     }
 
     if (showBlockManager) {

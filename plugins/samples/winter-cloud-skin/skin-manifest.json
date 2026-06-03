@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "skinId": "samples.winter_cloud",
+  "displayName": "冬日云朵皮肤",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "BiliPai",
+  "surfaces": [
+    "HOME_BOTTOM_BAR",
+    "HOME_TOP_CHROME"
+  ],
+  "assets": {
+    "bottomBarTrim": "assets/bottom_trim.png",
+    "topAtmosphere": "assets/top_atmosphere.png",
+    "searchCapsuleBackground": "assets/search_capsule.png",
+    "bottomBarIcons": {
+      "home": "assets/icon_home.png",
+      "following": "assets/icon_following.png",
+      "member": "assets/icon_member.png",
+      "profile": "assets/icon_profile.png"
+    }
+  },
+  "colors": {
+    "bottomBarTrimTint": "#EAF8FF",
+    "topAtmosphereTint": "#DFF5FF",
+    "searchCapsuleTint": "#FFFFFF"
+  }
+}

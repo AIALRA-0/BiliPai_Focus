@@ -20,6 +20,26 @@ data class VideoFeedbackPlacement(
     val emphasis: VideoFeedbackEmphasis = VideoFeedbackEmphasis.Standard
 )
 
+data class VideoDetailActionActiveColors(
+    val primaryAction: Color,
+    val watchLater: Color,
+    val downloadInProgress: Color,
+    val downloaded: Color
+)
+
+fun resolveVideoDetailActionActiveColors(
+    primary: Color,
+    secondary: Color,
+    tertiary: Color
+): VideoDetailActionActiveColors {
+    return VideoDetailActionActiveColors(
+        primaryAction = primary,
+        watchLater = tertiary,
+        downloadInProgress = secondary,
+        downloaded = primary
+    )
+}
+
 fun resolveVideoActionTint(
     isActive: Boolean,
     activeColor: Color,

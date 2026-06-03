@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.article
 
+import com.android.purebilibili.core.ui.transition.BiliPaiSharedElementKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -22,15 +23,15 @@ class ArticleSharedTransitionPolicyTest {
     @Test
     fun `article shared transition keys stay stable per slot`() {
         assertEquals(
-            "article_card_6233590",
+            BiliPaiSharedElementKey.Raw("article_card", "6233590"),
             resolveArticleSharedTransitionKey(6233590L, ArticleSharedElementSlot.CARD)
         )
         assertEquals(
-            "article_cover_6233590",
+            BiliPaiSharedElementKey.ArticleCover(6233590L),
             resolveArticleSharedTransitionKey(6233590L, ArticleSharedElementSlot.COVER)
         )
         assertEquals(
-            "article_title_6233590",
+            BiliPaiSharedElementKey.Raw("article_title", "6233590"),
             resolveArticleSharedTransitionKey(6233590L, ArticleSharedElementSlot.TITLE)
         )
     }
@@ -40,21 +41,12 @@ class ArticleSharedTransitionPolicyTest {
         assertTrue(
             shouldUseArticleNoOpRouteTransition(
                 cardTransitionEnabled = true,
-                predictiveBackAnimationEnabled = false,
                 sharedTransitionReady = true
             )
         )
         assertFalse(
             shouldUseArticleNoOpRouteTransition(
                 cardTransitionEnabled = true,
-                predictiveBackAnimationEnabled = true,
-                sharedTransitionReady = true
-            )
-        )
-        assertFalse(
-            shouldUseArticleNoOpRouteTransition(
-                cardTransitionEnabled = true,
-                predictiveBackAnimationEnabled = false,
                 sharedTransitionReady = false
             )
         )

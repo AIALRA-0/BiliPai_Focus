@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -97,7 +99,7 @@ private fun TimelineView(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(days.size) { index ->
+            items(days.size, key = { index -> days[index].date }) { index ->
                 val day = days[index]
                 DayChip(
                     day = day,
@@ -120,11 +122,10 @@ private fun TimelineView(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(
+                itemsIndexed(
                     items = selectedDay.episodes,
-                    // [修复] 使用复合 key 防止 episodeId 重复导致崩溃
-                    key = { "${it.seasonId}_${it.episodeId}" }
-                ) { episode ->
+                    key = { index, episode -> resolveTimelineEpisodeLazyKey(index, episode) }
+                ) { _, episode ->
                     TimelineEpisodeCard(
                         episode = episode,
                         onClick = { onBangumiClick(episode.seasonId) }
@@ -165,7 +166,7 @@ private fun DayChip(
     
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.container(ContainerLevel.Card),
         color = when {
             isSelected -> MaterialTheme.colorScheme.primary
             isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -210,7 +211,7 @@ private fun TimelineEpisodeCard(
     
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.container(ContainerLevel.Card),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -222,7 +223,7 @@ private fun TimelineEpisodeCard(
             Box(
                 modifier = Modifier
                     .size(80.dp, 60.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(AppShapes.container(ContainerLevel.Chip))
             ) {
                 AsyncImage(
                     model = FormatUtils.fixImageUrl(episode.cover.ifEmpty { episode.squareCover }),
@@ -237,7 +238,7 @@ private fun TimelineEpisodeCard(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(4.dp)
-                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary, AppShapes.container(ContainerLevel.Tag))
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
                         Text(

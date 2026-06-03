@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import androidx.window.layout.WindowMetrics
+import kotlin.math.min
 
 /**
  * 🖥️ 窗口宽度尺寸类型
@@ -42,6 +44,28 @@ enum class WindowHeightSizeClass {
     Expanded
 }
 
+internal fun resolveWindowWidthSizeClass(widthDp: Dp): WindowWidthSizeClass {
+    return when {
+        widthDp < 600.dp -> WindowWidthSizeClass.Compact
+        widthDp < 840.dp -> WindowWidthSizeClass.Medium
+        else -> WindowWidthSizeClass.Expanded
+    }
+}
+
+internal fun resolveWindowHeightSizeClass(heightDp: Dp): WindowHeightSizeClass {
+    return when {
+        heightDp < 480.dp -> WindowHeightSizeClass.Compact
+        heightDp < 900.dp -> WindowHeightSizeClass.Medium
+        else -> WindowHeightSizeClass.Expanded
+    }
+}
+
+internal fun resolveStableDeviceWidthSizeClass(
+    smallestScreenWidthDp: Int
+): WindowWidthSizeClass {
+    return resolveWindowWidthSizeClass(smallestScreenWidthDp.dp)
+}
+
 /**
  * 📐 窗口尺寸类信息
  */
@@ -49,11 +73,20 @@ data class WindowSizeClass(
     val widthSizeClass: WindowWidthSizeClass,
     val heightSizeClass: WindowHeightSizeClass,
     val widthDp: Dp,
-    val heightDp: Dp
+    val heightDp: Dp,
+    val deviceWidthSizeClass: WindowWidthSizeClass = widthSizeClass
 ) {
-    /** 是否为平板设备 */
+    /** 是否为当前窗口意义上的平板宽度布局 */
     val isTablet: Boolean
         get() = widthSizeClass != WindowWidthSizeClass.Compact
+
+    /** 是否为稳定意义上的手机宽度设备 */
+    val isCompactDevice: Boolean
+        get() = deviceWidthSizeClass == WindowWidthSizeClass.Compact
+
+    /** 是否为稳定意义上的平板宽度设备 */
+    val isTabletDevice: Boolean
+        get() = !isCompactDevice
     
     /** 是否为大屏设备（平板横屏） */
     val isExpandedScreen: Boolean
@@ -85,30 +118,26 @@ val LocalWindowSizeClass = compositionLocalOf {
  */
 @Composable
 fun calculateWindowSizeClass(
-    densityMultiplier: Float = 1f
+    densityMultiplier: Float = 1f,
+    metrics: WindowMetrics
 ): WindowSizeClass {
     val configuration = LocalConfiguration.current
     val widthDp = (configuration.screenWidthDp / densityMultiplier).dp
     val heightDp = (configuration.screenHeightDp / densityMultiplier).dp
+    val deviceWidthSizeClass = resolveStableDeviceWidthSizeClass(
+        min(metrics.widthDp, metrics.heightDp).toInt()
+    )
     
-    val widthSizeClass = when {
-        widthDp < 600.dp -> WindowWidthSizeClass.Compact
-        widthDp < 840.dp -> WindowWidthSizeClass.Medium
-        else -> WindowWidthSizeClass.Expanded
-    }
+    val widthSizeClass = resolveWindowWidthSizeClass(widthDp)
+    val heightSizeClass = resolveWindowHeightSizeClass(heightDp)
     
-    val heightSizeClass = when {
-        heightDp < 480.dp -> WindowHeightSizeClass.Compact
-        heightDp < 900.dp -> WindowHeightSizeClass.Medium
-        else -> WindowHeightSizeClass.Expanded
-    }
-    
-    return remember(widthDp, heightDp) {
+    return remember(widthDp, heightDp, deviceWidthSizeClass) {
         WindowSizeClass(
             widthSizeClass = widthSizeClass,
             heightSizeClass = heightSizeClass,
             widthDp = widthDp,
-            heightDp = heightDp
+            heightDp = heightDp,
+            deviceWidthSizeClass = deviceWidthSizeClass
         )
     }
 }
@@ -186,7 +215,7 @@ fun shouldUseSideNavigation(): Boolean {
 @Composable
 fun isTabletDevice(): Boolean {
     val windowSizeClass = LocalWindowSizeClass.current
-    return windowSizeClass.isTablet
+    return windowSizeClass.isTabletDevice
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -305,7 +334,7 @@ fun Modifier.centeredContent(
 @Composable
 fun isTabletLandscape(): Boolean {
     val windowSizeClass = LocalWindowSizeClass.current
-    return windowSizeClass.isTablet && windowSizeClass.widthDp > windowSizeClass.heightDp
+    return windowSizeClass.isTabletDevice && windowSizeClass.widthDp > windowSizeClass.heightDp
 }
 
 /**
@@ -314,7 +343,7 @@ fun isTabletLandscape(): Boolean {
 @Composable
 fun isTabletPortrait(): Boolean {
     val windowSizeClass = LocalWindowSizeClass.current
-    return windowSizeClass.isTablet && windowSizeClass.widthDp <= windowSizeClass.heightDp
+    return windowSizeClass.isTabletDevice && windowSizeClass.widthDp <= windowSizeClass.heightDp
 }
 
 /**

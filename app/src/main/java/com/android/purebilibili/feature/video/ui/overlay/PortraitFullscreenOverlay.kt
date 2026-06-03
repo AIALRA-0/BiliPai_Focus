@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.MoreVert
+import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
@@ -48,6 +50,19 @@ internal fun shouldShowPortraitViewCount(viewCount: Int, compactMode: Boolean): 
 }
 
 internal fun shouldShowPortraitTopMoreAction(): Boolean = false
+
+internal fun resolvePortraitProgressTimeLabel(
+    positionMs: Long,
+    durationMs: Long
+): String {
+    val safeDurationMs = durationMs.coerceAtLeast(0L)
+    val safePositionMs = if (safeDurationMs > 0L) {
+        positionMs.coerceIn(0L, safeDurationMs)
+    } else {
+        positionMs.coerceAtLeast(0L)
+    }
+    return "${FormatUtils.formatDuration(safePositionMs)} / ${FormatUtils.formatDuration(safeDurationMs)}"
+}
 
 /**
  * 竖屏全屏覆盖层 (B站官方风格) - 重构版
@@ -74,6 +89,7 @@ fun PortraitFullscreenOverlay(
     isCoined: Boolean,
     isFavorited: Boolean,
     onLikeClick: () -> Unit,
+    onLikeLongClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onCommentClick: () -> Unit = {},
@@ -97,12 +113,13 @@ fun PortraitFullscreenOverlay(
     
     // 显示状态
     showControls: Boolean = true,
+    commentExpansionProgress: Float = 0f,
     videoshotData: VideoshotData? = null,
     isPlaybackRecovering: Boolean = false,
     
     // 回调
     onBack: () -> Unit,
-    onHomeClick: () -> Unit,
+    onHomeClick: () -> Unit = onBack,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onSeekStart: () -> Unit = {},
@@ -129,6 +146,21 @@ fun PortraitFullscreenOverlay(
             widthDp = configuration.screenWidthDp
         )
     }
+    val progressLayoutPolicy = remember(configuration.screenWidthDp) {
+        resolvePortraitProgressBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp
+        )
+    }
+    val progressTimeLabel = remember(seekPositionMs, progress.current, progress.duration, isSeekScrubbing) {
+        resolvePortraitProgressTimeLabel(
+            positionMs = if (isSeekScrubbing) seekPositionMs else progress.current,
+            durationMs = progress.duration
+        )
+    }
+    val commentProgress = commentExpansionProgress.coerceIn(0f, 1f)
+    val commentOverlayAlpha = (1f - commentProgress).coerceIn(0f, 1f)
+    val density = LocalDensity.current
+    val commentOverlayOffsetPx = with(density) { 24.dp.toPx() } * commentProgress
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -136,12 +168,22 @@ fun PortraitFullscreenOverlay(
         
         // 控件层动画
         AnimatedVisibility(
-            visible = showControls,
+            visible = showControls && commentOverlayAlpha > 0.001f,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = commentOverlayAlpha
+                            translationY = -commentOverlayOffsetPx
+                        }
+                ) {
+                    PortraitReadableTextScrims(layoutPolicy = layoutPolicy)
+                }
                 
                 // 1. 顶部栏 (返回 + 观看人数)
                 PortraitTopControlBar(
@@ -154,7 +196,11 @@ fun PortraitFullscreenOverlay(
                     isStatusBarHidden = isStatusBarHidden,
                     onToggleStatusBar = onToggleStatusBar,
                     onSearchClick = onSearchClick,
-                    onMoreClick = onMoreClick
+                    onMoreClick = onMoreClick,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = commentOverlayAlpha
+                        translationY = -commentOverlayOffsetPx
+                    }
                 )
 
                 // 2. 右侧互动栏 (不再包含头像)
@@ -166,15 +212,27 @@ fun PortraitFullscreenOverlay(
                     commentCount = statReply.takeIf { it > 0 } ?: statDanmaku, // 优先用评论数，没有则用弹幕数代替展示
                     shareCount = statShare,
                     onLikeClick = onLikeClick,
+                    onLikeLongClick = onLikeLongClick,
                     onFavoriteClick = onFavoriteClick,
                     onCommentClick = onCommentClick,
                     onShareClick = onShareClick,
-                    modifier = Modifier.align(Alignment.BottomEnd)
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .graphicsLayer {
+                            alpha = commentOverlayAlpha
+                            translationX = commentOverlayOffsetPx
+                        }
                 )
                 
                 // 3. 底部区域 (信息 + 进度条 + 输入栏占位)
                 Column(
-                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = commentOverlayAlpha
+                            translationY = commentOverlayOffsetPx
+                        }
                 ) {
                     // 视频信息 (Video Info)
                     PortraitVideoInfo(
@@ -190,6 +248,16 @@ fun PortraitFullscreenOverlay(
                             .fillMaxWidth(layoutPolicy.infoWidthFraction)
                             .padding(horizontal = layoutPolicy.infoHorizontalPaddingDp.dp)
                             .padding(bottom = layoutPolicy.infoBottomPaddingDp.dp)
+                    )
+
+                    PortraitProgressControlStrip(
+                        timeLabel = progressTimeLabel,
+                        currentSpeed = currentSpeed,
+                        onSpeedClick = onSpeedClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = progressLayoutPolicy.horizontalPaddingDp.dp)
+                            .padding(bottom = 2.dp)
                     )
                     
                     // 底部进度条 (Progress Bar)
@@ -236,6 +304,10 @@ fun PortraitFullscreenOverlay(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = layoutPolicy.bottomInputLiftDp.dp)
+                        .graphicsLayer {
+                            alpha = commentOverlayAlpha
+                            translationY = commentOverlayOffsetPx
+                        }
                 )
 
                 AnimatedVisibility(
@@ -281,6 +353,82 @@ fun PortraitFullscreenOverlay(
     }
 }
 
+@Composable
+private fun PortraitReadableTextScrims(
+    layoutPolicy: PortraitFullscreenOverlayLayoutPolicy
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 亮色视频会吞掉白色标题和顶部图标，只在文字覆盖区下方加渐变暗层。
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(layoutPolicy.topScrimHeightDp.dp)
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Black.copy(alpha = layoutPolicy.topScrimStartAlpha),
+                            1f to Color.Transparent
+                        )
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(layoutPolicy.bottomTextScrimHeightDp.dp)
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.42f to Color.Black.copy(alpha = layoutPolicy.bottomTextScrimEndAlpha * 0.46f),
+                            1f to Color.Black.copy(alpha = layoutPolicy.bottomTextScrimEndAlpha)
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+private fun PortraitProgressControlStrip(
+    timeLabel: String,
+    currentSpeed: Float,
+    onSpeedClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.height(40.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = timeLabel,
+            color = Color.White.copy(alpha = 0.86f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Surface(
+            onClick = onSpeedClick,
+            shape = RoundedCornerShape(999.dp),
+            color = Color.White.copy(alpha = 0.14f),
+            contentColor = if (currentSpeed == 1.0f) {
+                Color.White
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
+        ) {
+            Text(
+                text = PlaybackSpeed.formatSpeed(currentSpeed),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
 /**
  * 顶部控制区
  */
@@ -295,10 +443,11 @@ private fun PortraitTopControlBar(
     isStatusBarHidden: Boolean,
     onToggleStatusBar: () -> Unit,
     onSearchClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(

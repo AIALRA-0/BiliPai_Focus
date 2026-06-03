@@ -16,7 +16,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,10 +53,13 @@ private sealed interface DynamicDetailUiState {
 @Composable
 fun DynamicDetailScreen(
     dynamicId: String,
+    openCommentRootRpid: Long = 0L,
+    openCommentTargetRpid: Long = 0L,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
     onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
+    onArticleClick: (articleId: Long, title: String) -> Unit = { _, _ -> },
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> }
 ) {
     val interactionViewModel: DynamicViewModel = viewModel()
@@ -80,8 +84,13 @@ fun DynamicDetailScreen(
 
     val context = LocalContext.current
     val gifImageLoader = context.imageLoader
-    val likedDynamics by interactionViewModel.likedDynamics.collectAsState()
+    val likedDynamics by interactionViewModel.likedDynamics.collectAsStateWithLifecycle()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }
+    var hasHandledRoutedComment by rememberSaveable(
+        dynamicId,
+        openCommentRootRpid,
+        openCommentTargetRpid
+    ) { mutableStateOf(false) }
 
     AdaptiveScaffold(
         topBar = {
@@ -130,6 +139,21 @@ fun DynamicDetailScreen(
             }
 
             is DynamicDetailUiState.Success -> {
+                LaunchedEffect(
+                    state.item.id_str,
+                    openCommentRootRpid,
+                    openCommentTargetRpid
+                ) {
+                    if (openCommentRootRpid > 0L && !hasHandledRoutedComment) {
+                        interactionViewModel.openCommentSheet(
+                            item = state.item,
+                            rootReplyId = openCommentRootRpid,
+                            targetReplyId = openCommentTargetRpid
+                        )
+                        hasHandledRoutedComment = true
+                    }
+                }
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -143,6 +167,7 @@ fun DynamicDetailScreen(
                             onVideoClick = onVideoClick,
                             onBangumiClick = onBangumiClick,
                             onUserClick = onUserClick,
+                            onArticleClick = onArticleClick,
                             onLiveClick = onLiveClick,
                             isDetail = true,
                             gifImageLoader = gifImageLoader,
@@ -151,6 +176,12 @@ fun DynamicDetailScreen(
                             onLikeClick = { targetDynamicId ->
                                 interactionViewModel.likeDynamic(targetDynamicId) { _, msg ->
                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onDeleteClick = { action ->
+                                interactionViewModel.deleteDynamic(action) { success, msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    if (success) onBack()
                                 }
                             },
                             isLiked = likedDynamics.contains(state.item.id_str)
@@ -167,10 +198,11 @@ fun DynamicDetailScreen(
                 showRepostDialog?.let { repostDynamicId ->
                     RepostDialog(
                         onDismiss = { showRepostDialog = null },
-                        onRepost = { content ->
+                        onRepost = { content: String, onComplete: (Boolean) -> Unit ->
                             interactionViewModel.repostDynamic(repostDynamicId, content) { success, msg ->
                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 if (success) showRepostDialog = null
+                                onComplete(success)
                             }
                         }
                     )

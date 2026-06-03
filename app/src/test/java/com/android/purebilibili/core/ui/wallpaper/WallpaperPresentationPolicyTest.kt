@@ -44,13 +44,13 @@ class WallpaperPresentationPolicyTest {
     }
 
     @Test
-    fun splash_tabletWidth_usesPosterCardWithBlurBackground() {
+    fun splash_tabletWidth_usesFullCrop() {
         assertEquals(
-            SplashWallpaperLayout.POSTER_CARD_BLUR_BG,
+            SplashWallpaperLayout.FULL_CROP,
             resolveSplashWallpaperLayout(WindowWidthSizeClass.Medium)
         )
         assertEquals(
-            SplashWallpaperLayout.POSTER_CARD_BLUR_BG,
+            SplashWallpaperLayout.FULL_CROP,
             resolveSplashWallpaperLayout(WindowWidthSizeClass.Expanded)
         )
     }

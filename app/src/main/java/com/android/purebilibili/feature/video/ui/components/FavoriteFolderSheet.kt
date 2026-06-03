@@ -97,7 +97,7 @@ fun FavoriteFolderSheet(
                     contentPadding = PaddingValues(vertical = 8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    items(folders) { folder ->
+                    items(folders, key = { resolveFavoriteFolderMediaId(it) }) { folder ->
                         FavoriteFolderItem(
                             folder = folder,
                             selected = selectedFolderIds.contains(resolveFavoriteFolderMediaId(folder)),

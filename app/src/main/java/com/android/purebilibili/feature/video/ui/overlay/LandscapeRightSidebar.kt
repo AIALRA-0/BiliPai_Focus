@@ -10,10 +10,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +27,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
+import com.android.purebilibili.core.ui.rememberAppCoinIcon
+import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
+import com.android.purebilibili.core.ui.rememberAppLikeIcon
+import com.android.purebilibili.core.ui.rememberAppMoreIcon
+import com.android.purebilibili.core.ui.rememberAppShareIcon
 import com.android.purebilibili.core.util.FormatUtils
 
 /**
@@ -65,6 +67,13 @@ fun LandscapeRightSidebar(
     onRatioClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val shareIcon = rememberAppShareIcon()
+    val favoriteIcon = rememberAppBookmarkIcon()
+    val coinIcon = rememberAppCoinIcon()
+    val likeIcon = rememberAppLikeIcon()
+    val likeFilledIcon = rememberAppLikeFilledIcon()
+    val moreIcon = rememberAppMoreIcon()
+
     // 右侧渐变背景 + 按钮列
     Box(
         modifier = modifier
@@ -104,14 +113,14 @@ fun LandscapeRightSidebar(
             
             // 分享按钮
             SidebarActionButton(
-                icon = CupertinoIcons.Default.SquareAndArrowUp,
+                icon = shareIcon,
                 label = "分享",
                 onClick = onShareClick
             )
             
             // 收藏按钮
             SidebarActionButton(
-                icon = CupertinoIcons.Default.Bookmark,
+                icon = favoriteIcon,
                 label = FormatUtils.formatStat(favoriteCount),
                 isActive = isFavorited,
                 activeColor = Color(0xFFFFD700), // 金色
@@ -120,7 +129,7 @@ fun LandscapeRightSidebar(
             
             // 投币按钮
             SidebarActionButton(
-                icon = CoinIcon,
+                icon = coinIcon,
                 label = if (hasCoin) "已投" else "投币",
                 isActive = hasCoin,
                 activeColor = Color(0xFFFFCA28), // 亮金色
@@ -129,7 +138,7 @@ fun LandscapeRightSidebar(
             
             // 点赞按钮
             SidebarActionButton(
-                icon = CupertinoIcons.Default.HandThumbsup,
+                icon = if (isLiked) likeFilledIcon else likeIcon,
                 label = FormatUtils.formatStat(likeCount),
                 isActive = isLiked,
                 activeColor = MaterialTheme.colorScheme.primary,
@@ -138,7 +147,7 @@ fun LandscapeRightSidebar(
             
             // 更多按钮
             SidebarActionButton(
-                icon = CupertinoIcons.Default.Ellipsis,
+                icon = moreIcon,
                 label = "更多",
                 onClick = onMoreClick
             )
@@ -230,9 +239,3 @@ private fun SidebarActionButton(
         )
     }
 }
-
-/**
- * 🪙 投币图标（圆形硬币设计）
- */
-private val CoinIcon: ImageVector
-    get() = com.android.purebilibili.core.ui.AppIcons.BiliCoin

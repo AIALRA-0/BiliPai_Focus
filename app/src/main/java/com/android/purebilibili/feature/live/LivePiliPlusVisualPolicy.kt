@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.live
 
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.resolveCompactCapsuleChromeSpec
 
 internal data class LivePiliPlusHomeMetrics(
     val safeSpaceDp: Int,
@@ -33,6 +36,14 @@ internal data class LivePiliPlusRoomColorTokens(
     val inputContainerAlpha: Float,
     val inputOverlayColor: Color,
     val inputContentColor: Color
+)
+
+internal data class LiveInteractionSegmentedControlSpec(
+    val horizontalPaddingDp: Int,
+    val verticalPaddingDp: Int,
+    val heightDp: Int,
+    val indicatorHeightDp: Int,
+    val labelFontSizeSp: Int
 )
 
 internal fun resolveLivePiliPlusHomeMetrics(): LivePiliPlusHomeMetrics {
@@ -72,7 +83,7 @@ internal fun resolveLivePiliPlusChatBubbleTokens(
     isDark: Boolean
 ): LivePiliPlusChatBubbleTokens {
     val backgroundAlpha = when {
-        isOverlay -> 0.56f
+        isOverlay -> 0f
         else -> 0.08f
     }
     val nameAlpha = if (isOverlay) 0.90f else 0.60f
@@ -91,6 +102,25 @@ internal fun shouldRenderLiveDanmaku(
     emoticonUrl: String?
 ): Boolean {
     return text.isNotBlank() || !emoticonUrl.isNullOrBlank()
+}
+
+internal fun shouldRenderLiveDanmakuImageEmoticon(emoticonUrl: String?): Boolean {
+    return !emoticonUrl.isNullOrBlank()
+}
+
+internal fun shouldStopLivePlaybackOnRouteDispose(isChangingConfigurations: Boolean): Boolean {
+    return !isChangingConfigurations
+}
+
+internal fun resolveLiveInteractionSegmentedControlSpec(): LiveInteractionSegmentedControlSpec {
+    val compactChrome = resolveCompactCapsuleChromeSpec(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+    return LiveInteractionSegmentedControlSpec(
+        horizontalPaddingDp = 14,
+        verticalPaddingDp = 8,
+        heightDp = compactChrome.primaryHeightDp,
+        indicatorHeightDp = 30,
+        labelFontSizeSp = 14
+    )
 }
 
 internal fun resolveLivePiliPlusRoomColorTokens(

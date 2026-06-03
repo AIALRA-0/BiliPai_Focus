@@ -11,7 +11,8 @@ data class DrawerGlassPalette(
 
 internal fun resolveDrawerGlassPalette(
     isDark: Boolean,
-    blurEnabled: Boolean
+    blurEnabled: Boolean,
+    budget: DrawerMotionBudget = DrawerMotionBudget.FULL
 ): DrawerGlassPalette {
     if (!blurEnabled) {
         return if (isDark) {
@@ -31,6 +32,28 @@ internal fun resolveDrawerGlassPalette(
                 dividerAlpha = 0.18f,
                 hazeBackgroundAlpha = 0.64f,
                 hazeTintAlpha = 0.34f
+            )
+        }
+    }
+
+    if (budget == DrawerMotionBudget.REDUCED) {
+        return if (isDark) {
+            DrawerGlassPalette(
+                drawerBaseAlpha = 0.48f,
+                itemSurfaceAlpha = 0.24f,
+                itemBorderAlpha = 0.24f,
+                dividerAlpha = 0.24f,
+                hazeBackgroundAlpha = 0.36f,
+                hazeTintAlpha = 0.18f
+            )
+        } else {
+            DrawerGlassPalette(
+                drawerBaseAlpha = 0.44f,
+                itemSurfaceAlpha = 0.24f,
+                itemBorderAlpha = 0.14f,
+                dividerAlpha = 0.16f,
+                hazeBackgroundAlpha = 0.30f,
+                hazeTintAlpha = 0.10f
             )
         }
     }

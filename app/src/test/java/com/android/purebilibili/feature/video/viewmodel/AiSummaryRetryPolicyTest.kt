@@ -68,4 +68,32 @@ class AiSummaryRetryPolicyTest {
             )
         )
     }
+
+    @Test
+    fun retryableRequestFailureUsesSmallAutoRetryBudget() {
+        assertTrue(
+            shouldRetryAiSummaryRequestFailure(
+                status = AiSummaryFetchStatus.RETRYABLE_FAILURE,
+                requestRetryCount = 0
+            )
+        )
+        assertTrue(
+            shouldRetryAiSummaryRequestFailure(
+                status = AiSummaryFetchStatus.RETRYABLE_FAILURE,
+                requestRetryCount = 1
+            )
+        )
+        assertFalse(
+            shouldRetryAiSummaryRequestFailure(
+                status = AiSummaryFetchStatus.RETRYABLE_FAILURE,
+                requestRetryCount = 2
+            )
+        )
+        assertFalse(
+            shouldRetryAiSummaryRequestFailure(
+                status = AiSummaryFetchStatus.FAILURE,
+                requestRetryCount = 0
+            )
+        )
+    }
 }

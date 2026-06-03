@@ -190,4 +190,117 @@ class SearchModelsParsingTest {
         assertEquals("黑神话", tag?.value)
         assertEquals("<suggest_high_light>黑神话</suggest_high_light>悟空", tag?.name)
     }
+
+    @Test
+    fun decodeExtendedSearchTypes_acceptsTopicPhotoAndLiveUser() {
+        val topicPayload = """
+            {
+              "code": 0,
+              "message": "0",
+              "data": {
+                "page": 1,
+                "numPages": 1,
+                "numResults": 1,
+                "result": [
+                  {
+                    "type": "topic",
+                    "tp_id": "34958",
+                    "title": "<em class='keyword'>BW</em>2025",
+                    "description": "topic desc",
+                    "cover": "//i0.hdslb.com/topic.jpg",
+                    "click": "1.2万",
+                    "author": "bilibili"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+        val topic = json.decodeFromString<SearchTopicResponse>(topicPayload)
+            .data
+            ?.result
+            ?.first()
+            ?.cleanupFields()
+
+        assertEquals(34958L, topic?.topicId)
+        assertEquals("BW2025", topic?.title)
+        assertEquals("https://i0.hdslb.com/topic.jpg", topic?.cover)
+        assertEquals(12000, topic?.view)
+
+        val photoPayload = """
+            {
+              "code": 0,
+              "message": "0",
+              "data": {
+                "page": 1,
+                "numPages": 2,
+                "numResults": 30,
+                "result": [
+                  {
+                    "type": "photo",
+                    "id": "99184721",
+                    "mid": "813818",
+                    "title": "<em class='keyword'>旅行</em>",
+                    "cover": "http://i0.hdslb.com/album.jpg",
+                    "uname": "QYS3",
+                    "count": "4",
+                    "view": "100924",
+                    "like": "42"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+        val photo = json.decodeFromString<SearchPhotoResponse>(photoPayload)
+            .data
+            ?.result
+            ?.first()
+            ?.cleanupFields()
+
+        assertEquals(99184721L, photo?.id)
+        assertEquals("旅行", photo?.title)
+        assertEquals("https://i0.hdslb.com/album.jpg", photo?.cover)
+        assertEquals(4, photo?.count)
+
+        val liveUserPayload = """
+            {
+              "code": 0,
+              "message": "0",
+              "data": {
+                "page": 1,
+                "numPages": 1,
+                "numResults": 1,
+                "result": [
+                  {
+                    "type": "live_user",
+                    "uid": "322892",
+                    "roomid": "5441",
+                    "uname": "<em class='keyword'>主播</em>",
+                    "uface": "//i2.hdslb.com/face.jpg",
+                    "live_status": 1,
+                    "is_live": true,
+                    "attentions": "2570790"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+        val liveUser = json.decodeFromString<SearchLiveUserResponse>(liveUserPayload)
+            .data
+            ?.result
+            ?.first()
+            ?.cleanupFields()
+
+        assertEquals(322892L, liveUser?.uid)
+        assertEquals(5441L, liveUser?.roomid)
+        assertEquals("主播", liveUser?.uname)
+        assertEquals("https://i2.hdslb.com/face.jpg", liveUser?.uface)
+        assertTrue(liveUser?.isLive == true)
+    }
+
+    @Test
+    fun searchTypeFromValue_recognizesExtendedTypes() {
+        assertEquals(SearchType.TOPIC, SearchType.fromValue("topic"))
+        assertEquals(SearchType.PHOTO, SearchType.fromValue("photo"))
+        assertEquals(SearchType.LIVE_USER, SearchType.fromValue("live_user"))
+    }
 }

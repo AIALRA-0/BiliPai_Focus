@@ -52,7 +52,10 @@ sealed class SkipAction {
     /** 跳转到指定位置（自动跳过） */
     data class SkipTo(
         val positionMs: Long,
-        val reason: String
+        val reason: String,
+        val segmentId: String? = null,
+        val startMs: Long? = null,
+        val categoryName: String? = null
     ) : SkipAction()
     
     /** 显示跳过按钮（手动跳过模式） */

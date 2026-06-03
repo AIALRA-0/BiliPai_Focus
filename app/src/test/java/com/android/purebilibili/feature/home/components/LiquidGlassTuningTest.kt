@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import com.android.purebilibili.core.store.LiquidGlassMode
+import com.android.purebilibili.core.store.LiquidGlassStyle
 import com.android.purebilibili.core.store.resolveLegacyLiquidGlassProgress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -78,5 +79,24 @@ class LiquidGlassTuningTest {
 
         assertTrue(clear < balanced)
         assertTrue(balanced < frosted)
+    }
+
+    @Test
+    fun `sukisu style keeps the original value one slot`() {
+        assertEquals(LiquidGlassStyle.SUKISU, LiquidGlassStyle.fromValue(1))
+    }
+
+    @Test
+    fun `sukisu style uses floating bottom bar glass recipe`() {
+        val tuning = resolveLiquidGlassTuning(LiquidGlassStyle.SUKISU)
+
+        assertEquals(LiquidGlassMode.BALANCED, tuning.mode)
+        assertEquals(8f, tuning.backdropBlurRadius, 0.0001f)
+        assertEquals(0.40f, tuning.surfaceAlpha, 0.0001f)
+        assertEquals(24f, tuning.refractionAmount, 0.0001f)
+        assertEquals(24f, tuning.refractionHeight, 0.0001f)
+        assertEquals(0.28f, tuning.indicatorTintAlpha, 0.0001f)
+        assertFalse(tuning.chromaticAberrationEnabled)
+        assertTrue(tuning.depthEffectEnabled)
     }
 }

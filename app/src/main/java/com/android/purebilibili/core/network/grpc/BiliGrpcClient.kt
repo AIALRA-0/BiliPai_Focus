@@ -36,7 +36,7 @@ internal object BiliGrpcClient {
             .build()
 
         NetworkModule.okHttpClient.newCall(request).execute().use { response ->
-            val body = response.body?.bytes() ?: ByteArray(0)
+            val body = response.body.bytes()
             val grpcStatus = response.header("grpc-status")
             if (!response.isSuccessful || grpcStatus != "0") {
                 Logger.w(

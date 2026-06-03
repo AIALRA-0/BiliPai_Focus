@@ -119,10 +119,13 @@ class DanmakuManager private constructor(
     private var cachedDanmakuList: List<DanmakuData>? = null
     private var sourceDanmakuList: List<DanmakuData>? = null
     private var sourceAdvancedDanmakuList: List<AdvancedDanmakuData>? = null
+    private var sourceCommandDanmakuList: List<CommandDanmakuItem> = emptyList()
     private var rawDanmakuList: List<DanmakuData>? = null
     // [新增] 高级弹幕数据流
     private val _advancedDanmakuFlow = kotlinx.coroutines.flow.MutableStateFlow<List<AdvancedDanmakuData>>(emptyList())
     val advancedDanmakuFlow: kotlinx.coroutines.flow.StateFlow<List<AdvancedDanmakuData>> = _advancedDanmakuFlow.asStateFlow()
+    private val _commandDanmakuFlow = kotlinx.coroutines.flow.MutableStateFlow<List<CommandDanmakuItem>>(emptyList())
+    val commandDanmakuFlow: kotlinx.coroutines.flow.StateFlow<List<CommandDanmakuItem>> = _commandDanmakuFlow.asStateFlow()
     private var cachedCid: Long = 0L
     private var lastExplicitSeekPositionMs: Long? = null
     private var lastExplicitSeekElapsedRealtimeMs: Long? = null
@@ -338,6 +341,7 @@ class DanmakuManager private constructor(
             cachedDanmakuList = emptyList()
             rawDanmakuList = emptyList()
             _advancedDanmakuFlow.value = emptyList()
+            _commandDanmakuFlow.value = emptyList()
             Log.w(TAG, " Danmaku cache rebuilt ($reason): no visible items after filtering")
             return false
         }
@@ -345,7 +349,11 @@ class DanmakuManager private constructor(
         rawDanmakuList = projectedStandardList
 
         if (config.mergeDuplicates) {
-            val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(projectedStandardList)
+            val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(
+                list = projectedStandardList,
+                intervalMs = config.duplicateMergeWindowMs.toLong(),
+                countThreshold = config.duplicateMergeCountThreshold
+            )
             cachedDanmakuList = mergedStandard
             val settings = currentTypeFilterSettings()
             val visibleMergedAdvanced = mergedAdvanced.filter { merged ->
@@ -786,6 +794,8 @@ class DanmakuManager private constructor(
         staticDanmakuToScroll: Boolean = this.staticDanmakuToScroll,
         massiveMode: Boolean = this.massiveMode,
         mergeDuplicates: Boolean = config.mergeDuplicates,
+        duplicateMergeWindowMs: Int = config.duplicateMergeWindowMs,
+        duplicateMergeCountThreshold: Int = config.duplicateMergeCountThreshold,
         allowScroll: Boolean = config.allowScroll,
         allowTop: Boolean = config.allowTop,
         allowBottom: Boolean = config.allowBottom,
@@ -794,7 +804,9 @@ class DanmakuManager private constructor(
         blockedRules: List<String> = config.blockedRules,
         smartOcclusion: Boolean = config.smartOcclusionEnabled
     ) {
-        val mergeChanged = config.mergeDuplicates != mergeDuplicates
+        val mergeChanged = config.mergeDuplicates != mergeDuplicates ||
+            config.duplicateMergeWindowMs != duplicateMergeWindowMs ||
+            config.duplicateMergeCountThreshold != duplicateMergeCountThreshold
         val blockedRulesChanged = config.blockedRules != blockedRules
         val filterChanged =
             config.allowScroll != allowScroll ||
@@ -818,6 +830,8 @@ class DanmakuManager private constructor(
         config.staticDanmakuToScroll = staticDanmakuToScroll
         config.massiveMode = massiveMode
         config.mergeDuplicates = mergeDuplicates
+        config.duplicateMergeWindowMs = duplicateMergeWindowMs
+        config.duplicateMergeCountThreshold = duplicateMergeCountThreshold
         config.allowScroll = allowScroll
         config.allowTop = allowTop
         config.allowBottom = allowBottom
@@ -1388,7 +1402,9 @@ class DanmakuManager private constructor(
         cachedDanmakuList = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
+        sourceCommandDanmakuList = emptyList()
         _advancedDanmakuFlow.value = emptyList()
+        _commandDanmakuFlow.value = emptyList()
         
         // 清除现有弹幕
         controller?.stop()
@@ -1398,6 +1414,7 @@ class DanmakuManager private constructor(
             try {
                 // 1. 获取弹幕元数据 (High-Energy, Command Dms)
                 var commandDmList: List<AdvancedDanmakuData> = emptyList()
+                var commandItemList: List<CommandDanmakuItem> = emptyList()
                 val viewReply = if (aid > 0) {
                      com.android.purebilibili.data.repository.DanmakuRepository.getDanmakuView(cid, aid)
                 } else null
@@ -1407,16 +1424,16 @@ class DanmakuManager private constructor(
                     
                     // 处理 Command Dms (如高能进度条提示, 互动弹幕)
                     if (viewReply.commandDms.isNotEmpty()) {
-                        commandDmList = viewReply.commandDms.mapNotNull { cmd ->
-                            buildCommandDanmaku(cmd)
+                        commandItemList = viewReply.commandDms.mapNotNull { cmd ->
+                            buildCommandDanmakuItem(cmd)
                         }
+                        commandDmList = emptyList()
                         Log.w(
                             TAG,
-                            " Converted ${commandDmList.size}/${viewReply.commandDms.size} Command Dms to AdvancedDanmakuData"
+                            " Converted ${commandItemList.size}/${viewReply.commandDms.size} Command Dms to overlay cards"
                         )
                     }
                     
-                    // TODO: specialDms 通常是 URL 列表，需要额外下载解析，暂跳过
                 }
                 
                 val (segments, rawData) = withContext(Dispatchers.IO) {
@@ -1433,7 +1450,9 @@ class DanmakuManager private constructor(
                                 metadataSegmentCount = viewReply?.dmSge?.total?.toInt()
                             )
                             if (fetched.isNotEmpty()) {
-                                segmentList = fetched
+                                val special = com.android.purebilibili.data.repository.DanmakuRepository
+                                    .getSpecialDanmakuSegments(viewReply?.specialDms.orEmpty())
+                                segmentList = fetched + special
                             }
                         } catch (e: Exception) {
                             Log.w(TAG, " Protobuf API failed: ${e.message}, falling back to XML")
@@ -1467,6 +1486,8 @@ class DanmakuManager private constructor(
                 
                 sourceDanmakuList = parsedResult.standardList
                 sourceAdvancedDanmakuList = parsedResult.advancedList + commandDmList
+                sourceCommandDanmakuList = commandItemList
+                _commandDanmakuFlow.value = sourceCommandDanmakuList
 
                 val rebuilt = withContext(Dispatchers.Default) {
                     rebuildDanmakuCacheFromSource("load")
@@ -1509,6 +1530,64 @@ class DanmakuManager private constructor(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, " Failed to load danmaku for cid=$cid: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    /**
+     * 加载离线缓存弹幕。该路径只读取本地文件，不做网络补拉。
+     */
+    fun loadLocalDanmaku(cid: Long, segments: List<ByteArray>) {
+        Log.w(TAG, "========== loadLocalDanmaku CALLED cid=$cid, segments=${segments.size} ==========")
+        loadJob?.cancel()
+        isLoading = true
+        cachedCid = cid
+        clearExplicitSeekResyncMarker()
+        cachedDanmakuList = null
+        sourceDanmakuList = null
+        sourceAdvancedDanmakuList = null
+        sourceCommandDanmakuList = emptyList()
+        _advancedDanmakuFlow.value = emptyList()
+        _commandDanmakuFlow.value = emptyList()
+        controller?.stop()
+
+        loadJob = scope.launch {
+            try {
+                val parsedResult = withContext(Dispatchers.Default) {
+                    if (segments.isNotEmpty()) {
+                        DanmakuParser.parseProtobuf(segments)
+                    } else {
+                        ParsedDanmaku(emptyList(), emptyList())
+                    }
+                }
+                sourceDanmakuList = parsedResult.standardList
+                sourceAdvancedDanmakuList = parsedResult.advancedList
+
+                val rebuilt = withContext(Dispatchers.Default) {
+                    rebuildDanmakuCacheFromSource("offline_load")
+                }
+
+                withContext(Dispatchers.Main) {
+                    isLoading = false
+                    if (!rebuilt) {
+                        controller?.clear()
+                        isPlaying = false
+                        return@withContext
+                    }
+                    val currentPlayTime = player?.currentPosition ?: 0L
+                    resyncDanmakuTimeline(
+                        list = cachedDanmakuList ?: emptyList(),
+                        positionMs = currentPlayTime,
+                        shouldPlay = player?.isPlaying == true,
+                        invalidateView = true,
+                        reason = "offline_load"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, " Failed to load local danmaku for cid=$cid: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     isLoading = false
                 }
@@ -1755,8 +1834,10 @@ class DanmakuManager private constructor(
         cachedDanmakuList = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
+        sourceCommandDanmakuList = emptyList()
         rawDanmakuList = null
         _advancedDanmakuFlow.value = emptyList()
+        _commandDanmakuFlow.value = emptyList()
         controller?.clear()
     }
 
@@ -1813,8 +1894,10 @@ class DanmakuManager private constructor(
         cachedDanmakuList = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
+        sourceCommandDanmakuList = emptyList()
         rawDanmakuList = null
         _advancedDanmakuFlow.value = emptyList()
+        _commandDanmakuFlow.value = emptyList()
         cachedCid = 0L
         clearExplicitSeekResyncMarker()
         

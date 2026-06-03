@@ -11,4 +11,10 @@ class HomeLoadSequencePolicyTest {
         assertTrue(shouldRefreshHomeUserInfoAfterFeedLoad(isLoadMore = false))
         assertFalse(shouldRefreshHomeUserInfoAfterFeedLoad(isLoadMore = true))
     }
+
+    @Test
+    fun stopsAutomaticPagingAfterLoadMoreFailure() {
+        assertFalse(shouldKeepHomeCategoryAutoPagingAfterFailure(isLoadMore = true))
+        assertTrue(shouldKeepHomeCategoryAutoPagingAfterFailure(isLoadMore = false))
+    }
 }

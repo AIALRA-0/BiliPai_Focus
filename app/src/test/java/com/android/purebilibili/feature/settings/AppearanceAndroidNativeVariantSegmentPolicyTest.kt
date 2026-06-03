@@ -14,7 +14,10 @@ class AppearanceAndroidNativeVariantSegmentPolicyTest {
         )
 
         assertEquals(
-            listOf(AndroidNativeVariant.MATERIAL3, AndroidNativeVariant.MIUIX),
+            listOf(
+                AndroidNativeVariant.MATERIAL3,
+                AndroidNativeVariant.MIUIX
+            ),
             options.map { it.value }
         )
         assertEquals(

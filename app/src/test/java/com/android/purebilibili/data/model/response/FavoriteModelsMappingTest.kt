@@ -103,4 +103,50 @@ class FavoriteModelsMappingTest {
         assertEquals(123, item.progress)
         assertEquals(1712345678L, item.view_at)
     }
+
+    @Test
+    fun `toVideoItem uses owner fallback when favorite resource upper is missing`() {
+        val item = FavoriteData(
+            id = 371494037,
+            bvid = "BV1CZ4y1T7gC",
+            title = "test"
+        ).toVideoItem(
+            ownerFallbackMid = 39366561L,
+            ownerFallbackName = "阿虎医考"
+        )
+
+        assertEquals(39366561L, item.owner.mid)
+        assertEquals("阿虎医考", item.owner.name)
+    }
+
+    @Test
+    fun `favorite folder response keeps subscribed folder upper owner`() {
+        val response = json.decodeFromString<FavFolderResponse>(
+            """
+            {
+              "code": 0,
+              "data": {
+                "count": 1,
+                "list": [
+                  {
+                    "id": 496307088,
+                    "fid": 4963070,
+                    "mid": 412466388,
+                    "title": "入站必刷",
+                    "upper": {
+                      "mid": 412466388,
+                      "name": "热门菌",
+                      "face": ""
+                    }
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        )
+
+        val folder = requireNotNull(response.data?.list).single()
+        assertEquals(412466388L, folder.upper?.mid)
+        assertEquals("热门菌", folder.upper?.name)
+    }
 }

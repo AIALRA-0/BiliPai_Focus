@@ -63,6 +63,7 @@ object FavoriteRepository {
         mediaId: Long,
         pn: Int,
         keyword: String? = null,
+        order: String? = null,
         platform: String = "web"
     ): Result<FavoriteResourceData> {
         return withContext(Dispatchers.IO) {
@@ -72,12 +73,53 @@ object FavoriteRepository {
                     mediaId = mediaId,
                     pn = pn,
                     keyword = keyword,
+                    order = order,
                     platform = platform
                 )
                 if (response.code == 0 && response.data != null) {
                     Result.success(response.data)
                 } else {
                     Result.failure(Exception(response.message))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getFavoriteSeasonList(
+        seasonId: Long,
+        pn: Int
+    ): Result<FavoriteResourceData> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getFavoriteSeasonList(
+                    seasonId = seasonId,
+                    pn = pn
+                )
+                if (response.code == 0 && response.data != null) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun cleanInvalidResources(mediaId: Long): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
+                if (csrf.isBlank()) {
+                    return@withContext Result.failure(Exception("请先登录"))
+                }
+                val response = api.cleanInvalidFavResource(mediaId = mediaId, csrf = csrf)
+                if (response.code == 0) {
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "清理失效内容失败: ${response.code}" }))
                 }
             } catch (e: Exception) {
                 Result.failure(e)

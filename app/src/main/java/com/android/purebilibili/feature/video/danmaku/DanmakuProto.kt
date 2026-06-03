@@ -91,7 +91,7 @@ object DanmakuProto {
     data class CommandDm(
         val id: Long = 0,
         val oid: Long = 0,
-        val mid: String = "", // midHash
+        val mid: Long = 0,
         val command: String = "",
         val content: String = "",
         val progress: Int = 0,
@@ -108,7 +108,7 @@ object DanmakuProto {
         val blocktop: Boolean = false,
         val blockscroll: Boolean = false,
         val blockbottom: Boolean = false,
-        val blockfunction: Boolean = false,
+        val blockcolor: Boolean = false,
         val blockspecial: Boolean = false,
         val preventeshading: Boolean = false,
         val dmask: Boolean = false,
@@ -149,19 +149,29 @@ object DanmakuProto {
 
                 when (fieldNumber) {
                     1 -> state = input.readVarint().toInt()
-                    2 -> textSide = input.readString()
+                    2 -> input.skipField(wireType)
                     // 兼容旧/新 web/view 字段：旧版 dmSge=3、flag=4；新版 dmSge=4、flag=5
-                    3, 4 -> {
+                    3 -> {
                         if (wireType == 2) {
                             val bytes = input.readBytes()
                             val dmSegCandidate = parseDmSegConfig(bytes)
                             if (isLikelyDmSegConfig(dmSegCandidate)) {
                                 dmSge = dmSegCandidate
                             } else {
-                                val flagCandidate = parseDanmakuFlagConfig(bytes)
-                                if (isLikelyDanmakuFlagConfig(flagCandidate)) {
-                                    flag = flagCandidate
-                                }
+                                textSide = String(bytes, StandardCharsets.UTF_8)
+                            }
+                        } else {
+                            input.skipField(wireType)
+                        }
+                    }
+                    4 -> {
+                        if (wireType == 2) {
+                            val bytes = input.readBytes()
+                            val dmSegCandidate = parseDmSegConfig(bytes)
+                            if (isLikelyDmSegConfig(dmSegCandidate)) {
+                                dmSge = dmSegCandidate
+                            } else {
+                                parseDanmakuFlagConfig(bytes).takeIf(::isLikelyDanmakuFlagConfig)?.let { flag = it }
                             }
                         } else {
                             input.skipField(wireType)
@@ -181,9 +191,25 @@ object DanmakuProto {
                             input.skipField(wireType)
                         }
                     }
-                    6 -> checkBox = input.readVarint() != 0L
+                    6 -> {
+                        if (wireType == 2) {
+                            decodeSpecialDmUrl(input.readBytes())?.let { specialDms.add(it) }
+                        } else {
+                            input.skipField(wireType)
+                        }
+                    }
                     // 旧版 count=7，新版 count=8；旧版 commandDms=8，新版 commandDms=9
-                    7, 8 -> {
+                    7 -> {
+                        when (wireType) {
+                            0 -> {
+                                val value = input.readVarint()
+                                if (value > 1L) count = value else checkBox = value != 0L
+                            }
+                            2 -> parseCommandDm(input.readBytes())?.let { commandDms.add(it) }
+                            else -> input.skipField(wireType)
+                        }
+                    }
+                    8 -> {
                         when (wireType) {
                             0 -> count = input.readVarint()
                             2 -> {
@@ -194,7 +220,7 @@ object DanmakuProto {
                         }
                     }
                     // 旧版 dmSetting=9，新版 dmSetting=10
-                    9, 10 -> {
+                    9 -> {
                         if (wireType == 2) {
                             val bytes = input.readBytes()
                             val command = parseCommandDm(bytes)
@@ -203,6 +229,13 @@ object DanmakuProto {
                             } else {
                                 dmSetting = parseDmSetting(bytes)
                             }
+                        } else {
+                            input.skipField(wireType)
+                        }
+                    }
+                    10 -> {
+                        if (wireType == 2) {
+                            dmSetting = parseDmSetting(input.readBytes())
                         } else {
                             input.skipField(wireType)
                         }
@@ -277,7 +310,7 @@ object DanmakuProto {
         if (data.isEmpty()) return null
         var id = 0L
         var oid = 0L
-        var mid = ""
+        var mid = 0L
         var command = ""
         var content = ""
         var progress = 0
@@ -293,7 +326,7 @@ object DanmakuProto {
                when(tag ushr 3) {
                    1 -> id = input.readVarint()
                    2 -> oid = input.readVarint()
-                   3 -> mid = input.readString()
+                   3 -> mid = input.readVarint()
                    4 -> command = input.readString()
                    5 -> content = input.readString()
                    6 -> progress = input.readVarint().toInt()
@@ -305,12 +338,84 @@ object DanmakuProto {
                }
            }
         } catch(e: Exception) { return null }
+        if (command.isBlank() && content.isBlank() && extra.isBlank()) return null
         return CommandDm(id, oid, mid, command, content, progress, ctime, mtime, extra, idStr)
     }
 
     private fun parseDmSetting(data: ByteArray): DmSetting {
-        // 简化解析，暂不实现所有字段，后续按需添加
-        return DmSetting()
+        var dmSwitch = true
+        var aiSwitch = true
+        var aiLevel = 0
+        var blocktop = false
+        var blockscroll = false
+        var blockbottom = false
+        var blockcolor = false
+        var blockspecial = false
+        var preventeshading = false
+        var dmask = false
+        var opacity = 1.0f
+        var dmarea = 0
+        var speedplus = 1.0f
+        var fontsize = 1.0f
+        var screensync = false
+        var speedsync = false
+        var fontfamily = ""
+        var bold = false
+        var fontborder = 0
+        var drawType = ""
+        try {
+            val input = ProtoInput(data)
+            while (!input.isAtEnd()) {
+                val tag = input.readTag()
+                val wireType = tag and 0x07
+                when (tag ushr 3) {
+                    1 -> dmSwitch = input.readVarint() != 0L
+                    2 -> aiSwitch = input.readVarint() != 0L
+                    3 -> aiLevel = input.readVarint().toInt()
+                    4 -> blocktop = input.readVarint() != 0L
+                    5 -> blockscroll = input.readVarint() != 0L
+                    6 -> blockbottom = input.readVarint() != 0L
+                    7 -> blockcolor = input.readVarint() != 0L
+                    8 -> blockspecial = input.readVarint() != 0L
+                    9 -> preventeshading = input.readVarint() != 0L
+                    10 -> dmask = input.readVarint() != 0L
+                    11 -> opacity = input.readFloat()
+                    12 -> dmarea = input.readVarint().toInt()
+                    13 -> speedplus = input.readFloat()
+                    14 -> fontsize = input.readFloat()
+                    15 -> screensync = input.readVarint() != 0L
+                    16 -> speedsync = input.readVarint() != 0L
+                    17 -> fontfamily = input.readString()
+                    18 -> bold = input.readVarint() != 0L
+                    19 -> fontborder = input.readVarint().toInt()
+                    20 -> drawType = input.readString()
+                    else -> input.skipField(wireType)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return DmSetting(
+            dmSwitch = dmSwitch,
+            aiSwitch = aiSwitch,
+            aiLevel = aiLevel,
+            blocktop = blocktop,
+            blockscroll = blockscroll,
+            blockbottom = blockbottom,
+            blockcolor = blockcolor,
+            blockspecial = blockspecial,
+            preventeshading = preventeshading,
+            dmask = dmask,
+            opacity = opacity,
+            dmarea = dmarea,
+            speedplus = speedplus,
+            fontsize = fontsize,
+            screensync = screensync,
+            speedsync = speedsync,
+            fontfamily = fontfamily,
+            bold = bold,
+            fontborder = fontborder,
+            drawType = drawType
+        )
     }
     
     /**
@@ -491,6 +596,16 @@ object DanmakuProto {
         fun readString(): String {
             val bytes = readBytes()
             return String(bytes, StandardCharsets.UTF_8)
+        }
+
+        fun readFloat(): Float {
+            if (position + 4 > data.size) return 0f
+            val bits = (data[position].toInt() and 0xFF) or
+                ((data[position + 1].toInt() and 0xFF) shl 8) or
+                ((data[position + 2].toInt() and 0xFF) shl 16) or
+                ((data[position + 3].toInt() and 0xFF) shl 24)
+            position += 4
+            return java.lang.Float.intBitsToFloat(bits)
         }
         
         /**

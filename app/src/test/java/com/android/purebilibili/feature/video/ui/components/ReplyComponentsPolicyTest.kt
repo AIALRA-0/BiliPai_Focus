@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -15,6 +16,8 @@ import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplyUpAction
+import com.android.purebilibili.data.model.response.ReplyUserSailing
+import java.io.File
 import kotlinx.coroutines.runBlocking
 import kotlin.test.assertContentEquals
 import kotlin.test.Test
@@ -257,6 +260,31 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `root click opens thread only when reply has nested replies`() {
+        assertTrue(
+            shouldOpenReplyThreadFromRootClick(
+                ReplyItem(
+                    rcount = 1,
+                    content = ReplyContent(message = "has remote thread")
+                )
+            )
+        )
+        assertTrue(
+            shouldOpenReplyThreadFromRootClick(
+                ReplyItem(
+                    replies = listOf(ReplyItem(rpid = 11L)),
+                    content = ReplyContent(message = "has preview thread")
+                )
+            )
+        )
+        assertFalse(
+            shouldOpenReplyThreadFromRootClick(
+                ReplyItem(content = ReplyContent(message = "plain comment"))
+            )
+        )
+    }
+
+    @Test
     fun `buildReplyCommentShareText includes author message and comment url`() {
         val text = buildReplyCommentShareText(
             ReplyItem(
@@ -284,6 +312,42 @@ class ReplyComponentsPolicyTest {
                     rpid = 888L
                 )
             )
+        )
+    }
+
+    @Test
+    fun `reply action sheet policy includes share and block actions when supported`() {
+        assertContentEquals(
+            listOf(
+                ReplyActionSheetAction.COPY_ALL,
+                ReplyActionSheetAction.FREE_COPY,
+                ReplyActionSheetAction.SAVE,
+                ReplyActionSheetAction.SHARE,
+                ReplyActionSheetAction.REPLY,
+                ReplyActionSheetAction.BLOCK_USER,
+                ReplyActionSheetAction.REPORT,
+                ReplyActionSheetAction.TOGGLE_TOP,
+                ReplyActionSheetAction.DELETE
+            ),
+            buildReplyActionSheetActions(
+                canDelete = true,
+                canReport = true,
+                canShare = true,
+                canBlockUser = true,
+                topActionLabel = "置顶"
+            )
+        )
+    }
+
+    @Test
+    fun `reply action sheet policy hides share when api disables support share`() {
+        assertFalse(
+            buildReplyActionSheetActions(
+                canDelete = false,
+                canReport = false,
+                canShare = false,
+                canBlockUser = false
+            ).contains(ReplyActionSheetAction.SHARE)
         )
     }
 
@@ -367,6 +431,23 @@ class ReplyComponentsPolicyTest {
                 .getStringAnnotations(COMMENT_URL_TAG, 3, annotated.length)
                 .firstOrNull()
                 ?.item
+        )
+    }
+
+    @Test
+    fun `resolveReplyContentUrlNavigationUrl prefers dynamic web url over misleading video schema`() {
+        val url = ReplyContentUrl(
+            title = "动态",
+            url = "https://t.bilibili.com/1199344045210468386",
+            appUrlSchema = "bilibili://video/1199344045210468386"
+        )
+
+        assertEquals(
+            "https://t.bilibili.com/1199344045210468386",
+            resolveReplyContentUrlNavigationUrl(
+                rawToken = "https://t.bilibili.com/1199344045210468386",
+                url = url
+            )
         )
     }
 
@@ -532,10 +613,11 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `lightweight reply mode keeps identity badges and sub previews while hiding ancillary labels`() {
+    fun `lightweight reply mode preserves independent identity toggle and sub previews while hiding ancillary labels`() {
         assertFalse(shouldShowReplyAncillaryDecorations(lightweightMode = true))
         assertTrue(shouldShowReplyAncillaryDecorations(lightweightMode = false))
-        assertTrue(shouldShowReplyIdentityDecorations())
+        assertFalse(shouldShowReplyIdentityDecorations(enabled = false))
+        assertTrue(shouldShowReplyIdentityDecorations(enabled = true))
         assertTrue(
             shouldShowReplySubPreview(
                 hideSubPreview = false,
@@ -553,6 +635,38 @@ class ReplyComponentsPolicyTest {
                 hideSubPreview = false,
                 lightweightMode = false
             )
+        )
+    }
+
+    @Test
+    fun `reply item layout gives comment text a wider reading column`() {
+        val policy = resolveReplyItemLayoutPolicy()
+
+        assertEquals(12, policy.horizontalPaddingDp)
+        assertEquals(36, policy.avatarSizeDp)
+        assertEquals(8, policy.avatarContentSpacingDp)
+        assertEquals(40, policy.actionButtonSizeDp)
+        assertEquals(78, policy.decorationWidthReserveDp)
+        assertEquals(56, policy.dividerStartPaddingDp)
+        assertEquals(
+            292,
+            resolveReplyItemTextColumnWidthDp(containerWidthDp = 360, policy = policy)
+        )
+        assertEquals(
+            40,
+            resolveReplyItemHeaderEndPaddingDp(hasPiliPlusDecoration = false, policy = policy)
+        )
+        assertEquals(
+            118,
+            resolveReplyItemHeaderEndPaddingDp(hasPiliPlusDecoration = true, policy = policy)
+        )
+        assertEquals(
+            12,
+            resolveReplyItemContentStartPaddingDp(containerWidth = 279.dp, policy = policy)
+        )
+        assertEquals(
+            44,
+            resolveReplyItemContentStartPaddingDp(containerWidth = 280.dp, policy = policy)
         )
     }
 
@@ -599,6 +713,35 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `fan group label uses uppercase co prefix and preserves visible number`() {
+        assertEquals("CO.008502", resolveFanGroupLabelText("008502"))
+        assertEquals("CO.008502", resolveFanGroupLabelText("8502"))
+        assertEquals("", resolveFanGroupLabelText("abc"))
+    }
+
+    @Test
+    fun `fan group label color falls back when server color lacks contrast`() {
+        val resolved = resolveFanGroupLabelTextColor(
+            fanColorHex = "#FFFFFF",
+            backgroundColor = Color.White,
+            fallbackColor = Color(0xFF1B1C1F)
+        )
+
+        assertEquals(Color(0xFF1B1C1F), resolved)
+    }
+
+    @Test
+    fun `fan group label color keeps server color when contrast is readable`() {
+        val resolved = resolveFanGroupLabelTextColor(
+            fanColorHex = "#1B1C1F",
+            backgroundColor = Color.White,
+            fallbackColor = Color(0xFF666666)
+        )
+
+        assertEquals(Color(0xFF1B1C1F), resolved)
+    }
+
+    @Test
     fun `resolveFanGroupTagVisual pads number when num_desc is blank`() {
         val fan = ReplySailingFan(
             isFan = 1,
@@ -631,6 +774,31 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `resolveFanGroupDecorationCardBgs prefers focused images before plain card backgrounds`() {
+        val member = ReplyMember(
+            userSailing = ReplyUserSailing(
+                cardBg = ReplySailingCardBg(image = "https://example.com/legacy_plain.png"),
+                cardBgWithFocus = ReplySailingCardBg(image = "https://example.com/legacy_focus.png")
+            ),
+            userSailingV2 = ReplyUserSailing(
+                cardBg = ReplySailingCardBg(image = "https://example.com/v2_plain.png"),
+                cardBgWithFocus = ReplySailingCardBg(image = "https://example.com/v2_focus.png")
+            )
+        )
+
+        val images = resolveFanGroupDecorationCardBgs(member).map { it.image }
+        assertEquals(
+            listOf(
+                "https://example.com/v2_focus.png",
+                "https://example.com/legacy_focus.png",
+                "https://example.com/v2_plain.png",
+                "https://example.com/legacy_plain.png"
+            ),
+            images
+        )
+    }
+
+    @Test
     fun `resolveSailingFan finds first fan with visible number`() {
         val cards = listOf(
             ReplySailingCardBg(
@@ -649,7 +817,7 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `resolveFanGroupVisualFromMemberAndSailing prefers pili plus garb card image over focus image`() {
+    fun `resolveFanGroupVisualFromMemberAndSailing prefers sailing fan number and focused garb image`() {
         val member = ReplyMember(
             garbCardImage = "https://example.com/garb_card.png",
             garbCardImageWithFocus = "https://example.com/garb_card_focus.png",
@@ -665,9 +833,25 @@ class ReplyComponentsPolicyTest {
 
         val visual = resolveFanGroupVisualFromMemberAndSailing(member, cards)
         assertNotNull(visual)
-        assertEquals("021288", visual.fanNumber)
-        assertEquals("https://example.com/garb_card.png", visual.cardBgImageUrl)
+        assertEquals("000011", visual.fanNumber)
+        assertEquals("https://example.com/garb_card_focus.png", visual.cardBgImageUrl)
         assertEquals("#f76a6b", visual.fanColorHex)
+    }
+
+    @Test
+    fun `resolveFanGroupVisualFromMemberAndSailing keeps sailing card image when legacy image is missing`() {
+        val member = ReplyMember()
+        val cards = listOf(
+            ReplySailingCardBg(
+                image = "https://example.com/sailing_card.png",
+                fan = ReplySailingFan(number = 8502, numDesc = "008502", color = "#576690", name = "", isFan = 1)
+            )
+        )
+
+        val visual = resolveFanGroupVisualFromMemberAndSailing(member, cards)
+        assertNotNull(visual)
+        assertEquals("008502", visual.fanNumber)
+        assertEquals("https://example.com/sailing_card.png", visual.cardBgImageUrl)
     }
 
     @Test
@@ -683,23 +867,36 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `resolveDecorationImageUrl appends low quality suffix for plain image urls`() {
+    fun `resolveDecorationImageUrl keeps normalized original image urls visible`() {
         assertEquals(
-            "https://i0.hdslb.com/bfs/garb/item.png@1q.webp",
+            "https://i0.hdslb.com/bfs/garb/item.png",
             resolveDecorationImageUrl("//i0.hdslb.com/bfs/garb/item.png")
         )
         assertEquals(
-            "https://i0.hdslb.com/bfs/garb/item.png@1q.webp",
+            "https://i0.hdslb.com/bfs/garb/item.png",
             resolveDecorationImageUrl("i0.hdslb.com/bfs/garb/item.png")
         )
     }
 
     @Test
-    fun `resolveDecorationImageUrl upgrades existing thumbnail suffix to include quality`() {
+    fun `resolveDecorationImageUrl keeps existing thumbnail suffix unchanged`() {
         assertEquals(
-            "https://i0.hdslb.com/bfs/garb/item@240w_1q.webp",
+            "https://i0.hdslb.com/bfs/garb/item@240w.webp",
             resolveDecorationImageUrl("https://i0.hdslb.com/bfs/garb/item@240w.webp")
         )
+    }
+
+    @Test
+    fun `fan group decoration image uses large cropped presentation for transparent garb assets`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/ReplyComponents.kt")
+            .readText()
+        val decorationSource = source
+            .substringAfter("@Composable\ninternal fun FanGroupDecorationBadge(")
+            .substringBefore("@Composable\nprivate fun PiliPlusGarbCardDecoration(")
+
+        assertTrue(decorationSource.contains("contentScale = ContentScale.Crop"))
+        assertTrue(decorationSource.contains("layoutPolicy.decorationImageWidthDp.dp"))
+        assertTrue(decorationSource.contains("layoutPolicy.decorationImageHeightDp.dp"))
     }
 
     @Test
@@ -795,9 +992,23 @@ class ReplyComponentsPolicyTest {
             resolveVisibleSubReplies(replies = replies, expanded = false).map { it.rpid }
         )
         assertEquals(
+            listOf(1L, 2L),
+            resolveVisibleSubReplies(
+                replies = replies,
+                expanded = false,
+                collapsedLimit = 2
+            ).map { it.rpid }
+        )
+        assertEquals(
             listOf(1L, 2L, 3L, 4L),
             resolveVisibleSubReplies(replies = replies, expanded = true).map { it.rpid }
         )
+    }
+
+    @Test
+    fun `sub reply preview expands by default when replies are already returned`() {
+        assertTrue(resolveInitialSubReplyPreviewExpanded(previewReplyCount = 2))
+        assertFalse(resolveInitialSubReplyPreviewExpanded(previewReplyCount = 0))
     }
 
     @Test
@@ -806,6 +1017,33 @@ class ReplyComponentsPolicyTest {
         assertTrue(shouldShowInlineSubReplyToggle(previewReplyCount = 4))
         assertEquals("展开回复", resolveInlineSubReplyToggleLabel(expanded = false))
         assertEquals("收起回复", resolveInlineSubReplyToggleLabel(expanded = true))
+    }
+
+    @Test
+    fun `normalizeCollapsedSubReplyPreviewLimit clamps supported range`() {
+        assertEquals(1, normalizeCollapsedSubReplyPreviewLimit(0))
+        assertEquals(3, normalizeCollapsedSubReplyPreviewLimit(3))
+        assertEquals(10, normalizeCollapsedSubReplyPreviewLimit(99))
+    }
+
+    @Test
+    fun `sub reply prefix includes compact official verify token`() {
+        assertContentEquals(
+            listOf("测试用户", " ", "[VERIFY_PERSONAL]", " ", "[UP]", ": "),
+            buildSubReplyPreviewPrefix(
+                userName = "测试用户",
+                isUpComment = true,
+                officialVerifyTone = com.android.purebilibili.core.ui.OfficialVerifyBadgeTone.PERSONAL
+            )
+        )
+        assertContentEquals(
+            listOf("机构号", " ", "[VERIFY_ORGANIZATION]", ": "),
+            buildSubReplyPreviewPrefix(
+                userName = "机构号",
+                isUpComment = false,
+                officialVerifyTone = com.android.purebilibili.core.ui.OfficialVerifyBadgeTone.ORGANIZATION
+            )
+        )
     }
 
     @Test

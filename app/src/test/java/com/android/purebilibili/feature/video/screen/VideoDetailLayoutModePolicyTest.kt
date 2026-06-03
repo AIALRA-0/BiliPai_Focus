@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.video.screen
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import com.android.purebilibili.core.store.FullscreenMode
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,7 +16,7 @@ class VideoDetailLayoutModePolicyTest {
         assertTrue(
             shouldUseTabletVideoLayout(
                 isExpandedScreen = true,
-                smallestScreenWidthDp = 700
+                isTabletDevice = true
             )
         )
     }
@@ -24,7 +26,7 @@ class VideoDetailLayoutModePolicyTest {
         assertFalse(
             shouldUseTabletVideoLayout(
                 isExpandedScreen = false,
-                smallestScreenWidthDp = 700
+                isTabletDevice = true
             )
         )
     }
@@ -34,7 +36,7 @@ class VideoDetailLayoutModePolicyTest {
         assertFalse(
             shouldUseTabletVideoLayout(
                 isExpandedScreen = true,
-                smallestScreenWidthDp = 411
+                isTabletDevice = false
             )
         )
     }
@@ -43,17 +45,17 @@ class VideoDetailLayoutModePolicyTest {
     fun autoRotatePolicy_appliesOnlyOnPhoneLayout() {
         assertTrue(
             shouldApplyPhoneAutoRotatePolicy(
-                useTabletLayout = false
+                isCompactDevice = true
             )
         )
         assertFalse(
             shouldApplyPhoneAutoRotatePolicy(
-                useTabletLayout = true
+                isCompactDevice = false
             )
         )
         assertFalse(
             shouldApplyPhoneAutoRotatePolicy(
-                useTabletLayout = true
+                isCompactDevice = false
             )
         )
     }
@@ -75,17 +77,17 @@ class VideoDetailLayoutModePolicyTest {
     fun orientationDrivenFullscreen_isPhoneOnly() {
         assertTrue(
             shouldUseOrientationDrivenFullscreen(
-                useTabletLayout = false
+                isCompactDevice = true
             )
         )
         assertFalse(
             shouldUseOrientationDrivenFullscreen(
-                useTabletLayout = true
+                isCompactDevice = false
             )
         )
         assertFalse(
             shouldUseOrientationDrivenFullscreen(
-                useTabletLayout = true
+                isCompactDevice = false
             )
         )
     }
@@ -100,6 +102,24 @@ class VideoDetailLayoutModePolicyTest {
         assertFalse(
             shouldShowDetachedVideoCommentThreadHost(
                 useTabletLayout = true
+            )
+        )
+    }
+
+    @Test
+    fun splitBackRotationPolicy_treatsExpandedPhoneLandscapeAsPhone() {
+        assertTrue(
+            shouldRotateToPortraitOnSplitBack(
+                useTabletLayout = true,
+                isCompactDevice = true,
+                orientation = Configuration.ORIENTATION_LANDSCAPE
+            )
+        )
+        assertFalse(
+            shouldRotateToPortraitOnSplitBack(
+                useTabletLayout = true,
+                isCompactDevice = false,
+                orientation = Configuration.ORIENTATION_LANDSCAPE
             )
         )
     }
@@ -122,6 +142,31 @@ class VideoDetailLayoutModePolicyTest {
             resolveVideoDetailCommentThreadHostMainSheetVisible(
                 useEmbeddedPresentation = false,
                 subReplyVisible = true
+            )
+        )
+    }
+
+    @Test
+    fun routedComment_forcesDetachedCommentThreadHostInitializationAfterAidIsReady() {
+        assertTrue(
+            shouldForceInitializeDetachedCommentThreadHostForRoute(
+                routeCommentRootRpid = 11L,
+                aid = 100L,
+                hasHandledRouteComment = false
+            )
+        )
+        assertFalse(
+            shouldForceInitializeDetachedCommentThreadHostForRoute(
+                routeCommentRootRpid = 11L,
+                aid = 0L,
+                hasHandledRouteComment = false
+            )
+        )
+        assertFalse(
+            shouldForceInitializeDetachedCommentThreadHostForRoute(
+                routeCommentRootRpid = 11L,
+                aid = 100L,
+                hasHandledRouteComment = true
             )
         )
     }
@@ -158,6 +203,35 @@ class VideoDetailLayoutModePolicyTest {
                 isInPictureInPictureMode = false,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
+    fun systemMultiWindowFullscreenPolicy_doesNotApplyRouteOrientationRequestInsideSmallWindow() {
+        assertFalse(
+            shouldApplyStartFullscreenOrientationRequest(
+                startInFullscreen = true,
+                isOrientationDrivenFullscreen = true,
+                isLandscape = false,
+                isInMultiWindowMode = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_doesNotWriteRequestedOrientationInsideSmallWindow() {
+        assertEquals(
+            null,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                isCompactDevice = true,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true,
+                manualFullscreenRequested = true,
+                isInMultiWindowMode = true
             )
         )
     }
@@ -222,13 +296,13 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    fun phoneOrientationPolicy_returnsNullOnTabletLayout() {
+    fun phoneOrientationPolicy_releasesOrientationLockOnNonCompactLayout() {
         assertEquals(
-            null,
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = true,
+                isCompactDevice = false,
                 isOrientationDrivenFullscreen = false,
                 isFullscreenMode = false
             )
@@ -243,7 +317,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false
             )
@@ -254,7 +328,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true
             )
@@ -269,7 +343,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = false,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false
             )
@@ -280,7 +354,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = false,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true
             )
@@ -295,7 +369,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false,
                 manualFullscreenRequested = true
@@ -333,7 +407,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.HORIZONTAL,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false,
                 manualFullscreenRequested = false
@@ -374,7 +448,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = false,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true
             )
@@ -389,7 +463,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true,
                 manualPortraitHoldActive = true
@@ -407,14 +481,14 @@ class VideoDetailLayoutModePolicyTest {
             )
         )
         assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
             resolvePhoneAutoRotateRequestedOrientation(
                 orientationDegrees = 90,
                 isCurrentlyLandscape = false
             )
         )
         assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
             resolvePhoneAutoRotateRequestedOrientation(
                 orientationDegrees = 48,
                 isCurrentlyLandscape = true
@@ -425,6 +499,88 @@ class VideoDetailLayoutModePolicyTest {
             resolvePhoneAutoRotateRequestedOrientation(
                 orientationDegrees = 8,
                 isCurrentlyLandscape = true
+            )
+        )
+    }
+
+    @Test
+    fun autoRotateSensorPolicy_usesExactLandscapeSideForRightTilt() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            resolvePhoneAutoRotateRequestedOrientation(
+                orientationDegrees = 270,
+                isCurrentlyLandscape = false
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            resolvePhoneAutoRotateRequestedOrientation(
+                orientationDegrees = 312,
+                isCurrentlyLandscape = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneAutoRotateApplyPolicy_appliesLandscapeCandidateImmediately() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+            resolvePhoneAutoRotateTargetToApply(
+                candidateOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+                lastLandscapeAppliedAtMs = null,
+                nowMs = 1_000L
+            )
+        )
+    }
+
+    @Test
+    fun phoneAutoRotateApplyPolicy_suppressesPortraitCandidateAfterRecentLandscape() {
+        assertEquals(
+            null,
+            resolvePhoneAutoRotateTargetToApply(
+                candidateOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                lastLandscapeAppliedAtMs = 1_000L,
+                nowMs = 1_300L
+            )
+        )
+    }
+
+    @Test
+    fun phoneAutoRotateApplyPolicy_allowsPortraitCandidateAfterLandscapeSettleWindow() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneAutoRotateTargetToApply(
+                candidateOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                lastLandscapeAppliedAtMs = 1_000L,
+                nowMs = 1_000L + PHONE_AUTO_ROTATE_LANDSCAPE_SETTLE_MS
+            )
+        )
+    }
+
+    @Test
+    fun phoneAutoRotateApplyPolicy_clearsUnknownCandidateImmediately() {
+        assertEquals(
+            null,
+            resolvePhoneAutoRotateTargetToApply(
+                candidateOrientation = null,
+                lastLandscapeAppliedAtMs = 1_000L,
+                nowMs = 1_300L
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_autoRotateFullscreen_preservesExactLandscapeSide() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                isCompactDevice = true,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true,
+                currentRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             )
         )
     }
@@ -445,7 +601,7 @@ class VideoDetailLayoutModePolicyTest {
             shouldObservePhoneAutoRotate(
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 manualPortraitHoldActive = true
@@ -455,10 +611,25 @@ class VideoDetailLayoutModePolicyTest {
             shouldObservePhoneAutoRotate(
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = false,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
                 fullscreenMode = FullscreenMode.AUTO,
                 manualPortraitHoldActive = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationObserverPolicy_doesNotListenInsideSmallWindow() {
+        assertFalse(
+            shouldObservePhoneAutoRotate(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                isCompactDevice = true,
+                isOrientationDrivenFullscreen = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                manualPortraitHoldActive = false,
+                isInMultiWindowMode = true
             )
         )
     }
@@ -471,7 +642,7 @@ class VideoDetailLayoutModePolicyTest {
                 autoRotateEnabled = true,
                 systemAutoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.NONE,
-                useTabletLayout = false,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = false,
                 isFullscreenMode = true
             )
@@ -579,6 +750,23 @@ class VideoDetailLayoutModePolicyTest {
                 startAudioFromRoute = false,
                 portraitExperienceEnabled = true,
                 useOfficialInlinePortraitDetailExperience = false,
+                isCurrentRouteVideoLoaded = true,
+                isVerticalVideo = true,
+                isPortraitFullscreen = false,
+                hasAutoEnteredPortraitFromRoute = false
+            )
+        )
+    }
+
+    @Test
+    fun autoPortraitRoutePolicy_doesNotEnter_whenWideWindowKeepsDetailContentVisible() {
+        assertFalse(
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = true,
+                startAudioFromRoute = false,
+                portraitExperienceEnabled = true,
+                useOfficialInlinePortraitDetailExperience = false,
+                allowStandalonePortraitAutoEnter = false,
                 isCurrentRouteVideoLoaded = true,
                 isVerticalVideo = true,
                 isPortraitFullscreen = false,

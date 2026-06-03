@@ -2,6 +2,9 @@ package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FavFolderSource
+import com.android.purebilibili.data.model.response.Owner
+import com.android.purebilibili.data.model.response.Upper
+import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -91,19 +94,36 @@ class FavoriteFolderAggregationPolicyTest {
                 mid = 39366561L,
                 title = "一天体重测试系列",
                 type = 21,
+                upper = Upper(mid = 39366561L, name = "测试UP"),
                 source = FavFolderSource.SUBSCRIBED
             )
         )
 
         assertEquals(
             FavoriteCollectionRoute(
-                type = "season",
+                type = "favorite_season",
                 id = 1324105L,
                 mid = 39366561L,
-                title = "一天体重测试系列"
+                title = "一天体重测试系列",
+                ownerName = "测试UP"
             ),
             route
         )
+    }
+
+    @Test
+    fun `resolveFavoriteCollectionRoute carries collection owner name`() {
+        val route = resolveFavoriteCollectionRoute(
+            VideoItem(
+                title = "小约翰可汗高分视频",
+                owner = Owner(mid = 96070394L, name = "UP-Sings"),
+                isCollectionResource = true,
+                collectionId = 725909L,
+                collectionMid = 96070394L
+            )
+        )
+
+        assertEquals("UP-Sings", route?.ownerName)
     }
 
     @Test

@@ -5,7 +5,6 @@ import com.android.purebilibili.data.model.response.SeasonArchiveItem
 import com.android.purebilibili.data.model.response.SeasonItem
 import com.android.purebilibili.data.model.response.SeriesArchiveItem
 import com.android.purebilibili.data.model.response.SeriesItem
-import com.android.purebilibili.data.model.response.SpaceVideoData
 import com.android.purebilibili.data.model.response.SpaceAggregateArchiveItem
 import com.android.purebilibili.data.model.response.SpaceAggregateData
 import com.android.purebilibili.data.model.response.SpaceAggregateFavoriteItem
@@ -48,6 +47,31 @@ internal fun resolveSpaceSearchPlaceholder(scope: SpaceSearchScope): String {
     }
 }
 
+internal fun resolveSpaceSearchBarGridItemIndex(
+    scope: SpaceSearchScope,
+    hasContributionToolbar: Boolean
+): Int? {
+    return when (scope) {
+        SpaceSearchScope.DYNAMIC -> 2
+        SpaceSearchScope.VIDEO -> if (hasContributionToolbar) 3 else 2
+        SpaceSearchScope.NONE -> null
+    }
+}
+
+internal fun resolveSpaceSearchBarRevealScrollOffsetPx(
+    topBarHeightPx: Int,
+    extraVisibleMarginPx: Int
+): Int {
+    return -(topBarHeightPx.coerceAtLeast(0) + extraVisibleMarginPx.coerceAtLeast(0))
+}
+
+internal fun shouldEnableSpaceLazyGridSharedTransition(
+    hasSharedTransitionScope: Boolean,
+    hasAnimatedVisibilityScope: Boolean
+): Boolean {
+    return hasSharedTransitionScope && hasAnimatedVisibilityScope
+}
+
 internal fun shouldApplySpaceLoadResult(
     requestMid: Long,
     activeMid: Long,
@@ -78,8 +102,8 @@ internal fun applySpaceSupplementalData(
         series = series,
         createdFavoriteFolders = createdFavoriteFolders,
         collectedFavoriteFolders = collectedFavoriteFolders,
-        seasonArchives = seasonArchives,
-        seriesArchives = seriesArchives,
+        seasonArchives = mergeArchiveMapsByLargestList(state.seasonArchives, seasonArchives),
+        seriesArchives = mergeArchiveMapsByLargestList(state.seriesArchives, seriesArchives),
         contributionTabs = mergedContributionTabs,
         headerState = state.headerState.copy(
             createdFavorites = createdFavoriteFolders,
@@ -99,15 +123,63 @@ internal fun applySpaceSupplementalData(
     )
 }
 
+private fun <T> mergeArchiveMapsByLargestList(
+    existing: Map<Long, List<T>>,
+    incoming: Map<Long, List<T>>
+): Map<Long, List<T>> {
+    return (existing.keys + incoming.keys).mapNotNull { id ->
+        val existingItems = existing[id].orEmpty()
+        val incomingItems = incoming[id].orEmpty()
+        val selectedItems = if (incomingItems.size >= existingItems.size) {
+            incomingItems
+        } else {
+            existingItems
+        }
+        if (selectedItems.isNotEmpty()) id to selectedItems else null
+    }.toMap()
+}
+
+internal fun resolveEmbeddedSeasonArchives(
+    seasons: List<SeasonItem>
+): Map<Long, List<SeasonArchiveItem>> {
+    return seasons.mapNotNull { season ->
+        val seasonId = season.meta.season_id
+        val archives = season.archives
+        if (seasonId > 0L && archives.isNotEmpty()) {
+            seasonId to archives
+        } else {
+            null
+        }
+    }.toMap()
+}
+
+internal fun resolveEmbeddedSeriesArchives(
+    series: List<SeriesItem>
+): Map<Long, List<SeriesArchiveItem>> {
+    return series.mapNotNull { seriesItem ->
+        val seriesId = seriesItem.meta.series_id
+        val archives = seriesItem.archives
+        if (seriesId > 0L && archives.isNotEmpty()) {
+            seriesId to archives
+        } else {
+            null
+        }
+    }.toMap()
+}
+
 internal fun mapSeasonArchiveToVideoItem(
     item: SeasonArchiveItem,
-    mid: Long
+    mid: Long,
+    ownerName: String = ""
 ): VideoItem {
     return VideoItem(
         bvid = item.bvid,
         title = item.title,
         pic = item.pic,
-        owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
+        owner = com.android.purebilibili.data.model.response.Owner(
+            mid = mid,
+            name = item.author.ifBlank { ownerName }
+        ),
         stat = Stat(
             view = item.stat.view.toInt(),
             danmaku = item.stat.danmaku.toInt(),
@@ -120,13 +192,17 @@ internal fun mapSeasonArchiveToVideoItem(
 
 internal fun mapSeriesArchiveToVideoItem(
     item: SeriesArchiveItem,
-    mid: Long
+    mid: Long,
+    ownerName: String = ""
 ): VideoItem {
     return VideoItem(
         bvid = item.bvid,
         title = item.title,
         pic = item.pic,
-        owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
+        owner = com.android.purebilibili.data.model.response.Owner(
+            mid = mid,
+            name = item.author.ifBlank { ownerName }
+        ),
         stat = Stat(
             view = item.stat.view.toInt(),
             danmaku = item.stat.danmaku.toInt(),
@@ -171,16 +247,49 @@ internal fun normalizeSpaceVideoPage(
     return if (order == VideoSortOrder.OLDEST_PUBDATE) videos.asReversed() else videos
 }
 
-internal fun shouldRetrySuspiciousInitialSpaceVideoResult(
-    order: VideoSortOrder,
-    tid: Int,
-    keyword: String,
-    firstPageResult: SpaceVideoData?
-): Boolean {
-    if (order != VideoSortOrder.PUBDATE) return false
-    if (tid != 0) return false
-    if (keyword.isNotBlank()) return false
-    return firstPageResult == null || firstPageResult.list.vlist.isEmpty()
+internal fun resolveSpaceContentGridColumnCount(widthDp: Int): Int {
+    return when {
+        widthDp >= 900 -> 4
+        widthDp >= 600 -> 3
+        else -> 2
+    }
+}
+
+internal enum class SpaceContributionVideoLayoutMode {
+    GRID,
+    SINGLE_COLUMN
+}
+
+internal fun defaultSpaceContributionVideoLayoutMode(): SpaceContributionVideoLayoutMode {
+    return SpaceContributionVideoLayoutMode.GRID
+}
+
+internal fun toggleSpaceContributionVideoLayoutMode(
+    current: SpaceContributionVideoLayoutMode
+): SpaceContributionVideoLayoutMode {
+    return when (current) {
+        SpaceContributionVideoLayoutMode.GRID -> SpaceContributionVideoLayoutMode.SINGLE_COLUMN
+        SpaceContributionVideoLayoutMode.SINGLE_COLUMN -> SpaceContributionVideoLayoutMode.GRID
+    }
+}
+
+internal fun resolveSpaceContributionVideoGridSpan(
+    layoutMode: SpaceContributionVideoLayoutMode,
+    maxLineSpan: Int
+): Int {
+    return when (layoutMode) {
+        SpaceContributionVideoLayoutMode.GRID -> 1
+        SpaceContributionVideoLayoutMode.SINGLE_COLUMN -> maxLineSpan
+    }
+}
+
+internal fun resolveSpaceContributionVideoItemKey(
+    layoutMode: SpaceContributionVideoLayoutMode,
+    bvid: String,
+    aid: Long
+): String {
+    // 布局模式切换会同时改变 span 和内容树，key 随模式变化可避免 LazyGrid 复用旧 lookahead 节点。
+    return "space_video_${layoutMode.name}_${bvid}_${aid}"
 }
 
 internal data class SpaceInitialSeed(
@@ -227,7 +336,10 @@ internal fun resolveSpaceInitialSeedFromAggregate(
     val relation = card.relation
     val isFollowed = relation.isFollow == 1 || relation.status in setOf(2, 6)
     val mainTabs = resolveSpaceMainTabs(data.tab2)
-    val contributionTabs = resolveSpaceContributionTabs(data.tab2)
+    val contributionTabs = ensureSpaceContributionTabsForAvailableContent(
+        tabs = resolveSpaceContributionTabs(data.tab2),
+        hasArticles = (data.article?.count ?: 0) > 0 || data.article?.item.orEmpty().isNotEmpty()
+    )
     val defaultSelection = resolveSpaceAggregateDefaultSelection(
         defaultTab = data.defaultTab,
         contributionTabs = contributionTabs
@@ -307,7 +419,6 @@ internal fun buildInitialSpaceSuccessState(
         upStat = seed.upStat,
         videos = seed.videos,
         totalVideos = seed.totalVideos,
-        hasConfirmedEmptyVideos = selectedSubTab == SpaceSubTab.VIDEO && seed.totalVideos == 0,
         categories = categories,
         selectedSubTab = selectedSubTab,
         selectedContributionTabId = seed.defaultContributionTabId,

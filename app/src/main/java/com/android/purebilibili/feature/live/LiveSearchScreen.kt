@@ -23,13 +23,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +70,13 @@ fun LiveSearchScreen(
     var hasSubmitted by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(false) }
+    var liveLoadingMore by remember { mutableStateOf(false) }
+    var userLoadingMore by remember { mutableStateOf(false) }
+    var liveHasMore by remember { mutableStateOf(false) }
+    var userHasMore by remember { mutableStateOf(false) }
+    var liveNextPage by remember { mutableIntStateOf(1) }
+    var userNextPage by remember { mutableIntStateOf(1) }
+    var activeKeyword by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val liveResults = remember { mutableStateListOf<LiveRoomSearchItem>() }
     val userResults = remember { mutableStateListOf<SearchUpItem>() }
@@ -84,14 +92,22 @@ fun LiveSearchScreen(
         hasSubmitted = true
         isLoading = true
         error = null
+        activeKeyword = normalized
         liveResults.clear()
         userResults.clear()
+        liveHasMore = false
+        userHasMore = false
+        liveNextPage = 1
+        userNextPage = 1
         SearchRepository.searchLive(
             keyword = normalized,
             page = 1,
             order = SearchLiveOrder.ONLINE
         ).onSuccess { (rooms, _) ->
-            liveResults.addAll(rooms)
+            liveResults.addAll(rooms.distinctBy { it.roomid })
+        }.onSuccess { (_, pageInfo) ->
+            liveHasMore = pageInfo.hasMore
+            liveNextPage = pageInfo.currentPage + 1
         }.onFailure { err ->
             error = err.message ?: "直播搜索失败"
         }
@@ -99,11 +115,49 @@ fun LiveSearchScreen(
             keyword = normalized,
             page = 1
         ).onSuccess { (ups, _) ->
-            userResults.addAll(ups)
+            userResults.addAll(ups.distinctBy { it.mid })
+        }.onSuccess { (_, pageInfo) ->
+            userHasMore = pageInfo.hasMore
+            userNextPage = pageInfo.currentPage + 1
         }.onFailure { err ->
             if (error == null) error = err.message ?: "主播搜索失败"
         }
         isLoading = false
+    }
+
+    suspend fun loadMoreLive() {
+        if (activeKeyword.isBlank() || liveLoadingMore || !liveHasMore) return
+        liveLoadingMore = true
+        SearchRepository.searchLive(
+            keyword = activeKeyword,
+            page = liveNextPage,
+            order = SearchLiveOrder.ONLINE
+        ).onSuccess { (rooms, pageInfo) ->
+            val currentIds = liveResults.map { it.roomid }.toSet()
+            liveResults.addAll(rooms.filterNot { it.roomid in currentIds })
+            liveHasMore = pageInfo.hasMore
+            liveNextPage = pageInfo.currentPage + 1
+        }.onFailure { err ->
+            error = err.message ?: "直播加载更多失败"
+        }
+        liveLoadingMore = false
+    }
+
+    suspend fun loadMoreUser() {
+        if (activeKeyword.isBlank() || userLoadingMore || !userHasMore) return
+        userLoadingMore = true
+        SearchRepository.searchUp(
+            keyword = activeKeyword,
+            page = userNextPage
+        ).onSuccess { (ups, pageInfo) ->
+            val currentIds = userResults.map { it.mid }.toSet()
+            userResults.addAll(ups.filterNot { it.mid in currentIds })
+            userHasMore = pageInfo.hasMore
+            userNextPage = pageInfo.currentPage + 1
+        }.onFailure { err ->
+            error = err.message ?: "主播加载更多失败"
+        }
+        userLoadingMore = false
     }
 
     Box(
@@ -179,7 +233,7 @@ fun LiveSearchScreen(
                     )
                 }
             } else {
-                TabRow(selectedTabIndex = selectedTab) {
+                PrimaryTabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
@@ -213,6 +267,17 @@ fun LiveSearchScreen(
                                     onClick = { onLiveClick(item.roomid, item.title, item.uname) }
                                 )
                             }
+                            item {
+                                if (liveHasMore || liveLoadingMore) {
+                                    Button(
+                                        enabled = !liveLoadingMore,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = { scope.launch { loadMoreLive() } }
+                                    ) {
+                                        Text(if (liveLoadingMore) "加载中" else "加载更多")
+                                    }
+                                }
+                            }
                         }
                     }
                     else -> {
@@ -222,6 +287,17 @@ fun LiveSearchScreen(
                         ) {
                             items(userResults, key = { it.mid }) { item ->
                                 LiveSearchUserCard(item = item, onClick = { onUserClick(item.mid) })
+                            }
+                            item {
+                                if (userHasMore || userLoadingMore) {
+                                    Button(
+                                        enabled = !userLoadingMore,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = { scope.launch { loadMoreUser() } }
+                                    ) {
+                                        Text(if (userLoadingMore) "加载中" else "加载更多")
+                                    }
+                                }
                             }
                         }
                     }

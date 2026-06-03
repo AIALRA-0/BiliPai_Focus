@@ -13,3 +13,11 @@ internal fun resolveArticleDetailBottomPadding(
         extraBottomPadding = extraBottomPadding
     )
 }
+
+internal fun resolveArticleImageAspectRatio(
+    width: Int,
+    height: Int
+): Float? {
+    if (width <= 0 || height <= 0) return null
+    return width.toFloat() / height.toFloat()
+}

@@ -50,7 +50,60 @@ data class ViewInfo(
     @SerialName("is_stein_gate")
     val isSteinGate: Int = 0,
     val dimension: Dimension? = null,  //  视频尺寸信息
-    val ugc_season: UgcSeason? = null  //  [新增] 视频合集信息
+    val ugc_season: UgcSeason? = null,  //  [新增] 视频合集信息
+    val staff: List<VideoStaff> = emptyList(),
+    val rights: VideoDetailRights = VideoDetailRights(),
+    @SerialName("is_upower_exclusive")
+    val isUpowerExclusive: Boolean = false,
+    @SerialName("is_upower_play")
+    val isUpowerPlay: Boolean = false,
+    @SerialName("is_upower_preview")
+    val isUpowerPreview: Boolean = false,
+    @SerialName("is_upower_exclusive_with_qa")
+    val isUpowerExclusiveWithQa: Boolean = false
+) {
+    val isCooperation: Boolean
+        get() = rights.isCooperation == 1 || staff.isNotEmpty()
+}
+
+@Serializable
+data class VideoDetailRights(
+    val elec: Int = 0,
+    @SerialName("is_cooperation")
+    val isCooperation: Int = 0
+)
+
+@Serializable
+data class VideoStaff(
+    val mid: Long = 0,
+    val title: String = "",
+    val name: String = "",
+    val face: String = "",
+    val vip: VideoStaffVip = VideoStaffVip(),
+    val official: VideoStaffOfficial = VideoStaffOfficial(),
+    val follower: Int = 0,
+    @SerialName("label_style")
+    val labelStyle: Int = 0
+)
+
+@Serializable
+data class VideoStaffVip(
+    val type: Int = 0,
+    val status: Int = 0,
+    @SerialName("due_date")
+    val dueDate: Long = 0,
+    @SerialName("vip_pay_type")
+    val vipPayType: Int = 0,
+    @SerialName("theme_type")
+    val themeType: Int = 0
+)
+
+@Serializable
+data class VideoStaffOfficial(
+    val role: Int = 0,
+    val title: String = "",
+    val desc: String = "",
+    val type: Int = -1
 )
 
 @Serializable
@@ -74,6 +127,9 @@ data class VideoTagResponse(
 data class VideoTag(
     val tag_id: Long = 0,
     val tag_name: String = "",
+    val music_id: String = "",
+    val tag_type: String = "",
+    val jump_url: String = "",
     val cover: String = "",
     val content: String = "",
     val short_content: String = "",
@@ -123,6 +179,8 @@ data class UgcEpisodeArc(
     val aid: Long = 0,
     val pic: String = "",
     val title: String = "",
+    val pubdate: Long = 0,
+    val ctime: Long = 0,
     val duration: Int = 0,
     val stat: Stat? = null
 )

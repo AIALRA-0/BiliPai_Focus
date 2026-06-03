@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import android.content.pm.ActivityInfo
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,13 +93,38 @@ class FullscreenPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun fullscreenOverlayExitOrientation_restoresOriginalRequestForPhoneAndTablet() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolveFullscreenOverlayExitRequestedOrientation(
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolveFullscreenOverlayExitRequestedOrientation(
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            resolveFullscreenOverlayExitRequestedOrientation(
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            )
+        )
+    }
+
+    @Test
     fun fullscreenPlaybackButton_usesThemeTintedNativeIconWithoutSurfaceShadow() {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt")
             .readText()
-        val playbackButtonIndex = source.indexOf("togglePlayerPlaybackFromUserAction(it)")
+        val playbackButtonIndex = source.indexOf("applyPlaybackButtonUserAction(")
+        assertTrue(playbackButtonIndex >= 0)
+        val iconButtonIndex = source.lastIndexOf("IconButton(", playbackButtonIndex)
+        assertTrue(iconButtonIndex >= 0)
         val buttonSource = source.substring(
-            playbackButtonIndex - 220,
-            playbackButtonIndex + 520
+            iconButtonIndex,
+            playbackButtonIndex + 760
         )
 
         assertTrue(buttonSource.contains("IconButton("))

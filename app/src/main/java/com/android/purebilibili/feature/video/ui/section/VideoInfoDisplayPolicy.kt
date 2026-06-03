@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.ui.section
 
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.AiSummaryData
+import com.android.purebilibili.data.model.response.ViewInfo
 import java.util.Locale
 import java.util.TimeZone
 
@@ -50,6 +51,13 @@ internal fun hasAiSummaryContent(aiSummary: AiSummaryData?): Boolean {
     return modelResult.summary.isNotBlank() || modelResult.outline.isNotEmpty()
 }
 
+internal fun shouldShowVideoNoteEntry(
+    isVideoLoaded: Boolean,
+    aid: Long
+): Boolean {
+    return isVideoLoaded && aid > 0L
+}
+
 internal fun shouldShowInlineOwnerIdentity(showOwnerAvatar: Boolean): Boolean {
     return !showOwnerAvatar
 }
@@ -59,6 +67,21 @@ internal fun resolveVideoDetailOnlineCountText(
     onlineCount: String
 ): String {
     return if (showOnlineCount) onlineCount.trim() else ""
+}
+
+internal fun resolveVideoDetailBadges(info: ViewInfo): List<String> {
+    val badges = mutableListOf<String>()
+    if (info.isUpowerExclusive) {
+        badges += if (info.isUpowerPreview) "充电专属 · 可试看" else "充电专属"
+    }
+    if (info.isCooperation) {
+        badges += "联合投稿"
+    }
+    return badges
+}
+
+internal fun shouldShowCreatorTeamSection(info: ViewInfo): Boolean {
+    return info.staff.isNotEmpty()
 }
 
 internal fun shouldEmphasizePrecisePublishTime(

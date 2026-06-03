@@ -34,6 +34,25 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun combinedMiniPlayerModeShowsInAppMiniPlayerAndCanEnterSystemPip() {
+        assertTrue(
+            shouldShowInAppMiniPlayerByPolicy(
+                mode = SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP,
+                isActive = true,
+                isNavigatingToVideo = false,
+                stopPlaybackOnExit = false
+            )
+        )
+        assertTrue(
+            shouldEnterPipByPolicy(
+                mode = SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP,
+                isActive = true,
+                stopPlaybackOnExit = false
+            )
+        )
+    }
+
+    @Test
     fun stopOnExitDisablesInAppMiniPlayer() {
         assertFalse(
             shouldShowInAppMiniPlayerByPolicy(
@@ -451,6 +470,53 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun foregroundEntryKicksPlaybackWhenAndroid16ClearsPlayWhenReadyButResumeIntentExists() {
+        assertTrue(
+            shouldKickPlaybackAfterForegroundTrackRestore(
+                hadSavedTrackParams = true,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY,
+                hasForegroundResumeIntent = true
+            )
+        )
+        assertFalse(
+            shouldKickPlaybackAfterForegroundTrackRestore(
+                hadSavedTrackParams = true,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY,
+                hasForegroundResumeIntent = true,
+                isLeavingByNavigation = true
+            )
+        )
+    }
+
+    @Test
+    fun foregroundEntryPreparesIdlePlayerOnlyWhenResumeIntentExists() {
+        assertTrue(
+            shouldPreparePlaybackOnForegroundResume(
+                hasForegroundResumeIntent = true,
+                hasMediaItems = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+        assertFalse(
+            shouldPreparePlaybackOnForegroundResume(
+                hasForegroundResumeIntent = false,
+                hasMediaItems = true,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+        assertFalse(
+            shouldPreparePlaybackOnForegroundResume(
+                hasForegroundResumeIntent = true,
+                hasMediaItems = true,
+                playbackState = Player.STATE_IDLE,
+                isLeavingByNavigation = true
+            )
+        )
+    }
+
+    @Test
     fun bufferingWithPlayWhenReadyShouldNotBeTreatedAsInactiveInBackground() {
         assertFalse(
             shouldPauseBackgroundBuffering(
@@ -473,7 +539,7 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
-    fun navigationExitShouldClearPlaybackNotificationForOffAndPip() {
+    fun navigationExitShouldClearPlaybackNotificationForOffAndPipButNotInAppModes() {
         assertTrue(
             shouldClearPlaybackNotificationOnNavigationExit(
                 mode = SettingsManager.MiniPlayerMode.OFF,
@@ -489,6 +555,12 @@ class BackgroundPlaybackPolicyTest {
         assertFalse(
             shouldClearPlaybackNotificationOnNavigationExit(
                 mode = SettingsManager.MiniPlayerMode.IN_APP_ONLY,
+                stopPlaybackOnExit = false
+            )
+        )
+        assertFalse(
+            shouldClearPlaybackNotificationOnNavigationExit(
+                mode = SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP,
                 stopPlaybackOnExit = false
             )
         )
@@ -529,11 +601,14 @@ class BackgroundPlaybackPolicyTest {
     @Test
     fun notificationIconShouldFollowSelectedAppIconKey() {
         assertEquals(R.mipmap.ic_launcher_telegram_blue, resolveNotificationSmallIconRes("icon_telegram_blue"))
-        assertEquals(R.mipmap.ic_launcher_neon, resolveNotificationSmallIconRes("Neon"))
-        assertEquals(R.mipmap.ic_launcher_telegram_pink, resolveNotificationSmallIconRes("Pink"))
         assertEquals(R.mipmap.ic_launcher_telegram_dark, resolveNotificationSmallIconRes("Dark"))
         assertEquals(R.mipmap.ic_launcher_bilipai, resolveNotificationSmallIconRes("icon_bilipai"))
+        assertEquals(R.mipmap.ic_launcher_bilipai_pink, resolveNotificationSmallIconRes("icon_bilipai_pink"))
+        assertEquals(R.mipmap.ic_launcher_bilipai_white, resolveNotificationSmallIconRes("BiliPai White"))
+        assertEquals(R.mipmap.ic_launcher_bilipai_monet, resolveNotificationSmallIconRes("BiliPai Monet"))
         assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("Flat Material"))
+        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("Neon"))
+        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("Pink"))
         assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("unknown_key"))
     }
 
@@ -551,7 +626,7 @@ class BackgroundPlaybackPolicyTest {
     @Test
     fun notificationIconShouldFallbackToIconKeyWhenLauncherIconMissing() {
         assertEquals(
-            R.mipmap.ic_launcher_neon,
+            R.mipmap.ic_launcher_3d,
             resolveNotificationIconResByPriority(
                 launcherIconRes = 0,
                 fallbackIconKey = "Neon"

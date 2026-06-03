@@ -29,9 +29,10 @@ fun DownloadQualityDialog(
     title: String,
     qualityOptions: List<Pair<Int, String>>,  // (qualityId, qualityLabel)
     currentQuality: Int,
-    onQualitySelected: (Int) -> Unit,
+    onQualitySelected: (Int, DownloadOptions) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var includeDanmaku by remember { mutableStateOf(true) }
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -75,6 +76,27 @@ fun DownloadQualityDialog(
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { includeDanmaku = !includeDanmaku }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = includeDanmaku,
+                        onCheckedChange = { includeDanmaku = it }
+                    )
+                    Text(
+                        text = "同时缓存弹幕",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 // 画质列表
                 qualityOptions.forEach { (qualityId, qualityLabel) ->
@@ -89,7 +111,9 @@ fun DownloadQualityDialog(
                                 if (isSelected) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                             )
-                            .clickable { onQualitySelected(qualityId) }
+                            .clickable {
+                                onQualitySelected(qualityId, DownloadOptions(includeDanmaku = includeDanmaku))
+                            }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically

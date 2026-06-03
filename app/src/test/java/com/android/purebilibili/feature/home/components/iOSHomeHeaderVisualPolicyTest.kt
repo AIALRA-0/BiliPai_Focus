@@ -6,13 +6,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.RectangleShape
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.store.HomeTopRightAction
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -20,6 +23,59 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class iOSHomeHeaderVisualPolicyTest {
+
+    @Test
+    fun `top right unread badge only appears for inbox action`() {
+        assertEquals("8", formatHomeTopRightUnreadBadge(HomeTopRightAction.INBOX, 8))
+        assertEquals("99+", formatHomeTopRightUnreadBadge(HomeTopRightAction.INBOX, 120))
+        assertEquals(null, formatHomeTopRightUnreadBadge(HomeTopRightAction.INBOX, 0))
+        assertEquals(null, formatHomeTopRightUnreadBadge(HomeTopRightAction.SETTINGS, 8))
+    }
+
+    @Test
+    fun `top right unread badge escapes icon center without clipping`() {
+        val layout = resolveHomeTopRightUnreadBadgeLayout()
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt"),
+            File("src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt")
+        ).first { it.exists() }.readText()
+        val topRightButtonSource = source
+            .substringAfter("Spacer(modifier = Modifier.width(resolveHomeTopEdgeControlGap")
+            .substringBefore("if (drawTopSearchDivider)")
+
+        assertEquals(0.dp, layout.offsetX)
+        assertEquals(0.dp, layout.offsetY)
+        assertEquals(9.dp, layout.reservedEndWidth)
+        assertEquals(18.dp, layout.minWidth)
+        assertEquals(18.dp, layout.minHeight)
+        assertEquals(5.dp, layout.horizontalPadding)
+        assertEquals(1.dp, layout.verticalPadding)
+        assertTrue(topRightButtonSource.contains("resolveHomeTopRightActionSlotWidth"))
+        assertTrue(topRightButtonSource.contains(".size(topRightActionButtonSize)"))
+        assertTrue(topRightButtonSource.contains("Box("))
+        assertTrue(topRightButtonSource.contains(".clip(edgeButtonShape)"))
+        assertTrue(topRightButtonSource.contains("topRightUnreadBadgeLayout.offsetX"))
+    }
+
+    @Test
+    fun `top right inbox content description includes unread count`() {
+        assertEquals(
+            "消息，8 条未读",
+            resolveHomeTopRightActionContentDescription(HomeTopRightAction.INBOX, 8)
+        )
+        assertEquals(
+            "消息，99+ 条未读",
+            resolveHomeTopRightActionContentDescription(HomeTopRightAction.INBOX, 120)
+        )
+        assertEquals(
+            HomeTopRightAction.INBOX.label,
+            resolveHomeTopRightActionContentDescription(HomeTopRightAction.INBOX, 0)
+        )
+        assertEquals(
+            HomeTopRightAction.SETTINGS.label,
+            resolveHomeTopRightActionContentDescription(HomeTopRightAction.SETTINGS, 8)
+        )
+    }
 
     @Test
     fun `wide liquid glass chrome prefers flat treatment to avoid center seam`() {
@@ -76,15 +132,37 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `search content export layer stays disabled to avoid scroll flicker`() {
-        val active = resolveHomeTopSearchRefractionLayerPolicy(
+    fun `liquid glass unified top panel does not draw a center divider`() {
+        assertEquals(
+            0f,
+            resolveHomeTopUnifiedPanelDividerAlpha(HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP),
+            0.0001f
+        )
+        assertEquals(
+            0f,
+            resolveHomeTopUnifiedPanelDividerAlpha(HomeTopChromeRenderMode.LIQUID_GLASS_HAZE),
+            0.0001f
+        )
+        assertTrue(resolveHomeTopUnifiedPanelDividerAlpha(HomeTopChromeRenderMode.BLUR) > 0f)
+    }
+
+    @Test
+    fun `search content export layer stays disabled to avoid duplicate search capsule`() {
+        val scrolling = resolveHomeTopSearchRefractionLayerPolicy(
             renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
             hasBackdrop = true,
-            searchRevealFraction = 0.82f,
+            searchRevealFraction = 1f,
             isScrolling = true,
             isTransitionRunning = false
         )
-        val idle = resolveHomeTopSearchRefractionLayerPolicy(
+        val stable = resolveHomeTopSearchRefractionLayerPolicy(
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            hasBackdrop = true,
+            searchRevealFraction = 1f,
+            isScrolling = false,
+            isTransitionRunning = false
+        )
+        val collapsing = resolveHomeTopSearchRefractionLayerPolicy(
             renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
             hasBackdrop = true,
             searchRevealFraction = 0.82f,
@@ -94,21 +172,24 @@ class iOSHomeHeaderVisualPolicyTest {
         val blur = resolveHomeTopSearchRefractionLayerPolicy(
             renderMode = HomeTopChromeRenderMode.BLUR,
             hasBackdrop = true,
-            searchRevealFraction = 0.82f,
-            isScrolling = true,
+            searchRevealFraction = 1f,
+            isScrolling = false,
             isTransitionRunning = false
         )
 
-        assertFalse(active.captureContentLayer)
-        assertFalse(active.useExportedBackdrop)
-        assertEquals(0f, active.overlayAlpha, 0.0001f)
-        assertEquals(1f, active.visibleContentAlpha, 0.0001f)
-        assertEquals(0f, active.exportTranslationMultiplier, 0.0001f)
-        assertFalse(idle.captureContentLayer)
-        assertFalse(idle.useExportedBackdrop)
-        assertEquals(0f, idle.overlayAlpha, 0.0001f)
-        assertEquals(1f, idle.visibleContentAlpha, 0.0001f)
-        assertEquals(0f, idle.exportTranslationMultiplier, 0.0001f)
+        assertFalse(scrolling.captureContentLayer)
+        assertFalse(scrolling.useExportedBackdrop)
+        assertEquals(0f, scrolling.overlayAlpha, 0.0001f)
+        assertEquals(1f, scrolling.visibleContentAlpha, 0.0001f)
+        assertEquals(0f, scrolling.exportTranslationMultiplier, 0.0001f)
+        assertFalse(stable.captureContentLayer)
+        assertFalse(stable.useExportedBackdrop)
+        assertEquals(0f, stable.overlayAlpha, 0.0001f)
+        assertEquals(1f, stable.visibleContentAlpha, 0.0001f)
+        assertEquals(0f, stable.exportTranslationMultiplier, 0.0001f)
+        assertFalse(collapsing.captureContentLayer)
+        assertFalse(collapsing.useExportedBackdrop)
+        assertEquals(0f, collapsing.overlayAlpha, 0.0001f)
         assertFalse(blur.captureContentLayer)
         assertFalse(blur.useExportedBackdrop)
         assertEquals(0f, blur.overlayAlpha, 0.0001f)
@@ -186,6 +267,26 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `ios home header expands docked top tab row for icon plus text`() {
+        assertEquals(
+            58.dp,
+            resolveHomeTopTabRowHeight(
+                isTabFloating = false,
+                uiPreset = UiPreset.IOS,
+                labelMode = 0
+            )
+        )
+        assertEquals(
+            62.dp,
+            resolveHomeTopTabRowHeight(
+                isTabFloating = true,
+                uiPreset = UiPreset.IOS,
+                labelMode = 0
+            )
+        )
+    }
+
+    @Test
     fun `header scroll hides search row while keeping top tabs pinned`() {
         val layout = resolveHomeHeaderScrollLayout(
             headerOffsetPx = -96f,
@@ -215,6 +316,58 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(0.5f, layout.searchAlpha, 0.0001f)
         assertEquals(56f, layout.tabRowHeightPx, 0.0001f)
         assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `top tab layout keeps screenshot order and pins tabs after search disappears`() {
+        val collapsed = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = 44.dp,
+            visibleSearchHeight = 0.dp,
+            tabRowHeight = 56.dp,
+            searchToTabsSpacing = 4.dp,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val expanded = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = 44.dp,
+            visibleSearchHeight = 48.dp,
+            tabRowHeight = 56.dp,
+            searchToTabsSpacing = 4.dp,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+
+        assertEquals(44.dp, collapsed.tabTop)
+        assertEquals(96.dp, expanded.tabTop)
+        assertEquals(44.dp, collapsed.searchTop)
+        assertEquals(collapsed.searchTop, expanded.searchTop)
+    }
+
+    @Test
+    fun `top blur height covers pinned tabs and only visible search area`() {
+        val collapsed = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = 44.dp,
+            visibleSearchHeight = 0.dp,
+            tabRowHeight = 56.dp,
+            searchToTabsSpacing = 4.dp,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val expanded = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = 44.dp,
+            visibleSearchHeight = 48.dp,
+            tabRowHeight = 56.dp,
+            searchToTabsSpacing = 4.dp,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val plain = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = 44.dp,
+            visibleSearchHeight = 48.dp,
+            tabRowHeight = 56.dp,
+            searchToTabsSpacing = 4.dp,
+            renderMode = HomeTopChromeRenderMode.PLAIN
+        )
+
+        assertEquals(100.dp, collapsed.blurHeight)
+        assertEquals(152.dp, expanded.blurHeight)
+        assertEquals(0.dp, plain.blurHeight)
     }
 
     @Test
@@ -309,6 +462,62 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `unified top tabs keep blur area for all presets`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopUnifiedLocalTabChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopUnifiedLocalTabChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopUnifiedLocalTabChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `unified top tab blur surface keeps visible backdrop fill`() {
+        val tabColor = Color.Black.copy(alpha = 0.38f)
+
+        assertEquals(
+            tabColor.copy(alpha = 0.38f),
+            resolveHomeTopUnifiedTabSurfaceColor(
+                tabContainerColor = tabColor,
+                tabOverlayAlpha = 0.38f,
+                uiPreset = UiPreset.IOS,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+                useUnifiedLiquidChrome = false,
+                tabChromeRenderMode = HomeTopChromeRenderMode.BLUR
+            )
+        )
+        assertEquals(
+            Color.Transparent,
+            resolveHomeTopUnifiedTabSurfaceColor(
+                tabContainerColor = tabColor,
+                tabOverlayAlpha = 0.38f,
+                uiPreset = UiPreset.IOS,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3,
+                useUnifiedLiquidChrome = false,
+                tabChromeRenderMode = HomeTopChromeRenderMode.PLAIN
+            )
+        )
+    }
+
+    @Test
     fun `md3 partial collapse softens search content alpha instead of using linear fade`() {
         val layout = resolveHomeHeaderScrollLayout(
             headerOffsetPx = -26f,
@@ -329,7 +538,7 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home header collapse distance includes search spacing before pinned tabs`() {
         assertEquals(
-            54.dp,
+            52.dp,
             resolveHomeTopSearchCollapseDistance(
                 searchBarHeight = 48.dp,
                 uiPreset = UiPreset.IOS
@@ -348,28 +557,79 @@ class iOSHomeHeaderVisualPolicyTest {
     fun `home header trims horizontal spacing without cramping controls`() {
         assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
         assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
-        assertEquals(34.dp, resolveHomeTopSearchPillHeight())
-        assertEquals(48.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
+        assertEquals(44.dp, resolveHomeTopSearchPillHeight())
+        assertEquals(44.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
         assertEquals(10.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
-        assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing())
+        assertEquals(4.dp, resolveHomeTopSearchToTabsSpacing())
         assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
     }
 
     @Test
-    fun `home header uses unified panel with embedded tabs for ios and md3`() {
+    fun `home header keeps ios and miuix tabs in detached dock`() {
         assertTrue(shouldUseUnifiedHomeTopPanel(UiPreset.IOS))
         assertTrue(shouldUseUnifiedHomeTopPanel(UiPreset.MD3))
+        assertTrue(shouldUseDetachedHomeTopTabDock(UiPreset.IOS))
+        assertFalse(
+            shouldUseDetachedHomeTopTabDock(
+                UiPreset.MD3,
+                AndroidNativeVariant.MATERIAL3
+            )
+        )
+        assertTrue(
+            shouldUseDetachedHomeTopTabDock(
+                UiPreset.MD3,
+                AndroidNativeVariant.MIUIX
+            )
+        )
         assertFalse(shouldShowUnifiedHomeTopPanelDivider(UiPreset.IOS))
-        assertTrue(shouldShowUnifiedHomeTopPanelDivider(UiPreset.MD3))
+        assertTrue(
+            shouldShowUnifiedHomeTopPanelDivider(
+                UiPreset.MD3,
+                AndroidNativeVariant.MATERIAL3
+            )
+        )
+        assertFalse(
+            shouldShowUnifiedHomeTopPanelDivider(
+                UiPreset.MD3,
+                AndroidNativeVariant.MIUIX
+            )
+        )
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding())
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding(UiPreset.MD3))
-        assertEquals(8.dp, resolveHomeTopUnifiedPanelInnerPadding())
+        assertEquals(6.dp, resolveHomeTopUnifiedPanelInnerPadding())
         assertEquals(10.dp, resolveHomeTopUnifiedPanelInnerPadding(UiPreset.MD3))
-        assertEquals(28.dp, resolveHomeTopUnifiedPanelCornerRadius())
+        assertEquals(32.dp, resolveHomeTopUnifiedPanelCornerRadius())
         assertEquals(16.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
+        assertEquals(
+            18.dp,
+            resolveHomeTopUnifiedPanelCornerRadius(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding(UiPreset.MD3))
+    }
+
+    @Test
+    fun `home top preset style owns whole header spacing for three presets`() {
+        val ios = resolveHomeTopPresetStyle(UiPreset.IOS, AndroidNativeVariant.MATERIAL3, labelMode = 2)
+        val material3 = resolveHomeTopPresetStyle(UiPreset.MD3, AndroidNativeVariant.MATERIAL3, labelMode = 2)
+        val miuix = resolveHomeTopPresetStyle(UiPreset.MD3, AndroidNativeVariant.MIUIX, labelMode = 2)
+
+        assertEquals(48.dp, ios.searchBarHeight)
+        assertEquals(52.dp, material3.searchBarHeight)
+        assertEquals(50.dp, miuix.searchBarHeight)
+        assertEquals(32.dp, ios.unifiedPanelCornerRadius)
+        assertEquals(16.dp, material3.unifiedPanelCornerRadius)
+        assertEquals(18.dp, miuix.unifiedPanelCornerRadius)
+        assertEquals(4.dp, ios.searchToTabsSpacing)
+        assertEquals(6.dp, material3.searchToTabsSpacing)
+        assertEquals(4.dp, miuix.searchToTabsSpacing)
+        assertFalse(ios.showUnifiedPanelDivider)
+        assertTrue(material3.showUnifiedPanelDivider)
+        assertFalse(miuix.showUnifiedPanelDivider)
     }
 
     @Test
@@ -409,7 +669,7 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home list top padding reserves full unified header height without underlapping md3 tabs`() {
         assertEquals(
-            175.dp,
+            169.dp,
             resolveHomeTopReservedListPadding(
                 statusBarHeight = 44.dp,
                 searchBarHeight = 48.dp,
@@ -442,6 +702,14 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `ios home search pill uses the same capsule shape as bottom bar`() {
+        assertEquals(
+            resolveSharedBottomBarCapsuleShape(),
+            resolveHomeTopSearchContainerShape(UiPreset.IOS)
+        )
+    }
+
+    @Test
     fun `md3 home header keeps search pill and edge controls less circular`() {
         val searchShape = resolveHomeTopSearchContainerShape(UiPreset.MD3)
         val edgeShape = resolveHomeTopEdgeButtonShape(UiPreset.MD3)
@@ -449,9 +717,9 @@ class iOSHomeHeaderVisualPolicyTest {
         assertTrue(searchShape is RoundedCornerShape)
         assertTrue(edgeShape is RoundedCornerShape)
         assertNotEquals(CircleShape, edgeShape)
-        assertEquals(48.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
+        assertEquals(44.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         assertEquals(16.dp, resolveHomeTopSearchContentHorizontalPadding(UiPreset.MD3))
-        assertEquals(10.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
+        assertEquals(8.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
     }
 
     @Test
@@ -475,7 +743,7 @@ class iOSHomeHeaderVisualPolicyTest {
             )
         )
         assertEquals(
-            46.dp,
+            44.dp,
             resolveHomeTopSearchPillHeight(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -596,7 +864,7 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `top chrome uses liquid glass when liquid glass is enabled`() {
+    fun `top chrome uses liquid glass when enabled`() {
         assertEquals(
             TopTabMaterialMode.LIQUID_GLASS,
             resolveHomeTopChromeMaterialMode(
@@ -632,7 +900,7 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `top chrome uses liquid glass when header blur is off but liquid glass remains enabled`() {
+    fun `top chrome uses liquid glass from linked bottom bar when enabled`() {
         assertEquals(
             TopTabMaterialMode.LIQUID_GLASS,
             resolveHomeTopChromeMaterialMode(
@@ -656,7 +924,7 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `home top keeps md3 material shell floating with ordinary blur`() {
+    fun `home top md3 shell keeps liquid glass off by default`() {
         val appearance = resolveHomeTopLinkedBottomBarAppearance(
             homeSettings = HomeSettings(),
             uiPreset = UiPreset.MD3,
@@ -669,9 +937,13 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `home top keeps miuix shell floating without inheriting bottom liquid glass`() {
+    fun `home top respects independent disabled top dock liquid glass`() {
         val appearance = resolveHomeTopLinkedBottomBarAppearance(
-            homeSettings = HomeSettings(),
+            homeSettings = HomeSettings(
+                isTopBarLiquidGlassEnabled = false,
+                isBottomBarLiquidGlassEnabled = true,
+                androidNativeLiquidGlassEnabled = true
+            ),
             uiPreset = UiPreset.MD3,
             androidNativeVariant = AndroidNativeVariant.MIUIX
         )
@@ -679,6 +951,40 @@ class iOSHomeHeaderVisualPolicyTest {
         assertTrue(appearance.isFloating)
         assertTrue(appearance.blurEnabled)
         assertFalse(appearance.liquidGlassEnabled)
+    }
+
+    @Test
+    fun `top chrome follows independent top dock liquid glass setting`() {
+        assertTrue(
+            resolveHomeTopChromeLiquidGlassEnabled(
+                homeSettings = HomeSettings(
+                    isTopBarLiquidGlassEnabled = true,
+                    isBottomBarLiquidGlassEnabled = false,
+                    androidNativeLiquidGlassEnabled = false
+                ),
+                uiPreset = UiPreset.MD3
+            )
+        )
+        assertFalse(
+            resolveHomeTopChromeLiquidGlassEnabled(
+                homeSettings = HomeSettings(
+                    isTopBarLiquidGlassEnabled = false,
+                    isBottomBarLiquidGlassEnabled = true,
+                    androidNativeLiquidGlassEnabled = true
+                ),
+                uiPreset = UiPreset.MD3
+            )
+        )
+        assertTrue(
+            resolveHomeTopChromeLiquidGlassEnabled(
+                homeSettings = HomeSettings(
+                    isTopBarLiquidGlassEnabled = true,
+                    isBottomBarLiquidGlassEnabled = false,
+                    androidNativeLiquidGlassEnabled = false
+                ),
+                uiPreset = UiPreset.IOS
+            )
+        )
     }
 
     @Test
@@ -700,9 +1006,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `md3 continuous top slab is limited to the status bar height`() {
+    fun `continuous top slab covers pinned tab and visible search area`() {
         assertEquals(
-            48.dp,
+            120.dp,
             resolveHomeTopContinuousSlabHeight(
                 statusBarHeight = 24.dp,
                 searchBarHeight = 52.dp,
@@ -724,7 +1030,7 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `md3 collapsed top slab keeps only status bar height when tabs are hidden`() {
+    fun `collapsed top slab keeps only status bar height when tabs are hidden`() {
         assertEquals(
             24.dp,
             resolveHomeTopContinuousSlabHeight(
@@ -786,9 +1092,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `ios unified home header keeps blur on the local panel while preserving top backdrop blur`() {
+    fun `ios unified home header keeps outer panel transparent while inner controls own blur`() {
         assertEquals(
-            HomeTopChromeRenderMode.BLUR,
+            HomeTopChromeRenderMode.PLAIN,
             resolveHomeTopPanelChromeRenderMode(
                 renderMode = HomeTopChromeRenderMode.BLUR,
                 uiPreset = UiPreset.IOS,
@@ -805,9 +1111,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `ios unified home header uses inset search styling instead of standalone blur pill`() {
+    fun `ios unified home header keeps search blur when blur is enabled`() {
         assertEquals(
-            HomeTopChromeRenderMode.PLAIN,
+            HomeTopChromeRenderMode.BLUR,
             resolveHomeTopSearchChromeRenderMode(
                 renderMode = HomeTopChromeRenderMode.BLUR,
                 uiPreset = UiPreset.IOS,
@@ -816,6 +1122,91 @@ class iOSHomeHeaderVisualPolicyTest {
         )
         assertTrue(resolveHomeTopUnifiedSearchContainerColor(isLightMode = true).alpha < 0.4f)
         assertTrue(resolveHomeTopUnifiedSearchBorderColor(isLightMode = true).alpha < 0.25f)
+    }
+
+    @Test
+    fun `dark unified search pill uses dark surface instead of white lift`() {
+        val darkContainer = resolveHomeTopUnifiedSearchContainerColor(isLightMode = false)
+
+        assertEquals(Color.Black.red, darkContainer.red)
+        assertEquals(Color.Black.green, darkContainer.green)
+        assertEquals(Color.Black.blue, darkContainer.blue)
+        assertTrue(darkContainer.alpha >= 0.30f)
+        assertTrue(resolveHomeTopSearchDarkWhiteOverlayMultiplier(isLightMode = false) < 0.5f)
+        assertEquals(0.86f, resolveHomeTopSearchDarkWhiteOverlayMultiplier(isLightMode = true), 0.0001f)
+    }
+
+    @Test
+    fun `plain top search keeps an opaque readable surface when liquid glass is disabled`() {
+        val darkPlain = resolveHomeTopUnifiedSearchContainerColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.PLAIN
+        )
+        val darkBlur = resolveHomeTopUnifiedSearchContainerColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val lightPlainBorder = resolveHomeTopUnifiedSearchBorderColor(
+            isLightMode = true,
+            renderMode = HomeTopChromeRenderMode.PLAIN
+        )
+
+        assertEquals(Color.Black.red, darkPlain.red)
+        assertTrue(darkPlain.alpha >= 0.40f)
+        assertTrue(darkPlain.alpha > darkBlur.alpha)
+        assertTrue(lightPlainBorder.alpha > 0f)
+    }
+
+    @Test
+    fun `top search legacy highlight is disabled for liquid glass refraction`() {
+        assertFalse(
+            shouldDrawHomeTopSearchLegacyHighlight(
+                uiPreset = UiPreset.IOS,
+                useUnifiedTopPanel = false,
+                renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+                refractionOverlayAlpha = 1f
+            )
+        )
+        assertTrue(
+            shouldDrawHomeTopSearchLegacyHighlight(
+                uiPreset = UiPreset.IOS,
+                useUnifiedTopPanel = false,
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                refractionOverlayAlpha = 0f
+            )
+        )
+    }
+
+    @Test
+    fun `plain top edge controls keep a contrasting visible container`() {
+        val darkPlain = resolveHomeTopEdgeControlContainerColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.PLAIN
+        )
+        val darkBlur = resolveHomeTopEdgeControlContainerColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val darkLiquid = resolveHomeTopEdgeControlContainerColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP
+        )
+        val darkBlurBorder = resolveHomeTopEdgeControlBorderColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val darkPlainBorder = resolveHomeTopEdgeControlBorderColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.PLAIN
+        )
+
+        assertEquals(Color.Black.red, darkPlain.red)
+        assertTrue(darkPlain.alpha >= 0.38f)
+        assertTrue(darkBlur.alpha >= 0.30f)
+        assertTrue(darkPlain.alpha > darkLiquid.alpha)
+        assertTrue(darkBlur.alpha > darkLiquid.alpha)
+        assertTrue(darkBlurBorder.alpha > 0f)
+        assertTrue(darkPlainBorder.alpha > 0f)
     }
 
     @Test
@@ -837,9 +1228,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `md3 unified home header also keeps search blur on the outer panel`() {
+    fun `md3 unified home header also keeps search blur on the search pill`() {
         assertEquals(
-            HomeTopChromeRenderMode.PLAIN,
+            HomeTopChromeRenderMode.BLUR,
             resolveHomeTopSearchChromeRenderMode(
                 renderMode = HomeTopChromeRenderMode.BLUR,
                 uiPreset = UiPreset.MD3,
@@ -849,9 +1240,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `miuix top chrome prefers blur over liquid glass when blur is enabled`() {
+    fun `miuix top chrome follows global liquid glass when enabled`() {
         assertEquals(
-            TopTabMaterialMode.BLUR,
+            TopTabMaterialMode.LIQUID_GLASS,
             resolveHomeTopChromeMaterialMode(
                 isHeaderBlurEnabled = true,
                 isBottomBarBlurEnabled = true,
@@ -943,6 +1334,18 @@ class iOSHomeHeaderVisualPolicyTest {
         val shape = RoundedCornerShape(10)
 
         assertEquals(shape, resolveHomeTopChromeLensShape(shape))
+    }
+
+    @Test
+    fun `continuous top slab uses subtle bottom corners`() {
+        assertEquals(
+            RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
+            resolveHomeTopContinuousSlabShape()
+        )
+        assertEquals(
+            RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
+            resolveHomeTopContinuousSlabShape(UiPreset.MD3)
+        )
     }
 
     @Test
@@ -1146,6 +1549,25 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `top tab chrome ignores vertical scroll motion to avoid stop flicker`() {
+        val liquidPolicy = resolveHomeTopTabChromeMotionPolicy(
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            isScrolling = true,
+            isTransitionRunning = true
+        )
+        val hazePolicy = resolveHomeTopTabChromeMotionPolicy(
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_HAZE,
+            isScrolling = true,
+            isTransitionRunning = false
+        )
+
+        assertFalse(liquidPolicy.isScrolling)
+        assertFalse(liquidPolicy.isTransitionRunning)
+        assertFalse(hazePolicy.isScrolling)
+        assertFalse(hazePolicy.isTransitionRunning)
+    }
+
+    @Test
     fun `top blur container color reuses bottom bar surface color rule`() {
         val colors = resolveHomeTopBlurContainerColors(
             colors = HomeGlassResolvedColors(
@@ -1190,6 +1612,31 @@ class iOSHomeHeaderVisualPolicyTest {
             ),
             0.0001f
         )
+    }
+
+    @Test
+    fun `detached top tab dock uses inverted surfaces in light and dark mode`() {
+        val lightDock = resolveHomeTopDetachedTabDockSurfaceColor(
+            isLightMode = true,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val darkDock = resolveHomeTopDetachedTabDockSurfaceColor(
+            isLightMode = false,
+            renderMode = HomeTopChromeRenderMode.BLUR
+        )
+        val darkSelectedCapsule = resolveIosTopTabCapsuleContainerColor(
+            isDarkTheme = true,
+            selectionFraction = 1f
+        )
+
+        val bottomIndicatorColor = resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = true)
+
+        assertTrue(lightDock.luminance() > 0.8f)
+        assertTrue(darkDock.luminance() < 0.1f)
+        assertEquals(bottomIndicatorColor.red, darkSelectedCapsule.red, 0.001f)
+        assertEquals(bottomIndicatorColor.green, darkSelectedCapsule.green, 0.001f)
+        assertEquals(bottomIndicatorColor.blue, darkSelectedCapsule.blue, 0.001f)
+        assertEquals(0.28f, darkSelectedCapsule.alpha, 0.002f)
     }
 
     @Test
@@ -1251,6 +1698,13 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `top tab chrome padding never passes negative values into compose`() {
+        assertEquals(0.dp, resolveNonNegativeHomeTopPadding((-4).dp))
+        assertEquals(0.dp, resolveNonNegativeHomeTopPadding(0.dp))
+        assertEquals(8.dp, resolveNonNegativeHomeTopPadding(8.dp))
+    }
+
+    @Test
     fun `docked top tabs keep neutral spacing beneath search`() {
         assertEquals(0f, resolveHomeTopTabVerticalPaddingDp(isTabFloating = false), 0.0001f)
         assertEquals(0f, resolveHomeTopTabYOffsetDp(isTabFloating = false), 0.0001f)
@@ -1274,5 +1728,97 @@ class iOSHomeHeaderVisualPolicyTest {
             ),
             0.0001f
         )
+    }
+
+    @Test
+    fun `home header consumes skin atmosphere and search tint`() {
+        val homeScreenSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
+        val headerSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt")
+
+        assertTrue(homeScreenSource.contains("uiSkinDecoration = homeUiSkinDecoration"))
+        assertTrue(headerSource.contains("uiSkinDecoration: HomeUiSkinDecoration? = null"))
+        assertFalse(headerSource.contains("HomeSkinAtmosphere("))
+        assertFalse(headerSource.contains("resolveHomeSkinAtmospherePinnedHeight("))
+        assertFalse(headerSource.contains("modifier = Modifier.matchParentSize()"))
+        assertTrue(headerSource.contains("skinTint = uiSkinDecoration?.searchCapsuleTint"))
+        assertTrue(headerSource.contains("uiSkinDecoration?.topAtmosphereTint"))
+    }
+
+    @Test
+    fun `home header skin search tint is applied as capsule surface not inner padded child`() {
+        val headerSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt")
+        val searchCapsuleSource = headerSource
+            .substringAfter(".height(resolveHomeTopSearchPillHeight(uiPreset, androidNativeVariant))")
+            .substringBefore("val searchFieldContent")
+
+        assertTrue(searchCapsuleSource.contains("val skinSearchSurfaceColor = resolveHomeSkinSearchSurfaceColor("))
+        assertTrue(searchCapsuleSource.contains("surfaceColor = skinSearchSurfaceColor"))
+        assertTrue(searchCapsuleSource.contains("KernelSuBottomBarIndicatorLayer("))
+        assertTrue(searchCapsuleSource.contains("drawShellLens = false"))
+        assertFalse(searchCapsuleSource.contains("SimpleLiquidIndicator("))
+        assertFalse(searchCapsuleSource.contains(".matchParentSize()\n                                                .background("))
+        assertFalse(searchCapsuleSource.contains("uiSkinDecoration.searchCapsuleTint.copy(alpha = 0.22f)"))
+    }
+
+    @Test
+    fun `home header skin top tabs keep host readability and only pass sticker icons`() {
+        val headerSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt")
+        val topBarSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt")
+
+        assertTrue(headerSource.contains("val shouldUseSkinPlainTopTabs = shouldUseHomeSkinPlainTopTabs(uiSkinDecoration)"))
+        assertTrue(headerSource.contains("skinPlainStyle = shouldUseSkinPlainTopTabs"))
+        assertTrue(headerSource.contains("topTabSkinIconPaths = uiSkinDecoration?.topTabSkinIconPaths.orEmpty()"))
+        assertTrue(headerSource.contains("partitionSkinIconPath = uiSkinDecoration?.topTabPartitionIconPath()"))
+        assertFalse(headerSource.contains("val topTabBackgroundImagePath = uiSkinDecoration?.topTabBackgroundImagePath"))
+        assertFalse(headerSource.contains("model = File(topTabBackgroundImagePath)"))
+        assertFalse(headerSource.contains("val tabRowHeightDp = if (shouldUseSkinPlainTopTabs)"))
+        assertTrue(topBarSource.contains("val effectiveRenderer = if (skinPlainStyle || forceMaterialUnderline)"))
+        assertTrue(topBarSource.contains("if (showPartitionAction && !hasSkinStickerIcons && !skinPlainStyle && presetStyle.renderer == HomeTopTabRenderer.MIUIX)"))
+    }
+
+    @Test
+    fun `home screen passes android native variant into top reserved padding`() {
+        val homeScreenSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
+        val reservedPaddingCall = homeScreenSource
+            .substringAfter("val listTopPadding = resolveHomeTopReservedListPadding(")
+            .substringBefore(")")
+
+        assertTrue(reservedPaddingCall.contains("androidNativeVariant = androidNativeVariant"))
+    }
+
+    @Test
+    fun `home header settings button uses preset aware sizing`() {
+        val headerSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt")
+
+        assertTrue(headerSource.contains("val topRightActionButtonSize = resolveHomeTopSettingsButtonSize(uiPreset, androidNativeVariant)"))
+        assertTrue(headerSource.contains(".size(topRightActionButtonSize)"))
+        assertTrue(headerSource.contains("modifier = Modifier.size(resolveHomeTopSettingsIconSize(uiPreset, androidNativeVariant))"))
+        assertFalse(headerSource.contains(".size(resolveHomeTopSettingsButtonSize())"))
+    }
+
+    @Test
+    fun `skin top tab content color follows skin atmosphere brightness`() {
+        assertEquals(
+            Color.White.copy(alpha = 0.98f),
+            resolveHomeSkinTopTabContentColor(Color(0xFF2E2A1E))
+        )
+        assertEquals(
+            Color.White.copy(alpha = 0.98f),
+            resolveHomeSkinTopTabContentColor(Color(0xFF778675))
+        )
+        assertEquals(
+            Color(0xFF111820).copy(alpha = 0.96f),
+            resolveHomeSkinTopTabContentColor(Color(0xFFE4F6FF))
+        )
+    }
+
+    private fun loadSource(path: String): String {
+        val normalizedPath = path.removePrefix("app/")
+        val sourceFile = listOf(
+            File(path),
+            File(normalizedPath)
+        ).firstOrNull { it.exists() }
+        require(sourceFile != null) { "Cannot locate $path from ${File(".").absolutePath}" }
+        return sourceFile.readText()
     }
 }

@@ -7,18 +7,22 @@ import kotlin.test.assertEquals
 class UiPresetSettingsPolicyTest {
 
     @Test
-    fun nullPreferenceValue_defaultsToIosPreset() {
-        assertEquals(UiPreset.IOS, resolveUiPresetPreferenceValue(null))
+    fun nullPreferenceValue_defaultsToMd3Preset() {
+        assertEquals(
+            UiPreset.MD3,
+            resolveUiPresetPreferenceValue(null)
+        )
     }
 
     @Test
-    fun invalidPreferenceValue_fallsBackToIosPreset() {
-        assertEquals(UiPreset.IOS, resolveUiPresetPreferenceValue(99))
-    }
-
-    @Test
-    fun persistedMd3Value_restoresMd3Preset() {
-        assertEquals(UiPreset.MD3, resolveUiPresetPreferenceValue(UiPreset.MD3.value))
-        assertEquals(UiPreset.IOS, resolveUiPresetPreferenceValue(UiPreset.IOS.value))
+    fun persistedPreferenceValue_restoresMatchingPreset() {
+        assertEquals(
+            UiPreset.IOS,
+            resolveUiPresetPreferenceValue(UiPreset.IOS.value)
+        )
+        assertEquals(
+            UiPreset.MD3,
+            resolveUiPresetPreferenceValue(UiPreset.MD3.value)
+        )
     }
 }

@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.bangumi.ui.player
 
 import android.app.Activity
 import android.content.Context
+import android.media.AudioManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -41,8 +42,11 @@ import androidx.media3.ui.PlayerView
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
+import com.android.purebilibili.feature.video.ui.components.AnimatedGesturePercentText
 import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
+import com.android.purebilibili.feature.video.ui.section.resolveSystemStreamVolumeFromGesture
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import com.android.purebilibili.data.model.response.SponsorSegment
 import com.android.purebilibili.feature.bangumi.resolveBangumiDanmakuTopInsetDp
@@ -75,6 +79,7 @@ fun BangumiPlayerView(
     coverUrl: String = "",
     currentVideoUrl: String = "",
     currentAudioUrl: String = "",
+    debugInfo: PlaybackDebugInfo = PlaybackDebugInfo(),
     pages: List<Page> = emptyList(),
     currentPageIndex: Int = 0,
     onPageSelect: (Int) -> Unit = {},
@@ -101,11 +106,15 @@ fun BangumiPlayerView(
     danmakuSpeed: Float = 1.0f,
     danmakuDisplayArea: Float = 0.5f,
     danmakuMergeDuplicates: Boolean = true,
+    danmakuDuplicateMergeWindowMs: Int = 500,
+    danmakuDuplicateMergeCountThreshold: Int = 2,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
     onDanmakuDisplayAreaChange: (Float) -> Unit = {},
     onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {},
+    onDanmakuDuplicateMergeWindowMsChange: (Int) -> Unit = {},
+    onDanmakuDuplicateMergeCountThresholdChange: (Int) -> Unit = {},
     isLiked: Boolean = false,
     coinCount: Int = 0,
     onToggleLike: () -> Unit = {},
@@ -127,9 +136,8 @@ fun BangumiPlayerView(
         statusBarsInsetDp = statusBarsInsetTopDp
     ).dp
     
-    // 音频管理
-    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager }
-    val maxVolume = remember { audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) }
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     
     // 控制层状态
     var showControls by remember { mutableStateOf(true) }
@@ -142,6 +150,8 @@ fun BangumiPlayerView(
     var gestureMode by remember { mutableStateOf(BangumiGestureMode.None) }
     var gestureValue by remember { mutableFloatStateOf(0f) }
     var dragDelta by remember { mutableFloatStateOf(0f) }
+    var startVolumeStep by remember { mutableIntStateOf(0) }
+    var totalVolumeDragDistanceY by remember { mutableFloatStateOf(0f) }
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
     
     // 亮度状态
@@ -195,6 +205,7 @@ fun BangumiPlayerView(
                         onDragStart = {
                             showControls = true
                             dragDelta = 0f
+                            totalVolumeDragDistanceY = 0f
                             seekPreviewPosition = currentPosition
                             gestureMode = BangumiGestureMode.None
                         },
@@ -217,7 +228,12 @@ fun BangumiPlayerView(
                                         gestureValue = currentBrightness
                                         BangumiGestureMode.Brightness
                                     } else {
-                                        gestureValue = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+                                        startVolumeStep = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                        gestureValue = if (maxVolume > 0) {
+                                            startVolumeStep.toFloat() / maxVolume.toFloat()
+                                        } else {
+                                            0f
+                                        }
                                         BangumiGestureMode.Volume
                                     }
                                 } else {
@@ -236,12 +252,24 @@ fun BangumiPlayerView(
                                     }
                                 }
                                 BangumiGestureMode.Volume -> {
-                                    gestureValue = (gestureValue - dragAmount.y / screenHeight).coerceIn(0f, 1f)
+                                    totalVolumeDragDistanceY += dragAmount.y
+                                    val newVolumeStep = resolveSystemStreamVolumeFromGesture(
+                                        startVolumeStep = startVolumeStep,
+                                        maxVolumeStep = maxVolume,
+                                        totalDragDistanceY = totalVolumeDragDistanceY,
+                                        screenHeightPx = screenHeight,
+                                        gestureSensitivity = 1.0f
+                                    )
                                     audioManager.setStreamVolume(
-                                        android.media.AudioManager.STREAM_MUSIC,
-                                        (gestureValue * maxVolume).toInt(),
+                                        AudioManager.STREAM_MUSIC,
+                                        newVolumeStep,
                                         0
                                     )
+                                    gestureValue = if (maxVolume > 0) {
+                                        newVolumeStep.toFloat() / maxVolume.toFloat()
+                                    } else {
+                                        0f
+                                    }
                                 }
                                 BangumiGestureMode.Seek -> {
                                     dragDelta += dragAmount.x
@@ -342,6 +370,7 @@ fun BangumiPlayerView(
             coverUrl = coverUrl,
             currentVideoUrl = currentVideoUrl,
             currentAudioUrl = currentAudioUrl,
+            debugInfo = debugInfo,
             isVisible = showControls && gestureMode == BangumiGestureMode.None,
             onToggleVisible = { showControls = !showControls },
             isFullscreen = isFullscreen,
@@ -362,11 +391,15 @@ fun BangumiPlayerView(
             danmakuSpeed = danmakuSpeed,
             danmakuDisplayArea = danmakuDisplayArea,
             danmakuMergeDuplicates = danmakuMergeDuplicates,
+            danmakuDuplicateMergeWindowMs = danmakuDuplicateMergeWindowMs,
+            danmakuDuplicateMergeCountThreshold = danmakuDuplicateMergeCountThreshold,
             onDanmakuOpacityChange = onDanmakuOpacityChange,
             onDanmakuFontScaleChange = onDanmakuFontScaleChange,
             onDanmakuSpeedChange = onDanmakuSpeedChange,
             onDanmakuDisplayAreaChange = onDanmakuDisplayAreaChange,
             onDanmakuMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
+            onDanmakuDuplicateMergeWindowMsChange = onDanmakuDuplicateMergeWindowMsChange,
+            onDanmakuDuplicateMergeCountThresholdChange = onDanmakuDuplicateMergeCountThresholdChange,
             currentAspectRatio = currentAspectRatio,
             onAspectRatioChange = { currentAspectRatio = it },
             pages = pages,
@@ -437,7 +470,13 @@ fun BangumiGestureIndicator(
                     Spacer(Modifier.height(8.dp))
                     Text("亮度", color = Color.White, fontSize = 14.sp)
                     Spacer(Modifier.height(4.dp))
-                    Text("${(value * 100).toInt()}%", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    AnimatedGesturePercentText(
+                        percent = (value * 100).toInt(),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        label = "bangumi-brightness-percent"
+                    )
                 }
                 BangumiGestureMode.Volume -> {
                     //  动态音量图标：3 级
@@ -450,7 +489,13 @@ fun BangumiGestureIndicator(
                     Spacer(Modifier.height(8.dp))
                     Text("音量", color = Color.White, fontSize = 14.sp)
                     Spacer(Modifier.height(4.dp))
-                    Text("${(value * 100).toInt()}%", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    AnimatedGesturePercentText(
+                        percent = (value * 100).toInt(),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        label = "bangumi-volume-percent"
+                    )
                 }
                 BangumiGestureMode.Seek -> {
                     Text(

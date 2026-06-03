@@ -18,6 +18,7 @@ object PlayerSettingsCache {
     private const val KEY_HW_DECODE = "hw_decode_enabled"
     private const val KEY_SEEK_FAST = "seek_fast_enabled"
     private const val KEY_PLAYER_DIAGNOSTIC_LOGGING = "player_diagnostic_logging_enabled"
+    private const val LEGACY_HW_DECODE_PREFS_NAME = "hw_decode_cache"
     
     // 内存缓存
     @Volatile
@@ -34,7 +35,7 @@ object PlayerSettingsCache {
      */
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        hwDecodeEnabled = prefs.getBoolean(KEY_HW_DECODE, true)
+        hwDecodeEnabled = readAndMigrateHwDecodeEnabled(context, prefs)
         seekFastEnabled = prefs.getBoolean(KEY_SEEK_FAST, true)
         playerDiagnosticLoggingEnabled = prefs.getBoolean(
             KEY_PLAYER_DIAGNOSTIC_LOGGING,
@@ -53,7 +54,7 @@ object PlayerSettingsCache {
     fun isHwDecodeEnabled(context: Context): Boolean {
         return hwDecodeEnabled ?: run {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val value = prefs.getBoolean(KEY_HW_DECODE, true)
+            val value = readAndMigrateHwDecodeEnabled(context, prefs)
             hwDecodeEnabled = value
             value
         }
@@ -134,7 +135,7 @@ object PlayerSettingsCache {
      */
     fun refresh(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        hwDecodeEnabled = prefs.getBoolean(KEY_HW_DECODE, true)
+        hwDecodeEnabled = readAndMigrateHwDecodeEnabled(context, prefs)
         seekFastEnabled = prefs.getBoolean(KEY_SEEK_FAST, true)
         playerDiagnosticLoggingEnabled = prefs.getBoolean(
             KEY_PLAYER_DIAGNOSTIC_LOGGING,
@@ -145,5 +146,43 @@ object PlayerSettingsCache {
             "🔄 缓存已刷新: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
                 "playerDiagnosticLogging=$playerDiagnosticLoggingEnabled"
         )
+    }
+
+    private fun readAndMigrateHwDecodeEnabled(
+        context: Context,
+        prefs: android.content.SharedPreferences
+    ): Boolean {
+        val legacyPrefs = context.getSharedPreferences(LEGACY_HW_DECODE_PREFS_NAME, Context.MODE_PRIVATE)
+        val currentExists = prefs.contains(KEY_HW_DECODE)
+        val legacyExists = legacyPrefs.contains(KEY_HW_DECODE)
+        val value = resolveMigratedHwDecodeValue(
+            currentExists = currentExists,
+            currentValue = prefs.getBoolean(KEY_HW_DECODE, true),
+            legacyExists = legacyExists,
+            legacyValue = legacyPrefs.getBoolean(KEY_HW_DECODE, true)
+        )
+
+        // 老版本写入过 hw_decode_cache；迁移到播放器实际读取的缓存，保留用户选择。
+        if (!currentExists && legacyExists) {
+            prefs.edit()
+                .putBoolean(KEY_HW_DECODE, value)
+                .apply()
+            Logger.d(TAG, "🔁 已迁移硬件解码缓存: hwDecode=$value")
+        }
+
+        return value
+    }
+}
+
+internal fun resolveMigratedHwDecodeValue(
+    currentExists: Boolean,
+    currentValue: Boolean,
+    legacyExists: Boolean,
+    legacyValue: Boolean
+): Boolean {
+    return when {
+        currentExists -> currentValue
+        legacyExists -> legacyValue
+        else -> true
     }
 }

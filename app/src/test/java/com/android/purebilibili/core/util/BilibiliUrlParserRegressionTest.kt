@@ -31,6 +31,15 @@ class BilibiliUrlParserRegressionTest {
     }
 
     @Test
+    fun parse_treatsLikelyDynamicIdVideoDeepLinkAsDynamicTarget() {
+        val result = BilibiliUrlParser.parse("bilibili://video/1199344045210468386")
+
+        assertTrue(result.isValid)
+        assertNull(result.getVideoId())
+        assertEquals("1199344045210468386", result.getDynamicTargetId())
+    }
+
+    @Test
     fun parse_extractsAidFromHttpsVideoNumericPath() {
         val result = BilibiliUrlParser.parse("https://www.bilibili.com/video/170001")
 

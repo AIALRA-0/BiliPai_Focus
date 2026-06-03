@@ -5,8 +5,11 @@ import android.hardware.display.DisplayManager
 import android.media.MediaCodecList
 import android.os.Build
 import android.view.Display
+import java.util.concurrent.ConcurrentHashMap
 
 object MediaUtils {
+    // 解码器探测结果缓存：codecInfos 在进程生命周期内不变，避免每次切画质都重新枚举
+    private val decoderSupportCache = ConcurrentHashMap<String, Boolean>()
     /**
      * Check if HEVC (H.265) decoder is supported
      */
@@ -105,6 +108,13 @@ object MediaUtils {
     }
 
     private fun hasDecoder(mimeType: String): Boolean {
+        decoderSupportCache[mimeType]?.let { return it }
+        val supported = queryDecoderSupport(mimeType)
+        decoderSupportCache[mimeType] = supported
+        return supported
+    }
+
+    private fun queryDecoderSupport(mimeType: String): Boolean {
         try {
             val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
             val codecs = list.codecInfos

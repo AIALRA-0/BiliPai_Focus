@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.message.feed
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +16,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -131,7 +132,7 @@ fun SystemNoticeScreen(
     onOpenLink: (String) -> Unit,
     viewModel: SystemNoticeViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     AdaptiveScaffold(
         topBar = {
@@ -176,7 +177,10 @@ fun SystemNoticeScreen(
                         items(uiState.items, key = { it.id }) { item ->
                             val annotatedContent = rememberSystemNoticeAnnotatedContent(item.content)
                             MessageFeedCard(modifier = Modifier.fillMaxWidth()) {
-                                Box(modifier = Modifier.padding(14.dp)) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
                                     Text(
                                         text = item.title,
                                         style = MaterialTheme.typography.bodyLarge,
@@ -184,7 +188,6 @@ fun SystemNoticeScreen(
                                     )
                                     ClickableText(
                                         text = annotatedContent,
-                                        modifier = Modifier.padding(top = 30.dp, end = 48.dp),
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         ),
@@ -199,8 +202,7 @@ fun SystemNoticeScreen(
                                     Text(
                                         text = item.timeAt,
                                         modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(top = 12.dp),
+                                            .align(Alignment.End),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -221,39 +223,22 @@ fun SystemNoticeScreen(
     }
 }
 
-private val systemNoticeLinkRegex = Regex(
-    "(https?://[^\\s]+|www\\.[^\\s]+|BV[a-zA-Z0-9]{10}|av\\d+)",
-    setOf(RegexOption.IGNORE_CASE)
-)
-
 @Composable
 private fun rememberSystemNoticeAnnotatedContent(content: String): AnnotatedString {
     val primaryColor = MaterialTheme.colorScheme.primary
     return remember(content, primaryColor) {
         buildAnnotatedString {
-            var lastIndex = 0
-            systemNoticeLinkRegex.findAll(content).forEach { match ->
-                if (match.range.first > lastIndex) {
-                    append(content.substring(lastIndex, match.range.first))
-                }
-
-                val rawLink = match.value
-                val normalizedLink = if (rawLink.startsWith("www.", ignoreCase = true)) {
-                    "https://$rawLink"
+            parseSystemNoticeContentSegments(content).forEach { segment ->
+                val link = segment.link
+                if (link == null) {
+                    append(segment.text)
                 } else {
-                    rawLink
+                    pushStringAnnotation(tag = "link", annotation = link)
+                    withStyle(SpanStyle(color = primaryColor)) {
+                        append(segment.text)
+                    }
+                    pop()
                 }
-
-                pushStringAnnotation(tag = "link", annotation = normalizedLink)
-                withStyle(SpanStyle(color = primaryColor)) {
-                    append(rawLink)
-                }
-                pop()
-                lastIndex = match.range.last + 1
-            }
-
-            if (lastIndex < content.length) {
-                append(content.substring(lastIndex))
             }
         }
     }

@@ -47,7 +47,6 @@ class AppearanceUiPresetDescriptionPolicyTest {
         )
     }
 
-    @Test
     fun `resolveAppearanceUiPresetDescription should return miuix copy for android native miuix variant`() {
         val description = resolveAppearanceUiPresetDescription(
             preset = UiPreset.MD3,

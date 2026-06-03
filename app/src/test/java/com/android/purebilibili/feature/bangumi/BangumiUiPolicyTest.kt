@@ -21,6 +21,9 @@ class BangumiUiPolicyTest {
     @Test
     fun `portrait player controls should clear status bar and danmaku should start below controls`() {
         val statusInsetDp = 28f
+        val containerPadding = resolveBangumiPortraitPlayerContainerTopPaddingDp(
+            statusBarsInsetDp = statusInsetDp
+        )
         val topControlsPadding = resolveBangumiPlayerTopControlsPaddingTopDp(
             isFullscreen = false,
             statusBarsInsetDp = statusInsetDp
@@ -30,8 +33,16 @@ class BangumiUiPolicyTest {
             statusBarsInsetDp = statusInsetDp
         )
 
-        assertTrue(topControlsPadding >= statusInsetDp)
+        assertEquals(statusInsetDp, containerPadding, 0.01f)
+        assertEquals(8f, topControlsPadding, 0.01f)
+        assertEquals(52f, danmakuTopInset, 0.01f)
         assertTrue(danmakuTopInset > topControlsPadding)
+    }
+
+    @Test
+    fun `portrait player container inset should sanitize invalid status bar values`() {
+        assertEquals(0f, resolveBangumiPortraitPlayerContainerTopPaddingDp(Float.NaN), 0.01f)
+        assertEquals(0f, resolveBangumiPortraitPlayerContainerTopPaddingDp(-10f), 0.01f)
     }
 
     @Test

@@ -36,6 +36,7 @@ import io.github.alexzhirkevich.cupertino.icons.filled.Play
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronDown
 import io.github.alexzhirkevich.cupertino.icons.outlined.MusicNote
 import kotlinx.coroutines.delay
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 原生音乐播放页 - au 格式 (传统 sid)
@@ -48,7 +49,7 @@ fun MusicDetailScreen(
     viewModel: MusicViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.initPlayer(context)
@@ -77,7 +78,7 @@ fun MusicDetailScreen(
     viewModel: MusicViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.initPlayer(context)

@@ -18,4 +18,29 @@ class ProfileWallpaperPolicyTest {
         val expandedHeight = resolveProfileTopBannerHeightDp(WindowWidthSizeClass.Expanded)
         assertTrue(compactHeight > expandedHeight)
     }
+
+    @Test
+    fun profileImmersiveBackground_isDeferredOnlyDuringBottomPagerTransition() {
+        assertEquals(
+            false,
+            shouldRenderProfileImmersiveBackground(
+                hasTopPhoto = true,
+                deferImmersiveRenderBudget = true
+            )
+        )
+        assertEquals(
+            true,
+            shouldRenderProfileImmersiveBackground(
+                hasTopPhoto = true,
+                deferImmersiveRenderBudget = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldRenderProfileImmersiveBackground(
+                hasTopPhoto = false,
+                deferImmersiveRenderBudget = false
+            )
+        )
+    }
 }

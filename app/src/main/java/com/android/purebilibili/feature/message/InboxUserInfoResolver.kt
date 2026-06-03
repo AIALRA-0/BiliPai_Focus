@@ -23,7 +23,27 @@ internal object InboxUserInfoResolver {
 
     fun shouldFetchUserInfo(mid: Long, cache: Map<Long, UserBasicInfo>): Boolean {
         val cached = cache[mid] ?: return true
-        return cached.name.cleanValue().isEmpty() || normalizeAvatarUrl(cached.face).isEmpty()
+        return !hasCompleteUserInfo(cached)
+    }
+
+    fun selectMissingUserInfoMids(
+        mids: List<Long>,
+        cache: Map<Long, UserBasicInfo>
+    ): List<Long> {
+        return mids
+            .distinct()
+            .filter { shouldFetchUserInfo(it, cache) }
+    }
+
+    fun shouldFetchSessionUserInfo(session: SessionItem, cache: Map<Long, UserBasicInfo>): Boolean {
+        if (session.session_type != 1 || session.talker_id <= 0L) return false
+        if (hasCompleteSessionAccountInfo(session)) return false
+        return shouldFetchUserInfo(session.talker_id, cache)
+    }
+
+    fun hasCompleteUserInfo(info: UserBasicInfo?): Boolean {
+        if (info == null) return false
+        return info.name.cleanValue().isNotEmpty() && normalizeAvatarUrl(info.face).isNotEmpty()
     }
 
     fun mergeFetchedUserInfo(existing: UserBasicInfo?, fetched: UserBasicInfo?): UserBasicInfo? {
@@ -44,6 +64,12 @@ internal object InboxUserInfoResolver {
             name = mergedName,
             face = mergedFace
         )
+    }
+
+    private fun hasCompleteSessionAccountInfo(session: SessionItem): Boolean {
+        val accountInfo = session.account_info ?: return false
+        return accountInfo.name.cleanValue().isNotEmpty() &&
+            normalizeAvatarUrl(accountInfo.avatarUrl).isNotEmpty()
     }
 
     private fun String?.cleanValue(): String = this?.trim().orEmpty()

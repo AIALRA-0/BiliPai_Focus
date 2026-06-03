@@ -155,7 +155,11 @@ val focusRepository = detectFocusRepositoryCoordinates()
 
 android {
     namespace = "com.android.purebilibili"
-    compileSdk = 36
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 0
+        }
+    }
 
     // 投屏服务进程开关：
     // 默认独立 :cast 进程（通过 CastBridgeService 做跨进程 IPC）
@@ -169,8 +173,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：官方主版本 + Focus 子版本
         // 更新日志：CHANGELOG.md
-        versionCode = 165
-        versionName = "8.0.0-Alpha3-focus.1"
+        versionCode = 217
+        versionName = "9.0.4-focus.1"
         resValue("string", "app_name", "BliPai Focus")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -215,8 +219,8 @@ android {
         }
     }
 
-        buildTypes {
-            release {
+    buildTypes {
+        release {
             if (hasFocusReleaseSigning) {
                 signingConfig = signingConfigs.getByName("focusRelease")
             }
@@ -238,6 +242,7 @@ android {
             // Debug 构建保持快速编译
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            resValue("string", "app_name", "BliPai Focus Debug")
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
             buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", debugVerboseLogsEnabled.toString())
             buildConfigField(
@@ -247,17 +252,6 @@ android {
             )
             isMinifyEnabled = false
             isShrinkResources = false
-        }
-        create("benchmark") {
-            // Release-like benchmark build for Macrobenchmark / Baseline Profile.
-            initWith(getByName("release"))
-            signingConfig = signingConfigs.getByName("debug")
-            matchingFallbacks += listOf("release")
-            resValue("string", "app_name", "BliPai Focus Benchmark")
-            ndk {
-                abiFilters.clear()
-                abiFilters += listOf("x86_64")
-            }
         }
         create("dev") {
             // Dev 保持“接近发布”的验证语义，不用于日常本地快速迭代。
@@ -270,6 +264,21 @@ android {
             buildConfigField("boolean", "ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE", "false")
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
+        }
+        create("smooth") {
+            // Smooth 用于本地快速验证正式版运行语义：保留非 debug 行为，但跳过 R8/资源压缩。
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-smooth"
+            resValue("string", "app_name", "BliPai Focus Smooth")
+            buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
+            buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", "false")
+            buildConfigField("boolean", "ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE", "false")
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            isMinifyEnabled = false
+            isShrinkResources = false
+            matchingFallbacks += listOf("dev", "release")
         }
     }
 
@@ -365,33 +374,42 @@ tasks.matching { task ->
 // }
 
 dependencies {
-    val miuixVersion = "0.8.6"
+    val miuixVersion = "0.9.1"
+    val material3Version = "1.5.0-alpha18"
     val media3Version = "1.10.0"
     val lifecycleVersion = "2.10.0"
     val roomVersion = "2.8.4"
 
     implementation(project(":settings-core"))
     implementation(project(":network-core"))
+    implementation(project(":plugin-sdk"))
 
     // --- 1. Compose UI ---
     implementation(platform("androidx.compose:compose-bom:2026.03.01"))  // 🔥 更新到最新版本
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.appcompat:appcompat:1.7.1")  // 🚀 For AppCompatDelegate night mode
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.runtime:runtime-tracing")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material3:material3-window-size-class") // [新增] 窗口大小类
-    implementation("top.yukonga.miuix.kmp:miuix-android:$miuixVersion")
+    implementation("androidx.compose.material3:material3:$material3Version")
+    implementation("androidx.compose.material3:material3-window-size-class:$material3Version") // [新增] 窗口大小类
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:$miuixVersion")
+    implementation("top.yukonga.miuix.kmp:miuix-preference-android:$miuixVersion")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:$miuixVersion")
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.animation:animation")
+    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc14")
 
     // --- 2. Network (网络请求) ---
     implementation("com.squareup.retrofit2:retrofit:2.12.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
     // 🔥 Brotli Decompression (for Bilibili Live Danmaku ProtoVer=3)
     implementation("org.brotli:dec:0.1.2")
 
@@ -401,6 +419,8 @@ dependencies {
     
     // --- 3.1 Palette (颜色提取 - 动态取色) ---
     implementation("androidx.palette:palette-ktx:1.0.0")
+    implementation("com.materialkolor:material-kolor:4.1.1")
+    implementation("com.github.skydoves:colorpicker-compose:1.1.4")
     
     // --- 3.2 Lottie (动画效果) ---
     implementation("com.airbnb.android:lottie-compose:6.7.1")
@@ -419,16 +439,17 @@ dependencies {
     // 🍎 800+ iOS SF Symbols 风格图标
     implementation("io.github.alexzhirkevich:cupertino-icons-extended:0.1.0-alpha04")
     
-    // --- 3.6 Orbital (iOS 风格共享元素动画) ---
-    // 提供流畅的共享元素过渡、尺寸变换、位置移动动画
-    implementation("com.github.skydoves:orbital:0.4.0")
+    // --- 3.6 Navigation3 (Compose 自有返回栈与预测性返回迁移层) ---
+    implementation("androidx.navigation3:navigation3-runtime:1.1.1")
+    implementation("androidx.navigation3:navigation3-ui:1.1.1")
+    implementation("androidx.navigationevent:navigationevent-compose:1.1.1")
     
     // --- 3.7 Startup (应用初始化) ---
     implementation("androidx.startup:startup-runtime:1.2.0")
     
     // --- 3.8 Backdrop (液态玻璃效果) ---
     // 提供透镜折射、玻璃高光、连续圆角等 iOS/visionOS 风格视觉效果
-    implementation("io.github.kyant0:backdrop:1.0.6")
+    implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
 
 
     // --- 4. Player (视频播放器 Media3) ---
@@ -436,6 +457,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")  // 🔥 HLS 直播流支持
     implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-datasource:$media3Version")
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
 
@@ -462,17 +484,19 @@ dependencies {
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-process:$lifecycleVersion")  // 🔋 ProcessLifecycleOwner 后台检测
     implementation("androidx.metrics:metrics-performance:1.0.0")
-    
+    implementation("androidx.window:window")
+
     // --- 8.1 WorkManager (后台下载任务) ---
     implementation("androidx.work:work-runtime-ktx:2.11.2")
-    // [新增] ML Kit 人脸检测（远程模型，减少 APK 体积）
-    // 使用 Play Services 动态下发模型，不把人脸模型打进 APK。
-    implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
-    
-    // --- 8.2 DLNA & Local Proxy (投屏) ---
+    // --- 8.2 Google Cast (CAF) ---
+    implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
+    implementation("androidx.mediarouter:mediarouter:1.8.1")
+
+    // --- 8.3 DLNA & Local Proxy (投屏) ---
     // DLNA Casting (Cling)
     implementation("org.fourthline.cling:cling-core:2.1.2")
     implementation("org.fourthline.cling:cling-support:2.1.2")
@@ -485,15 +509,12 @@ dependencies {
     // NanoHTTPD (Lightweight local proxy server)
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
-    implementation("androidx.navigation:navigation-compose:2.9.7")
     
     // --- 9. SplashScreen (启动屏支持) ---
     implementation("androidx.core:core-splashscreen:1.2.0")
     
     // --- 10. ProfileInstaller (启动优化) ---
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
-    add("benchmarkImplementation", "androidx.tracing:tracing-perfetto:1.0.0")
-    add("benchmarkImplementation", "androidx.tracing:tracing-perfetto-binary:1.0.0")
     
     // --- 11. Firebase (崩溃追踪和分析) ---
     implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
@@ -544,6 +565,18 @@ tasks.register("installFast") {
     group = "install"
     description = "Installs the fast local development variant (debug) on a connected device."
     dependsOn("installDebug")
+}
+
+tasks.register("assembleFastRelease") {
+    group = "build"
+    description = "Assembles the fast local release-like variant (smooth, no R8/resource shrink)."
+    dependsOn("assembleSmooth")
+}
+
+tasks.register("installFastRelease") {
+    group = "install"
+    description = "Installs the fast local release-like variant (smooth, no R8/resource shrink)."
+    dependsOn("installSmooth")
 }
 
 if (file("google-services.json").exists()) {

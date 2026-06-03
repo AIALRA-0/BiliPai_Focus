@@ -4187,17 +4187,6 @@
     <issue
         id="ObsoleteSdkInt"
         message="Unnecessary; `SDK_INT` is always >= 26"
-        errorLine1="@RequiresApi(Build.VERSION_CODES.O)"
-        errorLine2="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/ui/effect/LiquidGlassContainer.kt"
-            line="33"
-            column="1"/>
-    </issue>
-
-    <issue
-        id="ObsoleteSdkInt"
-        message="Unnecessary; `SDK_INT` is always >= 26"
         errorLine1="        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N &amp;&amp;"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
@@ -4325,17 +4314,6 @@
             file="src/main/java/com/android/purebilibili/app/PureApplication.kt"
             line="330"
             column="13"/>
-    </issue>
-
-    <issue
-        id="ObsoleteSdkInt"
-        message="Unnecessary; `SDK_INT` is always >= 26"
-        errorLine1="@RequiresApi(Build.VERSION_CODES.O) // For Bitmap.config, etc. Ideally Tiramisu for Backdrop but simpler here."
-        errorLine2="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/ui/effect/SimpMusicLiquidGlassModifier.kt"
-            line="38"
-            column="1"/>
     </issue>
 
     <issue
@@ -4530,17 +4508,6 @@
             file="src/main/java/com/android/purebilibili/feature/video/ui/components/CommentInputDialog.kt"
             line="119"
             column="34"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var captureCounter by remember { mutableStateOf(0) }"
-        errorLine2="                                     ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/android/purebilibili/core/ui/effect/LiquidGlassContainer.kt"
-            line="45"
-            column="38"/>
     </issue>
 
     <issue
@@ -6491,17 +6458,6 @@
             file="src/main/java/com/android/purebilibili/core/plugin/json/JsonPluginManager.kt"
             line="470"
             column="22"/>
-    </issue>
-
-    <issue
-        id="UseKtx"
-        message="Use the KTX function `createBitmap` instead?"
-        errorLine1="                            val bitmap = Bitmap.createBitmap("
-        errorLine2="                                         ^">
-        <location
-            file="src/main/java/com/android/purebilibili/core/ui/effect/LiquidGlassContainer.kt"
-            line="66"
-            column="42"/>
     </issue>
 
     <issue

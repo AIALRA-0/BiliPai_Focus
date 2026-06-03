@@ -2,7 +2,12 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.FullscreenMode
+import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
+import com.android.purebilibili.core.store.PortraitPlayerCollapseMode
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
+import com.android.purebilibili.feature.screenshot.AppScreenshotCaptureMode
+import com.android.purebilibili.feature.screenshot.AppScreenshotGestureMode
 
 internal data class PlaybackSegmentOption<T>(
     val value: T,
@@ -101,5 +106,49 @@ internal fun resolveFullscreenAspectRatioSegmentOptions(): List<PlaybackSegmentO
         PlaybackSegmentOption(FullscreenAspectRatio.RATIO_16_9, "16:9"),
         PlaybackSegmentOption(FullscreenAspectRatio.RATIO_4_3, "4:3"),
         PlaybackSegmentOption(FullscreenAspectRatio.STRETCH, "拉伸")
+    )
+}
+
+internal fun resolvePortraitPlayerCollapseModeSegmentOptions(): List<PlaybackSegmentOption<PortraitPlayerCollapseMode>> {
+    return listOf(
+        PlaybackSegmentOption(PortraitPlayerCollapseMode.OFF, "关闭"),
+        PlaybackSegmentOption(PortraitPlayerCollapseMode.INTRO_ONLY, "竖屏"),
+        PlaybackSegmentOption(PortraitPlayerCollapseMode.COMMENT_ONLY, "横屏"),
+        PlaybackSegmentOption(PortraitPlayerCollapseMode.BOTH, "全部"),
+        PlaybackSegmentOption(PortraitPlayerCollapseMode.PAUSED_ONLY, "暂停时")
+    )
+}
+
+internal fun resolveHomeFeedCardWidthPresetSegmentOptions(): List<PlaybackSegmentOption<HomeFeedCardWidthPreset>> {
+    return listOf(
+        PlaybackSegmentOption(HomeFeedCardWidthPreset.AUTO, "自动"),
+        PlaybackSegmentOption(HomeFeedCardWidthPreset.COMPACT, "紧凑"),
+        PlaybackSegmentOption(HomeFeedCardWidthPreset.BALANCED, "均衡"),
+        PlaybackSegmentOption(HomeFeedCardWidthPreset.WIDE, "宽"),
+        PlaybackSegmentOption(HomeFeedCardWidthPreset.ULTRA_WIDE, "超宽")
+    )
+}
+
+internal fun resolveTabletCommentPanelWidthSegmentOptions(): List<PlaybackSegmentOption<TabletCommentPanelWidthPreset>> {
+    return listOf(
+        PlaybackSegmentOption(TabletCommentPanelWidthPreset.COMPACT, "窄"),
+        PlaybackSegmentOption(TabletCommentPanelWidthPreset.STANDARD, "标准"),
+        PlaybackSegmentOption(TabletCommentPanelWidthPreset.WIDE, "宽"),
+        PlaybackSegmentOption(TabletCommentPanelWidthPreset.ULTRA_WIDE, "超宽")
+    )
+}
+
+internal fun resolveAppScreenshotGestureModeSegmentOptions(): List<PlaybackSegmentOption<AppScreenshotGestureMode>> {
+    return listOf(
+        PlaybackSegmentOption(AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS, "右上角"),
+        PlaybackSegmentOption(AppScreenshotGestureMode.THREE_FINGER_SWIPE_DOWN, "三指下滑"),
+        PlaybackSegmentOption(AppScreenshotGestureMode.DISABLED, "关闭")
+    )
+}
+
+internal fun resolveAppScreenshotCaptureModeSegmentOptions(): List<PlaybackSegmentOption<AppScreenshotCaptureMode>> {
+    return listOf(
+        PlaybackSegmentOption(AppScreenshotCaptureMode.FULL_WINDOW, "全屏"),
+        PlaybackSegmentOption(AppScreenshotCaptureMode.SELECT_REGION, "手选")
     )
 }

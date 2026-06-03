@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.rememberAppClearIcon
 import com.android.purebilibili.data.model.response.SponsorSegment
 
 /**
@@ -34,6 +35,8 @@ fun SponsorSkipButton(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val clearIcon = rememberAppClearIcon()
+
     AnimatedVisibility(
         visible = visible && segment != null,
         enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(tween(200)),
@@ -90,7 +93,7 @@ fun SponsorSkipButton(
                     
                     // 关闭按钮
                     Icon(
-                        imageVector = CupertinoIcons.Default.Xmark,
+                        imageVector = clearIcon,
                         contentDescription = "忽略",
                         tint = Color.White.copy(alpha = 0.6f),
                         modifier = Modifier

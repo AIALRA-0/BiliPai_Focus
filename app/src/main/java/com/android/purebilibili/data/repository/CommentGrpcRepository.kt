@@ -14,6 +14,7 @@ import com.android.purebilibili.data.model.response.ReplyEmote
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyLevelInfo
+import com.android.purebilibili.data.model.response.ReplyPage
 import com.android.purebilibili.data.model.response.ReplyPageControl
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplyRichText
@@ -242,10 +243,17 @@ internal object CommentGrpcRepository {
             }
         }
 
+        val detailCount = root.rcount
+            .takeIf { it > 0 }
+            ?: root.count.takeIf { it > 0 }
+            ?: subject.count.toInt()
+
         return ReplyData(
-            cursor = cursor.copy(allCount = root.count.takeIf { it > 0 } ?: subject.count.toInt()),
+            cursor = cursor.copy(allCount = detailCount),
+            page = ReplyPage(count = detailCount),
             config = ReplyConfig(showUpFlag = subject.showUpAction),
             replies = root.replies.orEmpty(),
+            root = root,
             control = ReplyPageControl(
                 inputDisable = subject.inputDisable,
                 rootInputText = subject.rootText,

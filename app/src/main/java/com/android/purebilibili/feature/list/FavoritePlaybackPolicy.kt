@@ -12,9 +12,10 @@ fun buildExternalPlaylistFromFavorite(
     items: List<VideoItem>,
     clickedBvid: String? = null
 ): FavoriteExternalPlaylist? {
-    if (items.isEmpty()) return null
+    val playableItems = items.filter { !it.isCollectionResource && it.bvid.isNotBlank() }
+    if (playableItems.isEmpty()) return null
 
-    val playlistItems = items.map { video ->
+    val playlistItems = playableItems.map { video ->
         PlaylistItem(
             bvid = video.bvid,
             title = video.title,
@@ -26,11 +27,18 @@ fun buildExternalPlaylistFromFavorite(
 
     val startIndex = clickedBvid
         ?.takeIf { it.isNotBlank() }
-        ?.let { bvid -> items.indexOfFirst { it.bvid == bvid }.takeIf { it >= 0 } }
+        ?.let { bvid -> playableItems.indexOfFirst { it.bvid == bvid }.takeIf { it >= 0 } }
         ?: 0
 
     return FavoriteExternalPlaylist(
         playlistItems = playlistItems,
         startIndex = startIndex
     )
+}
+
+internal fun shouldUseFavoriteExternalPlaylist(
+    hasFavoriteViewModel: Boolean,
+    isFavoriteDetail: Boolean
+): Boolean {
+    return hasFavoriteViewModel || isFavoriteDetail
 }

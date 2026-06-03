@@ -11,5 +11,6 @@ data class HomeVideoClickRequest(
     val dynamicId: String = "",
     val cid: Long = 0L,
     val coverUrl: String = "",
+    val isVerticalVideo: Boolean = false,
     val source: HomeVideoClickSource = HomeVideoClickSource.GRID
 )

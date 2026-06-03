@@ -1,7 +1,6 @@
 package com.android.purebilibili.core.util
 
 import java.io.File
-import java.util.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -111,16 +110,10 @@ class LoggerPersistencePolicyTest {
             "Download/BiliPai/logs/last_crash_log.txt",
             resolveCrashSnapshotExportRelativePath()
         )
-        val originalTimeZone = TimeZone.getDefault()
-        try {
-            TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
-            assertEquals(
-                "player_diagnostic_20260329_075725.txt",
-                resolvePlayerDiagnosticExportFileName(1_774_771_045_000L)
-            )
-        } finally {
-            TimeZone.setDefault(originalTimeZone)
-        }
+        assertEquals(
+            "player_diagnostic_20260329_155725.txt",
+            resolvePlayerDiagnosticExportFileName(1_774_771_045_000L)
+        )
     }
 
     @Test

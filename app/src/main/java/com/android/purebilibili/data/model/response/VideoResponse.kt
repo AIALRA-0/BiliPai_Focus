@@ -218,45 +218,67 @@ fun Dash.getBestVideo(
     // - 优先匹配用户偏好且设备如果支持
     // - 其次降级：AV1 -> HEVC -> AVC
     // - 不支持的格式降权
+    // - 同等可用性/编码偏好时，选择更低 bandwidth 的轨，避免同为 1080P 时吃到高码率源
     
-    val selected = targetVideos.maxByOrNull { video ->
-        var score = 0
-        val codecs = video.codecs.lowercase()
-        
-        val isAvc = codecs.startsWith("avc")
-        val isHevc = codecs.startsWith("hev")
-        val isAv1 = codecs.startsWith("av01")
-        
-        // 基础可用性检查
-        val supported = when {
-            isAvc -> true // 所有设备都支持 AVC
-            isHevc -> isHevcSupported
-            isAv1 -> isAv1Supported
-            else -> false
-        }
-        
-        if (!supported) {
-            score = -100 // 设备不支持，尽量不选
-        } else {
-            // 设备支持，计算偏好得分
-            // 精确匹配用户偏好
-            if (codecs.contains(preferCodec, ignoreCase = true)) {
-                score += 10
-            } else if (secondPreferCodec.isNotBlank() && codecs.contains(secondPreferCodec, ignoreCase = true)) {
-                score += 6
-            }
-            
-            // 编码效率加分 (AV1 > HEVC > AVC)
-            if (isAv1) score += 3
-            else if (isHevc) score += 2
-            else if (isAvc) score += 1
-        }
-        
-        score
-    }
+    val selected = targetVideos.sortedWith(
+        compareByDescending<DashVideo> { video ->
+            videoPlaybackSelectionScore(
+                video = video,
+                preferCodec = preferCodec,
+                secondPreferCodec = secondPreferCodec,
+                isHevcSupported = isHevcSupported,
+                isAv1Supported = isAv1Supported
+            )
+        }.thenBy { video -> normalizedSelectionBandwidth(video.bandwidth) }
+    ).firstOrNull()
     
-    com.android.purebilibili.core.util.Logger.d("VideoResponse", " getBestVideo: selected id=${selected?.id}, codec=${selected?.codecs}")
+    com.android.purebilibili.core.util.Logger.d(
+        "VideoResponse",
+        " getBestVideo: selected id=${selected?.id}, codec=${selected?.codecs}, bandwidth=${selected?.bandwidth ?: 0}"
+    )
     return selected
+}
+
+private fun videoPlaybackSelectionScore(
+    video: DashVideo,
+    preferCodec: String,
+    secondPreferCodec: String,
+    isHevcSupported: Boolean,
+    isAv1Supported: Boolean
+): Int {
+    var score = 0
+    val codecs = video.codecs.lowercase()
+
+    val isAvc = codecs.startsWith("avc")
+    val isHevc = codecs.startsWith("hev")
+    val isAv1 = codecs.startsWith("av01")
+
+    val supported = when {
+        isAvc -> true
+        isHevc -> isHevcSupported
+        isAv1 -> isAv1Supported
+        else -> false
+    }
+
+    if (!supported) {
+        return -100
+    }
+
+    if (codecs.contains(preferCodec, ignoreCase = true)) {
+        score += 10
+    } else if (secondPreferCodec.isNotBlank() && codecs.contains(secondPreferCodec, ignoreCase = true)) {
+        score += 6
+    }
+
+    if (isAv1) score += 3
+    else if (isHevc) score += 2
+    else if (isAvc) score += 1
+
+    return score
+}
+
+private fun normalizedSelectionBandwidth(bandwidth: Int): Int {
+    return if (bandwidth > 0) bandwidth else Int.MAX_VALUE
 }
 
 //  扩展函数：获取最佳音频流

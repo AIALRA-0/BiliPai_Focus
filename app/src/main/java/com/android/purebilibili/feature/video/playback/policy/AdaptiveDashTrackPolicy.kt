@@ -10,6 +10,44 @@ data class AdaptiveDashTrackSet(
     val audioTracks: List<DashAudio>
 )
 
+const val PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD = 1.5f
+private const val DOLBY_AUDIO_QUALITY_ID = 30250
+private const val HI_RES_AUDIO_QUALITY_ID = 30251
+
+fun isSpeedSensitivePremiumAudioQuality(audioQuality: Int): Boolean {
+    return audioQuality == DOLBY_AUDIO_QUALITY_ID || audioQuality == HI_RES_AUDIO_QUALITY_ID
+}
+
+fun resolveSpeedCompatibleAudioQualityPreference(
+    requestedAudioQuality: Int,
+    playbackSpeed: Float,
+    speedThreshold: Float = PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD
+): Int {
+    if (playbackSpeed <= speedThreshold) return requestedAudioQuality
+    return if (isSpeedSensitivePremiumAudioQuality(requestedAudioQuality)) {
+        -1
+    } else {
+        requestedAudioQuality
+    }
+}
+
+fun shouldRefreshPremiumAudioForPlaybackSpeedChange(
+    requestedAudioQuality: Int,
+    previousPlaybackSpeed: Float,
+    nextPlaybackSpeed: Float,
+    speedThreshold: Float = PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD
+): Boolean {
+    return resolveSpeedCompatibleAudioQualityPreference(
+        requestedAudioQuality = requestedAudioQuality,
+        playbackSpeed = previousPlaybackSpeed,
+        speedThreshold = speedThreshold
+    ) != resolveSpeedCompatibleAudioQualityPreference(
+        requestedAudioQuality = requestedAudioQuality,
+        playbackSpeed = nextPlaybackSpeed,
+        speedThreshold = speedThreshold
+    )
+}
+
 fun buildAdaptiveDashTrackSet(
     dash: Dash,
     mode: PlaybackQualityMode,

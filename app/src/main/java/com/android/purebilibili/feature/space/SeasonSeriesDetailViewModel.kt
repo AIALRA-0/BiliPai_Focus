@@ -18,7 +18,12 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     private var type: String = "" // "season" or "series"
     private var id: Long = 0
     private var mid: Long = 0
+    private var ownerName: String = ""
     private var pageTitle: String = ""
+
+    val isFavoriteDetail: Boolean
+        get() = type == SpaceCollectionDetailType.FAVORITE.raw ||
+            type == SpaceCollectionDetailType.FAVORITE_SEASON.raw
 
     // Pagination
     private var currentPage = 1
@@ -43,12 +48,13 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     private val _favoriteDetailProgressState = MutableStateFlow(FavoriteDetailProgressState())
     val favoriteDetailProgressState = _favoriteDetailProgressState.asStateFlow()
 
-    fun init(type: String, id: Long, mid: Long, title: String) {
+    fun init(type: String, id: Long, mid: Long, title: String, ownerName: String = "") {
         val request = resolveSpaceCollectionDetailRequest(type, id, mid, title)
         if (request == null) {
             this.type = ""
             this.id = 0L
             this.mid = 0L
+            this.ownerName = ownerName
             this.pageTitle = title
             _uiState.value = _uiState.value.copy(title = title, items = emptyList())
             return
@@ -56,6 +62,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         this.type = request.type.raw
         this.id = request.id
         this.mid = request.mid
+        this.ownerName = ownerName
         this.pageTitle = request.title
         _favoriteDetailProgressState.value = FavoriteDetailProgressState()
         
@@ -79,6 +86,8 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
             return fetchSeriesArchives()
         } else if (type == "favorite") {
             return fetchFavoriteResources()
+        } else if (type == "favorite_season") {
+            return fetchFavoriteSeasonResources()
         }
         return emptyList()
     }
@@ -94,7 +103,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     hasMore = archives.size >= 30 // Assumption based on page size
                      _hasMoreState.value = hasMore
                      
-                    return archives.map { item -> mapSeasonArchiveToVideoItem(item, mid) }
+                    return archives.map { item -> mapSeasonArchiveToVideoItem(item, mid, ownerName) }
                 }
             }
         } catch (e: Exception) {
@@ -114,7 +123,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     hasMore = archives.size >= 30
                     _hasMoreState.value = hasMore
 
-                    return archives.map { item -> mapSeriesArchiveToVideoItem(item, mid) }
+                    return archives.map { item -> mapSeriesArchiveToVideoItem(item, mid, ownerName) }
                 }
             }
         } catch (e: Exception) {
@@ -140,7 +149,39 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
             )
             mediaItems
                 .orEmpty()
-                .map { it.toVideoItem() }
+                .map {
+                    it.toVideoItem(
+                        ownerFallbackMid = mid,
+                        ownerFallbackName = ownerName
+                    )
+                }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    private suspend fun fetchFavoriteSeasonResources(): List<VideoItem> {
+        currentPage = 1
+        return try {
+            val response = FavoriteRepository.getFavoriteSeasonList(seasonId = id, pn = currentPage).getOrNull()
+            hasMore = response?.has_more == true
+            _hasMoreState.value = hasMore
+            val mediaItems = response?.medias.orEmpty()
+            _favoriteDetailProgressState.value = FavoriteDetailProgressState(
+                loadedCount = mediaItems.size,
+                expectedCount = response?.info?.media_count ?: 0,
+                currentPage = currentPage,
+                lastAddedCount = mediaItems.size,
+                invalidCount = mediaItems.count { it.attr != 0 },
+                hasMore = hasMore
+            )
+            mediaItems.map {
+                it.toVideoItem(
+                    ownerFallbackMid = mid,
+                    ownerFallbackName = ownerName
+                )
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -162,20 +203,47 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                      val response = spaceApi.getSeasonArchives(mid, id, currentPage)
                      if (response.code == 0 && response.data != null) {
                          val archives = response.data.archives
-                         newItems = archives.map { item -> mapSeasonArchiveToVideoItem(item, mid) }
+                         newItems = archives.map { item -> mapSeasonArchiveToVideoItem(item, mid, ownerName) }
                      }
                 } else if (type == "series") {
                      val response = spaceApi.getSeriesArchives(mid, id, currentPage)
                      if (response.code == 0 && response.data != null) {
                          val archives = response.data.archives
-                         newItems = archives.map { item -> mapSeriesArchiveToVideoItem(item, mid) }
+                         newItems = archives.map { item -> mapSeriesArchiveToVideoItem(item, mid, ownerName) }
                      }
                 } else if (type == "favorite") {
                     val response = FavoriteRepository.getFavoriteList(mediaId = id, pn = currentPage).getOrNull()
                     hasMore = response?.has_more == true
                     _hasMoreState.value = hasMore
                     val mediaItems = response?.medias.orEmpty()
-                    newItems = mediaItems.map { it.toVideoItem() }
+                    newItems = mediaItems.map {
+                        it.toVideoItem(
+                            ownerFallbackMid = mid,
+                            ownerFallbackName = ownerName
+                        )
+                    }
+                    val currentLoadedCount = _uiState.value.items.size + newItems.size
+                    _favoriteDetailProgressState.value = _favoriteDetailProgressState.value.copy(
+                        loadedCount = currentLoadedCount,
+                        expectedCount = response?.info?.media_count
+                            ?: _favoriteDetailProgressState.value.expectedCount,
+                        currentPage = currentPage,
+                        lastAddedCount = mediaItems.size,
+                        invalidCount = _favoriteDetailProgressState.value.invalidCount +
+                            mediaItems.count { it.attr != 0 },
+                        hasMore = hasMore
+                    )
+                } else if (type == "favorite_season") {
+                    val response = FavoriteRepository.getFavoriteSeasonList(seasonId = id, pn = currentPage).getOrNull()
+                    hasMore = response?.has_more == true
+                    _hasMoreState.value = hasMore
+                    val mediaItems = response?.medias.orEmpty()
+                    newItems = mediaItems.map {
+                        it.toVideoItem(
+                            ownerFallbackMid = mid,
+                            ownerFallbackName = ownerName
+                        )
+                    }
                     val currentLoadedCount = _uiState.value.items.size + newItems.size
                     _favoriteDetailProgressState.value = _favoriteDetailProgressState.value.copy(
                         loadedCount = currentLoadedCount,
@@ -209,5 +277,9 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                  _isLoadingMoreState.value = false
             }
         }
+    }
+
+    init {
+        loadData()
     }
 }

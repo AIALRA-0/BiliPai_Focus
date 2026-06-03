@@ -20,7 +20,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 @Composable
 fun RepostDialog(
     onDismiss: () -> Unit,
-    onRepost: (String) -> Unit
+    onRepost: (content: String, onComplete: (Boolean) -> Unit) -> Unit
 ) {
     var repostText by remember { mutableStateOf("") }
     var isPosting by remember { mutableStateOf(false) }
@@ -97,7 +97,11 @@ fun RepostDialog(
                     Button(
                         onClick = {
                             isPosting = true
-                            onRepost(repostText)
+                            onRepost(repostText) { success ->
+                                if (!success) {
+                                    isPosting = false
+                                }
+                            }
                         },
                         enabled = !isPosting,
                         shape = RoundedCornerShape(20.dp)

@@ -82,7 +82,14 @@ class PlaybackProgressManager {
         }
         
         memoryCache[key] = positionMs
-        prefs?.edit()?.putLong(key, positionMs)?.apply()
+        prefs?.edit()?.apply {
+            putLong(key, positionMs)
+            if (cid > 0L) {
+                // 空间页等入口拿不到 cid 时，用 bvid 级进度兜底；播放器加载后仍优先 cid 精确进度。
+                putLong(buildProgressKey(bvid, cid = 0L), positionMs)
+                memoryCache[buildProgressKey(bvid, cid = 0L)] = positionMs
+            }
+        }?.apply()
         Logger.d(TAG, "Saved position for $key: ${positionMs}ms")
     }
 
@@ -113,10 +120,13 @@ class PlaybackProgressManager {
             }
         }
         
-        if (position != null && position > 0) {
+        if (position > 0) {
             Logger.d(TAG, "Retrieved position for $key: ${position}ms")
+            return position
         }
-        return position ?: 0L
+        // cid 精确查询用于分 P/明确页面恢复，不能回退到 bvid 级进度，
+        // 否则切到未看过的分 P 会继承上一分 P 刚保存的位置。
+        return 0L
     }
 
     fun getCachedPosition(bvid: String): Long {
@@ -129,7 +139,14 @@ class PlaybackProgressManager {
     fun clearPosition(bvid: String, cid: Long) {
         val key = buildProgressKey(bvid, cid)
         memoryCache.remove(key)
-        prefs?.edit()?.remove(key)?.apply()
+        prefs?.edit()?.apply {
+            remove(key)
+            if (cid > 0L) {
+                val bvidKey = buildProgressKey(bvid, cid = 0L)
+                remove(bvidKey)
+                memoryCache.remove(bvidKey)
+            }
+        }?.apply()
         Logger.d(TAG, "Cleared position for $key")
     }
 

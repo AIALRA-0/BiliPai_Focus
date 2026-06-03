@@ -19,7 +19,7 @@ class AppNavigationMotionSpecTest {
         assertEquals(120, spec.fallbackFadeDurationMillis)
         assertEquals(170, spec.quickReturnFadeDurationMillis)
         assertEquals(180, spec.seamlessFadeDurationMillis)
-        assertEquals(180, spec.cardTargetFallbackSlideMaxDurationMillis)
+        assertEquals(220, spec.cardTargetFallbackSlideMaxDurationMillis)
     }
 
     @Test

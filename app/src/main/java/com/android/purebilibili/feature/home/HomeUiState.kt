@@ -6,6 +6,12 @@ import androidx.compose.runtime.Stable
 import com.android.purebilibili.R
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.LiveRoom
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 
 /**
  * 用户状态
@@ -102,9 +108,9 @@ data class TodayUpRank(
 @Immutable
 data class TodayWatchPlan(
     val mode: TodayWatchMode = TodayWatchMode.RELAX,
-    val upRanks: List<TodayUpRank> = emptyList(),
-    val videoQueue: List<VideoItem> = emptyList(),
-    val explanationByBvid: Map<String, String> = emptyMap(),
+    val upRanks: ImmutableList<TodayUpRank> = persistentListOf(),
+    val videoQueue: ImmutableList<VideoItem> = persistentListOf(),
+    val explanationByBvid: ImmutableMap<String, String> = persistentMapOf(),
     val historySampleCount: Int = 0,
     val nightSignalUsed: Boolean = false,
     val generatedAt: Long = 0L
@@ -124,9 +130,9 @@ data class TodayWatchCardUiConfig(
  */
 @Stable
 data class CategoryContent(
-    val videos: List<VideoItem> = emptyList(),
-    val liveRooms: List<LiveRoom> = emptyList(),
-    val followedLiveRooms: List<LiveRoom> = emptyList(),
+    val videos: ImmutableList<VideoItem> = persistentListOf(),
+    val liveRooms: ImmutableList<LiveRoom> = persistentListOf(),
+    val followedLiveRooms: ImmutableList<LiveRoom> = persistentListOf(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val pageIndex: Int = 1, //  保存分页索引
@@ -140,22 +146,25 @@ data class CategoryContent(
 @Stable
 data class HomeUiState(
     // 兼容旧字段便于迁移（将被 categoryStates 替代）
-    val videos: List<VideoItem> = emptyList(),
-    val liveRooms: List<LiveRoom> = emptyList(),  // 热门直播
-    val followedLiveRooms: List<LiveRoom> = emptyList(),  // 🔴 [新增] 关注的主播直播
+    val videos: ImmutableList<VideoItem> = persistentListOf(),
+    val liveRooms: ImmutableList<LiveRoom> = persistentListOf(),  // 热门直播
+    val followedLiveRooms: ImmutableList<LiveRoom> = persistentListOf(),  // 🔴 [新增] 关注的主播直播
     val isLoading: Boolean = false,
     val error: String? = null,
     
     // 📺 [核心变更] 各分类独立状态缓存
     // 使用 Map 保存每个分类的数据，切换时直接读取
-    val categoryStates: Map<HomeCategory, CategoryContent> = emptyMap(),
+    val categoryStates: ImmutableMap<HomeCategory, CategoryContent> = persistentMapOf(),
+    // 热门子页签需要独立缓存，切换时保留旧页内容并让 Pager 负责横向位移。
+    val popularCategoryStates: ImmutableMap<PopularSubCategory, CategoryContent> = persistentMapOf(),
     
     val user: UserState = UserState(),
     val currentCategory: HomeCategory = HomeCategory.RECOMMEND,
     val liveSubCategory: LiveSubCategory = LiveSubCategory.FOLLOWED,
     val popularSubCategory: PopularSubCategory = PopularSubCategory.COMPREHENSIVE,
     val refreshKey: Long = 0L,
-    val followingMids: Set<Long> = emptySet(),
+    val followingMids: ImmutableSet<Long> = persistentSetOf(),
+    val messageUnreadCount: Int = 0,
     //  [新增] 标签页显示索引（独立于内容分类，用于特殊分类导航后保持标签位置）
     val displayedTabIndex: Int = 0,
     //  [彩蛋] 刷新成功后的趣味消息
@@ -166,16 +175,6 @@ data class HomeUiState(
     val refreshNewItemsKey: Long = 0L,
     //  [新增] 新增条数提示已消费键（防止离开页面后重复弹出）
     val refreshNewItemsHandledKey: Long = 0L,
-    //  [Focus] FOLLOW 刷新完成后的回顶事件键
-    val followPresentationTopResetKey: Long = 0L,
-    //  [Focus] FOLLOW 回顶事件已处理键
-    val followPresentationTopResetHandledKey: Long = 0L,
-    //  [Focus] FOLLOW 手动刷新后是否仍有待提交的新列表
-    val followRefreshPresentationPending: Boolean = false,
-    //  [Focus] FOLLOW 是否允许自动触发下一批 loadMore
-    val followAutoLoadMoreEnabled: Boolean = true,
-    //  [Focus] FOLLOW 是否已经观察到本轮展示后的用户下滚交互
-    val followLoadMoreArmed: Boolean = false,
     //  [新增] 推荐流旧内容锚点（刷新前首条视频 bvid）
     val recommendOldContentAnchorBvid: String? = null,
     //  [新增] 推荐流中“旧内容起始”索引（用于插入分割线）
@@ -183,7 +182,7 @@ data class HomeUiState(
     //  [新增] 推荐流旧内容分割线已解锁的刷新键
     val recommendOldContentRevealKey: Long = 0L,
     //  [新增] 正在消散动画中的视频 BVIDs（动画完成后移除）
-    val dissolvingVideos: Set<String> = emptySet(),
+    val dissolvingVideos: ImmutableSet<String> = persistentSetOf(),
     //  [新增] 今日看什么推荐单
     val todayWatchMode: TodayWatchMode = TodayWatchMode.RELAX,
     val todayWatchPlan: TodayWatchPlan? = null,

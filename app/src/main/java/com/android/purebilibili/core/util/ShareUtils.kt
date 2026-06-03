@@ -100,6 +100,25 @@ object ShareUtils {
             Logger.e("ShareUtils", "分享失败: ${e.message}")
         }
     }
+
+    fun shareText(
+        context: Context,
+        subject: String,
+        text: String,
+        chooserTitle: String = "分享"
+    ) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+
+        try {
+            context.startActivity(Intent.createChooser(intent, chooserTitle))
+        } catch (e: Exception) {
+            Logger.e("ShareUtils", "分享文本失败: ${e.message}")
+        }
+    }
     
     /**
      * 分享番剧/影视到其他应用

@@ -12,3 +12,8 @@ internal fun shouldFallbackForDynamicDetail(item: DynamicItem): Boolean {
     val hasRenderableContent = hasDescText || hasMajorContent || hasOrig
     return !hasRenderableContent
 }
+
+internal fun shouldFetchOpusDetailForDynamicDetail(item: DynamicItem): Boolean {
+    val major = item.modules.module_dynamic?.major ?: return false
+    return major.type == "MAJOR_TYPE_OPUS" || major.opus != null
+}

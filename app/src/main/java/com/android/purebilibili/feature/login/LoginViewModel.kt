@@ -132,8 +132,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             }
 
                             if (sessData.isNotEmpty()) {
-                                Logger.d("LoginDebug", " 成功提取 SESSDATA: $sessData")
-                                Logger.d("LoginDebug", " 成功提取 bili_jct: $biliJct")
+                                Logger.d("LoginDebug", " 成功提取 SESSDATA")
+                                Logger.d("LoginDebug", " 成功提取 bili_jct=${biliJct.isNotEmpty()}")
 
                                 // 保存并更新缓存
                                 TokenManager.saveCookies(getApplication(), sessData)
@@ -533,16 +533,16 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                             kotlinx.coroutines.runBlocking {
                                                 TokenManager.saveCookies(getApplication(), cookie.value)
                                             }
-                                            Logger.d("TvLogin", " 保存 SESSDATA: ${cookie.value.take(10)}...")
+                                            Logger.d("TvLogin", " 保存 SESSDATA")
                                         }
                                         "bili_jct" -> {
                                             TokenManager.saveCsrf(getApplication(), cookie.value)
-                                            Logger.d("TvLogin", " 保存 bili_jct: ${cookie.value.take(10)}...")
+                                            Logger.d("TvLogin", " 保存 bili_jct")
                                         }
                                     }
                                 }
                                 
-                                Logger.d("TvLogin", " access_token: ${data.accessToken.take(10)}...")
+                                Logger.d("TvLogin", " access_token saved")
                                 
                                 isTvPolling = false
                                 finishLogin("qrcode_tv")

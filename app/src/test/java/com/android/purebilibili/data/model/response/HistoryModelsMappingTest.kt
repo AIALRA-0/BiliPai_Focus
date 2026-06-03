@@ -65,4 +65,25 @@ class HistoryModelsMappingTest {
         assertEquals(6233590L, item.videoItem.id)
         assertEquals("https://i0.hdslb.com/bfs/article/cover.jpg", item.videoItem.pic)
     }
+
+    @Test
+    fun `pgc history keeps episode id and cid for playback resume`() {
+        val data = HistoryData(
+            title = "pgc",
+            progress = 66,
+            history = HistoryPage(
+                oid = 114514L,
+                epid = 1919810L,
+                cid = 223344L,
+                business = "pgc"
+            )
+        )
+
+        val item = data.toHistoryItem()
+
+        assertEquals(HistoryBusiness.PGC, item.business)
+        assertEquals(1919810L, item.epid)
+        assertEquals(223344L, item.cid)
+        assertEquals(66, item.progress)
+    }
 }

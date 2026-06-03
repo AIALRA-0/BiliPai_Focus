@@ -12,14 +12,16 @@ class FavoritePlaybackPolicyTest {
         bvid: String,
         title: String,
         duration: Int = 100,
-        owner: String = "up"
+        owner: String = "up",
+        isCollectionResource: Boolean = false
     ): VideoItem {
         return VideoItem(
             bvid = bvid,
             title = title,
             pic = "https://example.com/$bvid.jpg",
             duration = duration,
-            owner = Owner(name = owner)
+            owner = Owner(name = owner),
+            isCollectionResource = isCollectionResource
         )
     }
 
@@ -53,5 +55,38 @@ class FavoritePlaybackPolicyTest {
     fun buildExternalPlaylistFromFavorite_returnsNullForEmptyItems() {
         val result = buildExternalPlaylistFromFavorite(emptyList(), clickedBvid = "BV1")
         assertNull(result)
+    }
+
+    @Test
+    fun buildExternalPlaylistFromFavorite_filtersCollectionRowsAndBlankBvids() {
+        val items = listOf(
+            item("BV1", "first"),
+            item("BV_COLLECTION", "collection", isCollectionResource = true),
+            item("", "broken"),
+            item("BV2", "second")
+        )
+
+        val result = buildExternalPlaylistFromFavorite(items, clickedBvid = "BV2")
+
+        assertEquals(1, result?.startIndex)
+        assertEquals(listOf("BV1", "BV2"), result?.playlistItems?.map { it.bvid })
+    }
+
+    @Test
+    fun favoriteDetailShouldUseFavoriteExternalPlaylist() {
+        assertEquals(
+            true,
+            shouldUseFavoriteExternalPlaylist(
+                hasFavoriteViewModel = false,
+                isFavoriteDetail = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldUseFavoriteExternalPlaylist(
+                hasFavoriteViewModel = false,
+                isFavoriteDetail = false
+            )
+        )
     }
 }

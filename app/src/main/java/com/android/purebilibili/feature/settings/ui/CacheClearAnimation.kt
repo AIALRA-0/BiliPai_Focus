@@ -1,6 +1,7 @@
 // 文件路径: feature/settings/CacheClearAnimation.kt
 package com.android.purebilibili.feature.settings
 
+import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
@@ -25,10 +26,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.theme.iOSGreen
+import com.android.purebilibili.core.theme.iOSOrange
+import com.android.purebilibili.core.theme.iOSPurple
+import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
 import kotlin.math.*
 import kotlin.random.Random
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
@@ -46,21 +53,21 @@ data class CacheClearProgress(
 
 private object CacheAnimationColors {
     // 主色调 - 柔和的蓝紫渐变
-    val primaryBlue = Color(0xFF007AFF)
-    val secondaryPurple = Color(0xFF5856D6)
-    val accentCyan = Color(0xFF32ADE6)
+    val primaryBlue = iOSBlue
+    val secondaryPurple = iOSPurple
+    val accentCyan = iOSTeal
     
     // 完成状态 - 清新绿色
-    val successGreen = Color(0xFF34C759)
-    val successGreenLight = Color(0xFF30D158)
+    val successGreen = iOSGreen
+    val successGreenLight = iOSGreen
     
     // 粒子色彩 - 轻盈的渐变色系
     val particleColors = listOf(
-        Color(0xFF007AFF).copy(alpha = 0.6f),
-        Color(0xFF5856D6).copy(alpha = 0.5f),
-        Color(0xFF32ADE6).copy(alpha = 0.4f),
-        Color(0xFFAF52DE).copy(alpha = 0.3f),
-        Color(0xFFFF9500).copy(alpha = 0.2f)
+        iOSBlue.copy(alpha = 0.6f),
+        iOSPurple.copy(alpha = 0.5f),
+        iOSTeal.copy(alpha = 0.4f),
+        iOSPurple.copy(alpha = 0.3f),
+        iOSOrange.copy(alpha = 0.2f)
     )
 }
 
@@ -295,7 +302,7 @@ fun CircularProgressRing(
         
         // 背景轨道 - 半透明
         drawCircle(
-            color = Color(0xFF8E8E93).copy(alpha = 0.15f),
+            color = iOSSystemGray.copy(alpha = 0.15f),
             radius = radius * scale,
             center = center,
             style = Stroke(width = stroke, cap = StrokeCap.Round)
@@ -334,7 +341,7 @@ fun CircularProgressRing(
         
         // 进度头部光晕效果
         if (!isComplete && animatedProgress > 0.01f) {
-            val headAngle = Math.toRadians((-90.0 + sweepAngle + gradientAngle).toDouble())
+            val headAngle = Math.toRadians(-90.0 + sweepAngle + gradientAngle)
             val headX = center.x + radius * scale * cos(headAngle).toFloat()
             val headY = center.y + radius * scale * sin(headAngle).toFloat()
             
@@ -507,10 +514,10 @@ fun CenterCleaningIcon(
                 
                 // 多层渐变色表示数据
                 val dataColors = listOf(
-                    Color(0xFF5AC8FA).copy(alpha = 0.7f * animatedFillLevel),  // iOS 浅蓝
-                    Color(0xFF007AFF).copy(alpha = 0.6f * animatedFillLevel),  // iOS 蓝
-                    Color(0xFF5856D6).copy(alpha = 0.5f * animatedFillLevel),  // iOS 紫
-                    Color(0xFFAF52DE).copy(alpha = 0.4f * animatedFillLevel)   // iOS 粉紫
+                    iOSTeal.copy(alpha = 0.7f * animatedFillLevel),
+                    iOSBlue.copy(alpha = 0.6f * animatedFillLevel),
+                    iOSPurple.copy(alpha = 0.5f * animatedFillLevel),
+                    iOSPurple.copy(alpha = 0.4f * animatedFillLevel)
                 )
                 
                 drawPath(
@@ -725,6 +732,7 @@ fun CacheClearAnimationDialog(
     onDismiss: () -> Unit
 ) {
     val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
+    val useHazeEffect = shouldAllowRuntimeShaderBackedHazeEffect(Build.VERSION.SDK_INT)
     
     val progressValue = if (progress.total > 0) {
         (progress.current.toFloat() / progress.total.toFloat()).coerceIn(0f, 1f)
@@ -743,7 +751,8 @@ fun CacheClearAnimationDialog(
         properties = DialogProperties(
             dismissOnBackPress = progress.isComplete,
             dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
         )
     ) {
         Box(
@@ -772,9 +781,15 @@ fun CacheClearAnimationDialog(
                             )
                         )
                     )
-                    .hazeChild(
-                        state = hazeState, 
-                        style = HazeMaterials.thin(MaterialTheme.colorScheme.surface)
+                    .then(
+                        if (useHazeEffect) {
+                            Modifier.hazeEffect(
+                                state = hazeState,
+                                style = HazeMaterials.thin(MaterialTheme.colorScheme.surface)
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     .padding(36.dp),
                 contentAlignment = Alignment.Center

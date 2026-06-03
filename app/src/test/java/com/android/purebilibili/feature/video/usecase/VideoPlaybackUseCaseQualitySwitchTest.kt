@@ -278,6 +278,21 @@ class VideoPlaybackUseCaseQualitySwitchTest {
     }
 
     @Test
+    fun `resolveAutoHighestTargetQuality treats video highest as normal target`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.resolveAutoHighestTargetQuality(
+            acceptQualities = listOf(116, 80, 64),
+            isLoggedIn = true,
+            isVip = true,
+            isHdrSupported = true,
+            isDolbyVisionSupported = false
+        )
+
+        assertEquals(116, result)
+    }
+
+    @Test
     fun `resolveAutoHighestTargetQuality caps vip auto highest at hdr before 8k`() {
         val useCase = VideoPlaybackUseCase()
 
@@ -315,6 +330,31 @@ class VideoPlaybackUseCaseQualitySwitchTest {
     }
 
     @Test
+    fun `buildPlaybackSelectionSummary includes selected stream bitrate when available`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.buildPlaybackSelectionSummary(
+            bvid = "BV1TEST12345",
+            cid = 9527L,
+            defaultQuality = 80,
+            targetQuality = 80,
+            returnedQuality = 80,
+            selectedDashQuality = 80,
+            selectedDashCodec = "hev1.1.6.L120.90",
+            selectedDashBandwidth = 900_000,
+            selectedAudioBandwidth = 64_000,
+            mergedQualityIds = listOf(80, 64, 32),
+            isLoggedIn = true,
+            isVip = false
+        )
+
+        assertEquals(
+            "PLAY_DIAG playback_selection bvid=BV1TEST12345 cid=9527 default=80 target=80 returned=80 selectedDash=80 selectedCodec=hev1.1.6.L120.90 selectedBandwidth=900000 selectedAudioBandwidth=64000 merged=[80, 64, 32] isLoggedIn=true isVip=false",
+            result
+        )
+    }
+
+    @Test
     fun `resolvePlaybackSelection chooses requested dash quality and keeps merged labels`() {
         val useCase = VideoPlaybackUseCase()
 
@@ -347,6 +387,37 @@ class VideoPlaybackUseCaseQualitySwitchTest {
         assertEquals(listOf(80, 64, 32, 16), result?.qualityIds)
         assertEquals(listOf(80, 64), result?.switchableQualityIds)
         assertEquals(listOf("1080P", "720P", "480P", "360P"), result?.qualityLabels)
+    }
+
+    @Test
+    fun `resolvePlaybackSelection uses standard dash audio for hi res preference at high speed`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.resolvePlaybackSelection(
+            playUrlData = PlayUrlData(
+                quality = 80,
+                acceptQuality = listOf(80, 64),
+                dash = Dash(
+                    video = listOf(
+                        DashVideo(id = 80, baseUrl = "https://example.com/1080-hevc.m4s", codecs = "hev1")
+                    ),
+                    audio = listOf(
+                        DashAudio(id = 30280, baseUrl = "https://example.com/audio-192.m4s", bandwidth = 192000),
+                        DashAudio(id = 30216, baseUrl = "https://example.com/audio-64.m4s", bandwidth = 64000)
+                    )
+                )
+            ),
+            targetQuality = 80,
+            audioQualityPreference = 30251,
+            playbackSpeed = 2.0f,
+            videoCodecPreference = "hev1",
+            videoSecondCodecPreference = "avc1",
+            isHevcSupported = true,
+            isAv1Supported = false
+        )
+
+        assertEquals("https://example.com/audio-192.m4s", result?.audioUrl)
+        assertEquals(listOf(30280, 30216), result?.adaptiveDashSource?.audioTracks?.map { it.id })
     }
 
     @Test

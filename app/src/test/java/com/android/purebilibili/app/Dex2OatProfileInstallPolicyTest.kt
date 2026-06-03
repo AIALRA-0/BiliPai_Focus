@@ -9,13 +9,13 @@ class Dex2OatProfileInstallPolicyTest {
 
     @Test
     fun profileInstall_enabledOnAndroidNougatAndAbove() {
-        assertFalse(shouldRequestDex2OatProfileInstall(sdkInt = 23))
-        assertTrue(shouldRequestDex2OatProfileInstall(sdkInt = 24))
-        assertTrue(shouldRequestDex2OatProfileInstall(sdkInt = 35))
+        assertFalse(PureApplicationRuntimeConfig.shouldRequestDex2OatProfileInstall(sdkInt = 23))
+        assertTrue(PureApplicationRuntimeConfig.shouldRequestDex2OatProfileInstall(sdkInt = 24))
+        assertTrue(PureApplicationRuntimeConfig.shouldRequestDex2OatProfileInstall(sdkInt = 35))
     }
 
     @Test
     fun profileInstallDelay_usesConservativePostStartupWindow() {
-        assertEquals(2_500L, dex2OatProfileInstallDelayMs())
+        assertEquals(2_500L, PureApplicationRuntimeConfig.dex2OatProfileInstallDelayMs())
     }
 }

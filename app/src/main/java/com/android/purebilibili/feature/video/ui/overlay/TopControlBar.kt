@@ -148,7 +148,7 @@ fun TopControlBar(
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     val layoutPolicy = remember(configuration.screenWidthDp) {

@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import android.content.ClipData
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -50,11 +51,17 @@ import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.data.repository.isCastDashManifestAvailable
+import com.android.purebilibili.data.repository.selectCastDashAudio
+import com.android.purebilibili.data.repository.selectCastDashVideo
+import com.android.purebilibili.feature.plugin.CdnLineDiagnostic
+import com.android.purebilibili.feature.video.playback.dash.buildLocalDashManifest
+import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
+import com.android.purebilibili.feature.video.progress.PbpRidgeSample
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
@@ -71,24 +78,27 @@ import com.android.purebilibili.core.util.Logger
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
-import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
-import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
-import com.android.purebilibili.core.ui.AppIcons
+import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
+import com.android.purebilibili.core.ui.rememberAppCoinIcon
+import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
+import com.android.purebilibili.core.ui.rememberAppLikeIcon
+import com.android.purebilibili.core.ui.rememberAppMoreIcon
+import com.android.purebilibili.core.ui.rememberAppShareIcon
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.feature.video.usecase.applyPlaybackButtonUserAction
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
-import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.feature.cast.DeviceListDialog
-import com.android.purebilibili.feature.cast.DlnaManager
+import com.android.purebilibili.core.plugin.CastPluginApi
+import com.android.purebilibili.core.plugin.CastPluginMediaRequest
+import com.android.purebilibili.core.plugin.CastPluginRoute
+import com.android.purebilibili.core.plugin.CastPluginPlaybackState
 import com.android.purebilibili.feature.cast.LocalProxyServer
-import com.android.purebilibili.feature.cast.SsdpCastClient
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -101,9 +111,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.compose.currentStateAsState
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
 import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
 import dev.chrisbanes.haze.HazeState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 internal fun shouldShowEpisodeEntryFromVideoData(
     relatedVideosCount: Int,
@@ -147,11 +157,110 @@ internal fun shouldConsumeBackgroundGesturesForEndDrawer(
     return endDrawerVisible
 }
 
-internal fun shouldReleaseCastBindingAfterDialogVisibilityChange(
-    previousVisible: Boolean,
-    currentVisible: Boolean
+internal fun shouldDismissCastDialogOnUrlFailure(castUrl: String?): Boolean = castUrl.isNullOrBlank()
+
+internal data class CastMediaResolution(val url: String, val contentType: String)
+
+internal fun resolveEffectivePlayerProgress(
+    localProgress: PlayerProgress,
+    pluginState: CastPluginPlaybackState?
+): PlayerProgress {
+    if (pluginState?.isActive != true) return localProgress
+    return PlayerProgress(
+        current = pluginState.currentPositionMs,
+        duration = pluginState.durationMs,
+        buffered = pluginState.bufferedPositionMs
+    )
+}
+
+internal fun resolveEffectivePlayingState(
+    localIsPlaying: Boolean,
+    pluginState: CastPluginPlaybackState?
 ): Boolean {
-    return previousVisible && !currentVisible
+    if (pluginState?.isActive != true) return localIsPlaying
+    return pluginState.isPlaying
+}
+
+internal fun shouldActivatePluginPlaybackAfterCast(pluginState: CastPluginPlaybackState): Boolean = pluginState.isActive
+
+internal data class CastMediaSourceSignature(val aid: Long, val cid: Long, val quality: Int, val videoUrl: String, val audioUrl: String = "")
+
+internal fun buildCastMediaSourceSignature(currentAid: Long, cid: Long, currentQuality: Int, currentVideoUrl: String, currentAudioUrl: String = ""): CastMediaSourceSignature {
+    return CastMediaSourceSignature(aid = currentAid, cid = cid, quality = currentQuality, videoUrl = currentVideoUrl, audioUrl = currentAudioUrl)
+}
+
+internal fun shouldReloadActiveCastAfterMediaSourceChange(
+    activePluginExists: Boolean,
+    activeRouteExists: Boolean,
+    pluginState: CastPluginPlaybackState,
+    currentSignature: CastMediaSourceSignature,
+    lastCastSignature: CastMediaSourceSignature?
+): Boolean {
+    if (!activePluginExists || !activeRouteExists || !pluginState.isActive || lastCastSignature == null) return false
+    return currentSignature != lastCastSignature
+}
+
+internal fun resolveCastDashDurationMs(timelengthMs: Long, dashDurationSec: Int): Long = when {
+    timelengthMs > 0L -> timelengthMs
+    dashDurationSec > 0 -> dashDurationSec * 1000L
+    else -> 0L
+}
+
+internal suspend fun resolveCastPlayUrl(
+    context: Context,
+    currentAid: Long,
+    cid: Long,
+    currentQuality: Int,
+    currentVideoUrl: String
+): CastMediaResolution? = withContext(Dispatchers.IO) {
+    val tvData = runCatching {
+        VideoRepository.getTvCastPlayData(aid = currentAid, cid = cid, qn = currentQuality)
+    }.getOrNull()
+
+    if (tvData != null) {
+        val durlUrl = tvData.durl.orEmpty().firstOrNull { it.url.isNotBlank() }?.url
+            ?: tvData.durl.orEmpty().firstNotNullOfOrNull { segment ->
+                segment.backupUrl?.firstOrNull { it.isNotBlank() }
+            }
+        if (!durlUrl.isNullOrBlank()) {
+            return@withContext CastMediaResolution(url = durlUrl, contentType = "video/mp4")
+        }
+
+        val dash = tvData.dash
+        if (dash != null && isCastDashManifestAvailable(dash)) {
+            val selectedVideo = selectCastDashVideo(dash.video, currentQuality.takeIf { it > 0 } ?: 80)
+            val selectedAudio = selectCastDashAudio(dash.audio.orEmpty(), dash.dolby, dash.flac)
+            if (selectedVideo != null && selectedAudio != null) {
+                val proxyVideo = selectedVideo.copy(
+                    baseUrl = LocalProxyServer.getProxyUrl(context, selectedVideo.getValidUrl()),
+                    backupUrl = null
+                )
+                val proxyAudio = selectedAudio.copy(
+                    baseUrl = LocalProxyServer.getProxyUrl(context, selectedAudio.getValidUrl()),
+                    backupUrl = null
+                )
+                val durationMs = resolveCastDashDurationMs(tvData.timelength, dash.duration)
+                val minBufferMs = (dash.minBufferTime * 1000f).toLong().coerceAtLeast(0L)
+                val manifest = buildLocalDashManifest(
+                    durationMs = durationMs,
+                    minBufferTimeMs = minBufferMs,
+                    videoTracks = listOf(proxyVideo),
+                    audioTracks = listOf(proxyAudio)
+                )
+                val manifestUrl = LocalProxyServer.registerDashManifest(context, manifest)
+                return@withContext CastMediaResolution(url = manifestUrl, contentType = LocalProxyServer.DASH_CONTENT_TYPE)
+            }
+        }
+    }
+
+    runCatching {
+        if (currentVideoUrl.isBlank()) return@runCatching null
+        LocalProxyServer.ensureStarted()
+        CastMediaResolution(
+            url = LocalProxyServer.getProxyUrl(context, currentVideoUrl),
+            contentType = "video/mp4"
+        )
+    }.getOrNull()
 }
 
 internal fun shouldPollInlineVideoOverlayProgress(
@@ -191,10 +300,9 @@ internal fun shouldShowCenterPlayButton(
 internal fun shouldShowBufferingIndicator(
     isBuffering: Boolean,
     isQualitySwitching: Boolean,
-    isVisible: Boolean,
-    isScrubbing: Boolean
+    playWhenReady: Boolean
 ): Boolean {
-    return isBuffering && !isQualitySwitching && (!isVisible || isScrubbing)
+    return isBuffering && playWhenReady && !isQualitySwitching
 }
 
 internal enum class FullscreenLockButtonIcon {
@@ -285,7 +393,7 @@ fun VideoPlayerOverlay(
     onQualitySelected: (Int) -> Unit,
 
     onBack: () -> Unit,
-    onHomeClick: () -> Unit,
+    onHomeClick: () -> Unit = onBack,
     onToggleFullscreen: () -> Unit,
     // [New] Player Data for Download
     bvid: String = "",
@@ -328,11 +436,14 @@ fun VideoPlayerOverlay(
     danmakuStaticToScroll: Boolean = false,
     danmakuMassiveMode: Boolean = false,
     danmakuMergeDuplicates: Boolean = true,
+    danmakuDuplicateMergeWindowMs: Int = 500,
+    danmakuDuplicateMergeCountThreshold: Int = 2,
     danmakuAllowScroll: Boolean = true,
     danmakuAllowTop: Boolean = true,
     danmakuAllowBottom: Boolean = true,
     danmakuAllowColorful: Boolean = true,
     danmakuAllowSpecial: Boolean = true,
+    danmakuHideInteractiveCommands: Boolean = false,
     danmakuBlockRulesRaw: String = "",
     danmakuSmartOcclusion: Boolean = true,
     danmakuFullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
@@ -351,20 +462,20 @@ fun VideoPlayerOverlay(
     onDanmakuStaticToScrollChange: (Boolean) -> Unit = {},
     onDanmakuMassiveModeChange: (Boolean) -> Unit = {},
     onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {},
+    onDanmakuDuplicateMergeWindowMsChange: (Int) -> Unit = {},
+    onDanmakuDuplicateMergeCountThresholdChange: (Int) -> Unit = {},
     onDanmakuAllowScrollChange: (Boolean) -> Unit = {},
     onDanmakuAllowTopChange: (Boolean) -> Unit = {},
     onDanmakuAllowBottomChange: (Boolean) -> Unit = {},
     onDanmakuAllowColorfulChange: (Boolean) -> Unit = {},
     onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
+    onDanmakuHideInteractiveCommandsChange: (Boolean) -> Unit = {},
     onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     onDanmakuFullscreenPanelWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     onDanmakuSyncNowClick: () -> Unit = {},
     subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
-    smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
-    smartOcclusionDownloadProgress: Int? = null,
-    onDanmakuSmartOcclusionDownloadClick: () -> Unit = {},
     //  [实验性功能] 双击点赞
     doubleTapLikeEnabled: Boolean = true,
     onDoubleTapLike: () -> Unit = {},
@@ -391,13 +502,17 @@ fun VideoPlayerOverlay(
     //  [新增] CDN 线路切换
     currentCdnIndex: Int = 0,
     cdnCount: Int = 1,
+    cdnLineDiagnostics: List<CdnLineDiagnostic> = emptyList(),
+    isCdnProbing: Boolean = false,
     onSwitchCdn: () -> Unit = {},
     onSwitchCdnTo: (Int) -> Unit = {},
+    onProbeCdnCandidates: () -> Unit = {},
     // 🖼️ [新增] 视频预览图数据
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     // 📖 [新增] 视频章节数据
     viewPoints: List<ViewPoint> = emptyList(),
     sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
+    pbpRidgeSamples: List<PbpRidgeSample> = emptyList(),
     // 📱 [新增] 竖屏全屏模式
     isVerticalVideo: Boolean = false,
     onPortraitFullscreen: () -> Unit = {},
@@ -433,6 +548,7 @@ fun VideoPlayerOverlay(
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
+    onPlaybackSpeedChange: (Float) -> Unit = { speed -> player.setPlaybackSpeed(speed) },
     
     // [新增] 侧边栏抽屉数据与交互
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
@@ -466,6 +582,18 @@ fun VideoPlayerOverlay(
     var showVideoSettings by remember { mutableStateOf(false) }  //  新增
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
     var showCastDialog by remember { mutableStateOf(false) }   // 📺 投屏对话框
+    var activeCastPlugin by remember { mutableStateOf<CastPluginApi?>(null) }
+    var activeCastRoute by remember { mutableStateOf<CastPluginRoute?>(null) }
+    var lastCastMediaSignature by remember { mutableStateOf<CastMediaSourceSignature?>(null) }
+    var lastCastMediaUrl by remember { mutableStateOf<String?>(null) }
+    val pluginPlaybackState by produceState(CastPluginPlaybackState(), activeCastPlugin) {
+        val plugin = activeCastPlugin
+        if (plugin != null) {
+            plugin.playbackState.collect { value = it }
+        } else {
+            value = CastPluginPlaybackState()
+        }
+    }
     var showPlaybackOrderSheet by remember { mutableStateOf(false) }
     var showPageSelectorSheet by remember { mutableStateOf(false) }
     var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
@@ -489,7 +617,7 @@ fun VideoPlayerOverlay(
     val fullscreenLockButtonState = remember(isScreenLocked) {
         resolveFullscreenLockButtonVisualState(isScreenLocked = isScreenLocked)
     }
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     val configuration = LocalConfiguration.current
@@ -631,25 +759,32 @@ fun VideoPlayerOverlay(
     }
     val showFullscreenLockButton by SettingsManager
         .getShowFullscreenLockButton(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true
+        )
     val showFullscreenScreenshotButton by SettingsManager
         .getShowFullscreenScreenshotButton(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true
+        )
     val showFullscreenBatteryLevel by SettingsManager
         .getShowFullscreenBatteryLevel(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true
+        )
     val showFullscreenTime by SettingsManager
         .getShowFullscreenTime(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true
+        )
     val showFullscreenActionItems by SettingsManager
         .getShowFullscreenActionItems(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true
+        )
     val showOnlineCount by SettingsManager
         .getShowOnlineCount(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     val bottomProgressBehavior by SettingsManager
         .getBottomProgressBehavior(context)
-        .collectAsState(initial = BottomProgressBehavior.ALWAYS_SHOW)
+        .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_SHOW
+        )
     val displayedOnlineCount = remember(onlineCount, showOnlineCount) {
         resolveDisplayedOnlineCount(
             onlineCount = onlineCount,
@@ -685,7 +820,8 @@ fun VideoPlayerOverlay(
     }
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
-        .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
+        .collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
+        )
 
     DisposableEffect(player) {
         currentSpeed = player.playbackParameters.speed
@@ -702,52 +838,38 @@ fun VideoPlayerOverlay(
     //  双击检测状态
     var lastTapTime by remember { mutableLongStateOf(0L) }
     var showLikeAnimation by remember { mutableStateOf(false) }
-    var previousShowCastDialog by remember { mutableStateOf(false) }
     val overlayVisualPolicy = remember(configuration.screenWidthDp) {
         resolveVideoPlayerOverlayVisualPolicy(
             widthDp = configuration.screenWidthDp
         )
     }
 
-    // 📺 [DLNA] 按需权限请求
+    // 📺 按需权限请求
     val dlnaPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val isGranted = permissions.values.all { it }
         if (isGranted) {
-            // 权限授予，绑定服务并显示对话框
-            DlnaManager.bindService(context)
-            DlnaManager.refresh() // 刷新列表
             showCastDialog = true
         } else {
-            // 权限被拒绝，提示用户（可选）
-             com.android.purebilibili.core.util.Logger.d("VideoPlayerOverlay", "DLNA permissions denied")
+            com.android.purebilibili.core.util.Logger.d("VideoPlayerOverlay", "DLNA permissions denied")
         }
     }
 
     val onCastClickAction = {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: NEARBY_WIFI_DEVICES
             if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.NEARBY_WIFI_DEVICES) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                 DlnaManager.bindService(context)
-                 DlnaManager.refresh()
                  showCastDialog = true
             } else {
                 dlnaPermissionLauncher.launch(arrayOf(android.Manifest.permission.NEARBY_WIFI_DEVICES))
             }
         } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            // Android 12: ACCESS_FINE_LOCATION
             if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                 DlnaManager.bindService(context)
-                 DlnaManager.refresh()
                  showCastDialog = true
             } else {
                 dlnaPermissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION))
             }
         } else {
-            // Android 11-: 无需运行时权限（除了 Internet/WifiState）
-            DlnaManager.bindService(context)
-            DlnaManager.refresh()
             showCastDialog = true
         }
     }
@@ -803,14 +925,20 @@ fun VideoPlayerOverlay(
             delay(delayMs)
         }
     }
+    val effectiveProgressState = remember(progressState, pluginPlaybackState) {
+        resolveEffectivePlayerProgress(progressState, pluginPlaybackState)
+    }
     val displayedProgressState = remember(
-        progressState,
+        effectiveProgressState,
         progressDisplayOverridePositionMs
     ) {
         resolveDisplayedPlayerProgressWithOverride(
-            progress = progressState,
+            progress = effectiveProgressState,
             overridePositionMs = progressDisplayOverridePositionMs
         )
+    }
+    val effectiveIsPlaying = remember(isPlaying, pluginPlaybackState) {
+        resolveEffectivePlayingState(isPlaying, pluginPlaybackState)
     }
     val centerLoadingUiState = remember(
         isBuffering,
@@ -841,16 +969,16 @@ fun VideoPlayerOverlay(
     }
 
     // 📖 计算当前章节（必须在 progressState 之后定义）
-    val currentChapter = remember(progressState.current, viewPoints) {
+    val currentChapter = remember(effectiveProgressState.current, viewPoints) {
         if (viewPoints.isEmpty()) null
-        else viewPoints.lastOrNull { progressState.current >= it.fromMs }?.content
+        else viewPoints.lastOrNull { effectiveProgressState.current >= it.fromMs }?.content
     }
 
-    LaunchedEffect(isVisible, isPlaying, isSeekScrubbing) {
+    LaunchedEffect(isVisible, effectiveIsPlaying, isSeekScrubbing) {
         if (
             shouldAutoHideInlineControlsAfterDelay(
                 controlsVisible = isVisible,
-                isPlaying = isPlaying,
+                isPlaying = effectiveIsPlaying,
                 isSeekScrubbing = isSeekScrubbing
             )
         ) {
@@ -858,7 +986,7 @@ fun VideoPlayerOverlay(
             if (
                 shouldAutoHideInlineControlsAfterDelay(
                     controlsVisible = isVisible,
-                    isPlaying = isPlaying,
+                    isPlaying = effectiveIsPlaying,
                     isSeekScrubbing = isSeekScrubbing
                 )
             ) {
@@ -917,30 +1045,39 @@ fun VideoPlayerOverlay(
         }
     }
 
-    LaunchedEffect(showCastDialog) {
-        if (shouldReleaseCastBindingAfterDialogVisibilityChange(previousShowCastDialog, showCastDialog)) {
-            DlnaManager.unbindService(context)
-        }
-        previousShowCastDialog = showCastDialog
-    }
-
     fun togglePlayPause() {
+        val plugin = activeCastPlugin
+        if (plugin != null && pluginPlaybackState.isActive) {
+            scope.launch {
+                if (pluginPlaybackState.isPlaying) {
+                    plugin.pause()
+                } else {
+                    plugin.play()
+                }
+            }
+            return
+        }
         if (player.playbackState == Player.STATE_ENDED) {
             onSeekTo?.invoke(0L) ?: player.seekTo(0L)
             playPlayerFromUserAction(player)
             isPlaying = true
-        } else if (isPlaying) {
-            togglePlayerPlaybackFromUserAction(player)
-            isPlaying = false
         } else {
-            playPlayerFromUserAction(player)
-            isPlaying = true
+            applyPlaybackButtonUserAction(
+                player = player,
+                isShowingPauseIcon = isPlaying
+            )
+            isPlaying = !isPlaying
         }
     }
 
     val commitSeek: (Long) -> Unit = { position ->
-        val safePosition = position.coerceAtLeast(0L)
-        onSeekTo?.invoke(safePosition) ?: seekPlayerFromUserAction(player, safePosition)
+        val plugin = activeCastPlugin
+        if (plugin != null && pluginPlaybackState.isActive) {
+            scope.launch { plugin.seek(position.coerceAtLeast(0L)) }
+        } else {
+            val safePosition = position.coerceAtLeast(0L)
+            onSeekTo?.invoke(safePosition) ?: seekPlayerFromUserAction(player, safePosition)
+        }
     }
 
     Box(
@@ -1070,7 +1207,7 @@ fun VideoPlayerOverlay(
                 
                 //  [修复] 底部控制栏 - 固定在底部
                 BottomControlBar(
-                    isPlaying = isPlaying,
+                    isPlaying = effectiveIsPlaying,
                     progress = displayedProgressState,
                     isFullscreen = isFullscreen,
                     currentSpeed = currentSpeed,
@@ -1091,7 +1228,7 @@ fun VideoPlayerOverlay(
                         val target = nextEpisodeTarget
                         when {
                             target?.nextPageIndex != null -> onPageSelect(target.nextPageIndex)
-                            !target?.nextBvid.isNullOrBlank() -> onDrawerVideoClick(target?.nextBvid ?: "", null)
+                            !target?.nextBvid.isNullOrBlank() -> onDrawerVideoClick(target.nextBvid, null)
                         }
                     },
                     hasNextEpisode = nextEpisodeTarget != null,
@@ -1118,6 +1255,7 @@ fun VideoPlayerOverlay(
                     // 📖 [新增] 视频章节数据
                     viewPoints = viewPoints,
                     sponsorMarkers = sponsorMarkers,
+                    pbpRidgeSamples = pbpRidgeSamples,
                     currentChapter = currentChapter,
                     onChapterClick = { showChapterList = true },
                     // 📱 [新增] 竖屏全屏模式
@@ -1209,10 +1347,6 @@ fun VideoPlayerOverlay(
                     .padding(
                         top = overlayVisualPolicy.statsTopPaddingDp.dp,
                         end = overlayVisualPolicy.statsEndPaddingDp.dp
-                    )
-                    .background(
-                        Color.Black.copy(0.6f),
-                        RoundedCornerShape(overlayVisualPolicy.statsCornerRadiusDp.dp)
                     )
                     .padding(
                         horizontal = overlayVisualPolicy.statsHorizontalPaddingDp.dp,
@@ -1342,7 +1476,7 @@ fun VideoPlayerOverlay(
         AnimatedVisibility(
             visible = shouldShowCenterPlayButton(
                 isVisible = isVisible,
-                isPlaying = isPlaying,
+                isPlaying = effectiveIsPlaying,
                 isQualitySwitching = isQualitySwitching,
                 isFullscreen = isFullscreen,
                 isBuffering = isBuffering,
@@ -1369,8 +1503,7 @@ fun VideoPlayerOverlay(
             visible = shouldShowBufferingIndicator(
                 isBuffering = isBuffering,
                 isQualitySwitching = isQualitySwitching,
-                isVisible = isVisible,
-                isScrubbing = isSeekScrubbing
+                playWhenReady = player.playWhenReady
             ) && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(tween(200)),
@@ -1481,7 +1614,7 @@ fun VideoPlayerOverlay(
                 currentSpeed = currentSpeed,
                 onSpeedSelected = { speed ->
                     currentSpeed = speed
-                    player.setPlaybackSpeed(speed)
+                    onPlaybackSpeedChange(speed)
                     scope.launch {
                         SettingsManager.setLastPlaybackSpeed(context, speed)
                     }
@@ -1535,19 +1668,20 @@ fun VideoPlayerOverlay(
                 staticDanmakuToScroll = danmakuStaticToScroll,
                 massiveMode = danmakuMassiveMode,
                 mergeDuplicates = danmakuMergeDuplicates,
+                duplicateMergeWindowMs = danmakuDuplicateMergeWindowMs,
+                duplicateMergeCountThreshold = danmakuDuplicateMergeCountThreshold,
                 allowScroll = danmakuAllowScroll,
                 allowTop = danmakuAllowTop,
                 allowBottom = danmakuAllowBottom,
                 allowColorful = danmakuAllowColorful,
                 allowSpecial = danmakuAllowSpecial,
+                hideInteractiveCommands = danmakuHideInteractiveCommands,
                 showBlockRuleEditor = true,
                 blockRulesRaw = danmakuBlockRulesRaw,
                 smartOcclusion = danmakuSmartOcclusion,
                 fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
                 showSyncSection = showDanmakuSyncSection,
                 syncUiState = danmakuSyncUiState,
-                smartOcclusionModuleState = smartOcclusionModuleState,
-                smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
                 onFontWeightChange = onDanmakuFontWeightChange,
@@ -1561,16 +1695,18 @@ fun VideoPlayerOverlay(
                 onStaticDanmakuToScrollChange = onDanmakuStaticToScrollChange,
                 onMassiveModeChange = onDanmakuMassiveModeChange,
                 onMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
+                onDuplicateMergeWindowMsChange = onDanmakuDuplicateMergeWindowMsChange,
+                onDuplicateMergeCountThresholdChange = onDanmakuDuplicateMergeCountThresholdChange,
                 onAllowScrollChange = onDanmakuAllowScrollChange,
                 onAllowTopChange = onDanmakuAllowTopChange,
                 onAllowBottomChange = onDanmakuAllowBottomChange,
                 onAllowColorfulChange = onDanmakuAllowColorfulChange,
                 onAllowSpecialChange = onDanmakuAllowSpecialChange,
+                onHideInteractiveCommandsChange = onDanmakuHideInteractiveCommandsChange,
                 onBlockRulesRawChange = onDanmakuBlockRulesRawChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
                 onSyncNowClick = onDanmakuSyncNowClick,
-                onSmartOcclusionDownloadClick = onDanmakuSmartOcclusionDownloadClick,
                 onDismiss = { showDanmakuSettings = false }
             )
         }
@@ -1595,7 +1731,7 @@ fun VideoPlayerOverlay(
                 currentSpeed = currentSpeed,
                 onSpeedChange = { speed ->
                     currentSpeed = speed
-                    player.setPlaybackSpeed(speed)
+                    onPlaybackSpeedChange(speed)
                     scope.launch {
                         SettingsManager.setLastPlaybackSpeed(context, speed)
                     }
@@ -1609,11 +1745,14 @@ fun VideoPlayerOverlay(
                 //  CDN 线路切换
                 currentCdnIndex = currentCdnIndex,
                 cdnCount = cdnCount,
+                cdnLineDiagnostics = cdnLineDiagnostics,
+                isCdnProbing = isCdnProbing,
                 onSwitchCdn = onSwitchCdn,
                 onSwitchCdnTo = { index ->
                     onSwitchCdnTo(index)
                     showVideoSettings = false
                 },
+                onProbeCdnCandidates = onProbeCdnCandidates,
                 // [New] Codec & Audio
                 currentCodec = currentCodec,
                 onCodecChange = { codec ->
@@ -1761,54 +1900,44 @@ fun VideoPlayerOverlay(
         )
         
         // --- 12. 📺 投屏对话框 ---
+        val currentCastSignature = remember(currentAid, cid, currentQuality, currentVideoUrl, currentAudioUrl) {
+            buildCastMediaSourceSignature(currentAid, cid, currentQuality, currentVideoUrl, currentAudioUrl)
+        }
         if (showCastDialog) {
-            suspend fun resolveCastUrlOrNull(): String? = withContext(Dispatchers.IO) {
-                val tvCastUrl = runCatching {
-                    VideoRepository.getTvCastPlayUrl(
-                        aid = currentAid,
-                        cid = cid,
-                        qn = currentQuality
-                    )
-                }.getOrNull()
-
-                if (!tvCastUrl.isNullOrBlank()) {
-                    return@withContext tvCastUrl
-                }
-
-                runCatching {
-                    if (currentVideoUrl.isBlank()) return@runCatching null
-                    LocalProxyServer.ensureStarted()
-                    LocalProxyServer.getProxyUrl(context, currentVideoUrl)
-                }.getOrNull()
-            }
-
             DeviceListDialog(
                 onDismissRequest = { showCastDialog = false },
-                onDeviceSelected = { device ->
-                    showCastDialog = false
+                onPluginCastDeviceSelected = { plugin, route ->
                     scope.launch {
-                        val castUrl = resolveCastUrlOrNull()
-                        if (castUrl == null) {
+                        val resolution = resolveCastPlayUrl(context, currentAid, cid, currentQuality, currentVideoUrl)
+                        if (resolution == null) {
+                            showCastDialog = false
                             android.widget.Toast.makeText(context, "投屏地址解析失败", android.widget.Toast.LENGTH_SHORT).show()
                             return@launch
                         }
-                        DlnaManager.cast(device, castUrl, videoTitle, videoOwnerName)
-                    }
-                },
-                onSsdpDeviceSelected = { ssdpDevice ->
-                    showCastDialog = false
-                    scope.launch {
-                        val castUrl = resolveCastUrlOrNull()
-                        if (castUrl == null) {
-                            android.widget.Toast.makeText(context, "投屏地址解析失败", android.widget.Toast.LENGTH_SHORT).show()
-                            return@launch
-                        }
-                        val result = SsdpCastClient.cast(
-                            device = ssdpDevice,
-                            mediaUrl = castUrl,
+                        val pluginCastUrl = resolution.url
+                        val mediaRequest = CastPluginMediaRequest(
+                            url = pluginCastUrl,
                             title = videoTitle,
-                            creator = videoOwnerName
+                            creator = videoOwnerName,
+                            contentType = resolution.contentType
                         )
+                        val result = plugin.cast(context, route, mediaRequest)
+                        showCastDialog = false
+                        if (result.isSuccess) {
+                            val state = plugin.playbackState.value
+                            if (shouldActivatePluginPlaybackAfterCast(state)) {
+                                player.pause()
+                                activeCastPlugin = plugin
+                                activeCastRoute = route
+                                lastCastMediaSignature = currentCastSignature
+                                lastCastMediaUrl = pluginCastUrl
+                            } else {
+                                activeCastPlugin = null
+                                activeCastRoute = null
+                                lastCastMediaSignature = null
+                                lastCastMediaUrl = null
+                            }
+                        }
                         val message = if (result.isSuccess) {
                             "已发送投屏指令"
                         } else {
@@ -1818,6 +1947,53 @@ fun VideoPlayerOverlay(
                     }
                 }
             )
+        }
+
+        // --- 13. 🔄 Active Cast quality/source reload ---
+        LaunchedEffect(currentCastSignature, activeCastPlugin, activeCastRoute, pluginPlaybackState.isActive) {
+            val plugin = activeCastPlugin ?: return@LaunchedEffect
+            val route = activeCastRoute ?: return@LaunchedEffect
+            if (!shouldReloadActiveCastAfterMediaSourceChange(
+                    activePluginExists = true,
+                    activeRouteExists = true,
+                    pluginState = pluginPlaybackState,
+                    currentSignature = currentCastSignature,
+                    lastCastSignature = lastCastMediaSignature
+                )) {
+                return@LaunchedEffect
+            }
+
+            val resolution = resolveCastPlayUrl(context, currentAid, cid, currentQuality, currentVideoUrl)
+            if (resolution == null) {
+                android.widget.Toast.makeText(context, "投屏地址解析失败", android.widget.Toast.LENGTH_SHORT).show()
+                return@LaunchedEffect
+            }
+
+            if (resolution.url == lastCastMediaUrl) {
+                lastCastMediaSignature = currentCastSignature
+                return@LaunchedEffect
+            }
+
+            val request = CastPluginMediaRequest(
+                url = resolution.url,
+                title = videoTitle,
+                creator = videoOwnerName,
+                contentType = resolution.contentType,
+                startPositionMs = pluginPlaybackState.currentPositionMs.coerceAtLeast(0L),
+                autoplay = pluginPlaybackState.isPlaying
+            )
+
+            val result = plugin.cast(context, route, request)
+            if (result.isSuccess) {
+                lastCastMediaSignature = currentCastSignature
+                lastCastMediaUrl = resolution.url
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "投屏画质切换失败：${result.exceptionOrNull()?.message ?: "未知错误"}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 }
@@ -1841,6 +2017,8 @@ private fun PortraitTopBar(
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
+    val moreIcon = rememberAppMoreIcon()
+    val shareIcon = rememberAppShareIcon()
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolvePortraitTopBarLayoutPolicy(
             widthDp = configuration.screenWidthDp
@@ -1939,7 +2117,7 @@ private fun PortraitTopBar(
                 modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
                 Icon(
-                    imageVector = CupertinoIcons.Default.Ellipsis,
+                    imageVector = moreIcon,
                     contentDescription = "设置",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
@@ -1952,7 +2130,7 @@ private fun PortraitTopBar(
                 modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
                 Icon(
-                    imageVector = CupertinoIcons.Default.SquareAndArrowUp,
+                    imageVector = shareIcon,
                     contentDescription = "分享",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
@@ -1999,7 +2177,8 @@ fun LandscapeEndDrawer(
     }
     val cardAnimationEnabled by SettingsManager
         .getCardAnimationEnabled(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true
+        )
     val overlayMotionTier = resolveEffectiveMotionTier(
         baseTier = deviceUiProfile.motionTier,
         animationEnabled = cardAnimationEnabled
@@ -2127,16 +2306,10 @@ fun LandscapeEndDrawer(
                     val hasSeason = ugcSeason != null && ugcSeason.sections.isNotEmpty()
                     
                     if (hasSeason) {
-                        TabRow(
+                        PrimaryTabRow(
                             selectedTabIndex = selectedTab,
                             containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            indicator = { tabPositions ->
-                                TabRowDefaults.Indicator(
-                                    Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ) {
                             Tab(
                                 selected = selectedTab == 0,
@@ -2168,7 +2341,18 @@ fun LandscapeEndDrawer(
                                 contentPadding = PaddingValues(layoutPolicy.listContentPaddingDp.dp),
                                 verticalArrangement = Arrangement.spacedBy(layoutPolicy.listItemSpacingDp.dp)
                             ) {
-                                items(relatedVideos) { video ->
+                                itemsIndexed(
+                                    items = relatedVideos,
+                                    key = { index, item ->
+                                        resolveIndexedVideoLazyKey(
+                                            namespace = "overlay_related",
+                                            index = index,
+                                            bvid = item.bvid,
+                                            aid = item.aid,
+                                            cid = item.cid
+                                        )
+                                    }
+                                ) { _, video ->
                                     LandscapeVideoItem(
                                         video = video,
                                         layoutPolicy = layoutPolicy,
@@ -2179,7 +2363,7 @@ fun LandscapeEndDrawer(
                                     )
                                 }
                             }
-                        } else if (hasSeason && ugcSeason != null) {
+                        } else if (hasSeason) {
                             // 合集列表
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
@@ -2195,7 +2379,7 @@ fun LandscapeEndDrawer(
                                             modifier = Modifier.padding(bottom = 8.dp)
                                         )
                                     }
-                                    items(section.episodes) { episode ->
+                                    items(section.episodes, key = { it.id }) { episode ->
                                         LandscapeEpisodeItem(
                                             episode = episode,
                                             layoutPolicy = layoutPolicy,
@@ -2273,6 +2457,10 @@ private fun TripleLikeInteractionButton(
     modifier: Modifier = Modifier
 ) {
     val haptic = rememberHapticFeedback()
+    val favoriteIcon = rememberAppBookmarkIcon()
+    val coinIcon = rememberAppCoinIcon()
+    val likeIcon = rememberAppLikeIcon()
+    val likeFilledIcon = rememberAppLikeFilledIcon()
     
     var isLongPressing by remember { mutableStateOf(false) }
     var longPressProgress by remember { mutableFloatStateOf(0f) }
@@ -2312,7 +2500,7 @@ private fun TripleLikeInteractionButton(
     ) {
         // 点赞
         LandscapeProgressIcon(
-            icon = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Outlined.HandThumbsup,
+            icon = if (isLiked) likeFilledIcon else likeIcon,
             label = "点赞",
             progress = longPressProgress,
             progressColor = MaterialTheme.colorScheme.primary,
@@ -2328,7 +2516,7 @@ private fun TripleLikeInteractionButton(
         
         // 投币 (显示时带进度)
         LandscapeProgressIcon(
-            icon = AppIcons.BiliCoin,
+            icon = coinIcon,
             label = "投币",
             progress = longPressProgress,
             progressColor = Color(0xFFFFB300),
@@ -2340,7 +2528,7 @@ private fun TripleLikeInteractionButton(
         
         // 收藏 (显示时带进度)
         LandscapeProgressIcon(
-            icon = if (isFavorited) CupertinoIcons.Filled.Star else CupertinoIcons.Default.Star,
+            icon = favoriteIcon,
             label = "收藏",
             progress = longPressProgress,
             progressColor = Color(0xFFFFC107),

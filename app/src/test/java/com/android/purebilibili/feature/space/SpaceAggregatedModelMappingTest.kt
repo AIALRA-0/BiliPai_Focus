@@ -229,6 +229,36 @@ class SpaceAggregatedModelMappingTest {
     }
 
     @Test
+    fun `resolveSpaceInitialSeedFromAggregate adds article contribution tab when article content exists`() {
+        val seed = resolveSpaceInitialSeedFromAggregate(
+            data = SpaceAggregateData(
+                card = SpaceAggregateCard(
+                    mid = "24",
+                    name = "article-up",
+                    face = "face",
+                    levelInfo = SpaceAggregateLevelInfo(currentLevel = 3)
+                ),
+                article = SpaceAggregateArticleSection(
+                    count = 1,
+                    item = listOf(SpaceArticleItem(id = 9L, title = "图文内容"))
+                ),
+                tab2 = listOf(
+                    SpaceAggregateTab(
+                        title = "投稿",
+                        param = "contribute",
+                        items = listOf(SpaceAggregateTabItem(title = "视频", param = "video"))
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("视频", "图文"),
+            seed?.contributionTabs?.map { it.title }
+        )
+    }
+
+    @Test
     fun `resolveSpaceInitialSeedFromAggregate returns null when card identity is missing`() {
         val seed = resolveSpaceInitialSeedFromAggregate(
             data = SpaceAggregateData(

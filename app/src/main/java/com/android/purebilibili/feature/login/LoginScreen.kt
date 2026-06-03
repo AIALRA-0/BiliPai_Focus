@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 // Enums
 enum class LoginMethod {
@@ -30,7 +31,7 @@ enum class LoginMethod {
 internal fun resolveAvailableLoginMethods(): List<LoginMethod> = listOf(LoginMethod.QR_CODE)
 
 internal fun resolveQrLoginReason(): String {
-    return "当前仅保留扫码登录，因为只有扫码能稳定获取完整登录态，并解锁高画质播放能力（4K/HDR/1080P60）"
+    return "当前仅保留扫码登录，因为只有扫码能稳定获取完整登录态，并解锁高画质播放能力（4K/HDR/1080P60）。"
 }
 
 @Composable
@@ -39,7 +40,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onClose: () -> Unit
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Handle navigation when login is successful
     LaunchedEffect(state) {
@@ -236,7 +237,7 @@ private fun WideLoginSheetContent(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "继续即表示你同意用户协议与隐私政策",
+                text = "继续即表示你同意用户协议与隐私政策。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
             )
@@ -258,9 +259,7 @@ fun LoginContentArea(
         },
         label = "login_content",
         modifier = modifier
-    ) { method ->
-        when (method) {
-            LoginMethod.QR_CODE -> QrCodeLoginContent(state, onRefreshQr)
-        }
+    ) {
+        QrCodeLoginContent(state, onRefreshQr)
     }
 }

@@ -25,4 +25,48 @@ class ProfileWallpaperActionLayoutPolicyTest {
             )
         )
     }
+
+    @Test
+    fun compactThreeColumnWallpaperStrip_usesTwoLineActionLabels() {
+        assertEquals(
+            ProfileWallpaperActionLabelMode.TWO_LINE,
+            resolveProfileWallpaperActionLabelMode(
+                screenWidthDp = 393,
+                columnCount = 3
+            )
+        )
+        assertEquals(
+            listOf("官方", "壁纸"),
+            resolveProfileWallpaperActionTitleLines(
+                title = "官方壁纸",
+                labelMode = ProfileWallpaperActionLabelMode.TWO_LINE
+            )
+        )
+    }
+
+    @Test
+    fun narrowTwoColumnWallpaperStrip_keepsSingleLineActionLabels() {
+        assertEquals(
+            ProfileWallpaperActionLabelMode.SINGLE_LINE,
+            resolveProfileWallpaperActionLabelMode(
+                screenWidthDp = 320,
+                columnCount = 2
+            )
+        )
+        assertEquals(
+            listOf("本地相册"),
+            resolveProfileWallpaperActionTitleLines(
+                title = "本地相册",
+                labelMode = ProfileWallpaperActionLabelMode.SINGLE_LINE
+            )
+        )
+    }
+
+    @Test
+    fun profileWallpaperBlendBandExtendsPastBannerCutoff() {
+        assertEquals(
+            196f,
+            resolveProfileWallpaperBlendBandDp(topBannerHeightDp = 420f)
+        )
+    }
 }

@@ -97,7 +97,7 @@ internal fun resolveDanmakuSendSelectionState(
 fun DanmakuSendDialog(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onSend: (message: String, color: Int, mode: Int, fontSize: Int, encourage: Boolean) -> Unit,
+    onSend: (message: String, color: Int, mode: Int, fontSize: Int, attentionCommand: Boolean) -> Unit,
     isSending: Boolean = false,
     initialColor: Int = 16777215,
     initialMode: Int = 1,
@@ -150,7 +150,7 @@ fun DanmakuSendDialog(
     var selectedColor by remember { mutableIntStateOf(initialColor) }
     var selectedMode by remember { mutableIntStateOf(initialMode) }
     var selectedFontSize by remember { mutableIntStateOf(initialFontSize) }
-    var encourageChecked by remember { mutableStateOf(false) }
+    var attentionCommandChecked by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -170,7 +170,7 @@ fun DanmakuSendDialog(
             selectedColor = selection.color
             selectedMode = selection.mode
             selectedFontSize = selection.fontSize
-            encourageChecked = false
+            attentionCommandChecked = false
             delay(100)
             focusRequester.requestFocus()
             keyboardController?.show()
@@ -381,24 +381,24 @@ fun DanmakuSendDialog(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f))
-                                .clickable { encourageChecked = !encourageChecked }
+                                .clickable { attentionCommandChecked = !attentionCommandChecked }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(
-                                checked = encourageChecked,
-                                onCheckedChange = { encourageChecked = it }
+                                checked = attentionCommandChecked,
+                                onCheckedChange = { attentionCommandChecked = it }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "关注弹幕",
+                                    text = "内嵌关注按钮",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "发送时附带 B 站关注/鼓励弹幕标识",
+                                    text = "发送一个视频内嵌关注按钮",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -486,7 +486,7 @@ fun DanmakuSendDialog(
                                         selectedColor,
                                         selectedMode,
                                         selectedFontSize,
-                                        encourageChecked
+                                        attentionCommandChecked
                                     )
                                 }
                             },

@@ -3,6 +3,7 @@ package com.android.purebilibili.core.theme
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.isSpecified
 import kotlin.math.roundToInt
@@ -153,6 +154,31 @@ fun Typography.scaled(multiplier: Float): Typography {
     )
 }
 
+private fun TextStyle.withFontFamily(fontFamily: FontFamily?): TextStyle {
+    return if (fontFamily == null) this else copy(fontFamily = fontFamily)
+}
+
+fun Typography.withFontFamily(fontFamily: FontFamily?): Typography {
+    if (fontFamily == null) return this
+    return copy(
+        displayLarge = displayLarge.withFontFamily(fontFamily),
+        displayMedium = displayMedium.withFontFamily(fontFamily),
+        displaySmall = displaySmall.withFontFamily(fontFamily),
+        headlineLarge = headlineLarge.withFontFamily(fontFamily),
+        headlineMedium = headlineMedium.withFontFamily(fontFamily),
+        headlineSmall = headlineSmall.withFontFamily(fontFamily),
+        titleLarge = titleLarge.withFontFamily(fontFamily),
+        titleMedium = titleMedium.withFontFamily(fontFamily),
+        titleSmall = titleSmall.withFontFamily(fontFamily),
+        bodyLarge = bodyLarge.withFontFamily(fontFamily),
+        bodyMedium = bodyMedium.withFontFamily(fontFamily),
+        bodySmall = bodySmall.withFontFamily(fontFamily),
+        labelLarge = labelLarge.withFontFamily(fontFamily),
+        labelMedium = labelMedium.withFontFamily(fontFamily),
+        labelSmall = labelSmall.withFontFamily(fontFamily)
+    )
+}
+
 fun TextStyles.scaled(multiplier: Float): TextStyles {
     if (multiplier == 1f) return this
     return copy(
@@ -170,5 +196,25 @@ fun TextStyles.scaled(multiplier: Float): TextStyles {
         title2 = title2.scaled(multiplier),
         title3 = title3.scaled(multiplier),
         title4 = title4.scaled(multiplier)
+    )
+}
+
+fun TextStyles.withFontFamily(fontFamily: FontFamily?): TextStyles {
+    if (fontFamily == null) return this
+    return copy(
+        main = main.withFontFamily(fontFamily),
+        paragraph = paragraph.withFontFamily(fontFamily),
+        body1 = body1.withFontFamily(fontFamily),
+        body2 = body2.withFontFamily(fontFamily),
+        button = button.withFontFamily(fontFamily),
+        footnote1 = footnote1.withFontFamily(fontFamily),
+        footnote2 = footnote2.withFontFamily(fontFamily),
+        headline1 = headline1.withFontFamily(fontFamily),
+        headline2 = headline2.withFontFamily(fontFamily),
+        subtitle = subtitle.withFontFamily(fontFamily),
+        title1 = title1.withFontFamily(fontFamily),
+        title2 = title2.withFontFamily(fontFamily),
+        title3 = title3.withFontFamily(fontFamily),
+        title4 = title4.withFontFamily(fontFamily)
     )
 }

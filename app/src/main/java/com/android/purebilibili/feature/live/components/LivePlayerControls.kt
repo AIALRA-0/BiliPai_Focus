@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.SpeakerWave2
@@ -40,6 +41,7 @@ import io.github.alexzhirkevich.cupertino.icons.filled.TextBubble
 import io.github.alexzhirkevich.cupertino.icons.filled.BubbleLeft
 import android.app.Activity
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Info
@@ -118,12 +120,16 @@ fun LivePlayerControls(
     onToggleBackgroundPlayback: () -> Unit = {},
     onOpenShutdownTimer: () -> Unit = {},
     onOpenPlayerInfo: () -> Unit = {},
+    onOpenSend: () -> Unit = {},
     videoFitDesc: String = "",
     onVideoFitClick: () -> Unit = {},
     currentQualityDesc: String = "",
     onQualityClick: () -> Unit = {},
     showPipButton: Boolean = false,
-    onEnterPip: () -> Unit = {}
+    onEnterPip: () -> Unit = {},
+    applyTopSystemBarPadding: Boolean = true,
+    applyBottomSystemBarPadding: Boolean = true,
+    bottomControlsBottomPadding: Dp = 0.dp
 ) {
     var isControlsVisible by remember { mutableStateOf(true) }
     val palette = rememberLiveChromePalette()
@@ -280,7 +286,7 @@ fun LivePlayerControls(
                             )
                         )
                     )
-                    .statusBarsPadding()
+                    .then(if (applyTopSystemBarPadding) Modifier.statusBarsPadding() else Modifier)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -352,7 +358,9 @@ fun LivePlayerControls(
             visible = isControlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = bottomControlsBottomPadding)
         ) {
             val scrollState = rememberScrollState()
             Row(
@@ -367,7 +375,7 @@ fun LivePlayerControls(
                             )
                         )
                     )
-                    .navigationBarsPadding()
+                    .then(if (applyBottomSystemBarPadding) Modifier.navigationBarsPadding() else Modifier)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -385,6 +393,13 @@ fun LivePlayerControls(
                     onClick = onRefresh
                 )
                 
+                Spacer(Modifier.width(12.dp))
+
+                PlayerIconBtn(
+                    icon = Icons.AutoMirrored.Outlined.Send,
+                    onClick = onOpenSend
+                )
+
                 Spacer(Modifier.width(12.dp))
                 
                 Row(

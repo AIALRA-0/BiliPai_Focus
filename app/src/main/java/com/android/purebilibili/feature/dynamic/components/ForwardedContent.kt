@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
-import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DrawMajor
 import com.android.purebilibili.data.model.response.OpusMajor
@@ -68,15 +67,30 @@ fun ForwardedContent(
     onVideoClick: (String) -> Unit,
     onBangumiClick: (Long, Long) -> Unit,
     onUserClick: (Long) -> Unit,
-    gifImageLoader: ImageLoader
+    gifImageLoader: ImageLoader,
+    defaultPreviewTextVisible: Boolean = true
 ) {
     val author = orig.modules.module_author
     val content = orig.modules.module_dynamic
     var previewState by remember { mutableStateOf<ForwardedImagePreviewState?>(null) }
     var previewSourceRect by remember { mutableStateOf<Rect?>(null) }
-    val previewTextContent = remember(author?.name, content?.desc?.text, content?.major?.opus?.summary?.text) {
-        val bodyText = content?.desc?.text.takeUnless { it.isNullOrBlank() }
-            ?: content?.major?.opus?.summary?.text.orEmpty()
+    val contentHasImages = content?.major?.draw?.items?.isNotEmpty() == true ||
+        content?.major?.opus?.pics?.isNotEmpty() == true
+    val visibleDynamicDesc = content?.desc?.let { desc ->
+        resolveDynamicDescForImages(desc, hasImages = contentHasImages)
+    }
+    val visibleOpusSummaryDesc = remember(content?.major?.opus?.summary, content?.major?.opus?.pics) {
+        content?.major?.opus?.summary?.let { summary ->
+            resolveDynamicOpusSummaryDescForImages(
+                text = summary.text,
+                richTextNodes = summary.rich_text_nodes,
+                hasImages = content.major.opus.pics.isNotEmpty()
+            )
+        }
+    }
+    val previewTextContent = remember(author?.name, visibleDynamicDesc?.text, visibleOpusSummaryDesc?.text) {
+        val bodyText = visibleDynamicDesc?.text.takeUnless { it.isNullOrBlank() }
+            ?: visibleOpusSummaryDesc?.text.orEmpty()
         ImagePreviewTextContent(
             headline = author?.name.orEmpty(),
             body = bodyText
@@ -91,6 +105,12 @@ fun ForwardedContent(
     ) {
         // 原作者
         if (author != null) {
+            val authorTimeText = remember(author.pub_time, author.pub_ts) {
+                resolveDynamicAuthorTimeText(
+                    pubTime = author.pub_time,
+                    pubTs = author.pub_ts
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "@${author.name}",
@@ -101,7 +121,7 @@ fun ForwardedContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    author.pub_time,
+                    authorTimeText,
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f)
                 )
@@ -110,8 +130,8 @@ fun ForwardedContent(
         }
         
         // 原文字内容 - 使用 RichTextContent 支持表情
-        content?.desc?.let { desc ->
-            if (desc.text.isNotEmpty()) {
+        visibleDynamicDesc?.let { desc ->
+            if (shouldRenderDynamicRichText(desc)) {
                 RichTextContent(
                     desc = desc,
                     onUserClick = onUserClick
@@ -126,6 +146,7 @@ fun ForwardedContent(
             VideoCardLarge(
                 archive = archive,
                 publishTs = author?.pub_ts ?: 0L,
+                cornerBadgeText = resolveDynamicArchiveBadgeLabel(archive),
                 onClick = { playableBvid?.let(onVideoClick) }
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -159,14 +180,11 @@ fun ForwardedContent(
         //  [新增] 原 Opus 图文动态
         content?.major?.opus?.let { opus ->
             // 显示文字摘要 (如果 desc 为空)
-            if (content.desc?.text.isNullOrEmpty()) {
-                opus.summary?.let { summary ->
-                    if (summary.text.isNotEmpty()) {
+            if (!shouldRenderDynamicRichText(visibleDynamicDesc)) {
+                visibleOpusSummaryDesc?.let { summary ->
+                    if (shouldRenderDynamicRichText(summary)) {
                         RichTextContent(
-                            desc = DynamicDesc(
-                                text = summary.text,
-                                rich_text_nodes = summary.rich_text_nodes
-                            ),
+                            desc = summary,
                             onUserClick = onUserClick
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -216,6 +234,7 @@ fun ForwardedContent(
             initialIndex = state.initialIndex,
             sourceRect = previewSourceRect,
             textContent = previewTextContent,
+            defaultTextVisible = defaultPreviewTextVisible,
             onDismiss = {
                 previewState = null
                 previewSourceRect = null

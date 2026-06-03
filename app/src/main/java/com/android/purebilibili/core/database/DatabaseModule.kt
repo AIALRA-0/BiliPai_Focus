@@ -16,7 +16,7 @@ object DatabaseModule {
                 AppDatabase::class.java,
                 "pure_bilibili.db"
             )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
             database = instance
             instance

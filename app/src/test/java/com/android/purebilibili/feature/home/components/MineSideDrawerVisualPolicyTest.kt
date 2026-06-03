@@ -38,6 +38,24 @@ class MineSideDrawerVisualPolicyTest {
     }
 
     @Test
+    fun `drawer transition should use more solid glass palette while blur budget is reduced`() {
+        val stable = resolveDrawerGlassPalette(
+            isDark = false,
+            blurEnabled = true,
+            budget = DrawerMotionBudget.FULL
+        )
+        val transitioning = resolveDrawerGlassPalette(
+            isDark = false,
+            blurEnabled = true,
+            budget = DrawerMotionBudget.REDUCED
+        )
+
+        assertTrue(transitioning.drawerBaseAlpha > stable.drawerBaseAlpha)
+        assertTrue(transitioning.itemSurfaceAlpha >= stable.itemSurfaceAlpha)
+        assertTrue(transitioning.hazeBackgroundAlpha > stable.hazeBackgroundAlpha)
+    }
+
+    @Test
     fun `md3 drawer chrome should prefer material icons and opaque containers when blur is off`() {
         val spec = resolveMineSideDrawerChromeSpec(
             uiPreset = UiPreset.MD3,

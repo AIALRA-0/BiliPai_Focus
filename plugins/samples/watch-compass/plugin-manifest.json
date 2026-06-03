@@ -1,0 +1,12 @@
+{
+  "pluginId": "dev.bilipai.samples.watch_compass",
+  "displayName": "观感罗盘",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "entryClassName": "dev.bilipai.samples.watchcompass.WatchCompassPlugin",
+  "capabilities": [
+    "RECOMMENDATION_CANDIDATES",
+    "LOCAL_HISTORY_READ",
+    "LOCAL_FEEDBACK_READ"
+  ]
+}

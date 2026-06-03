@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import com.android.purebilibili.data.model.response.VideoshotData
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,6 +54,38 @@ class SeekPreviewBubblePolicyTest {
                 videoshotData = videoshotData,
                 targetPositionMs = 3_700L,
                 durationMs = 4_000L
+            )
+        )
+    }
+
+    @Test
+    fun seekPreviewDestinationRect_preservesLandscapeSourceAspectRatio() {
+        assertEquals(
+            SeekPreviewDestinationRect(
+                offset = IntOffset(14, 0),
+                size = IntSize(213, 120)
+            ),
+            resolveSeekPreviewDestinationRect(
+                sourceWidthPx = 160,
+                sourceHeightPx = 90,
+                containerWidthPx = 240,
+                containerHeightPx = 120
+            )
+        )
+    }
+
+    @Test
+    fun seekPreviewDestinationRect_centersPortraitSourceWithoutStretching() {
+        assertEquals(
+            SeekPreviewDestinationRect(
+                offset = IntOffset(64, 0),
+                size = IntSize(60, 106)
+            ),
+            resolveSeekPreviewDestinationRect(
+                sourceWidthPx = 90,
+                sourceHeightPx = 160,
+                containerWidthPx = 188,
+                containerHeightPx = 106
             )
         )
     }

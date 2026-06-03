@@ -79,4 +79,22 @@ class VideoPlayerSurfacePolicyTest {
         assertEquals(0f, manualStartSpec.alpha)
         assertEquals(1f, manualStartSpec.scale)
     }
+
+    @Test
+    fun `inline player view is invisible during manual start cover`() {
+        assertFalse(
+            shouldShowInlinePlayerView(
+                isPortraitFullscreen = false,
+                forceCoverDuringReturnAnimation = false,
+                shouldKeepCoverForManualStart = true
+            )
+        )
+        assertTrue(
+            shouldShowInlinePlayerView(
+                isPortraitFullscreen = false,
+                forceCoverDuringReturnAnimation = false,
+                shouldKeepCoverForManualStart = false
+            )
+        )
+    }
 }

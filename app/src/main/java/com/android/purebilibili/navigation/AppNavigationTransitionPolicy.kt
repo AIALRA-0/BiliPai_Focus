@@ -1,6 +1,5 @@
 package com.android.purebilibili.navigation
 
-import androidx.lifecycle.Lifecycle
 import com.android.purebilibili.core.ui.transition.VideoSharedTransitionProfile
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionProfile
 
@@ -335,20 +334,6 @@ internal fun shouldDeferBottomBarRevealOnVideoReturn(
     return false
 }
 
-internal fun shouldClearReturningStateWhenDisposingVideoDestination(
-    stillInVideoRoute: Boolean
-): Boolean {
-    return stillInVideoRoute
-}
-
-internal fun shouldShareAudioModeViewModelWithPreviousEntry(
-    previousRoute: String?,
-    previousLifecycleState: Lifecycle.State?
-): Boolean {
-    return previousLifecycleState?.isAtLeast(Lifecycle.State.CREATED) == true &&
-        isVideoDetailRoute(previousRoute)
-}
-
 internal fun shouldUseTabletSeamlessBackTransition(
     isTabletLayout: Boolean,
     cardTransitionEnabled: Boolean,
@@ -359,16 +344,6 @@ internal fun shouldUseTabletSeamlessBackTransition(
         cardTransitionEnabled &&
         isVideoDetailRoute(fromRoute) &&
         isVideoCardReturnTargetRoute(toRoute)
-}
-
-internal fun shouldStopPlaybackEagerlyOnVideoRouteExit(
-    fromRoute: String?,
-    toRoute: String?
-): Boolean {
-    if (toRoute.isNullOrBlank()) return false
-    return isVideoDetailRoute(fromRoute) &&
-        !isVideoDetailRoute(toRoute) &&
-        toRoute != ScreenRoutes.AudioMode.route
 }
 
 internal fun resolveVideoPopExitDirection(
@@ -382,25 +357,6 @@ internal fun resolveVideoPopExitDirection(
     }
     if (isSingleColumnCard) return VideoPopExitDirection.DOWN
     return if (isCardOnLeft) VideoPopExitDirection.LEFT else VideoPopExitDirection.RIGHT
-}
-
-internal fun isVideoCardReturnTargetRoute(route: String?): Boolean {
-    val routeBase = route?.substringBefore("?") ?: return false
-    return routeBase == ScreenRoutes.Home.route ||
-        routeBase == ScreenRoutes.History.route ||
-        routeBase == ScreenRoutes.Favorite.route ||
-        routeBase == ScreenRoutes.WatchLater.route ||
-        routeBase == ScreenRoutes.Search.route ||
-        routeBase == ScreenRoutes.Dynamic.route ||
-        routeBase.startsWith("dynamic_detail/") ||
-        routeBase == ScreenRoutes.Partition.route ||
-        routeBase.startsWith("category/") ||
-        routeBase.startsWith("season_series_detail/") ||
-        routeBase.startsWith("space/")
-}
-
-private fun isVideoDetailRoute(route: String?): Boolean {
-    return route?.startsWith("${VideoRoute.base}/") == true
 }
 
 /**

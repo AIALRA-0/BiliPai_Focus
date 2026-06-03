@@ -87,8 +87,14 @@ class DownloadWorker(
             Result.success()
             
         } catch (e: kotlinx.coroutines.CancellationException) {
-            com.android.purebilibili.core.util.Logger.d("DownloadWorker", "⏸️ Download paused: $taskId")
-            Result.success()
+            if (DownloadManager.shouldTreatWorkerCancellationAsFinished(taskId)) {
+                com.android.purebilibili.core.util.Logger.d("DownloadWorker", "⏸️ Download paused: $taskId")
+                Result.success()
+            } else {
+                com.android.purebilibili.core.util.Logger.w("DownloadWorker", "🔁 Download interrupted, will retry: $taskId", e)
+                DownloadManager.markInterruptedForRetry(taskId, e.message ?: "下载被系统中断，等待重试")
+                Result.retry()
+            }
             
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("DownloadWorker", "❌ Download failed: $taskId", e)

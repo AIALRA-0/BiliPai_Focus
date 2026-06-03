@@ -37,6 +37,17 @@ interface Plugin {
     /**  不可用原因描述 */
     val unavailableReason: String
         get() = "功能开发中"
+
+    /** 插件能力声明，用于安装前授权和插件中心展示 */
+    val capabilityManifest: PluginCapabilityManifest
+        get() = PluginCapabilityManifest(
+            pluginId = id,
+            displayName = name,
+            version = version,
+            apiVersion = 1,
+            entryClassName = this::class.java.name,
+            capabilities = emptySet()
+        )
     
     /**
      * 插件启用时调用

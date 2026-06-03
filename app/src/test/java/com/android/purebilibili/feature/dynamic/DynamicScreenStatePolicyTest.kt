@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.DynamicModules
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -10,23 +13,23 @@ import kotlin.test.assertTrue
 class DynamicScreenStatePolicyTest {
 
     @Test
-    fun `horizontal dynamic header should use tighter list top padding`() {
+    fun `horizontal dynamic header reserves top user list height at rest`() {
         assertEquals(
-            168,
+            184,
             resolveDynamicListTopPaddingExtraDp(
                 isHorizontalMode = true,
                 isHorizontalUserListCollapsed = false
             )
         )
         assertEquals(
-            100,
+            60,
             resolveDynamicListTopPaddingExtraDp(
                 isHorizontalMode = true,
                 isHorizontalUserListCollapsed = true
             )
         )
         assertEquals(
-            100,
+            60,
             resolveDynamicListTopPaddingExtraDp(
                 isHorizontalMode = false,
                 isHorizontalUserListCollapsed = false
@@ -37,83 +40,6 @@ class DynamicScreenStatePolicyTest {
     @Test
     fun `horizontal user list should use compact vertical padding`() {
         assertEquals(4, resolveHorizontalUserListVerticalPaddingDp())
-    }
-
-    @Test
-    fun shouldLoadMoreDynamicFeed_blocksAutoPagingWhenNoVisibleItemsRemain() {
-        assertFalse(
-            shouldLoadMoreDynamicFeed(
-                totalItems = 1,
-                lastVisibleItemIndex = 0,
-                visibleItemCount = 0,
-                isLoading = false,
-                sourceHasMore = true
-            )
-        )
-    }
-
-    @Test
-    fun shouldLoadMoreDynamicFeed_allowsAutoPagingNearTailWhenVisibleItemsExist() {
-        assertTrue(
-            shouldLoadMoreDynamicFeed(
-                totalItems = 6,
-                lastVisibleItemIndex = 5,
-                visibleItemCount = 3,
-                isLoading = false,
-                sourceHasMore = true
-            )
-        )
-    }
-
-    @Test
-    fun shouldLoadMoreDynamicFeed_keepsPrefetchingWhenDefaultTimelineVisibleItemsAreSparse() {
-        assertTrue(
-            shouldLoadMoreDynamicFeed(
-                totalItems = 3,
-                lastVisibleItemIndex = 1,
-                visibleItemCount = 3,
-                isLoading = false,
-                sourceHasMore = true,
-                minimumVisibleItemCountBeforePause = DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE
-            )
-        )
-    }
-
-    @Test
-    fun shouldLoadMoreDynamicFeed_blocksWhenVisibleContinuationIsSuppressed() {
-        assertFalse(
-            shouldLoadMoreDynamicFeed(
-                totalItems = 6,
-                lastVisibleItemIndex = 5,
-                visibleItemCount = 4,
-                isLoading = false,
-                sourceHasMore = true,
-                visibleHasMore = false,
-                continuationAllowed = true
-            )
-        )
-        assertFalse(
-            shouldLoadMoreDynamicFeed(
-                totalItems = 6,
-                lastVisibleItemIndex = 5,
-                visibleItemCount = 4,
-                isLoading = false,
-                sourceHasMore = true,
-                visibleHasMore = true,
-                continuationAllowed = false
-            )
-        )
-    }
-
-    @Test
-    fun resolveDynamicVisiblePaginationState_keepsContinuationOpenWhileSourceStillHasMore() {
-        val result = resolveDynamicVisiblePaginationState(
-            visibleItemCount = 2,
-            sourceHasMore = true
-        )
-
-        assertTrue(result.visibleHasMore)
-        assertTrue(result.continuationAllowed)
     }
 
     @Test
@@ -173,6 +99,28 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `static empty dynamic content should reveal bottom bar`() {
+        assertTrue(
+            shouldRevealDynamicBottomBarForStaticContent(
+                activeItemsCount = 0,
+                isLoading = false
+            )
+        )
+        assertFalse(
+            shouldRevealDynamicBottomBarForStaticContent(
+                activeItemsCount = 0,
+                isLoading = true
+            )
+        )
+        assertFalse(
+            shouldRevealDynamicBottomBarForStaticContent(
+                activeItemsCount = 1,
+                isLoading = false
+            )
+        )
+    }
+
+    @Test
     fun `comment sheet should only show when a dynamic is selected`() {
         assertTrue(shouldShowDynamicCommentSheet("dyn:123"))
         assertFalse(shouldShowDynamicCommentSheet(null))
@@ -184,6 +132,37 @@ class DynamicScreenStatePolicyTest {
         assertEquals(26, resolveDynamicCommentSheetTotalCount(liveCount = 26, fallbackCount = 12))
         assertEquals(12, resolveDynamicCommentSheetTotalCount(liveCount = 0, fallbackCount = 12))
         assertEquals(0, resolveDynamicCommentSheetTotalCount(liveCount = 0, fallbackCount = -3))
+    }
+
+    @Test
+    fun `unfollowed author is removed from cached dynamic lists`() {
+        val state = DynamicUiState(
+            items = listOf(
+                buildDynamicItem(id = "100", authorMid = 11L),
+                buildDynamicItem(id = "101", authorMid = 12L)
+            ).toImmutableList(),
+            userItems = listOf(
+                buildDynamicItem(id = "200", authorMid = 11L),
+                buildDynamicItem(id = "201", authorMid = 13L)
+            ).toImmutableList()
+        )
+
+        val updated = resolveDynamicStateAfterAuthorUnfollow(state, authorMid = 11L)
+
+        assertEquals(listOf("101"), updated.items.map { it.id_str })
+        assertEquals(listOf("201"), updated.userItems.map { it.id_str })
+    }
+
+    @Test
+    fun `unfollowed author is removed from followed user sidebar`() {
+        val users = listOf(
+            SidebarUser(uid = 11L, name = "removed", face = ""),
+            SidebarUser(uid = 12L, name = "kept", face = "")
+        )
+
+        val updated = resolveFollowedUsersAfterAuthorUnfollow(users, authorMid = 11L)
+
+        assertEquals(listOf(12L), updated.map { it.uid })
     }
 
     @Test
@@ -255,6 +234,41 @@ class DynamicScreenStatePolicyTest {
         assertTrue(shouldUseSelectedUserDynamicFeed(selectedTab = 4, selectedUserId = 10001L))
         assertFalse(shouldUseSelectedUserDynamicFeed(selectedTab = 0, selectedUserId = 10001L))
         assertFalse(shouldUseSelectedUserDynamicFeed(selectedTab = 4, selectedUserId = null))
+    }
+
+    @Test
+    fun `non up tab clears selected user highlight`() {
+        assertNull(resolveDynamicSelectedUserForTab(selectedTab = 0, selectedUserId = 10001L))
+        assertNull(resolveDynamicSelectedUserForTab(selectedTab = 2, selectedUserId = 10001L))
+        assertEquals(10001L, resolveDynamicSelectedUserForTab(selectedTab = 4, selectedUserId = 10001L))
+    }
+
+    @Test
+    fun `feed should reset scroll when tab or selected user source changes`() {
+        assertTrue(
+            shouldResetDynamicFeedScrollOnSourceChange(
+                previousTab = 4,
+                nextTab = 0,
+                previousSelectedUserId = 10001L,
+                nextSelectedUserId = null
+            )
+        )
+        assertTrue(
+            shouldResetDynamicFeedScrollOnSourceChange(
+                previousTab = 4,
+                nextTab = 4,
+                previousSelectedUserId = 10001L,
+                nextSelectedUserId = 10002L
+            )
+        )
+        assertFalse(
+            shouldResetDynamicFeedScrollOnSourceChange(
+                previousTab = 0,
+                nextTab = 0,
+                previousSelectedUserId = null,
+                nextSelectedUserId = null
+            )
+        )
     }
 
     @Test
@@ -363,7 +377,7 @@ class DynamicScreenStatePolicyTest {
 
     @Test
     fun `incremental refresh prepends new items without dropping current list`() {
-        val existing = listOf(buildDynamicItem("old_a"), buildDynamicItem("old_b"))
+        val existing = listOf(buildDynamicItem("old_a"), buildDynamicItem("old_b")).toImmutableList()
         val result = resolveDynamicFeedStateAfterSuccess(
             currentState = DynamicUiState(items = existing),
             incomingItems = listOf(buildDynamicItem("new_1"), buildDynamicItem("new_2")),
@@ -384,10 +398,61 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `incremental refresh keeps merged timeline sorted by publish timestamp`() {
+        val existing = listOf(
+            buildDynamicItem(id = "today_0900", pubTs = 1_800L),
+            buildDynamicItem(id = "yesterday_2300", pubTs = 900L)
+        ).toImmutableList()
+        val result = resolveDynamicFeedStateAfterSuccess(
+            currentState = DynamicUiState(
+                items = existing,
+                timelineRequestType = "all"
+            ),
+            incomingItems = listOf(
+                buildDynamicItem(id = "today_1000", pubTs = 2_000L),
+                buildDynamicItem(id = "yesterday_2200", pubTs = 800L)
+            ),
+            isRefresh = true,
+            requestType = "all",
+            incrementalRefreshEnabled = true,
+            hasMore = true
+        )
+
+        assertEquals(
+            listOf("today_1000", "today_0900", "yesterday_2300", "yesterday_2200"),
+            result.items.map { it.id_str }
+        )
+    }
+
+    @Test
+    fun `pagination append keeps server page order instead of resorting the entire list`() {
+        val existing = listOf(
+            buildDynamicItem(id = "newer", pubTs = 2_000L),
+            buildDynamicItem(id = "older", pubTs = 1_000L)
+        ).toImmutableList()
+        val result = resolveDynamicFeedStateAfterSuccess(
+            currentState = DynamicUiState(items = existing),
+            incomingItems = listOf(
+                buildDynamicItem(id = "page_second", pubTs = 1_200L),
+                buildDynamicItem(id = "page_first", pubTs = 1_300L)
+            ),
+            isRefresh = false,
+            requestType = "all",
+            incrementalRefreshEnabled = true,
+            hasMore = true
+        )
+
+        assertEquals(
+            listOf("newer", "older", "page_second", "page_first"),
+            result.items.map { it.id_str }
+        )
+    }
+
+    @Test
     fun `incremental refresh does not merge items from a different dynamic feed type`() {
         val result = resolveDynamicFeedStateAfterSuccess(
             currentState = DynamicUiState(
-                items = listOf(buildDynamicItem("pgc_old")),
+                items = listOf(buildDynamicItem("pgc_old")).toImmutableList(),
                 timelineRequestType = "pgc"
             ),
             incomingItems = listOf(buildDynamicItem("all_new")),
@@ -405,7 +470,7 @@ class DynamicScreenStatePolicyTest {
 
     @Test
     fun `pagination failure preserves existing items and marks append error`() {
-        val existing = listOf(buildDynamicItem("keep_me"))
+        val existing = listOf(buildDynamicItem("keep_me")).toImmutableList()
         val result = resolveDynamicFeedStateAfterFailure(
             currentState = DynamicUiState(items = existing),
             errorMessage = "网络错误",
@@ -432,7 +497,7 @@ class DynamicScreenStatePolicyTest {
     @Test
     fun `refresh failure with existing items is not treated as append failure`() {
         val result = resolveDynamicFeedStateAfterFailure(
-            currentState = DynamicUiState(items = listOf(buildDynamicItem("keep_me"))),
+            currentState = DynamicUiState(items = listOf(buildDynamicItem("keep_me")).toImmutableList()),
             errorMessage = "刷新失败",
             refresh = true
         )
@@ -473,4 +538,13 @@ class DynamicScreenStatePolicyTest {
     }
 }
 
-private fun buildDynamicItem(id: String) = DynamicItem(id_str = id)
+private fun buildDynamicItem(
+    id: String,
+    authorMid: Long = 0L,
+    pubTs: Long = 0L
+) = DynamicItem(
+    id_str = id,
+    modules = DynamicModules(
+        module_author = DynamicAuthorModule(mid = authorMid, pub_ts = pubTs)
+    )
+)

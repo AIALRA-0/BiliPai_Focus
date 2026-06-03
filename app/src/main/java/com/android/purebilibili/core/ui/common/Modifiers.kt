@@ -3,29 +3,26 @@ package com.android.purebilibili.core.ui.common
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.foundation.clickable
 
 @Composable
 fun rememberClipboardCopyHandler(): (String, String?) -> Unit {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val clipboardManager = LocalClipboardManager.current
-    return remember(context, haptic, clipboardManager) {
+    return remember(context, haptic) {
         { rawText: String, label: String? ->
             val text = rawText.trim()
             if (text.isNotEmpty()) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                clipboardManager.setText(AnnotatedString(text))
+                copyPlainTextToClipboard(context, text, label ?: "BiliPai")
                 val toastMsg = if (label != null) "已复制 $label" else "已复制到剪贴板"
                 if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
                     Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()

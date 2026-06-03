@@ -1,7 +1,5 @@
 *.iml
 .gradle
-.gradle-home/
-.gradle-user/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -62,11 +60,16 @@ app/release/
 *.ai.md
 *.txt
 bilipai_log_*.txt
+!AI.txt
+!llm.txt
 
 # Bilibili API files
 bilibili-API-collect/
 
 # 🔥 Ignore external projects/useless files
+/.external/
+/.local/
+external/
 AndroidLiquidGlass/
 SimpMusic/
 Telegram/
@@ -80,6 +83,8 @@ docs/
 **/docs/
 docs/plans/
 **/docs/plans/
+docs/releases/raw/
+report.md
 *.md
 !llms.txt
 !README.md
@@ -88,8 +93,10 @@ docs/plans/
 !CHANGELOG.md
 !docs/
 docs/*
-!docs/releases/
-!docs/releases/*.md
+!docs/GOOGLE_CAST_PLUGIN.md
+!docs/DLNA_CAST_PLUGIN.md
+!docs/images/
+!docs/images/screenshot*.png
 !docs/wiki/
 !docs/wiki/*.md
 .omx/

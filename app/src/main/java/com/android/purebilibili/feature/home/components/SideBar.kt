@@ -10,7 +10,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.R
 import dev.chrisbanes.haze.HazeState
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -37,6 +39,14 @@ import io.github.alexzhirkevich.cupertino.icons.filled.*
 /**
  * 平板端侧边导航栏 - 垂直版本的 FrostedBottomBar
  */
+internal fun performHomeSideBarItemTap(
+    haptic: (HapticType) -> Unit,
+    onClick: () -> Unit
+) {
+    haptic(HapticType.LIGHT)
+    onClick()
+}
+
 @Composable
 fun FrostedSideBar(
     currentItem: BottomNavItem = BottomNavItem.HOME,
@@ -47,6 +57,7 @@ fun FrostedSideBar(
     onHomeDoubleTap: () -> Unit = {},
     visibleItems: List<BottomNavItem> = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY, BottomNavItem.PROFILE),
     itemColorIndices: Map<String, Int> = emptyMap(), // Keep explicit map type to match usage
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
     onToggleSidebar: (() -> Unit)? = null  // 📱 [平板适配] 切换到底栏
 ) {
     val haptic = rememberHapticFeedback()
@@ -68,14 +79,14 @@ fun FrostedSideBar(
                 if (hazeState != null) {
                     Modifier.unifiedBlur(hazeState, shape = androidx.compose.ui.graphics.RectangleShape)
                 } else {
-                    Modifier.background(MaterialTheme.colorScheme.surface)
+                    Modifier.background(AppSurfaceTokens.chromeBackground())
                 }
             ),
         shape = androidx.compose.ui.graphics.RectangleShape,
         color = if (hazeState != null) {
-            MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha)
+            AppSurfaceTokens.chromeBackground().copy(alpha = backgroundAlpha)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+            AppSurfaceTokens.chromeBackground().copy(alpha = 0.95f)
         },
         border = if (hazeState != null) {
              androidx.compose.foundation.BorderStroke(
@@ -117,6 +128,7 @@ fun FrostedSideBar(
                 // 颜色动画
                 val primaryColor = MaterialTheme.colorScheme.primary
                 val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = isSelected)
                 
                 val iconColor by animateColorAsState(
                     targetValue = if (isSelected || isPending) primaryColor else unselectedColor,
@@ -146,9 +158,11 @@ fun FrostedSideBar(
                 }
                 val triggerItemClick = {
                     isPending = true
-                    haptic(HapticType.LIGHT)
+                    performHomeSideBarItemTap(
+                        haptic = haptic,
+                        onClick = { onItemClick(item) }
+                    )
                     wobbleAngle = 8f
-                    onItemClick(item)
                     scope.launch {
                         kotlinx.coroutines.delay(90)
                         isPending = false
@@ -194,7 +208,17 @@ fun FrostedSideBar(
                             }
                     ) {
                          CompositionLocalProvider(LocalContentColor provides iconColor) {
-                            if (isSelected) item.selectedIcon() else item.unselectedIcon()
+                            if (skinIconPath != null) {
+                                BottomBarSkinIcon(
+                                    iconPath = skinIconPath,
+                                    contentDescription = itemLabel,
+                                    size = resolveBottomBarMiuixSkinDockIconSize()
+                                )
+                            } else if (isSelected) {
+                                item.selectedIcon()
+                            } else {
+                                item.unselectedIcon()
+                            }
                         }
                     }
                     
@@ -220,7 +244,7 @@ fun FrostedSideBar(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(AppShapes.container(ContainerLevel.Card))
                         .clickable { 
                             haptic(HapticType.LIGHT)
                             onToggleSidebar() 

@@ -38,6 +38,21 @@ internal fun resolveDrawGridScaleMode(totalImages: Int): DrawGridScaleMode {
     return if (totalImages == 1) DrawGridScaleMode.FIT else DrawGridScaleMode.CROP
 }
 
+internal fun resolveDrawGridDisplayCount(
+    totalImages: Int,
+    maxDisplayImages: Int?
+): Int {
+    if (totalImages <= 0) return 0
+    val maxImages = maxDisplayImages ?: return totalImages
+    return totalImages.coerceAtMost(maxImages.coerceAtLeast(1))
+}
+
+internal fun shouldDrawGridShowMoreBadge(
+    index: Int,
+    displayCount: Int,
+    totalCount: Int
+): Boolean = index == displayCount - 1 && totalCount > displayCount
+
 internal fun resolveDrawGridSpacingDp(): Int = 5
 
 internal fun resolveDrawGridCornerRadiusDp(): Int = 10

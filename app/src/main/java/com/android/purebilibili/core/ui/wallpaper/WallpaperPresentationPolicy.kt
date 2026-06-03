@@ -30,7 +30,7 @@ fun resolveSplashWallpaperLayout(
             }
         }
         WindowWidthSizeClass.Medium,
-        WindowWidthSizeClass.Expanded -> SplashWallpaperLayout.POSTER_CARD_BLUR_BG
+        WindowWidthSizeClass.Expanded -> SplashWallpaperLayout.FULL_CROP
     }
 }
 

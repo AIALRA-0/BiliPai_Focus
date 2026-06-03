@@ -17,6 +17,7 @@ fun SubReplySheet(
     showUpFlag: Boolean = false,
     emoteMap: Map<String, String>,
     onDismiss: () -> Unit,
+    onRootCommentClick: (() -> Unit)? = null,
     onLoadMore: () -> Unit,
     maxHeightFraction: Float = 1f,
     scrimAlpha: Float = 0.32f,
@@ -31,6 +32,7 @@ fun SubReplySheet(
     onCommentLike: ((Long) -> Unit)? = null,
     likedComments: Set<Long> = emptySet(),
     onUrlClick: ((String) -> Unit)? = null,
+    showIdentityDecorations: Boolean = true,
     onAvatarClick: ((String) -> Unit)? = null
 ) {
     if (state.visible && state.rootReply != null) {
@@ -43,11 +45,13 @@ fun SubReplySheet(
             SubReplyDetailContent(
                 rootReply = rootReply,
                 subReplies = state.items,
+                remoteReplyCount = state.totalCount,
                 isLoading = state.isLoading,
                 isEnd = state.isEnd,
                 emoteMap = emoteMap,
                 onLoadMore = onLoadMore,
                 onDismiss = onDismiss,
+                onRootCommentClick = onRootCommentClick,
                 onTimestampClick = onTimestampClick,
                 upMid = state.upMid,
                 showUpFlag = showUpFlag,
@@ -61,7 +65,9 @@ fun SubReplySheet(
                 onCommentLike = onCommentLike,
                 likedComments = likedComments,
                 onUrlClick = onUrlClick,
-                onAvatarClick = onAvatarClick
+                showIdentityDecorations = showIdentityDecorations,
+                onAvatarClick = onAvatarClick,
+                targetReplyId = state.targetReplyId
             )
         }
     }

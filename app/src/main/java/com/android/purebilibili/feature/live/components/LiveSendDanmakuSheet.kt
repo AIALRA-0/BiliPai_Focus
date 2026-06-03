@@ -24,14 +24,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.data.repository.LiveDanmakuPermission
+import com.android.purebilibili.feature.live.LiveDanmakuItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveSendDanmakuSheet(
     onDismiss: () -> Unit,
-    onSend: (String) -> Unit
+    onSend: (String) -> Unit,
+    permission: LiveDanmakuPermission = LiveDanmakuPermission(),
+    replyTarget: LiveDanmakuItem? = null
 ) {
     var message by remember { mutableStateOf("") }
+    val maxLength = permission.maxLength.takeIf { it > 0 } ?: 40
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -40,7 +45,7 @@ fun LiveSendDanmakuSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "发弹幕",
+                text = if (replyTarget == null) "发弹幕" else "回复 @${replyTarget.uname.ifBlank { replyTarget.uid.toString() }}",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -57,19 +62,33 @@ fun LiveSendDanmakuSheet(
                 ) {
                     OutlinedTextField(
                         value = message,
-                        onValueChange = { message = it.take(40) },
+                        onValueChange = { message = it.take(maxLength) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 4,
-                        placeholder = { Text("输入弹幕内容") },
+                        placeholder = { Text(if (replyTarget == null) "输入弹幕内容" else "输入回复内容") },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
                             val content = message.trim()
-                            if (content.isNotEmpty()) onSend(content)
+                            if (content.isNotEmpty() && permission.canSend) onSend(content)
                         })
                     )
                     Text(
-                        text = "首版先提供快速发送入口，表情和回复能力后续再并入这里。",
+                        text = buildString {
+                            append(permission.statusText)
+                            append(" · ")
+                            append(message.length)
+                            append("/")
+                            append(maxLength)
+                            if (permission.availableColors.isNotEmpty()) {
+                                append(" · ")
+                                append(permission.availableColors.take(3).joinToString("、") { it.name })
+                            }
+                            if (permission.availableModes.isNotEmpty()) {
+                                append(" · ")
+                                append(permission.availableModes.take(2).joinToString("、") { it.name })
+                            }
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -79,7 +98,7 @@ fun LiveSendDanmakuSheet(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Button(
-                            enabled = message.trim().isNotEmpty(),
+                            enabled = permission.canSend && message.trim().isNotEmpty(),
                             onClick = { onSend(message.trim()) }
                         ) {
                             Text("发送")

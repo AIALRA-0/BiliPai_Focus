@@ -32,5 +32,6 @@ include(":app")
 include(":baselineprofile")
 include(":settings-core")
 include(":network-core")
+include(":plugin-sdk")
 
  

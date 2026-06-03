@@ -3,32 +3,45 @@ package com.android.purebilibili.feature.video.screen
 import android.app.Activity
 import android.content.ContextWrapper
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -36,6 +49,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowRight
@@ -46,11 +60,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,17 +84,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import com.android.purebilibili.core.util.ShareUtils
+import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.ViewPoint
+import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.video.state.VideoPlayerState
+import com.android.purebilibili.feature.video.note.VideoNoteEditorDocument
+import com.android.purebilibili.feature.video.note.buildVideoNoteShareText
+import com.android.purebilibili.feature.video.note.shouldShowVideoNoteCard
+import com.android.purebilibili.feature.video.progress.PbpProgressData
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.CollectionRow
 import com.android.purebilibili.feature.video.ui.components.CollectionSheet
@@ -92,11 +115,15 @@ import com.android.purebilibili.feature.video.ui.components.rememberVideoComment
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
 import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
+import com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
 import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
+import com.android.purebilibili.feature.video.ui.section.VideoNoteCard
+import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
+import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
 import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntry
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
@@ -118,16 +145,18 @@ fun TabletCinemaLayout(
     isVerticalVideo: Boolean,
     sleepTimerMinutes: Int?,
     viewPoints: List<ViewPoint>,
+    pbpProgressData: PbpProgressData?,
     bvid: String,
     coverUrl: String = "",
     onBack: () -> Unit,
-    onHomeClick: () -> Unit = {},
     onUpClick: (Long) -> Unit,
+    onBgmClick: (BgmInfo) -> Unit = {},
     onNavigateToAudioMode: () -> Unit,
     onToggleFullscreen: () -> Unit,
     isInPipMode: Boolean,
     onPipClick: () -> Unit,
     isPortraitFullscreen: Boolean = false,
+    onHomeClick: () -> Unit,
     currentCodec: String = "hev1",
     onCodecChange: (String) -> Unit = {},
     currentSecondCodec: String = "avc1",
@@ -139,19 +168,32 @@ fun TabletCinemaLayout(
     showRelatedVideosSection: Boolean = true,
     showUpBadge: Boolean = true,
     onSearchKeywordClick: (String) -> Unit = {},
+    onOpenBilibiliLink: ((String) -> Unit)? = null,
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode =
         com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
     forceCoverOnlyOnReturn: Boolean = false
 ) {
     val appContext = LocalContext.current
-    val policy = remember(configuration.screenWidthDp) {
+    val tabletCommentPanelWidthPreset by SettingsManager
+        .getTabletCommentPanelWidthPreset(appContext)
+        .collectAsStateWithLifecycle(initialValue = TabletCommentPanelWidthPreset.STANDARD
+        )
+    val commentMemberDecorationsEnabled by SettingsManager
+        .getCommentMemberDecorationsEnabled(appContext)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
+    val policy = remember(configuration.screenWidthDp, tabletCommentPanelWidthPreset) {
         resolveTabletCinemaLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = configuration.screenWidthDp,
+            commentWidthPreset = tabletCommentPanelWidthPreset
         )
     }
     val success = uiState as? PlayerUiState.Success
-    val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val relatedVideos = remember(success?.related, showRelatedVideosSection) {
+        if (showRelatedVideosSection) success?.related.orEmpty() else emptyList()
+    }
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val initialCurtainState = remember(configuration.screenWidthDp) {
         resolveInitialCurtainState(configuration.screenWidthDp).name
     }
@@ -163,7 +205,7 @@ fun TabletCinemaLayout(
     var selectedTab by rememberSaveable(bvid) { mutableIntStateOf(0) }
     val curtainPagerState = rememberPagerState(
         initialPage = selectedTab,
-        pageCount = { if (showRelatedVideosSection) 2 else 1 }
+        pageCount = { 2 }
     )
     val curtainWidth by animateDpAsState(
         targetValue = resolveCurtainWidthDp(curtainState, policy).dp,
@@ -171,13 +213,12 @@ fun TabletCinemaLayout(
         label = "cinemaCurtainWidth"
     )
 
-    LaunchedEffect(success?.related?.size, commentState.replyCount, commentState.isRepliesLoading) {
+    LaunchedEffect(relatedVideos.size, commentState.replyCount, commentState.isRepliesLoading) {
         selectedTab = resolveCinemaSideCurtainSelectedTab(
             currentSelectedTab = selectedTab,
             replyCount = commentState.replyCount,
             isRepliesLoading = commentState.isRepliesLoading,
-            hasRelatedVideos = !success?.related.isNullOrEmpty(),
-            showRelatedVideosSection = showRelatedVideosSection
+            hasRelatedVideos = relatedVideos.isNotEmpty()
         )
     }
     LaunchedEffect(selectedTab) {
@@ -194,21 +235,19 @@ fun TabletCinemaLayout(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surfaceContainerLowest,
-                        MaterialTheme.colorScheme.surfaceContainer
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.surfaceContainer)
     ) {
+        val padding = PaddingValues(
+            top = max(WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), policy.horizontalPaddingDp.dp),
+            bottom = max(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), policy.horizontalPaddingDp.dp)
+        )
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .padding(horizontal = policy.horizontalPaddingDp.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = policy.horizontalPaddingDp.dp)
+                .padding(padding)
+                .consumeWindowInsets(padding),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -230,6 +269,7 @@ fun TabletCinemaLayout(
                     onPipClick = onPipClick,
                     sleepTimerMinutes = sleepTimerMinutes,
                     viewPoints = viewPoints,
+                    pbpProgressData = pbpProgressData,
                     isVerticalVideo = isVerticalVideo,
                     isPortraitFullscreen = isPortraitFullscreen,
                     currentCodec = currentCodec,
@@ -242,7 +282,7 @@ fun TabletCinemaLayout(
                     currentPlayMode = currentPlayMode,
                     onPlayModeClick = onPlayModeClick,
                     onRelatedVideoClick = onRelatedVideoClick,
-                    showRelatedVideosSection = showRelatedVideosSection,
+                    relatedVideos = relatedVideos,
                     playerMaxWidth = policy.playerMaxWidthDp.dp,
                     forceCoverOnlyOnReturn = forceCoverOnlyOnReturn
                 )
@@ -266,7 +306,19 @@ fun TabletCinemaLayout(
                         },
                         onCollectionEpisodeClick = onRelatedVideoClick,
                         onPageSelect = { pageIndex -> viewModel.switchPage(pageIndex) },
-                        onRetryAiSummary = viewModel::retryAiSummary
+                        onOpenBilibiliLink = onOpenBilibiliLink,
+                        onBgmClick = onBgmClick,
+                        onRelatedVideoClick = onRelatedVideoClick,
+                        onRetryAiSummary = viewModel::retryAiSummary,
+                        onCreateNoteDraftFromAiSummary = viewModel::createVideoNoteDraftFromAiSummary,
+                        onOpenVideoNoteEditor = viewModel::openVideoNoteEditor,
+                        onCloseVideoNoteEditor = viewModel::closeVideoNoteEditor,
+                        onVideoNoteDocumentChange = viewModel::updateVideoNoteEditorDocument,
+                        onInsertVideoNoteTimestamp = viewModel::insertCurrentPlaybackTimestampIntoNote,
+                        onVideoNoteTimestampClick = viewModel::seekTo,
+                        onSaveVideoNote = viewModel::saveVideoNote,
+                        onDeleteVideoNote = viewModel::deleteVideoNote,
+                        onRetryVideoNote = viewModel::retryVideoNote
                     )
                 } else {
                     Surface(
@@ -303,6 +355,7 @@ fun TabletCinemaLayout(
                     curtainStateName = TabletSideCurtainState.OPEN.name
                 },
                 success = success,
+                relatedVideos = relatedVideos,
                 commentState = commentState,
                 commentViewModel = commentViewModel,
                 viewModel = viewModel,
@@ -310,9 +363,10 @@ fun TabletCinemaLayout(
                 onUpClick = onUpClick,
                 onRelatedVideoClick = onRelatedVideoClick,
                 context = appContext,
-                showRelatedVideosSection = showRelatedVideosSection,
                 showUpBadge = showUpBadge,
-                onSearchKeywordClick = onSearchKeywordClick
+                showIdentityDecorations = commentMemberDecorationsEnabled,
+                onSearchKeywordClick = onSearchKeywordClick,
+                onOpenBilibiliLink = onOpenBilibiliLink
             )
         }
     }
@@ -333,6 +387,7 @@ private fun CinemaStagePlayer(
     onPipClick: () -> Unit,
     sleepTimerMinutes: Int?,
     viewPoints: List<ViewPoint>,
+    pbpProgressData: PbpProgressData?,
     isVerticalVideo: Boolean,
     isPortraitFullscreen: Boolean,
     currentCodec: String,
@@ -345,7 +400,7 @@ private fun CinemaStagePlayer(
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode,
     onPlayModeClick: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    showRelatedVideosSection: Boolean,
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     playerMaxWidth: Dp,
     forceCoverOnlyOnReturn: Boolean
 ) {
@@ -362,9 +417,8 @@ private fun CinemaStagePlayer(
     ) {
         with(requireNotNull(sharedTransitionScope)) {
             Modifier.sharedBounds(
-                sharedContentState = rememberSharedContentState(key = "video_cover_$bvid"),
+                sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey(bvid)),
                 animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                boundsTransform = { _, _ -> com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec },
                 clipInOverlayDuringTransition = OverlayClip(
                     RoundedCornerShape(12.dp)
                 )
@@ -373,87 +427,87 @@ private fun CinemaStagePlayer(
     } else {
         Modifier
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        tonalElevation = 4.dp
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+        val playerWidth = minOf(maxWidth, playerMaxWidth)
+        val videoHeight = if (forceCoverOnlyOnReturn) {
+            playerWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
+        } else {
+            playerWidth * 9f / 16f
+        }
+        Surface(
+            modifier = playerContainerModifier
+                .align(Alignment.Center)
+                .width(playerWidth)
+                .height(videoHeight)
+                .aspectRatio(playerWidth / videoHeight),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+            tonalElevation = 4.dp
         ) {
-            val playerWidth = minOf(maxWidth, playerMaxWidth)
-            val videoHeight = if (forceCoverOnlyOnReturn) {
-                playerWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
-            } else {
-                playerWidth * 9f / 16f
-            }
-            Box(
-                modifier = playerContainerModifier
-                    .width(playerWidth)
-                    .height(videoHeight)
-                    .align(Alignment.Center)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color.Black)
-            ) {
-                VideoPlayerSection(
-                    playerState = playerState,
-                    uiState = uiState,
-                    isFullscreen = false,
-                    isInPipMode = isInPipMode,
-                    onToggleFullscreen = onToggleFullscreen,
-                    onQualityChange = { qid -> viewModel.changeQuality(qid) },
-                    onBack = onBack,
-                    onHomeClick = onHomeClick,
-                    bvid = bvid,
-                    coverUrl = coverUrl,
-                    onDoubleTapLike = { viewModel.toggleLike() },
-                    onReloadVideo = { viewModel.reloadVideo() },
-                    currentCdnIndex = success?.currentCdnIndex ?: 0,
-                    cdnCount = success?.cdnCount ?: 1,
-                    onSwitchCdn = { viewModel.switchCdn() },
-                    onSwitchCdnTo = { viewModel.switchCdnTo(it) },
-                    isAudioOnly = false,
-                    onAudioOnlyToggle = {
-                        viewModel.setAudioMode(true)
-                        onNavigateToAudioMode()
-                    },
-                    sleepTimerMinutes = sleepTimerMinutes,
-                    onSleepTimerChange = { viewModel.setSleepTimer(it) },
-                    videoshotData = success?.videoshotData,
-                    viewPoints = viewPoints,
-                    isVerticalVideo = isVerticalVideo,
-                    onPortraitFullscreen = { playerState.setPortraitFullscreen(true) },
-                    isPortraitFullscreen = isPortraitFullscreen,
-                    onPipClick = onPipClick,
-                    currentCodec = currentCodec,
-                    onCodecChange = onCodecChange,
-                    currentSecondCodec = currentSecondCodec,
-                    onSecondCodecChange = onSecondCodecChange,
-                    currentAudioQuality = currentAudioQuality,
-                    onAudioQualityChange = onAudioQualityChange,
-                    onSaveCover = { viewModel.saveCover(context) },
-                    onDownloadAudio = { viewModel.downloadAudio(context) },
-                    currentPlayMode = currentPlayMode,
-                    onPlayModeClick = onPlayModeClick,
-                    onRelatedVideoClick = onRelatedVideoClick,
-                    relatedVideos = success?.related ?: emptyList(),
-                    forceCoverOnly = forceCoverOnlyOnReturn,
-                    ugcSeason = success?.info?.ugc_season,
-                    isFollowed = success?.isFollowing ?: false,
-                    isLiked = success?.isLiked ?: false,
-                    isCoined = success?.coinCount?.let { it > 0 } ?: false,
-                    isFavorited = success?.isFavorited ?: false,
-                    onToggleFollow = { viewModel.toggleFollow() },
-                    onToggleLike = { viewModel.toggleLike() },
-                    onDislike = { viewModel.markVideoNotInterested() },
-                    onCoin = { viewModel.showCoinDialog() },
-                    onToggleFavorite = { viewModel.toggleFavorite() },
-                    onTriple = { viewModel.doTripleAction() }
-                )
-            }
+            VideoPlayerSection(
+                playerState = playerState,
+                uiState = uiState,
+                isFullscreen = false,
+                isInPipMode = isInPipMode,
+                onToggleFullscreen = onToggleFullscreen,
+                onQualityChange = { qid -> viewModel.changeQuality(qid) },
+                onBack = onBack,
+                onHomeClick = onHomeClick,
+                bvid = bvid,
+                coverUrl = coverUrl,
+                onDoubleTapLike = { viewModel.toggleLike() },
+                onReloadVideo = { viewModel.reloadVideo() },
+                currentCdnIndex = success?.currentCdnIndex ?: 0,
+                cdnCount = success?.cdnCount ?: 1,
+                cdnLineDiagnostics = success?.cdnLineDiagnostics.orEmpty(),
+                isCdnProbing = success?.isCdnProbing ?: false,
+                onSwitchCdn = { viewModel.switchCdn() },
+                onSwitchCdnTo = { viewModel.switchCdnTo(it) },
+                onProbeCdnCandidates = { viewModel.probeCurrentCdnCandidates() },
+                isAudioOnly = false,
+                onAudioOnlyToggle = {
+                    viewModel.setAudioMode(true)
+                    onNavigateToAudioMode()
+                },
+                sleepTimerMinutes = sleepTimerMinutes,
+                onSleepTimerChange = { viewModel.setSleepTimer(it) },
+                videoshotData = success?.videoshotData,
+                viewPoints = viewPoints,
+                pbpProgressData = pbpProgressData,
+                isVerticalVideo = isVerticalVideo,
+                onPortraitFullscreen = { playerState.setPortraitFullscreen(true) },
+                isPortraitFullscreen = isPortraitFullscreen,
+                onPipClick = onPipClick,
+                currentCodec = currentCodec,
+                onCodecChange = onCodecChange,
+                currentSecondCodec = currentSecondCodec,
+                onSecondCodecChange = onSecondCodecChange,
+                currentAudioQuality = currentAudioQuality,
+                onAudioQualityChange = onAudioQualityChange,
+                onPlaybackSpeedChange = { viewModel.applyPlaybackSpeedFromUi(it) },
+                onSaveCover = { viewModel.saveCover(context) },
+                onDownloadAudio = { viewModel.downloadAudio(context) },
+                currentPlayMode = currentPlayMode,
+                onPlayModeClick = onPlayModeClick,
+                onRelatedVideoClick = onRelatedVideoClick,
+                relatedVideos = relatedVideos,
+                forceCoverOnly = forceCoverOnlyOnReturn,
+                ugcSeason = success?.info?.ugc_season,
+                isFollowed = success?.isFollowing ?: false,
+                isLiked = success?.isLiked ?: false,
+                isCoined = success?.coinCount?.let { it > 0 } ?: false,
+                isFavorited = success?.isFavorited ?: false,
+                onToggleFollow = { viewModel.toggleFollow() },
+                onToggleLike = { viewModel.toggleLike() },
+                onDislike = { viewModel.markVideoNotInterested() },
+                onCoin = { viewModel.showCoinDialog() },
+                onToggleFavorite = { viewModel.toggleFavorite() },
+                onTriple = { viewModel.doTripleAction() },
+                onSubtitleTrackSelected = viewModel::selectSubtitleTrack
+            )
         }
     }
 }
@@ -474,7 +528,19 @@ private fun CinemaMetaPanel(
     onOpenComments: () -> Unit,
     onCollectionEpisodeClick: (String, android.os.Bundle?) -> Unit,
     onPageSelect: (Int) -> Unit,
-    onRetryAiSummary: () -> Unit
+    onOpenBilibiliLink: ((String) -> Unit)?,
+    onBgmClick: (BgmInfo) -> Unit = {},
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> },
+    onRetryAiSummary: () -> Unit,
+    onCreateNoteDraftFromAiSummary: () -> Unit,
+    onOpenVideoNoteEditor: () -> Unit,
+    onCloseVideoNoteEditor: () -> Unit,
+    onVideoNoteDocumentChange: (VideoNoteEditorDocument) -> Unit,
+    onInsertVideoNoteTimestamp: () -> Unit,
+    onVideoNoteTimestampClick: (Long) -> Unit,
+    onSaveVideoNote: (VideoNoteEditorDocument) -> Unit,
+    onDeleteVideoNote: () -> Unit,
+    onRetryVideoNote: () -> Unit
 ) {
     val context = LocalContext.current
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -482,6 +548,20 @@ private fun CinemaMetaPanel(
         success.info.pages.indexOfFirst { it.cid == success.info.cid }.coerceAtLeast(0)
     }
     var showCollectionSheet by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
+    var confirmDeleteNote by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
+    val onShareVideoNote: (VideoNoteEditorDocument, Boolean) -> Unit = { document, isDraft ->
+        ShareUtils.shareText(
+            context = context,
+            subject = document.title.ifBlank { success.info.title },
+            text = buildVideoNoteShareText(
+                videoTitle = success.info.title,
+                bvid = success.info.bvid,
+                document = document,
+                isDraft = isDraft
+            ),
+            chooserTitle = "分享视频笔记"
+        )
+    }
 
     success.info.ugc_season?.let { season ->
         if (showCollectionSheet) {
@@ -516,7 +596,6 @@ private fun CinemaMetaPanel(
             success.info.pages.size
         ) {
             resolveCinemaMetaPanelBlocks(
-                hasOwner = success.info.owner.mid > 0L || success.info.owner.name.isNotBlank(),
                 hasCollection = success.info.ugc_season != null,
                 hasMultiplePages = success.info.pages.size > 1
             )
@@ -524,8 +603,8 @@ private fun CinemaMetaPanel(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            contentPadding = PaddingValues(bottom = 16.dp),
+                .padding(horizontal = 8.dp),
+            contentPadding = PaddingValues(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(
@@ -534,43 +613,97 @@ private fun CinemaMetaPanel(
             ) { block ->
                 when (block) {
                     CinemaMetaPanelBlock.ACTIONS -> {
-                        ActionButtonsRow(
-                            info = success.info,
-                            isFavorited = success.isFavorited,
-                            isLiked = success.isLiked,
-                            coinCount = success.coinCount,
-                            downloadProgress = downloadProgress,
-                            isInWatchLater = success.isInWatchLater,
-                            onFavoriteClick = onFavoriteClick,
-                            onLikeClick = onLikeClick,
-                            onCoinClick = onCoinClick,
-                            onTripleClick = onTripleClick,
-                            onDownloadClick = onDownloadClick,
-                            onWatchLaterClick = onWatchLaterClick,
-                            onCommentClick = onOpenComments,
-                            onShareClick = {
-                                ShareUtils.shareVideo(
-                                    context,
-                                    success.info.title,
-                                    success.info.bvid
-                                )
+                        if (success.info.owner.mid > 0L || success.info.owner.name.isNotBlank()) {
+                            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                val isWide = maxWidth >= 600.dp
+
+                                AnimatedContent(
+                                    targetState = isWide,
+                                    label = "ActionUpInfoTransition"
+                                ) { targetIsWide ->
+                                    if (targetIsWide) {
+                                        // 宽度足够，横排
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            CinemaMetaUpInfo(
+                                                success = success,
+                                                onFollowClick = onFollowClick,
+                                                onUpClick = onUpClick,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            CinemaMetaActions(
+                                                success = success,
+                                                downloadProgress = downloadProgress,
+                                                context = context,
+                                                onFavoriteClick = onFavoriteClick,
+                                                onLikeClick = onLikeClick,
+                                                onCoinClick = onCoinClick,
+                                                onTripleClick = onTripleClick,
+                                                onDownloadClick = onDownloadClick,
+                                                onWatchLaterClick = onWatchLaterClick,
+                                                onOpenComments = onOpenComments,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    } else {
+                                        // 宽度不足，竖排
+                                        Column(Modifier.fillMaxWidth()) {
+                                            CinemaMetaActions(
+                                                success = success,
+                                                downloadProgress = downloadProgress,
+                                                context = context,
+                                                onFavoriteClick = onFavoriteClick,
+                                                onLikeClick = onLikeClick,
+                                                onCoinClick = onCoinClick,
+                                                onTripleClick = onTripleClick,
+                                                onDownloadClick = onDownloadClick,
+                                                onWatchLaterClick = onWatchLaterClick,
+                                                onOpenComments = onOpenComments,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            CinemaMetaUpInfo(
+                                                success = success,
+                                                onFollowClick = onFollowClick,
+                                                onUpClick = onUpClick,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
                             }
-                        )
-                    }
-                    CinemaMetaPanelBlock.UP_INFO -> {
-                        UpInfoSection(
-                            info = success.info,
-                            isFollowing = success.isFollowing,
-                            onFollowClick = onFollowClick,
-                            onUpClick = onUpClick,
-                            followerCount = success.ownerFollowerCount,
-                            videoCount = success.ownerVideoCount
-                        )
+                        } else {
+                            CinemaMetaActions(
+                                success = success,
+                                downloadProgress = downloadProgress,
+                                context = context,
+                                onFavoriteClick = onFavoriteClick,
+                                onLikeClick = onLikeClick,
+                                onCoinClick = onCoinClick,
+                                onTripleClick = onTripleClick,
+                                onDownloadClick = onDownloadClick,
+                                onWatchLaterClick = onWatchLaterClick,
+                                onOpenComments = onOpenComments,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                     CinemaMetaPanelBlock.INTRO -> {
                         CinemaVideoIntroSection(
                             success = success,
-                            onRetryAiSummary = onRetryAiSummary
+                            onOpenBilibiliLink = onOpenBilibiliLink,
+                            onBgmClick = onBgmClick,
+                            onRelatedVideoClick = onRelatedVideoClick,
+                            onRetryAiSummary = onRetryAiSummary,
+                            onCreateNoteDraftFromAiSummary = onCreateNoteDraftFromAiSummary,
+                            onOpenVideoNoteEditor = onOpenVideoNoteEditor,
+                            onRetryVideoNote = onRetryVideoNote,
+                            onDeleteVideoNoteClick = { confirmDeleteNote = true },
+                            onShareVideoNote = { document -> onShareVideoNote(document, false) },
+                            onPublicVideoNoteClick = { _, url ->
+                                if (url.isNotBlank()) onOpenBilibiliLink?.invoke(url)
+                            }
                         )
                     }
                     CinemaMetaPanelBlock.COLLECTION -> {
@@ -597,62 +730,161 @@ private fun CinemaMetaPanel(
             }
         }
     }
+
+    VideoNoteEditorSheet(
+        noteState = success.videoNoteState,
+        onDismiss = onCloseVideoNoteEditor,
+        onDocumentChange = onVideoNoteDocumentChange,
+        onInsertTimestamp = onInsertVideoNoteTimestamp,
+        onTimestampClick = onVideoNoteTimestampClick,
+        onShare = { document -> onShareVideoNote(document, success.videoNoteState.editorFromAiSummary) },
+        onSave = onSaveVideoNote
+    )
+
+    VideoNoteDeleteConfirmDialog(
+        visible = confirmDeleteNote,
+        deleting = success.videoNoteState.deleting,
+        onConfirm = {
+            confirmDeleteNote = false
+            onDeleteVideoNote()
+        },
+        onDismiss = { confirmDeleteNote = false }
+    )
+}
+
+@Composable
+private fun CinemaMetaActions(
+    success: PlayerUiState.Success,
+    downloadProgress: Float,
+    context: android.content.Context,
+    onFavoriteClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onTripleClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onWatchLaterClick: () -> Unit,
+    onOpenComments: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ActionButtonsRow(
+        info = success.info,
+        isFavorited = success.isFavorited,
+        isLiked = success.isLiked,
+        coinCount = success.coinCount,
+        downloadProgress = downloadProgress,
+        isInWatchLater = success.isInWatchLater,
+        onFavoriteClick = onFavoriteClick,
+        onLikeClick = onLikeClick,
+        onCoinClick = onCoinClick,
+        onTripleClick = onTripleClick,
+        onDownloadClick = onDownloadClick,
+        onWatchLaterClick = onWatchLaterClick,
+        onCommentClick = onOpenComments,
+        onShareClick = {
+            ShareUtils.shareVideo(
+                context,
+                success.info.title,
+                success.info.bvid
+            )
+        },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun CinemaMetaUpInfo(
+    success: PlayerUiState.Success,
+    onFollowClick: () -> Unit,
+    onUpClick: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    UpInfoSection(
+        info = success.info,
+        isFollowing = success.isFollowing,
+        onFollowClick = onFollowClick,
+        onUpClick = onUpClick,
+        followerCount = success.ownerFollowerCount,
+        videoCount = success.ownerVideoCount,
+        modifier = modifier
+    )
 }
 
 @Composable
 private fun CinemaVideoIntroSection(
     success: PlayerUiState.Success,
-    onRetryAiSummary: () -> Unit = {}
+    onBgmClick: (BgmInfo) -> Unit = {},
+    onOpenBilibiliLink: ((String) -> Unit)? = null,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> },
+    onRetryAiSummary: () -> Unit = {},
+    onCreateNoteDraftFromAiSummary: () -> Unit = {},
+    onOpenVideoNoteEditor: () -> Unit = {},
+    onRetryVideoNote: () -> Unit = {},
+    onDeleteVideoNoteClick: () -> Unit = {},
+    onShareVideoNote: (VideoNoteEditorDocument) -> Unit = {},
+    onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val videoAiSummaryEntryEnabled by com.android.purebilibili.core.store.SettingsManager
         .getVideoAiSummaryEntryEnabled(context)
-        .collectAsState(initial = true)
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = resolveCinemaIntroCardContainerColor(
-            isDarkTheme = isDarkTheme,
-            surfaceContainerLowColor = MaterialTheme.colorScheme.surfaceContainerLow
+        .collectAsStateWithLifecycle(initialValue = true
         )
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = resolveCinemaIntroCardContainerColor(
+                isDarkTheme = isDarkTheme,
+                surfaceContainerLowColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
         ) {
             VideoTitleWithDesc(
                 info = success.info,
                 videoTags = success.videoTags,
-                bgmInfo = success.bgmInfo
+                onDescriptionUrlClick = onOpenBilibiliLink,
+                bgmList = resolveDisplayBgmList(
+                    bgmInfo = success.bgmInfo,
+                    bgmInfoList = success.bgmInfoList
+                ),
+                onBgmClick = onBgmClick,
+                onRelatedVideoClick = onRelatedVideoClick
             )
-            if (shouldShowAiSummaryEntry(
-                    aiSummary = success.aiSummary,
-                    isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-                )
-            ) {
-                AiSummaryCard(
-                    aiSummary = success.aiSummary,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            } else if (videoAiSummaryEntryEnabled && success.aiSummaryPrompt != null) {
-                AiSummaryPromptCard(
-                    promptState = success.aiSummaryPrompt,
-                    onActionClick = onRetryAiSummary,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            }
-            if (success.info.desc.isBlank()) {
-                Text(
-                    text = "暂无简介",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                )
-            }
+        }
+        if (shouldShowAiSummaryEntry(
+                aiSummary = success.aiSummary,
+                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
+            )
+        ) {
+            AiSummaryCard(
+                aiSummary = success.aiSummary,
+                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary
+            )
+        } else if (videoAiSummaryEntryEnabled && success.aiSummaryPrompt != null) {
+            AiSummaryPromptCard(
+                promptState = success.aiSummaryPrompt,
+                onActionClick = onRetryAiSummary
+            )
+        }
+        val videoNoteEnabled by SettingsManager.getVideoNoteEnabled(context)
+            .collectAsStateWithLifecycle(initialValue = true)
+        val videoNoteDefaultCollapsed by SettingsManager.getVideoNoteDefaultCollapsed(context)
+            .collectAsStateWithLifecycle(initialValue = false)
+        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
+            VideoNoteCard(
+                noteState = success.videoNoteState,
+                isLoggedIn = success.isLoggedIn,
+                onCreateOrEditClick = onOpenVideoNoteEditor,
+                onRetryClick = onRetryVideoNote,
+                onDeleteClick = onDeleteVideoNoteClick,
+                onShareClick = onShareVideoNote,
+                onPublicNoteClick = onPublicVideoNoteClick,
+                defaultCollapsed = videoNoteDefaultCollapsed
+            )
         }
     }
 }
@@ -666,6 +898,7 @@ private fun CinemaSideCurtain(
     onToggle: () -> Unit,
     onTabSelected: (Int) -> Unit,
     success: PlayerUiState.Success?,
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     commentState: CommentUiState,
     commentViewModel: VideoCommentViewModel,
     viewModel: PlayerViewModel,
@@ -673,144 +906,158 @@ private fun CinemaSideCurtain(
     onUpClick: (Long) -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     context: android.content.Context,
-    showRelatedVideosSection: Boolean,
     showUpBadge: Boolean,
-    onSearchKeywordClick: (String) -> Unit
+    showIdentityDecorations: Boolean,
+    onSearchKeywordClick: (String) -> Unit,
+    onOpenBilibiliLink: ((String) -> Unit)?
 ) {
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val subReplyState by commentViewModel.subReplyState.collectAsState()
+    val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
+    val transition = updateTransition(targetState = state, label = "SideCurtainAnimation")
     LaunchedEffect(subReplyState.visible) {
         if (subReplyState.visible) {
             onTabSelected(0)
-            if (pagerState.currentPage != 0) {
-                pagerState.animateScrollToPage(0)
+        }
+    }
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            if (transition.currentState == TabletSideCurtainState.OPEN) {
+                pagerState.animateScrollToPage(selectedTab)
+            } else {    // 动画中或关闭状态停用动画，避免卡动画
+                pagerState.scrollToPage(selectedTab)
             }
         }
     }
-    Row(
-        modifier = Modifier.fillMaxHeight(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Surface(
-            modifier = Modifier
-                .width(34.dp)
-                .fillMaxHeight()
-                .padding(vertical = 26.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .clickable { onToggle() },
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
+    transition.AnimatedContent(
+        modifier = Modifier.fillMaxHeight()
+    ) { targetState ->
+        Row(
+            modifier = Modifier.fillMaxHeight(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (state == TabletSideCurtainState.OPEN) {
-                        Icons.Outlined.KeyboardDoubleArrowRight
-                    } else {
-                        Icons.Outlined.KeyboardDoubleArrowLeft
-                    },
-                    contentDescription = "toggle curtain",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        if (state != TabletSideCurtainState.HIDDEN) {
             Surface(
                 modifier = Modifier
-                    .width(width)
+                    .width(20.dp)
                     .fillMaxHeight()
-                    .animateContentSize(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null // 移除点击视觉反馈
+                    ) { onToggle() },
+                color = Color.Transparent
             ) {
-                if (state == TabletSideCurtainState.PEEK) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 18.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        IconButton(onClick = { onTabSelected(0) }) {
-                            Icon(
-                                imageVector = Icons.Outlined.ChatBubbleOutline,
-                                contentDescription = "comments"
-                            )
-                        }
-                        if (showRelatedVideosSection) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (targetState == TabletSideCurtainState.OPEN) {
+                            Icons.Outlined.KeyboardDoubleArrowRight
+                        } else {
+                            Icons.Outlined.KeyboardDoubleArrowLeft
+                        },
+                        contentDescription = "toggle curtain",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (targetState != TabletSideCurtainState.HIDDEN) {
+                Surface(
+                    modifier = Modifier
+                        .width(width)
+                        .fillMaxHeight()
+                        .animateContentSize(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                ) {
+                    if (targetState == TabletSideCurtainState.PEEK) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = 18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            IconButton(onClick = { onTabSelected(0) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                                    contentDescription = "comments"
+                                )
+                            }
                             Spacer(modifier = Modifier.height(10.dp))
                             IconButton(onClick = { onTabSelected(1) }) {
                                 Icon(
-                                    imageVector = Icons.Outlined.PlaylistPlay,
+                                    imageVector = Icons.AutoMirrored.Outlined.PlaylistPlay,
                                     contentDescription = "related videos"
                                 )
                             }
                         }
-                    }
-                } else {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        val tabs = resolveTabletSecondaryTabs(
-                            replyCount = commentState.replyCount,
-                            showRelatedVideosSection = showRelatedVideosSection
-                        )
-                        TabRow(
-                            selectedTabIndex = pagerState.currentPage,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            tabs.forEachIndexed { index, title ->
+                    } else {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            PrimaryTabRow(
+                                selectedTabIndex = pagerState.currentPage,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Tab(
-                                    selected = pagerState.currentPage == index,
+                                    selected = pagerState.currentPage == 0,
                                     onClick = {
-                                        onTabSelected(index)
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(index)
-                                        }
+                                        onTabSelected(0)
                                     },
-                                    text = { Text(title) }
+                                    text = {
+                                        Text(
+                                            text = "评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}"
+                                        )
+                                    }
+                                )
+                                Tab(
+                                    selected = pagerState.currentPage == 1,
+                                    onClick = {
+                                        onTabSelected(1)
+                                    },
+                                    text = { Text("相关推荐") }
                                 )
                             }
-                        }
 
-                        HorizontalPager(
-                            state = pagerState,
-                            userScrollEnabled = true,
-                            modifier = Modifier.fillMaxSize()
-                        ) { page ->
-                            when {
-                                success == null -> {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CupertinoActivityIndicator()
+                            HorizontalPager(
+                                state = pagerState,
+                                userScrollEnabled = true,
+                                modifier = Modifier.fillMaxSize()
+                            ) { page ->
+                                when {
+                                    success == null -> {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CupertinoActivityIndicator()
+                                        }
                                     }
-                                }
 
-                                page == 0 -> {
-                                    CinemaCommentsPane(
-                                        success = success,
-                                        commentState = commentState,
-                                        subReplyState = subReplyState,
-                                        commentViewModel = commentViewModel,
-                                        viewModel = viewModel,
-                                        playerState = playerState,
-                                        onUpClick = onUpClick,
-                                        context = context,
-                                        onRelatedVideoClick = onRelatedVideoClick,
-                                        onSearchKeywordClick = onSearchKeywordClick
-                                    )
-                                }
+                                    page == 0 -> {
+                                        CinemaCommentsPane(
+                                            success = success,
+                                            commentState = commentState,
+                                            subReplyState = subReplyState,
+                                            commentViewModel = commentViewModel,
+                                            viewModel = viewModel,
+                                            playerState = playerState,
+                                            onUpClick = onUpClick,
+                                            context = context,
+                                            onRelatedVideoClick = onRelatedVideoClick,
+                                            showIdentityDecorations = showIdentityDecorations,
+                                            onSearchKeywordClick = onSearchKeywordClick,
+                                            onOpenBilibiliLink = onOpenBilibiliLink
+                                        )
+                                    }
 
-                                else -> {
-                                    CinemaRelatedPane(
-                                        success = success,
-                                        onRelatedVideoClick = onRelatedVideoClick,
-                                        context = context,
-                                        showRelatedVideosSection = showRelatedVideosSection,
-                                        showUpBadge = showUpBadge
-                                    )
+                                    else -> {
+                                        CinemaRelatedPane(
+                                            success = success,
+                                            relatedVideos = relatedVideos,
+                                            onRelatedVideoClick = onRelatedVideoClick,
+                                            context = context,
+                                            showUpBadge = showUpBadge
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -832,7 +1079,9 @@ private fun CinemaCommentsPane(
     onUpClick: (Long) -> Unit,
     context: android.content.Context,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    onSearchKeywordClick: (String) -> Unit
+    showIdentityDecorations: Boolean,
+    onSearchKeywordClick: (String) -> Unit,
+    onOpenBilibiliLink: ((String) -> Unit)?
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     val listState = rememberLazyListState()
@@ -841,6 +1090,10 @@ private fun CinemaCommentsPane(
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
+        if (onOpenBilibiliLink != null) {
+            onOpenBilibiliLink(url)
+            return@openCommentUrl
+        }
         when (val target = resolveCommentUrlNavigationTarget(url)) {
             is CommentUrlNavigationTarget.Video -> {
                 onRelatedVideoClick(target.videoId, null)
@@ -901,10 +1154,7 @@ private fun CinemaCommentsPane(
             maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
             onLoadMore = { commentViewModel.loadMoreSubReplies() },
             onDismiss = { commentViewModel.closeSubReply() },
-            onRootCommentClick = {
-                viewModel.clearReplyingTo()
-                viewModel.showCommentInputDialog()
-            },
+            onRootCommentClick = { viewModel.openRootCommentComposer() },
             onTimestampClick = { positionMs ->
                 seekPlayerFromUserAction(playerState.player, positionMs)
             },
@@ -926,6 +1176,7 @@ private fun CinemaCommentsPane(
             onCommentLike = commentViewModel::likeComment,
             onReportComment = commentViewModel::reportComment,
             onUrlClick = openCommentUrl,
+            showIdentityDecorations = showIdentityDecorations,
             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
         )
     } else {
@@ -957,8 +1208,7 @@ private fun CinemaCommentsPane(
                     color = commentAppearance.composerHintBackgroundColor,
                     shape = RoundedCornerShape(14.dp),
                     onClick = {
-                        viewModel.clearReplyingTo()
-                        viewModel.showCommentInputDialog()
+                        viewModel.openRootCommentComposer()
                     }
                 ) {
                     Text(
@@ -978,6 +1228,7 @@ private fun CinemaCommentsPane(
                     item = reply,
                     upMid = success.info.owner.mid,
                     showUpFlag = commentState.showUpFlag,
+                    showIdentityDecorations = showIdentityDecorations,
                     isPinned = reply.rpid in commentState.pinnedReplyIds,
                     emoteMap = success.emoteMap,
                     onClick = {},
@@ -1079,32 +1330,27 @@ private fun CinemaCommentsPane(
 @Composable
 private fun CinemaRelatedPane(
     success: PlayerUiState.Success,
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     context: android.content.Context,
-    showRelatedVideosSection: Boolean,
     showUpBadge: Boolean
 ) {
-    if (!showRelatedVideosSection) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "相关推荐已隐藏",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        return
-    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp)
     ) {
-        items(
-            items = success.related,
-            key = { "curtain_related_${it.bvid}" }
-        ) { video ->
+        itemsIndexed(
+            items = relatedVideos,
+            key = { index, item ->
+                resolveIndexedVideoLazyKey(
+                    namespace = "cinema_related",
+                    index = index,
+                    bvid = item.bvid,
+                    aid = item.aid,
+                    cid = item.cid
+                )
+            }
+        ) { _, video ->
             RelatedVideoItem(
                 video = video,
                 isFollowed = video.owner.mid in success.followingMids,
@@ -1123,7 +1369,7 @@ private fun CinemaRelatedPane(
                 }
             )
         }
-        if (success.related.isEmpty()) {
+        if (relatedVideos.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier

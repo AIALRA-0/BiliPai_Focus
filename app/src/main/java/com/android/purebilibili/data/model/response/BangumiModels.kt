@@ -93,7 +93,15 @@ data class BangumiItem(
     val seasonTypeName: String = "",
     @SerialName("subTitle")
     val subtitle: String = "",        // 副标题
-    val styles: String = ""           // 风格标签
+    val styles: String = "",          // 风格标签
+    @SerialName("index_show")
+    val indexShow: String = "",
+    @SerialName("is_finish")
+    val isFinish: Int = 0,
+    @SerialName("first_ep")
+    val firstEp: BangumiFirstEpisode? = null,
+    @SerialName("season_status")
+    val seasonStatus: Int = 0
 )
 
 @Serializable
@@ -102,6 +110,13 @@ data class NewEpInfo(
     val id: Long = 0,
     @SerialName("index_show")
     val indexShow: String = ""        // "全13话" "更新至第12话"
+)
+
+@Serializable
+data class BangumiFirstEpisode(
+    val cover: String = "",
+    @SerialName("ep_id")
+    val epId: Long = 0
 )
 
 /**
@@ -143,7 +158,14 @@ data class BangumiDetail(
     val mode: Int = 0,                           // 2=电影 3=番剧
     val rights: BangumiRights? = null,
     @SerialName("user_status")
-    val userStatus: UserStatus? = null
+    val userStatus: UserStatus? = null,
+    val publish: BangumiPublish? = null,
+    val payment: BangumiPayment? = null,
+    val positive: BangumiPositive? = null,
+    val section: List<BangumiSection>? = null,
+    @SerialName("season_title")
+    val seasonTitle: String = "",
+    val subtitle: String = ""
 )
 
 @Serializable
@@ -238,7 +260,53 @@ data class BangumiRights(
     @SerialName("is_preview")
     val isPreview: Int = 0,           // 是否预告/预览
     @SerialName("watch_platform")
-    val watchPlatform: Int = 0
+    val watchPlatform: Int = 0,
+    @SerialName("allow_demand")
+    val allowDemand: Int = 0,
+    @SerialName("area_limit")
+    val areaLimit: Int = 0,
+    @SerialName("allow_dm")
+    val allowDanmaku: Int = 1
+)
+
+@Serializable
+data class BangumiPublish(
+    @SerialName("is_finish")
+    val isFinish: Int = 0,
+    @SerialName("is_started")
+    val isStarted: Int = 0,
+    @SerialName("pub_time")
+    val pubTime: String = "",
+    @SerialName("pub_time_show")
+    val pubTimeShow: String = ""
+)
+
+@Serializable
+data class BangumiPayment(
+    val price: String = "",
+    val tip: String = "",
+    val promotion: String = "",
+    @SerialName("vip_price")
+    val vipPrice: String = "",
+    @SerialName("vip_promotion")
+    val vipPromotion: String = "",
+    @SerialName("view_start_time")
+    val viewStartTime: Long = 0
+)
+
+@Serializable
+data class BangumiPositive(
+    val id: Long = 0,
+    val title: String = ""
+)
+
+@Serializable
+data class BangumiSection(
+    val id: Long = 0,
+    val title: String = "",
+    @SerialName("type")
+    val type: Int = 0,
+    val episodes: List<BangumiEpisode>? = null
 )
 
 @Serializable
@@ -338,6 +406,8 @@ data class BangumiSearchData(
 data class BangumiSearchItem(
     @SerialName("season_id")
     val seasonId: Long = 0,
+    @SerialName("pgc_season_id")
+    val pgcSeasonId: Long = 0,
     @SerialName("media_id")
     val mediaId: Long = 0,
     val title: String = "",              // 标题 (可能包含高亮标签)
@@ -353,6 +423,8 @@ data class BangumiSearchItem(
     val seasonTypeName: String = "",     // "番剧" "电影" 等
     @SerialName("season_type")
     val seasonType: Int = 0,
+    @SerialName("media_type")
+    val mediaType: Int = 0,
     val desc: String = "",               // 简介
     @SerialName("pubtime")
     val pubTime: Long = 0,
@@ -366,7 +438,15 @@ data class BangumiSearchItem(
     @SerialName("goto_url")
     val gotoUrl: String = "",
     @SerialName("index_show")
-    val indexShow: String = ""           // "全12话" "更新至第5话"
+    val indexShow: String = "",          // "全12话" "更新至第5话"
+    @SerialName("button_text")
+    val buttonText: String = "",
+    @SerialName("is_follow")
+    val isFollow: Int = 0,
+    @SerialName("eps")
+    val episodes: List<BangumiSearchEpisode>? = null,
+    @SerialName("hit_epids")
+    val hitEpids: String = ""
 )
 
 @Serializable
@@ -393,6 +473,19 @@ data class BangumiSearchBadge(
     val borderColorNight: String = "",
     @SerialName("bg_style")
     val bgStyle: Int = 0
+)
+
+@Serializable
+data class BangumiSearchEpisode(
+    val id: Long = 0,
+    val cover: String = "",
+    val title: String = "",
+    val url: String = "",
+    @SerialName("index_title")
+    val indexTitle: String = "",
+    @SerialName("long_title")
+    val longTitle: String = "",
+    val badges: List<BangumiSearchBadge>? = null
 )
 
 // ========== 我的追番列表响应 ==========
@@ -457,8 +550,14 @@ data class BangumiFilter(
     val area: Int = -1,                  // 地区，-1=全部
     val styleId: Int = -1,               // 风格，-1=全部
     val isFinish: Int = -1,              // 状态，-1=全部, 0=连载, 1=完结
-    val seasonStatus: Int = -1,          // 付费类型，-1=全部
-    val order: Int = 2                   // 排序，2=播放量, 0=更新时间
+    val seasonStatus: String = "-1",     // 付费类型，-1=全部, 1=免费, 4,6=大会员
+    val producerId: Int = -1,             // 出品方，-1=全部
+    val order: Int = 3,                  // 排序指标，3=综合/追剧人数, 2=播放量
+    val sortDirection: Int = 0,          // 排序方向，0=降序, 1=升序
+    val seasonVersion: Int = -1,         // 类型：-1=全部，1=正片，2=电影，3=其他
+    val spokenLanguageType: Int = -1,    // 配音：-1=全部，1=原声，2=中文配音
+    val copyright: String = "-1",        // 版权：-1=全部，3=独家，1,2,4=其他
+    val seasonMonth: Int = -1            // 季度：-1=全部，1/4/7/10
 ) {
     fun toApiYear(seasonType: Int): String {
         return if (seasonType == BangumiType.ANIME.value || seasonType == BangumiType.GUOCHUANG.value) {
@@ -471,7 +570,8 @@ data class BangumiFilter(
     fun toApiReleaseDate(seasonType: Int): String {
         val shouldUseReleaseDate = seasonType == BangumiType.MOVIE.value ||
             seasonType == BangumiType.DOCUMENTARY.value ||
-            seasonType == BangumiType.TV_SHOW.value
+            seasonType == BangumiType.TV_SHOW.value ||
+            seasonType == BangumiType.VARIETY.value
         if (!shouldUseReleaseDate || year == "-1") return "-1"
 
         val range = Regex("""^\[(.*?),(.*?)\)$""").matchEntire(year) ?: return "-1"
@@ -484,9 +584,9 @@ data class BangumiFilter(
 
     companion object {
         val ORDER_OPTIONS = listOf(
-            0 to "更新时间",
-            2 to "播放数量",
-            3 to "追番人数",
+            3 to "综合排序",
+            2 to "最多播放",
+            0 to "最近更新",
             4 to "最高评分"
         )
         

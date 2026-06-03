@@ -6,8 +6,8 @@ import android.os.Looper
 
 internal class AppStartupOrchestrator(
     private val sdkInt: Int = Build.VERSION.SDK_INT,
-    private val deferredDelayMs: Long = deferredNonCriticalStartupDelayMs(),
-    private val dex2OatDelayMs: Long = dex2OatProfileInstallDelayMs(),
+    private val deferredDelayMs: Long = PureApplicationRuntimeConfig.deferredNonCriticalStartupDelayMs(),
+    private val dex2OatDelayMs: Long = PureApplicationRuntimeConfig.dex2OatProfileInstallDelayMs(),
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
 ) {
 

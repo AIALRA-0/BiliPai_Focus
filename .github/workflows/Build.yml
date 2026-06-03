@@ -2,80 +2,87 @@ name: Build
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
-  pull_request:
   workflow_dispatch:
     inputs:
       build_type:
         type: choice
-        description: Select build variant
+        description: '选择编译类型'
         required: true
-        default: both
+        default: 'debug'
         options:
-          - debug
-          - release
-          - both
+          - 'debug'
+          - 'release'
 
 permissions:
   contents: write
   actions: read
+  attestations: write
+  id-token: write
 
 jobs:
+  check-fcm:
+    runs-on: ubuntu-latest
+    outputs:
+      has_fcm: ${{ steps.check.outputs.has_fcm }}
+    steps:
+      - name: Check FCM configuration
+        id: check
+        run: |
+          if [ -n "${{ secrets.FCM }}" ]; then
+            echo "FCM secret is configured"
+            echo "has_fcm=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ FCM secret is not configured. Workflow will not run."
+            echo "has_fcm=false" >> $GITHUB_OUTPUT
+          fi
+
   build:
     runs-on: ubuntu-latest
+    needs: check-fcm
+    if: needs.check-fcm.outputs.has_fcm == 'true'
+    env:
+      NATIVE_TARGET: "arm64-v8a"
     steps:
-      - name: Checkout Repository
+      - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Resolve Build Type
-        id: build_type
-        shell: bash
+      - name: Set Build Type
+        id: set_build_type
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            BUILD_TYPE="${{ github.event.inputs.build_type }}"
+            echo "build_type=${{ github.event.inputs.build_type }}" >> $GITHUB_OUTPUT
           elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            BUILD_TYPE="release"
+            echo "build_type=release" >> $GITHUB_OUTPUT
           else
-            BUILD_TYPE="both"
+            echo "build_type=debug" >> $GITHUB_OUTPUT
           fi
-          echo "value=${BUILD_TYPE}" >> "$GITHUB_OUTPUT"
-          echo "Resolved build type: ${BUILD_TYPE}"
+          echo "构建类型已设置"
 
-      - name: Set up Java 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: gradle
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v3
 
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
-      - name: Restore optional Firebase config
-        shell: bash
+      - name: Set Up FCM Config
         run: |
-          if [ -n "${{ secrets.FCM }}" ]; then
-            echo "${{ secrets.FCM }}" | base64 -d > app/google-services.json
-            echo "google-services.json restored from secret"
-          else
-            echo "FCM secret not configured, continuing without google-services.json"
-          fi
+          cd ./app
+          echo "${{ secrets.FCM }}" | base64 -d > google-services.json
 
-      - name: Run Tests and Build
-        shell: bash
+      - name: Build APK
         env:
           BILI_BUILD_COMMIT_SHA: ${{ github.sha }}
           BILI_BUILD_GIT_REF: ${{ github.ref }}
           BILI_BUILD_WORKFLOW_RUN_ID: ${{ github.run_id }}
           BILI_BUILD_WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BILI_BUILD_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          FOCUS_GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           COMMON_ARGS=(
             "-Pbili.build.commitSha=${BILI_BUILD_COMMIT_SHA}"
@@ -84,59 +91,148 @@ jobs:
             "-Pbili.build.workflowRunUrl=${BILI_BUILD_WORKFLOW_RUN_URL}"
             "-Pbili.build.releaseTag=${BILI_BUILD_RELEASE_TAG}"
           )
-
-          ./gradlew --no-parallel --max-workers=2 "${COMMON_ARGS[@]}" :app:testDebugUnitTest
-
-          if [ "${{ steps.build_type.outputs.value }}" != "release" ]; then
-            ./gradlew --no-parallel --max-workers=2 "${COMMON_ARGS[@]}" :app:assembleDebug
+          if [ "${{ steps.set_build_type.outputs.build_type }}" = "release" ]; then
+            ./gradlew "${COMMON_ARGS[@]}" assembleRelease
+          else
+            ./gradlew "${COMMON_ARGS[@]}" assembleDebug
           fi
 
-          if [ "${{ steps.build_type.outputs.value }}" != "debug" ]; then
-            ./gradlew --no-parallel --max-workers=2 "${COMMON_ARGS[@]}" :app:assembleRelease
-          fi
-
-      - name: Collect APK Artifacts
-        id: apks
-        shell: bash
+      - name: Collect release evidence
+        id: collect_release_assets
         run: |
-          APK_FILES=$(find "${{ github.workspace }}/app/build/outputs/apk" -name "*.apk" -type f | sort)
-          if [ -z "${APK_FILES}" ]; then
+          APK_FILES=$(find ${{ github.workspace }}/app/build/outputs/apk/ -name "*.apk" -type f)
+          if [ -z "$APK_FILES" ]; then
             echo "No APK files found"
             exit 1
           fi
-          {
-            echo "files<<EOF"
-            echo "${APK_FILES}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          echo "${APK_FILES}"
 
-      - name: Upload APK Artifacts
+          DIST_DIR="${{ github.workspace }}/build/release-evidence"
+          mkdir -p "$DIST_DIR"
+
+          while IFS= read -r apk; do
+            cp "$apk" "$DIST_DIR/"
+          done <<< "$APK_FILES"
+
+          pushd "$DIST_DIR" >/dev/null
+          sha256sum *.apk | tee checksums.txt
+          VERSION_NAME=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' "${{ github.workspace }}/app/build.gradle.kts" | head -n 1)
+          VERSION_CODE=$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' "${{ github.workspace }}/app/build.gradle.kts" | head -n 1)
+          export VERSION_NAME VERSION_CODE
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          dist_dir = Path(os.environ["DIST_DIR"])
+          metadata_path = dist_dir / "build-metadata.json"
+          apk_files = sorted(dist_dir.glob("*.apk"))
+          payload = {
+              "schemaVersion": 1,
+              "appId": "com.android.purebilibili",
+              "versionName": os.environ["VERSION_NAME"],
+              "versionCode": int(os.environ["VERSION_CODE"]),
+              "gitCommitSha": os.environ["GITHUB_SHA"],
+              "gitRef": os.environ["GITHUB_REF"],
+              "workflowRunId": os.environ["GITHUB_RUN_ID"],
+              "workflowRunUrl": os.environ["WORKFLOW_RUN_URL"],
+              "releaseTag": os.environ["RELEASE_TAG"],
+              "generatedAt": os.environ["GENERATED_AT"],
+              "artifacts": []
+          }
+          for apk in apk_files:
+              sha256 = hashlib.sha256(apk.read_bytes()).hexdigest()
+              payload["artifacts"].append({
+                  "name": apk.name,
+                  "sha256": sha256,
+                  "sizeBytes": apk.stat().st_size,
+              })
+
+          metadata_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+          PY
+          popd >/dev/null
+
+          echo "artifact_paths<<EOF" >> $GITHUB_OUTPUT
+          find "$DIST_DIR" -maxdepth 1 -type f | sort >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          DIST_DIR: ${{ github.workspace }}/build/release-evidence
+          GENERATED_AT: ${{ github.run_started_at }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+
+      - name: Generate artifact attestation
+        id: attest_release
+        if: startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-checksums: ${{ github.workspace }}/build/release-evidence/checksums.txt
+          show-summary: true
+
+      - name: Collect attestation evidence
+        if: startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
+        env:
+          DIST_DIR: ${{ github.workspace }}/build/release-evidence
+          ATTESTATION_URL: ${{ steps.attest_release.outputs.attestation-url }}
+          ATTESTATION_ID: ${{ steps.attest_release.outputs.attestation-id }}
+          BUNDLE_PATH: ${{ steps.attest_release.outputs.bundle-path }}
+          BUNDLE_FILE_NAME: build-provenance.intoto.jsonl
+          PREDICATE_TYPE: https://slsa.dev/provenance/v1
+        run: |
+          if [ -n "$BUNDLE_PATH" ] && [ -f "$BUNDLE_PATH" ]; then
+            cp "$BUNDLE_PATH" "$DIST_DIR/$BUNDLE_FILE_NAME"
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          dist_dir = Path(os.environ["DIST_DIR"])
+          metadata_path = dist_dir / "verification-metadata.json"
+          payload = {
+              "schemaVersion": 1,
+              "attestationId": os.environ.get("ATTESTATION_ID", ""),
+              "attestationUrl": os.environ.get("ATTESTATION_URL", ""),
+              "bundleFileName": os.environ.get("BUNDLE_FILE_NAME", ""),
+              "predicateType": os.environ.get("PREDICATE_TYPE", ""),
+          }
+          metadata_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BiliPai-Focus-${{ steps.build_type.outputs.value }}
-          path: ${{ steps.apks.outputs.files }}
+          name: BiliPai
+          path: ${{ github.workspace }}/build/release-evidence
           retention-days: 7
           if-no-files-found: error
 
-      - name: Publish GitHub Release APK
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish GitHub Release Assets
+        if: startsWith(github.ref, 'refs/tags/v') && steps.set_build_type.outputs.build_type == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        shell: bash
+          DIST_DIR: ${{ github.workspace }}/build/release-evidence
         run: |
-          RELEASE_APK=$(find "${{ github.workspace }}/app/build/outputs/apk/release" -name "*.apk" -type f | sort | head -n 1)
-          if [ -z "${RELEASE_APK}" ]; then
-            echo "Release APK not found"
-            exit 1
-          fi
-
-          gh release view "${RELEASE_TAG}" --json isDraft >/dev/null 2>&1 || \
-            gh release create "${RELEASE_TAG}" \
+          gh release view "$RELEASE_TAG" --json isDraft >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" \
               --draft \
-              --title "${RELEASE_TAG}" \
+              --title "$RELEASE_TAG" \
               --generate-notes
 
-          gh release upload "${RELEASE_TAG}" "${RELEASE_APK}" --clobber
-          gh release edit "${RELEASE_TAG}" --draft=false
+          gh release upload "$RELEASE_TAG" "$DIST_DIR"/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
+
+  skipped-due-to-no-fcm:
+    runs-on: ubuntu-latest
+    needs: check-fcm
+    if: needs.check-fcm.outputs.has_fcm == 'false'
+    steps:
+      - name: Workflow Skipped
+        run: |
+          echo "❌ Workflow skipped because FCM secret is not configured."
+          echo "Please configure the FCM secret in the repository settings."

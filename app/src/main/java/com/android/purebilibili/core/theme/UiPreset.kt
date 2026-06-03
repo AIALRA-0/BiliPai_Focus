@@ -16,7 +16,10 @@ enum class AndroidNativeVariant(val value: Int, val label: String) {
     MIUIX(1, "Miuix");
 
     companion object {
+        private const val LEGACY_REMOVED_VARIANT_VALUE = 2
+
         fun fromValue(value: Int): AndroidNativeVariant {
+            if (value == LEGACY_REMOVED_VARIANT_VALUE) return MATERIAL3
             return entries.find { it.value == value } ?: MATERIAL3
         }
     }
@@ -47,3 +50,4 @@ fun resolveUiRenderingProfile(preset: UiPreset): UiRenderingProfile {
 val LocalUiPreset = staticCompositionLocalOf { UiPreset.IOS }
 val LocalAndroidNativeVariant = staticCompositionLocalOf { AndroidNativeVariant.MATERIAL3 }
 val LocalDynamicColorActive = staticCompositionLocalOf { false }
+val LocalSettingsLiquidGlassEnabled = staticCompositionLocalOf { false }

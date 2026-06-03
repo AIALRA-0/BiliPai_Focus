@@ -52,7 +52,8 @@ object ArticleRepository {
     private fun ArticleViewData.toUiModel(): ArticleDetailUiModel {
         val parsedBlocks = parseArticleContentBlocks(
             structuredParagraphs = opus?.paragraphs().orEmpty(),
-            htmlContent = content
+            htmlContent = content,
+            ops = ops
         )
 
         val resolvedTitle = title

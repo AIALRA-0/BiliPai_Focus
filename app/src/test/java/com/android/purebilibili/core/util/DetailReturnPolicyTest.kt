@@ -2,6 +2,7 @@ package com.android.purebilibili.core.util
 
 import kotlin.test.Test
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DetailReturnPolicyTest {
@@ -37,15 +38,18 @@ class DetailReturnPolicyTest {
     }
 
     @Test
-    fun markAndClearReturning_updatesReturningFlags() {
-        CardPositionManager.clearReturning()
-        assertFalse(CardPositionManager.isReturningFromDetail)
+    fun clear_resetsOnlyCardGeometryFallback() {
+        CardPositionManager.recordCardPosition(
+            bounds = androidx.compose.ui.geometry.Rect(0f, 0f, 100f, 100f),
+            screenWidth = 200f,
+            screenHeight = 200f
+        )
+        assertTrue(CardPositionManager.lastClickedCardBounds != null)
+        assertTrue(CardPositionManager.lastClickedCardCenter != null)
 
-        CardPositionManager.markReturning()
-        assertTrue(CardPositionManager.isReturningFromDetail)
+        CardPositionManager.clear()
 
-        CardPositionManager.clearReturning()
-        assertFalse(CardPositionManager.isReturningFromDetail)
-        assertFalse(CardPositionManager.isQuickReturnFromDetail)
+        assertNull(CardPositionManager.lastClickedCardBounds)
+        assertNull(CardPositionManager.lastClickedCardCenter)
     }
 }

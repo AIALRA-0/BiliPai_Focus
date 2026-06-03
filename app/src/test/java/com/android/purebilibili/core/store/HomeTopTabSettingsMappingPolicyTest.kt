@@ -14,11 +14,11 @@ class HomeTopTabSettingsMappingPolicyTest {
         val result = mapHomeTopTabSettingsFromPreferences(prefs)
 
         assertEquals(
-            listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
+            listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME", "PARTITION"),
             result.orderIds
         )
         assertEquals(
-            setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
+            setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME", "PARTITION"),
             result.visibleIds
         )
     }

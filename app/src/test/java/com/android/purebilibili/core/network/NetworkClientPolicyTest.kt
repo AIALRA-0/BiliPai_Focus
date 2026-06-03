@@ -37,4 +37,20 @@ class NetworkClientPolicyTest {
         assertEquals(Proxy.NO_PROXY, playbackClient.proxy)
         assertEquals(sharedClient.protocols, playbackClient.protocols)
     }
+
+    @Test
+    fun guestClient_allowsHttpTwoForFallbackRequests() {
+        assertEquals(
+            listOf(Protocol.HTTP_2, Protocol.HTTP_1_1),
+            NetworkModule.guestOkHttpClient.protocols
+        )
+    }
+
+    @Test
+    fun sharedProtocolPolicy_keepsHttpTwoWithHttpOneFallback() {
+        assertEquals(
+            listOf(Protocol.HTTP_2, Protocol.HTTP_1_1),
+            NetworkModule.resolveSharedNetworkProtocols()
+        )
+    }
 }

@@ -16,6 +16,7 @@ internal data class AppNavigationMotionSpec(
 private const val FALLBACK_FADE_DURATION_MILLIS = 120
 private const val QUICK_RETURN_FADE_DURATION_MILLIS = 170
 private const val SEAMLESS_FADE_DURATION_MILLIS = 180
+private const val CARD_DISABLED_TARGET_SLIDE_MAX_DURATION_MILLIS = 220
 private const val CARD_TARGET_FALLBACK_SLIDE_MAX_DURATION_MILLIS = 180
 
 internal fun resolveAppNavigationMotionSpec(
@@ -33,7 +34,7 @@ internal fun resolveAppNavigationMotionSpec(
             fallbackFadeDurationMillis = FALLBACK_FADE_DURATION_MILLIS,
             quickReturnFadeDurationMillis = QUICK_RETURN_FADE_DURATION_MILLIS,
             seamlessFadeDurationMillis = SEAMLESS_FADE_DURATION_MILLIS,
-            cardTargetFallbackSlideMaxDurationMillis = CARD_TARGET_FALLBACK_SLIDE_MAX_DURATION_MILLIS
+            cardTargetFallbackSlideMaxDurationMillis = CARD_DISABLED_TARGET_SLIDE_MAX_DURATION_MILLIS
         )
     }
 

@@ -4,7 +4,10 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
+import com.android.purebilibili.data.model.response.SearchLiveUserItem
+import com.android.purebilibili.data.model.response.SearchPhotoItem
 import com.android.purebilibili.data.model.response.SearchSuggestTag
+import com.android.purebilibili.data.model.response.SearchTopicItem
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.LiveRoomSearchItem
@@ -30,6 +33,42 @@ object SearchRepository {
         val totalResults: Int,
         val hasMore: Boolean
     )
+
+    private fun createPageInfo(
+        requestedPage: Int,
+        responsePage: Int,
+        totalPages: Int,
+        totalResults: Int,
+        fallbackResultCount: Int
+    ): SearchPageInfo {
+        val resolvedPage = resolveSearchLoadedPage(
+            requestedPage = requestedPage,
+            responsePage = responsePage
+        )
+        val resolvedTotalPages = totalPages.takeIf { it > 0 } ?: 1
+        return SearchPageInfo(
+            currentPage = resolvedPage,
+            totalPages = resolvedTotalPages,
+            totalResults = totalResults.takeIf { it > 0 } ?: fallbackResultCount,
+            hasMore = resolvedPage < resolvedTotalPages
+        )
+    }
+
+    private fun searchTypeParams(
+        keyword: String,
+        searchType: String,
+        page: Int,
+        extra: Map<String, String> = emptyMap()
+    ): MutableMap<String, String> {
+        return mutableMapOf(
+            "keyword" to keyword,
+            "search_type" to searchType,
+            "page" to page.toString(),
+            "page_size" to "20",
+            "platform" to "pc",
+            "web_location" to "1430654"
+        ).apply { putAll(extra) }
+    }
 
     //  视频搜索 - 支持排序、时长过滤和分页
     suspend fun search(
@@ -82,15 +121,12 @@ object SearchRepository {
                 )
                 return@withContext searchVideoFallback(keyword = keyword, page = page)
             }
-            val resolvedPage = resolveSearchLoadedPage(
+            val pageInfo = createPageInfo(
                 requestedPage = page,
-                responsePage = response.data?.page ?: page
-            )
-            val pageInfo = SearchPageInfo(
-                currentPage = resolvedPage,
+                responsePage = response.data?.page ?: page,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: videoList.size,
-                hasMore = resolvedPage < (response.data?.numPages ?: 1)
+                fallbackResultCount = videoList.size
             )
             
             com.android.purebilibili.core.util.Logger.d(
@@ -109,6 +145,48 @@ object SearchRepository {
             searchVideoFallback(keyword = keyword, page = page)
         }
     }
+
+    suspend fun searchWithDurations(
+        keyword: String,
+        order: SearchOrder = SearchOrder.TOTALRANK,
+        durations: Set<SearchDuration> = emptySet(),
+        tids: Int = 0,
+        page: Int = 1
+    ): Result<Pair<List<VideoItem>, SearchPageInfo>> {
+        val requests = resolveSearchDurationRequests(durations)
+        if (requests.size == 1) {
+            return search(
+                keyword = keyword,
+                order = order,
+                duration = requests.single(),
+                tids = tids,
+                page = page
+            )
+        }
+
+        val pages = mutableListOf<Pair<List<VideoItem>, SearchPageInfo>>()
+        var firstFailure: Throwable? = null
+        for (duration in requests) {
+            search(
+                keyword = keyword,
+                order = order,
+                duration = duration,
+                tids = tids,
+                page = page
+            ).fold(
+                onSuccess = { pages += it },
+                onFailure = { error ->
+                    if (firstFailure == null) firstFailure = error
+                }
+            )
+        }
+
+        return if (pages.isNotEmpty()) {
+            Result.success(mergeSearchDurationResultPages(pages))
+        } else {
+            Result.failure(firstFailure ?: IllegalStateException("搜索失败"))
+        }
+    }
     
     //  UP主 搜索
     suspend fun searchUp(
@@ -119,16 +197,15 @@ object SearchRepository {
         userType: SearchUserType = SearchUserType.ALL
     ): Result<Pair<List<SearchUpItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
-            val params = mutableMapOf(
-                "keyword" to keyword,
-                "search_type" to "bili_user",
-                "order" to order.value,
-                "order_sort" to orderSort.value.toString(),
-                "user_type" to userType.value.toString(),
-                "page" to page.toString(),
-                "page_size" to "20",
-                "platform" to "pc",
-                "web_location" to "1430654"
+            val params = searchTypeParams(
+                keyword = keyword,
+                searchType = "bili_user",
+                page = page,
+                extra = mapOf(
+                    "order" to order.value,
+                    "order_sort" to orderSort.value.toString(),
+                    "user_type" to userType.value.toString()
+                )
             )
 
             val signedParams = signWithWbi(params)
@@ -142,15 +219,12 @@ object SearchRepository {
                 ?.map { it.cleanupFields() }
                 ?: emptyList()
 
-            val resolvedPage = resolveSearchLoadedPage(
+            val pageInfo = createPageInfo(
                 requestedPage = page,
-                responsePage = response.data?.page ?: page
-            )
-            val pageInfo = SearchPageInfo(
-                currentPage = resolvedPage,
+                responsePage = response.data?.page ?: page,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: upList.size,
-                hasMore = resolvedPage < (response.data?.numPages ?: 1)
+                fallbackResultCount = upList.size
             )
             
             com.android.purebilibili.core.util.Logger.d(
@@ -195,6 +269,26 @@ object SearchRepository {
     //  热搜榜单（PiliPlus 同源）
     suspend fun getTrendingKeywords(limit: Int = 30): Result<SearchTrendingBundle> = withContext(Dispatchers.IO) {
         try {
+            val wbiResponse = runCatching {
+                api.getHotSearch(
+                    signWithWbi(
+                        mapOf("limit" to limit.toString())
+                    )
+                )
+            }.getOrNull()
+            if (wbiResponse?.code == 0) {
+                val wbiItems = wbiResponse.data
+                    ?.trending
+                    ?.list
+                    ?.filter { item -> item.keyword.isNotBlank() || item.show_name.isNotBlank() }
+                    .orEmpty()
+                if (wbiItems.isNotEmpty()) {
+                    return@withContext Result.success(
+                        SearchTrendingBundle(items = wbiItems.take(limit))
+                    )
+                }
+            }
+
             val response = api.getTrendingList(limit)
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
@@ -219,13 +313,10 @@ object SearchRepository {
         page: Int = 1
     ): Result<Pair<List<com.android.purebilibili.data.model.response.BangumiSearchItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
-            val params = mutableMapOf(
-                "keyword" to keyword,
-                "search_type" to "media_bangumi",
-                "page" to page.toString(),
-                "page_size" to "20",
-                "platform" to "pc",
-                "web_location" to "1430654"
+            val params = searchTypeParams(
+                keyword = keyword,
+                searchType = "media_bangumi",
+                page = page
             )
             
             val signedParams = signWithWbi(params)
@@ -238,20 +329,17 @@ object SearchRepository {
             val bangumiList = response.data?.result?.map { item ->
                 // 清理 HTML 标签
                 item.copy(
-                    title = item.title.replace(Regex("<.*?>"), ""),
-                    cover = if (item.cover.startsWith("//")) "https:${item.cover}" else item.cover
+                    title = com.android.purebilibili.data.model.response.cleanSearchText(item.title),
+                    cover = com.android.purebilibili.data.model.response.normalizeSearchImageUrl(item.cover)
                 )
             } ?: emptyList()
             
-            val resolvedPage = resolveSearchLoadedPage(
+            val pageInfo = createPageInfo(
                 requestedPage = page,
-                responsePage = response.data?.page ?: page
-            )
-            val pageInfo = SearchPageInfo(
-                currentPage = resolvedPage,
+                responsePage = response.data?.page ?: page,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: bangumiList.size,
-                hasMore = resolvedPage < (response.data?.numPages ?: 1)
+                fallbackResultCount = bangumiList.size
             )
             
             com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Bangumi search result: ${bangumiList.size} items, page ${pageInfo.currentPage}/${pageInfo.totalPages}")
@@ -269,13 +357,10 @@ object SearchRepository {
         page: Int = 1
     ): Result<Pair<List<com.android.purebilibili.data.model.response.BangumiSearchItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
-            val params = mutableMapOf(
-                "keyword" to keyword,
-                "search_type" to "media_ft",
-                "page" to page.toString(),
-                "page_size" to "20",
-                "platform" to "pc",
-                "web_location" to "1430654"
+            val params = searchTypeParams(
+                keyword = keyword,
+                searchType = "media_ft",
+                page = page
             )
 
             val signedParams = signWithWbi(params)
@@ -286,20 +371,17 @@ object SearchRepository {
 
             val resultList = response.data?.result?.map { item ->
                 item.copy(
-                    title = item.title.replace(Regex("<.*?>"), ""),
-                    cover = if (item.cover.startsWith("//")) "https:${item.cover}" else item.cover
+                    title = com.android.purebilibili.data.model.response.cleanSearchText(item.title),
+                    cover = com.android.purebilibili.data.model.response.normalizeSearchImageUrl(item.cover)
                 )
             } ?: emptyList()
 
-            val resolvedPage = resolveSearchLoadedPage(
+            val pageInfo = createPageInfo(
                 requestedPage = page,
-                responsePage = response.data?.page ?: page
-            )
-            val pageInfo = SearchPageInfo(
-                currentPage = resolvedPage,
+                responsePage = response.data?.page ?: page,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: resultList.size,
-                hasMore = resolvedPage < (response.data?.numPages ?: 1)
+                fallbackResultCount = resultList.size
             )
 
             com.android.purebilibili.core.util.Logger.d(
@@ -321,14 +403,11 @@ object SearchRepository {
         order: SearchLiveOrder = SearchLiveOrder.ONLINE
     ): Result<Pair<List<LiveRoomSearchItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
-            val params = mutableMapOf(
-                "keyword" to keyword,
-                "search_type" to "live_room",
-                "order" to order.value,
-                "page" to page.toString(),
-                "page_size" to "20",
-                "platform" to "pc",
-                "web_location" to "1430654"
+            val params = searchTypeParams(
+                keyword = keyword,
+                searchType = "live_room",
+                page = page,
+                extra = mapOf("order" to order.value)
             )
             
             val signedParams = signWithWbi(params)
@@ -340,15 +419,12 @@ object SearchRepository {
             
             val liveList = response.data?.result?.map { it.cleanupFields() } ?: emptyList()
             
-            val resolvedPage = resolveSearchLoadedPage(
+            val pageInfo = createPageInfo(
                 requestedPage = page,
-                responsePage = response.data?.page ?: page
-            )
-            val pageInfo = SearchPageInfo(
-                currentPage = resolvedPage,
+                responsePage = response.data?.page ?: page,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: liveList.size,
-                hasMore = resolvedPage < (response.data?.numPages ?: 1)
+                fallbackResultCount = liveList.size
             )
             
             com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Live search result: ${liveList.size} rooms, page ${pageInfo.currentPage}/${pageInfo.totalPages}")
@@ -365,13 +441,10 @@ object SearchRepository {
         page: Int = 1
     ): Result<Pair<List<SearchArticleItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
         try {
-            val params = mutableMapOf(
-                "keyword" to keyword,
-                "search_type" to "article",
-                "page" to page.toString(),
-                "page_size" to "20",
-                "platform" to "pc",
-                "web_location" to "1430654"
+            val params = searchTypeParams(
+                keyword = keyword,
+                searchType = "article",
+                page = page
             )
 
             val signedParams = signWithWbi(params)
@@ -384,18 +457,90 @@ object SearchRepository {
                 ?.map { it.cleanupFields() }
                 ?: emptyList()
 
-            val resolvedPage = resolveSearchLoadedPage(
+            val pageInfo = createPageInfo(
                 requestedPage = page,
-                responsePage = response.data?.page ?: page
-            )
-            val pageInfo = SearchPageInfo(
-                currentPage = resolvedPage,
+                responsePage = response.data?.page ?: page,
                 totalPages = response.data?.numPages ?: 1,
                 totalResults = response.data?.numResults ?: articleList.size,
-                hasMore = resolvedPage < (response.data?.numPages ?: 1)
+                fallbackResultCount = articleList.size
             )
 
             Result.success(Pair(articleList, pageInfo))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchLiveUser(
+        keyword: String,
+        page: Int = 1
+    ): Result<Pair<List<SearchLiveUserItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
+        try {
+            val signedParams = signWithWbi(searchTypeParams(keyword, "live_user", page))
+            val response = api.searchLiveUser(signedParams)
+            if (response.code != 0) {
+                return@withContext Result.failure(createSearchError(response.code, response.message))
+            }
+            val items = response.data?.result?.map { it.cleanupFields() } ?: emptyList()
+            val pageInfo = createPageInfo(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page,
+                totalPages = response.data?.numPages ?: 1,
+                totalResults = response.data?.numResults ?: items.size,
+                fallbackResultCount = items.size
+            )
+            Result.success(Pair(items, pageInfo))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchTopic(
+        keyword: String,
+        page: Int = 1
+    ): Result<Pair<List<SearchTopicItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
+        try {
+            val signedParams = signWithWbi(searchTypeParams(keyword, "topic", page))
+            val response = api.searchTopic(signedParams)
+            if (response.code != 0) {
+                return@withContext Result.failure(createSearchError(response.code, response.message))
+            }
+            val items = response.data?.result?.map { it.cleanupFields() } ?: emptyList()
+            val pageInfo = createPageInfo(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page,
+                totalPages = response.data?.numPages ?: 1,
+                totalResults = response.data?.numResults ?: items.size,
+                fallbackResultCount = items.size
+            )
+            Result.success(Pair(items, pageInfo))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchPhoto(
+        keyword: String,
+        page: Int = 1
+    ): Result<Pair<List<SearchPhotoItem>, SearchPageInfo>> = withContext(Dispatchers.IO) {
+        try {
+            val signedParams = signWithWbi(searchTypeParams(keyword, "photo", page))
+            val response = api.searchPhoto(signedParams)
+            if (response.code != 0) {
+                return@withContext Result.failure(createSearchError(response.code, response.message))
+            }
+            val items = response.data?.result?.map { it.cleanupFields() } ?: emptyList()
+            val pageInfo = createPageInfo(
+                requestedPage = page,
+                responsePage = response.data?.page ?: page,
+                totalPages = response.data?.numPages ?: 1,
+                totalResults = response.data?.numResults ?: items.size,
+                fallbackResultCount = items.size
+            )
+            Result.success(Pair(items, pageInfo))
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
@@ -520,14 +665,19 @@ object SearchRepository {
         return withContext(Dispatchers.IO) {
             try {
                 val response = api.searchAll(
-                    mapOf(
+                    signWithWbi(
+                        mapOf(
                         "keyword" to keyword,
                         "page" to page.toString(),
                         "page_size" to "20",
                         "platform" to "pc",
                         "web_location" to "1430654"
+                        )
                     )
                 )
+                if (response.code != 0) {
+                    return@withContext Result.failure(createSearchError(response.code, response.message))
+                }
 
                 val videos = response.data?.result
                     ?.firstOrNull { it.result_type == "video" }
@@ -537,9 +687,9 @@ object SearchRepository {
 
                 val pageInfo = SearchPageInfo(
                     currentPage = page,
-                    totalPages = if (videos.size >= 20) page + 1 else page,
-                    totalResults = videos.size,
-                    hasMore = videos.size >= 20
+                    totalPages = response.data?.numPages?.takeIf { it > 0 } ?: if (videos.size >= 20) page + 1 else page,
+                    totalResults = response.data?.numResults?.takeIf { it > 0 } ?: videos.size,
+                    hasMore = response.data?.numPages?.let { page < it } ?: (videos.size >= 20)
                 )
 
                 com.android.purebilibili.core.util.Logger.d(

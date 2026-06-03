@@ -10,10 +10,8 @@
 -dontwarn org.jetbrains.annotations.**
 
 # === 优化选项 ===
-# Release 7.1.4-focus.2 on device hit a VerifyError while entering VideoDetailScreen.
-# Keep shrinking/obfuscation, but disable bytecode optimization to avoid Compose/R8
-# generating unverifiable dex for large video screen composables.
--dontoptimize
+-optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
+-optimizationpasses 5
 -allowaccessmodification
 -dontpreverify
 
@@ -70,6 +68,29 @@
 # === Compose ===
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
+
+# Android 16 ART can reject the heavily optimized dex for the large Compose
+# VideoDetailScreen entrypoint. Keep this class unoptimized while preserving
+# R8 for the rest of the release build.
+-keep class com.android.purebilibili.feature.video.screen.VideoDetailScreenKt { *; }
+
+# Release-only player overlay regressions are hard to diagnose because gestures
+# can keep working while Compose control layers stop rendering. Keep the
+# player section and overlay classes out of R8 optimization; this preserves
+# minification for the rest of the app while protecting the control UI path.
+-keep class com.android.purebilibili.feature.video.ui.section.** { *; }
+-keep class com.android.purebilibili.feature.video.ui.overlay.** { *; }
+
+# Release 下底栏搜索入口曾出现点击无响应，只在正式版复现。
+# 保留底栏搜索、搜索页入口和导航交接相关的 Compose 函数及合成 lambda，
+# 避免 R8 优化破坏点击、展开、焦点和搜索页入场链路。
+-keep class com.android.purebilibili.feature.home.components.BottomBarKt { *; }
+-keep class com.android.purebilibili.feature.home.components.BottomBarKt$* { *; }
+-keep class com.android.purebilibili.feature.search.SearchScreenKt { *; }
+-keep class com.android.purebilibili.feature.search.SearchScreenKt$* { *; }
+-keep class com.android.purebilibili.feature.search.SearchEntryMotionSource { *; }
+-keep class com.android.purebilibili.navigation.AppNavigationKt { *; }
+-keep class com.android.purebilibili.navigation.AppNavigationKt$* { *; }
 
 # === Haze (毛玻璃效果) ===
 -keep class dev.chrisbanes.haze.** { *; }

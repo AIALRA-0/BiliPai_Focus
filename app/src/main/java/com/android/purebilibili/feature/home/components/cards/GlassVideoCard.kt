@@ -19,9 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -50,10 +48,15 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.tween
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
+import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
+import com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
+import kotlin.math.roundToInt
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
 import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
 
@@ -75,6 +78,8 @@ fun GlassVideoCard(
     animationEnabled: Boolean = true,  //  卡片动画开关
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
+    sharedElementSourceRoute: String? = null,
+    isReturningFromVideoDetail: Boolean = false,
     isDataSaverActive: Boolean = false,
     preferLowQualityCover: Boolean = false,
     showCoverGlassBadges: Boolean = true,
@@ -149,9 +154,26 @@ fun GlassVideoCard(
     
     //  记录卡片位置（非 Compose State，避免滚动时触发高频重组）
     val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val localSharedElementSourceRoute = LocalVideoCardSharedElementSourceRoute.current
+    val effectiveSharedElementSourceRoute = remember(sharedElementSourceRoute, localSharedElementSourceRoute) {
+        sharedElementSourceRoute ?: localSharedElementSourceRoute
+    }
+    val cardSharedTransitionMotionSpec = remember(effectiveSharedElementSourceRoute, transitionEnabled) {
+        resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = effectiveSharedElementSourceRoute,
+            transitionEnabled = transitionEnabled
+        )
+    }
     val triggerCardClick = {
         cardBoundsRef.value?.let { bounds ->
-            CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
+            CardPositionManager.recordVideoCardPosition(
+                bvid = video.bvid,
+                sourceRoute = effectiveSharedElementSourceRoute,
+                bounds = bounds,
+                screenWidth = screenWidthPx,
+                screenHeight = screenHeightPx,
+                sourceCornerDp = cardCornerRadius.value.roundToInt()
+            )
         }
         onClick(video.bvid, 0)
     }
@@ -178,9 +200,23 @@ fun GlassVideoCard(
         with(sharedTransitionScope) {
             Modifier
                 .sharedBounds(
-                    sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
+                    sharedContentState = rememberSharedContentState(
+                        key = videoCoverSharedElementKey(
+                            video.bvid,
+                            sourceRoute = effectiveSharedElementSourceRoute
+                        )
+                    ),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = { _, _ -> com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec },
+                    boundsTransform = { _, _ ->
+                        if (cardSharedTransitionMotionSpec.enabled) {
+                            tween(
+                                durationMillis = cardSharedTransitionMotionSpec.durationMillis,
+                                easing = cardSharedTransitionMotionSpec.easing
+                            )
+                        } else {
+                            com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                        }
+                    },
                     clipInOverlayDuringTransition = OverlayClip(
                         RoundedCornerShape(cardCornerRadius)  // 过渡时保持动态圆角
                     )
@@ -192,7 +228,7 @@ fun GlassVideoCard(
     val enterAnimationEnabledAtMount = remember(video.bvid) {
         resolveHomeCardEnterAnimationEnabledAtMount(
             baseAnimationEnabled = animationEnabled,
-            isReturningFromDetail = CardPositionManager.isReturningFromDetail,
+            isReturningFromDetail = isReturningFromVideoDetail,
             isSwitchingCategory = CardPositionManager.isSwitchingCategory
         )
     }
@@ -328,37 +364,32 @@ fun GlassVideoCard(
                                     maxLines = 1,
                                     softWrap = false,
                                     textAlign = TextAlign.Center,
-                                    style = androidx.compose.ui.text.TextStyle(
-                                        shadow = Shadow(
-                                            color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
-                                            offset = Offset(0f, 1f),
-                                            blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
-                                        )
-                                    ),
                                     modifier = Modifier
                                         .widthIn(min = durationBadgeMinWidth)
                                         .padding(horizontal = 10.dp, vertical = 5.dp)
                                 )
                             }
                         } else {
-                            Text(
-                                text = durationText,
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false,
-                                style = androidx.compose.ui.text.TextStyle(
-                                    shadow = Shadow(
-                                        color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
-                                        offset = Offset(0f, 1f),
-                                        blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
-                                    )
-                                ),
+                            Surface(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(20.dp, 0.dp, 20.dp, 16.dp)
-                            )
+                                    .padding(20.dp, 0.dp, 20.dp, 16.dp),
+                                color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha),
+                                shape = RoundedCornerShape(tagCornerRadius)
+                            ) {
+                                Text(
+                                    text = durationText,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .widthIn(min = durationBadgeMinWidth)
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
                         }
                         
                         //  [新增] 竖屏标签 - 左上角显示
@@ -380,22 +411,21 @@ fun GlassVideoCard(
                                 )
                             }
                         } else if (video.isVertical) {
-                            Text(
-                                text = "竖屏",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                style = androidx.compose.ui.text.TextStyle(
-                                    shadow = Shadow(
-                                        color = Color.Black.copy(alpha = 0.45f),
-                                        offset = Offset(0f, 1f),
-                                        blurRadius = 3f
-                                    )
-                                ),
+                            Surface(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
-                                    .padding(10.dp)
-                            )
+                                    .padding(10.dp),
+                                color = Color(0xFF00D1B2).copy(alpha = 0.82f),
+                                shape = RoundedCornerShape(smallTagRadius)
+                            ) {
+                                Text(
+                                    text = "竖屏",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -445,9 +475,9 @@ fun GlassVideoCard(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             ),
-                            nameColor = onSurfaceVariant,
+                            nameColor = MaterialTheme.colorScheme.primary,
                             badgeTextColor = onSurfaceVariant.copy(alpha = 0.85f),
-                            badgeBorderColor = onSurfaceVariant.copy(alpha = 0.35f),
+                            badgeBackgroundColor = onSurfaceVariant.copy(alpha = 0.12f),
                             showUpBadge = showUpBadge,
                             modifier = Modifier.weight(1f, fill = false)
                         )

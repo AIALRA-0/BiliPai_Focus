@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
  * - 视频: bilibili.com/video/BV... 或 av...
  * - UP主空间: space.bilibili.com/{mid}
  * - 直播: live.bilibili.com/{roomId}
+ * - 动态: t.bilibili.com/{dynamicId} 或 opus/{dynamicId}
  * - 番剧: bilibili.com/bangumi/play/ss{id} 或 ep{id}
  * - 音乐: music.bilibili.com/h5/music-detail?music_id=...
  */
@@ -39,6 +40,7 @@ fun WebViewScreen(
     onVideoClick: ((bvid: String) -> Unit)? = null,
     onSpaceClick: ((mid: Long) -> Unit)? = null,
     onLiveClick: ((roomId: Long) -> Unit)? = null,
+    onDynamicClick: ((dynamicId: String) -> Unit)? = null,
     onBangumiClick: ((seasonId: Long, epId: Long) -> Unit)? = null,
     onMusicClick: ((musicId: String) -> Unit)? = null
 ) {
@@ -151,8 +153,13 @@ fun WebViewScreen(
                                                 onMusicClick != null
                                             }
 
-                                            is BilibiliNavigationTarget.Dynamic -> false
+                                            is BilibiliNavigationTarget.Dynamic -> {
+                                                onDynamicClick?.invoke(target.dynamicId)
+                                                onDynamicClick != null
+                                            }
+
                                             is BilibiliNavigationTarget.Search -> false
+                                            is BilibiliNavigationTarget.Article -> false
                                         }
                                     }
 

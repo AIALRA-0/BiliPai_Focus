@@ -111,9 +111,7 @@ object HistoryRepository {
         }
     }
 
-    suspend fun clearHistory(
-        csrf: String
-    ): Result<Unit> {
+    suspend fun clearHistory(csrf: String): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
                 val response = api.clearHistory(csrf = csrf)
@@ -121,6 +119,39 @@ object HistoryRepository {
                     Result.success(Unit)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "清空历史失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getHistoryPaused(): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getHistoryShadow()
+                if (response.code == 0) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "查询历史记录状态失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun setHistoryPaused(
+        paused: Boolean,
+        csrf: String
+    ): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.setHistoryShadow(shadowSwitch = paused, csrf = csrf)
+                if (response.code == 0) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "设置历史记录状态失败: ${response.code}" }))
                 }
             } catch (e: Exception) {
                 Result.failure(e)

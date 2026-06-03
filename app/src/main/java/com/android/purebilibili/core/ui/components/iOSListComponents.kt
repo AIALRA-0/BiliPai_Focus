@@ -3,21 +3,39 @@ package com.android.purebilibili.core.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +45,7 @@ import androidx.compose.ui.graphics.SolidColor
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalDynamicColorActive
+import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
@@ -40,6 +59,8 @@ import com.android.purebilibili.core.theme.iOSRed
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSYellow
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults
@@ -47,7 +68,18 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
+import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
+import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference as MiuixSwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.max
+
+private object NoOpHapticFeedback : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}
 
 // ═══════════════════════════════════════════════════
 //  Common iOS List Components (Reused across Settings, Profile, etc.)
@@ -168,40 +200,81 @@ internal fun resolveAdaptiveGroupContainerColor(
     uiPreset: UiPreset,
     colorScheme: ColorScheme,
     fallbackColor: Color,
-    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
+    globalWallpaperVisible: Boolean = false
 ): Color {
-    return if (uiPreset == UiPreset.MD3) {
-        if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-            colorScheme.surfaceContainer
-        } else {
-            colorScheme.surfaceContainerLow
+    val resolvedColor = if (uiPreset == UiPreset.MD3) {
+        when {
+            androidNativeVariant == AndroidNativeVariant.MIUIX -> colorScheme.surfaceContainer
+            else -> colorScheme.surfaceContainerLow
         }
     } else {
         fallbackColor
     }
+    return resolveGlobalWallpaperListContainerColor(
+        containerColor = resolvedColor,
+        colorScheme = colorScheme,
+        globalWallpaperVisible = globalWallpaperVisible,
+        targetAlpha = 0.62f
+    )
 }
 
 internal fun resolveAdaptiveSearchBarContainerColor(
     uiPreset: UiPreset,
     colorScheme: ColorScheme,
     fallbackColor: Color,
-    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
+    globalWallpaperVisible: Boolean = false
 ): Color {
-    return if (uiPreset == UiPreset.MD3) {
-        if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-            colorScheme.surfaceContainer
-        } else {
-            colorScheme.surfaceContainerHigh
+    val resolvedColor = if (uiPreset == UiPreset.MD3) {
+        when {
+            androidNativeVariant == AndroidNativeVariant.MIUIX -> colorScheme.surfaceContainer
+            else -> colorScheme.surfaceContainerHigh
         }
     } else {
         fallbackColor
     }
+    return resolveGlobalWallpaperListContainerColor(
+        containerColor = resolvedColor,
+        colorScheme = colorScheme,
+        globalWallpaperVisible = globalWallpaperVisible,
+        targetAlpha = 0.48f
+    )
 }
 
 internal fun shouldUseNativeMiuixSearchBar(
     uiPreset: UiPreset,
     androidNativeVariant: AndroidNativeVariant
 ): Boolean = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
+
+internal fun resolveGlobalWallpaperListContainerColor(
+    containerColor: Color,
+    colorScheme: ColorScheme,
+    globalWallpaperVisible: Boolean,
+    targetAlpha: Float
+): Color {
+    if (!globalWallpaperVisible || containerColor.alpha == 0f) return containerColor
+    if (!isDefaultListContainerColor(containerColor, colorScheme)) return containerColor
+    val adjustedAlpha = if (colorScheme.background.luminance() > 0.5f) {
+        targetAlpha
+    } else {
+        (targetAlpha + 0.12f).coerceAtMost(0.78f)
+    }
+    return containerColor.copy(alpha = containerColor.alpha.coerceAtMost(adjustedAlpha))
+}
+
+private fun isDefaultListContainerColor(
+    color: Color,
+    colorScheme: ColorScheme
+): Boolean {
+    val opaqueColor = color.copy(alpha = 1f)
+    return opaqueColor == colorScheme.background.copy(alpha = 1f) ||
+        opaqueColor == colorScheme.surface.copy(alpha = 1f) ||
+        opaqueColor == colorScheme.surfaceVariant.copy(alpha = 1f) ||
+        opaqueColor == colorScheme.surfaceContainer.copy(alpha = 1f) ||
+        opaqueColor == colorScheme.surfaceContainerLow.copy(alpha = 1f) ||
+        opaqueColor == colorScheme.surfaceContainerHigh.copy(alpha = 1f)
+}
 
 private val miuixAdaptiveSearchShape = RoundedCornerShape(percent = 50)
 private val miuixAdaptiveSearchLeadingStartPadding = 16.dp
@@ -280,6 +353,8 @@ fun AppAdaptiveSwitch(
     enabled: Boolean = true
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val settingsLiquidGlassEnabled = LocalSettingsLiquidGlassEnabled.current
     val colorScheme = MaterialTheme.colorScheme
     val switchSpec = remember(uiPreset, colorScheme) {
         resolveAdaptiveSwitchVisualSpec(
@@ -287,41 +362,177 @@ fun AppAdaptiveSwitch(
             colorScheme = colorScheme
         )
     }
-    if (uiPreset == UiPreset.MD3) {
-        if (switchSpec.usePlatformDefaults) {
-            Switch(
+    when (
+        resolveAppAdaptiveSwitchTreatment(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant,
+            settingsLiquidGlassEnabled = settingsLiquidGlassEnabled
+        )
+    ) {
+        AppAdaptiveSwitchTreatment.MATERIAL -> {
+            if (switchSpec.usePlatformDefaults) {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    enabled = enabled,
+                    modifier = modifier
+                )
+            } else {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    enabled = enabled,
+                    modifier = modifier,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = switchSpec.checkedThumbColor,
+                        checkedTrackColor = switchSpec.checkedTrackColor,
+                        checkedBorderColor = switchSpec.checkedTrackColor,
+                        uncheckedThumbColor = switchSpec.uncheckedThumbColor,
+                        uncheckedTrackColor = switchSpec.uncheckedTrackColor,
+                        uncheckedBorderColor = switchSpec.uncheckedBorderColor
+                    )
+                )
+            }
+        }
+        AppAdaptiveSwitchTreatment.MIUIX -> {
+            MiuixSwitch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 enabled = enabled,
                 modifier = modifier
             )
-        } else {
-            Switch(
+        }
+        AppAdaptiveSwitchTreatment.CUPERTINO -> {
+            CupertinoSwitch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 enabled = enabled,
                 modifier = modifier,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = switchSpec.checkedThumbColor,
+                colors = CupertinoSwitchDefaults.colors(
+                    thumbColor = switchSpec.checkedThumbColor,
                     checkedTrackColor = switchSpec.checkedTrackColor,
-                    checkedBorderColor = switchSpec.checkedTrackColor,
-                    uncheckedThumbColor = switchSpec.uncheckedThumbColor,
-                    uncheckedTrackColor = switchSpec.uncheckedTrackColor,
-                    uncheckedBorderColor = switchSpec.uncheckedBorderColor
+                    uncheckedTrackColor = switchSpec.uncheckedTrackColor
                 )
             )
         }
-    } else {
-        CupertinoSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled,
-            modifier = modifier,
-            colors = CupertinoSwitchDefaults.colors(
-                thumbColor = switchSpec.checkedThumbColor,
-                checkedTrackColor = switchSpec.checkedTrackColor,
-                uncheckedTrackColor = switchSpec.uncheckedTrackColor
+        AppAdaptiveSwitchTreatment.LIQUID_GLASS -> {
+            IOSLiquidGlassSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+                modifier = modifier
             )
+        }
+    }
+}
+
+@Composable
+private fun IOSLiquidGlassSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val clickPulse = remember { Animatable(0f) }
+    var didInitializePulse by remember { mutableStateOf(false) }
+    val layoutSpec = remember { resolveLiquidSwitchLayoutSpec() }
+    val motionSpec = remember { resolveLiquidSwitchMotionSpec() }
+    val themePrimaryColor = MaterialTheme.colorScheme.primary
+    val uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+    val position by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = motionSpec.selectionSpring.toSpringSpec(),
+        label = "settingsLiquidSwitchPosition"
+    )
+    val pressProgress by animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = motionSpec.pressSpring.toSpringSpec(),
+        label = "settingsLiquidSwitchPress"
+    )
+    val trackColor = resolveLiquidSwitchTrackColor(
+        checked = checked,
+        themePrimaryColor = themePrimaryColor,
+        uncheckedTrackColor = uncheckedTrackColor
+    )
+    val thumbOffsetDp by animateFloatAsState(
+        targetValue = layoutSpec.checkedThumbOffsetXDp * position,
+        animationSpec = motionSpec.selectionSpring.toSpringSpec(),
+        label = "settingsLiquidSwitchThumbOffset"
+    )
+    val highlightProgress = max(pressProgress, clickPulse.value)
+    val targetThumbTransform = resolveLiquidSwitchThumbTransform(highlightProgress, motionSpec)
+    val thumbScaleX = targetThumbTransform.scaleX
+    val thumbScaleY = targetThumbTransform.scaleY
+    val thumbPulseOverscan = 2.dp * highlightProgress
+
+    LaunchedEffect(checked) {
+        if (!didInitializePulse) {
+            didInitializePulse = true
+            return@LaunchedEffect
+        }
+        clickPulse.snapTo(1f)
+        clickPulse.animateTo(0f, motionSpec.indicatorScaleSpring.toSpringSpec())
+    }
+
+    Box(
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.45f)
+            .size(width = layoutSpec.containerWidthDp.dp, height = layoutSpec.containerHeightDp.dp)
+            .clip(RoundedCornerShape(50))
+            .clipToBounds()
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Switch,
+                interactionSource = interactionSource,
+                indication = null,
+                onValueChange = onCheckedChange
+            ),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = 0.dp, y = layoutSpec.trackOffsetYDp.dp)
+                .size(width = layoutSpec.trackWidthDp.dp, height = layoutSpec.trackHeightDp.dp)
+                .clip(RoundedCornerShape(50))
+                .background(trackColor)
+                .drawBehind {
+                    drawRect(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (checked) 0.18f else 0.08f),
+                                Color.White.copy(alpha = 0.02f),
+                                Color.Black.copy(alpha = if (checked) 0.04f else 0.02f)
+                            )
+                        )
+                    )
+                }
+        )
+        Box(
+            modifier = Modifier
+                .offset(
+                    x = thumbOffsetDp.dp - thumbPulseOverscan,
+                    y = layoutSpec.thumbOffsetYDp.dp
+                )
+                .size(
+                    width = layoutSpec.thumbWidthDp.dp + thumbPulseOverscan * 2,
+                    height = layoutSpec.thumbHeightDp.dp
+                )
+                .graphicsLayer {
+                    scaleX = thumbScaleX
+                    scaleY = thumbScaleY
+                    shape = RoundedCornerShape(50)
+                    clip = false
+                }
+                .clip(RoundedCornerShape(50))
+                .drawBehind {
+                    drawRoundRect(
+                        color = Color.White,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f)
+                    )
+                }
         )
     }
 }
@@ -391,8 +602,21 @@ fun IOSGroup(
         uiPreset = uiPreset,
         colorScheme = colorScheme,
         fallbackColor = containerColor,
-        androidNativeVariant = androidNativeVariant
+        androidNativeVariant = androidNativeVariant,
+        globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     )
+
+    if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        MiuixCard(
+            modifier = modifier.padding(horizontal = 14.dp),
+            cornerRadius = visualSpec.groupCornerRadiusDp.dp,
+            insideMargin = PaddingValues(0.dp),
+            colors = MiuixCardDefaults.defaultColors(color = resolvedContainerColor)
+        ) {
+            content()
+        }
+        return
+    }
     
     Surface(
         modifier = modifier
@@ -406,16 +630,20 @@ fun IOSGroup(
                 }
             )
             .clip(appliedShape),
+        shape = appliedShape,
         color = resolvedContainerColor,
         shadowElevation = if (uiPreset == UiPreset.MD3) 0.dp else 0.dp,
-        tonalElevation = if (uiPreset == UiPreset.MD3) 0.dp else visualSpec.groupTonalElevationDp.dp,
+        tonalElevation = if (uiPreset == UiPreset.MD3) {
+            0.dp
+        } else {
+            visualSpec.groupTonalElevationDp.dp
+        },
         border = if (uiPreset == UiPreset.MD3) {
             androidx.compose.foundation.BorderStroke(
                 0.8.dp,
-                if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-                    colorScheme.outline.copy(alpha = 0.22f)
-                } else {
-                    colorScheme.outlineVariant.copy(alpha = 0.6f)
+                when {
+                    androidNativeVariant == AndroidNativeVariant.MIUIX -> colorScheme.outline.copy(alpha = 0.22f)
+                    else -> colorScheme.outlineVariant.copy(alpha = 0.6f)
                 }
             )
         } else {
@@ -449,42 +677,92 @@ fun IOSSwitchItem(
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
-    if (uiPreset == UiPreset.MD3) {
-        BasicComponent(
-            title = title,
-            summary = subtitle,
-            enabled = enabled,
-            onClick = { onCheckedChange(!checked) },
-            insideMargin = PaddingValues(
-                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
-                vertical = rowSpec.insideVerticalPaddingDp.dp
-            ),
-            startAction = {
-                if (icon != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(visualSpec.iconContainerSizeDp.dp)
-                            .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
-                            .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = effectiveIconTint,
-                            modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
-                        )
+    if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        val context = LocalContext.current
+        val platformHaptic = LocalHapticFeedback.current
+        val effectiveHaptic = if (SettingsManager.isHapticFeedbackEnabledSync(context)) {
+            platformHaptic
+        } else {
+            NoOpHapticFeedback
+        }
+        CompositionLocalProvider(LocalHapticFeedback provides effectiveHaptic) {
+            MiuixSwitchPreference(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                title = title,
+                titleColor = BasicComponentDefaults.titleColor(color = textColor),
+                summary = subtitle,
+                summaryColor = BasicComponentDefaults.summaryColor(color = subtitleColor),
+                enabled = enabled,
+                insideMargin = PaddingValues(
+                    horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                    vertical = rowSpec.insideVerticalPaddingDp.dp
+                ),
+                startAction = {
+                    if (icon != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(visualSpec.iconContainerSizeDp.dp)
+                                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                                .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = effectiveIconTint,
+                                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
+                            )
+                        }
                     }
                 }
-            },
-            endActions = {
-                AppAdaptiveSwitch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    enabled = enabled
-                )
+            )
+        }
+        return
+    }
+    if (uiPreset == UiPreset.MD3) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(if (enabled) 1f else 0.6f)
+                .clickable(enabled = enabled) { onCheckedChange(!checked) }
+                .padding(
+                    horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                    vertical = rowSpec.insideVerticalPaddingDp.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(visualSpec.iconContainerSizeDp.dp)
+                        .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                        .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = effectiveIconTint,
+                        modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
             }
-        )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = textColor)
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+                }
+            }
+            Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
+            AppAdaptiveSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled
+            )
+        }
         return
     }
 
@@ -520,6 +798,7 @@ fun IOSSwitchItem(
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
             }
         }
+        Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
         AppAdaptiveSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
@@ -557,6 +836,83 @@ fun IOSClickableItem(
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
+    if (
+        uiPreset == UiPreset.MD3 &&
+        androidNativeVariant == AndroidNativeVariant.MIUIX &&
+        onClick != null &&
+        showChevron &&
+        !centered
+    ) {
+        MiuixArrowPreference(
+            title = title,
+            titleColor = BasicComponentDefaults.titleColor(color = textColor),
+            summary = subtitle,
+            summaryColor = BasicComponentDefaults.summaryColor(color = subtitleColor),
+            onClick = onClick,
+            insideMargin = PaddingValues(
+                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                vertical = rowSpec.insideVerticalPaddingDp.dp
+            ),
+            startAction = {
+                when {
+                    icon != null -> {
+                        Box(
+                            modifier = Modifier
+                                .size(visualSpec.iconContainerSizeDp.dp)
+                                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                                .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = effectiveIconTint,
+                                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
+                            )
+                        }
+                    }
+
+                    iconPainter != null -> {
+                        Box(
+                            modifier = Modifier
+                                .size(visualSpec.iconContainerSizeDp.dp)
+                                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                                .background(
+                                    if (effectiveIconTint == Color.Unspecified) {
+                                        Color.Transparent
+                                    } else {
+                                        effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = iconPainter,
+                                contentDescription = null,
+                                tint = effectiveIconTint,
+                                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            endActions = {
+                if (!value.isNullOrBlank()) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = valueColor,
+                        modifier = if (enableCopy) {
+                            Modifier.copyOnLongPress(copyValue ?: value, title)
+                        } else {
+                            Modifier
+                        }
+                    )
+                }
+            }
+        )
+        return
+    }
     if (uiPreset == UiPreset.MD3) {
         BasicComponent(
             title = title,
@@ -772,7 +1128,10 @@ fun IOSDivider(
     startIndent: androidx.compose.ui.unit.Dp = 66.dp
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
     if (visualSpec.dividerThicknessDp <= 0f) return
 
     Box(
@@ -796,18 +1155,26 @@ fun IOSGridItem(
     modifier: Modifier = Modifier
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val itemCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.gridCornerRadiusDp.dp else iOSCornerRadius.Medium * cornerRadiusScale
+    val resolvedContainerColor = resolveGlobalWallpaperListContainerColor(
+        containerColor = containerColor,
+        colorScheme = MaterialTheme.colorScheme,
+        globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current,
+        targetAlpha = 0.62f
+    )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(itemCornerRadius))
-            .background(containerColor)
-            .clickable(onClick = onClick)
-            .padding(vertical = 24.dp, horizontal = 16.dp),
+            .background(resolvedContainerColor)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -863,7 +1230,8 @@ fun IOSSearchBar(
         uiPreset = uiPreset,
         colorScheme = colorScheme,
         fallbackColor = containerColor,
-        androidNativeVariant = androidNativeVariant
+        androidNativeVariant = androidNativeVariant,
+        globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     )
     val resolvedHeight = heightOverride ?: visualSpec.searchBarHeightDp.dp
 

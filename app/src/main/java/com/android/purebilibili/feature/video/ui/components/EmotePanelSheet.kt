@@ -143,7 +143,7 @@ fun EmotePanelSheet(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(emotes) { emote ->
+                    items(emotes, key = { it.id }) { emote ->
                         EmoteGridItem(
                             emote = emote,
                             onClick = { onEmoteSelect(emote) }

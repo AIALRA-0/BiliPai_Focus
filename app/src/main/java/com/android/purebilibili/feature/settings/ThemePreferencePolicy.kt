@@ -7,6 +7,11 @@ internal data class ThemePreferenceState(
     val useAmoledDarkTheme: Boolean
 )
 
+enum class Md3ColorSource(val label: String) {
+    FOLLOW_WALLPAPER("跟随系统壁纸"),
+    CUSTOM("自定义颜色")
+}
+
 internal fun resolveThemeModePreference(
     themeModeValue: Int
 ): AppThemeMode {
@@ -44,4 +49,47 @@ internal fun resolveThemePreferenceState(
         useDarkTheme = useDarkTheme,
         useAmoledDarkTheme = useDarkTheme && darkThemeStyle == DarkThemeStyle.AMOLED
     )
+}
+
+internal fun resolveMd3ColorSourcePreference(
+    sourceValue: String?,
+    legacyDynamicColorEnabled: Boolean?
+): Md3ColorSource {
+    val explicitSource = runCatching {
+        sourceValue?.let(Md3ColorSource::valueOf)
+    }.getOrNull()
+    if (explicitSource != null) return explicitSource
+
+    return if (legacyDynamicColorEnabled == false) {
+        Md3ColorSource.CUSTOM
+    } else {
+        Md3ColorSource.FOLLOW_WALLPAPER
+    }
+}
+
+internal fun normalizeMd3CustomColorHex(
+    rawValue: String?,
+    fallback: String = "#007AFF"
+): String {
+    val normalizedFallback = fallback
+        .trim()
+        .removePrefix("#")
+        .uppercase()
+        .takeIf { it.length == 6 && it.all(Char::isHexDigit) }
+        ?.let { "#$it" }
+        ?: "#007AFF"
+    val rawHex = rawValue
+        ?.trim()
+        ?.removePrefix("#")
+        ?.uppercase()
+        ?: return normalizedFallback
+    return if (rawHex.length == 6 && rawHex.all(Char::isHexDigit)) {
+        "#$rawHex"
+    } else {
+        normalizedFallback
+    }
+}
+
+private fun Char.isHexDigit(): Boolean {
+    return this in '0'..'9' || this in 'A'..'F' || this in 'a'..'f'
 }

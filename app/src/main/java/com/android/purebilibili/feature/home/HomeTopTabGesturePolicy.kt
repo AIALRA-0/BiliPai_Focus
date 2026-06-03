@@ -26,10 +26,10 @@ internal fun resolveHomeTopCollapsedHandleHeight(): Dp = 12.dp
 
 internal fun resolveHomeTopTabsAutoCollapsed(
     currentHeaderOffsetPx: Float,
-    isHeaderCollapseEnabled: Boolean,
+    isTopTabAutoCollapseEnabled: Boolean,
     collapseThresholdPx: Float = 0.5f
 ): Boolean {
-    if (!isHeaderCollapseEnabled) return false
+    if (!isTopTabAutoCollapseEnabled) return false
     return currentHeaderOffsetPx <= -collapseThresholdPx
 }
 

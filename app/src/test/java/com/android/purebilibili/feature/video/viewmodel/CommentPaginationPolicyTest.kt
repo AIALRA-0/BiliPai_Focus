@@ -120,4 +120,87 @@ class CommentPaginationPolicyTest {
 
         assertEquals(34, data.getAllCount())
     }
+
+    @Test
+    fun `sub reply page should keep pagination open when detail count exceeds loaded items`() {
+        assertFalse(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = true,
+                fetchedReplyCount = 2,
+                loadedReplyCount = 2,
+                remoteReplyCount = 8
+            )
+        )
+        assertTrue(
+            resolveSubReplyPageEnd(
+                cursorIsEnd = true,
+                fetchedReplyCount = 8,
+                loadedReplyCount = 8,
+                remoteReplyCount = 8
+            )
+        )
+    }
+
+    @Test
+    fun `routed comment root prefers loaded root reply`() {
+        val loaded = ReplyItem(rpid = 11L)
+        val remote = ReplyData(root = ReplyItem(rpid = 11L, content = com.android.purebilibili.data.model.response.ReplyContent(message = "remote")))
+
+        assertEquals(
+            loaded,
+            resolveRoutedCommentRootReply(
+                loadedReplies = listOf(loaded),
+                remoteData = remote,
+                rootReplyId = 11L
+            )
+        )
+    }
+
+    @Test
+    fun `routed comment root falls back to remote root reply`() {
+        val remoteRoot = ReplyItem(rpid = 22L)
+
+        assertEquals(
+            remoteRoot,
+            resolveRoutedCommentRootReply(
+                loadedReplies = emptyList(),
+                remoteData = ReplyData(root = remoteRoot),
+                rootReplyId = 22L
+            )
+        )
+    }
+
+    @Test
+    fun `routed comment root ignores unrelated remote reply`() {
+        assertEquals(
+            null,
+            resolveRoutedCommentRootReply(
+                loadedReplies = emptyList(),
+                remoteData = ReplyData(root = ReplyItem(rpid = 33L)),
+                rootReplyId = 44L
+            )
+        )
+    }
+
+    @Test
+    fun `routed sub reply open only starts after aid is ready`() {
+        assertFalse(
+            shouldStartRoutedSubReplyOpen(
+                rootReplyId = 11L,
+                currentAid = 0L
+            )
+        )
+        assertFalse(
+            shouldStartRoutedSubReplyOpen(
+                rootReplyId = 0L,
+                currentAid = 100L
+            )
+        )
+        assertTrue(
+            shouldStartRoutedSubReplyOpen(
+                rootReplyId = 11L,
+                currentAid = 100L
+            )
+        )
+    }
 }

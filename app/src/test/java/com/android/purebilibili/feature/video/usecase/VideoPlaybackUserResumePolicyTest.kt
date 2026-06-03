@@ -23,6 +23,21 @@ class VideoPlaybackUserResumePolicyTest {
     }
 
     @Test
+    fun `playPlayerFromUserAction prepares idle player before first double tap resume`() {
+        val player = mockk<Player>(relaxed = true)
+        every { player.playbackState } returns Player.STATE_IDLE
+        every { player.mediaItemCount } returns 1
+        every { player.isPlaying } returns false
+        every { player.playWhenReady } returns false
+
+        playPlayerFromUserAction(player)
+
+        verify(exactly = 1) { player.prepare() }
+        verify(exactly = 1) { player.playWhenReady = true }
+        verify(exactly = 1) { player.play() }
+    }
+
+    @Test
     fun `togglePlayerPlaybackFromUserAction restarts ended playback from beginning`() {
         val player = mockk<Player>(relaxed = true)
         every { player.playbackState } returns Player.STATE_ENDED
@@ -35,6 +50,69 @@ class VideoPlaybackUserResumePolicyTest {
 
         verify(exactly = 1) { player.seekTo(0L) }
         verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `togglePlayerPlaybackFromUserAction resumes immediately after pause intent while isPlaying is stale`() {
+        val player = mockk<Player>(relaxed = true)
+        every { player.playbackState } returns Player.STATE_READY
+        every { player.mediaItemCount } returns 1
+        every { player.isPlaying } returns true
+        every { player.playWhenReady } returns false
+
+        togglePlayerPlaybackFromUserAction(player)
+
+        verify(exactly = 0) { player.pause() }
+        verify(exactly = 1) { player.playWhenReady = true }
+        verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `togglePlayerPlaybackFromUserAction kicks silent ready playback instead of pausing first`() {
+        val player = mockk<Player>(relaxed = true)
+        every { player.playbackState } returns Player.STATE_READY
+        every { player.mediaItemCount } returns 1
+        every { player.isPlaying } returns false
+        every { player.playWhenReady } returns true
+
+        togglePlayerPlaybackFromUserAction(player)
+
+        verify(exactly = 0) { player.pause() }
+        verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `applyPlaybackButtonUserAction plays when play icon is shown during buffering resume`() {
+        val player = mockk<Player>(relaxed = true)
+        every { player.playbackState } returns Player.STATE_BUFFERING
+        every { player.mediaItemCount } returns 1
+        every { player.isPlaying } returns false
+        every { player.playWhenReady } returns true
+
+        applyPlaybackButtonUserAction(
+            player = player,
+            isShowingPauseIcon = false
+        )
+
+        verify(exactly = 0) { player.pause() }
+        verify(exactly = 1) { player.play() }
+    }
+
+    @Test
+    fun `applyPlaybackButtonUserAction pauses when pause icon is shown during buffering`() {
+        val player = mockk<Player>(relaxed = true)
+        every { player.playbackState } returns Player.STATE_BUFFERING
+        every { player.mediaItemCount } returns 1
+        every { player.isPlaying } returns false
+        every { player.playWhenReady } returns true
+
+        applyPlaybackButtonUserAction(
+            player = player,
+            isShowingPauseIcon = true
+        )
+
+        verify(exactly = 1) { player.pause() }
+        verify(exactly = 0) { player.play() }
     }
 
     @Test

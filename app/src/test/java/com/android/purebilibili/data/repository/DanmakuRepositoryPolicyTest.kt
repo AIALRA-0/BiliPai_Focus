@@ -75,4 +75,37 @@ class DanmakuRepositoryPolicyTest {
             )
         )
     }
+
+    @Test
+    fun buildDanmakuPostPayload_doesNotUseAttentionCheckboxValue() {
+        val payload = buildDanmakuPostPayload(
+            aid = 2L,
+            cid = 62131L,
+            message = "前来考古",
+            progress = 5000L,
+            color = 16777215,
+            fontSize = 25,
+            mode = 1,
+            colorful = false,
+            upIdentity = true
+        )
+
+        assertEquals(4, payload.checkboxType)
+    }
+
+    @Test
+    fun buildAttentionCommandDanmakuPayload_usesCommandPostTypeFive() {
+        val payload = buildAttentionCommandDanmakuPayload(
+            aid = 2L,
+            cid = 62131L,
+            progress = 5000L,
+            durationMs = 6000L,
+            posX = 240,
+            posY = 160
+        )
+
+        assertEquals(5, payload.type)
+        assertEquals(1, payload.plat)
+        assertEquals("""{"duration":6000,"posX":240,"posY":160}""", payload.data)
+    }
 }

@@ -35,6 +35,33 @@ internal fun filterUsersBySelectedFollowGroup(
     }
 }
 
+internal fun mergeFollowingUsersDistinct(
+    currentUsers: List<FollowingUser>,
+    incomingUsers: List<FollowingUser>,
+    removedUserMids: Set<Long>
+): List<FollowingUser> {
+    return (currentUsers + incomingUsers)
+        .asSequence()
+        .filter { it.mid > 0L }
+        .filterNot { removedUserMids.contains(it.mid) }
+        .distinctBy { it.mid }
+        .toList()
+}
+
+internal fun isFollowingListIncomplete(loadedCount: Int, total: Int): Boolean {
+    return total > loadedCount
+}
+
+internal fun shouldPublishFollowingLoadBatch(
+    loadedCount: Int,
+    total: Int,
+    pagesSinceLastPublish: Int,
+    publishIntervalPages: Int
+): Boolean {
+    if (loadedCount >= total) return true
+    return pagesSinceLastPublish >= publishIntervalPages
+}
+
 internal fun addFollowGroupMappingIfSuccess(
     target: MutableMap<Long, Set<Long>>,
     userMid: Long,

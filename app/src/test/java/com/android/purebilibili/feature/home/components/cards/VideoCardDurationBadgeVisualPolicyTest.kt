@@ -1,18 +1,36 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class VideoCardDurationBadgeVisualPolicyTest {
 
     @Test
-    fun `duration badge style should use transparent background to avoid black border`() {
+    fun `duration badge style uses background instead of text shadow`() {
         val style = resolveVideoCardDurationBadgeVisualStyle()
 
-        assertEquals(0f, style.backgroundAlpha, 0.0001f)
-        assertTrue(style.textShadowAlpha > 0f)
-        assertTrue(style.textShadowBlurRadiusPx > 0f)
+        assertEquals(0.54f, style.backgroundAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `home video card text does not use shadow during detail return`() {
+        val sourceRoot = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/home/components/cards"),
+            File("src/main/java/com/android/purebilibili/feature/home/components/cards")
+        ).first { it.exists() }
+        val sources = listOf(
+            "VideoCard.kt",
+            "StoryVideoCard.kt",
+            "GlassVideoCard.kt",
+            "CinematicVideoCard.kt"
+        ).joinToString(separator = "\n") { fileName ->
+            sourceRoot.resolve(fileName).readText()
+        }
+
+        assertFalse(sources.contains("shadow = Shadow("))
+        assertFalse(sources.contains("shadow = androidx.compose.ui.graphics.Shadow("))
     }
 
     @Test

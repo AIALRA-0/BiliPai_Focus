@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.theme.iOSYellow
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
@@ -45,10 +46,7 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.feature.bangumi.ui.detail.RatingRow
 import com.android.purebilibili.feature.bangumi.ui.detail.FollowButton
 import com.android.purebilibili.feature.bangumi.ui.detail.SeasonSelector
-import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
-import com.android.purebilibili.core.ui.blur.unifiedBlur
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 番剧详情页面
@@ -63,11 +61,7 @@ fun BangumiDetailScreen(
     onSeasonClick: (Long) -> Unit = {},        //  点击切换季度
     viewModel: BangumiViewModel = viewModel()
 ) {
-    val detailState by viewModel.detailState.collectAsState()
-    
-    // ✨ Haze State
-    val hazeState = rememberRecoverableHazeState()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     
     // 加载详情
     LaunchedEffect(seasonId, epId) {
@@ -86,9 +80,6 @@ fun BangumiDetailScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     scrolledContainerColor = Color.Transparent
-                ),
-                modifier = Modifier.unifiedBlur(
-                    hazeState = hazeState
                 )
             )
         }
@@ -132,7 +123,6 @@ fun BangumiDetailScreen(
                     TabletBangumiDetailContent(
                         detail = state.detail,
                         paddingValues = paddingValues,
-                        hazeState = hazeState,
                         onEpisodeClick = { episode -> onEpisodeClick(actionSeasonId, episode) },
                         onSeasonClick = onSeasonClick,
                         onFollowStatusSelect = { status ->
@@ -143,7 +133,6 @@ fun BangumiDetailScreen(
                     MobileBangumiDetailContent(
                         detail = state.detail,
                         paddingValues = paddingValues,
-                        hazeState = hazeState,
                         onEpisodeClick = { episode -> onEpisodeClick(actionSeasonId, episode) },
                         onSeasonClick = onSeasonClick,
                         onFollowStatusSelect = { status ->
@@ -160,7 +149,6 @@ fun BangumiDetailScreen(
 private fun TabletBangumiDetailContent(
     detail: BangumiDetail,
     paddingValues: PaddingValues,
-    hazeState: HazeState,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onSeasonClick: (Long) -> Unit,
     onFollowStatusSelect: (Int) -> Unit
@@ -190,8 +178,7 @@ private fun TabletBangumiDetailContent(
         ) {
             LazyColumn(
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.hazeSource(state = hazeState)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Header (Cover + Title)
                 item {
@@ -289,6 +276,10 @@ private fun TabletBangumiDetailContent(
                         }
                     }
                 }
+
+                item {
+                    BangumiDetailMetaSection(detail = detail)
+                }
                 
                 // Introduction
                 if (detail.evaluate.isNotEmpty()) {
@@ -325,7 +316,7 @@ private fun TabletBangumiDetailContent(
                 contentPadding = PaddingValues(24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
+                modifier = Modifier.fillMaxSize()
             ) {
                  // Header: Episodes Title
                  if (!detail.episodes.isNullOrEmpty()) {
@@ -348,13 +339,33 @@ private fun TabletBangumiDetailContent(
                         }
                      }
                      
-                     items(detail.episodes) { episode ->
+                     items(detail.episodes, key = { it.id }) { episode ->
                          EpisodeChip(
                                 episode = episode,
                                 onClick = { onEpisodeClick(episode) }
                          )
                      }
                  }
+
+                 detail.section.orEmpty()
+                     .filter { !it.episodes.isNullOrEmpty() }
+                     .forEachIndexed { index, section ->
+                         item(span = { GridItemSpan(maxLineSpan) }) {
+                             Text(
+                                 text = resolveBangumiSectionTitle(section, index),
+                                 modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+                                 fontWeight = FontWeight.Bold,
+                                 fontSize = 20.sp
+                             )
+                         }
+
+                         items(section.episodes.orEmpty(), key = { it.id }) { episode ->
+                             EpisodeChip(
+                                 episode = episode,
+                                 onClick = { onEpisodeClick(episode) }
+                             )
+                         }
+                     }
                  
                  // Related Seasons
                  if (!detail.seasons.isNullOrEmpty() && detail.seasons.size > 1) {
@@ -367,7 +378,7 @@ private fun TabletBangumiDetailContent(
                         )
                      }
                      
-                     items(detail.seasons) { season ->
+                     items(detail.seasons, key = { it.seasonId }) { season ->
                          val isCurrentSeason = season.seasonId == detail.seasonId
                          Surface(
                             onClick = { if (!isCurrentSeason) onSeasonClick(season.seasonId) },
@@ -457,7 +468,6 @@ private fun TabletBangumiDetailContent(
 private fun MobileBangumiDetailContent(
     detail: BangumiDetail,
     paddingValues: PaddingValues,
-    hazeState: HazeState,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onSeasonClick: (Long) -> Unit,
     onFollowStatusSelect: (Int) -> Unit
@@ -480,7 +490,7 @@ private fun MobileBangumiDetailContent(
     
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             // 头部封面和信息
@@ -652,6 +662,13 @@ private fun MobileBangumiDetailContent(
                     }
                 }
             }
+
+            item {
+                BangumiDetailMetaSection(
+                    detail = detail,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
             
             // 简介
             if (detail.evaluate.isNotEmpty()) {
@@ -722,7 +739,7 @@ private fun MobileBangumiDetailContent(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) {
-                            items(totalPages) { page ->
+                            items(totalPages, key = { it }) { page ->
                                 val start = page * episodesPerPage + 1
                                 val end = minOf((page + 1) * episodesPerPage, detail.episodes.size)
                                 val isCurrentPage = page == selectedPreviewPage
@@ -762,7 +779,7 @@ private fun MobileBangumiDetailContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(previewEpisodes) { episode ->
+                        items(previewEpisodes, key = { it.id }) { episode ->
                             EpisodeChip(
                                 episode = episode,
                                 onClick = { onEpisodeClick(episode) }
@@ -804,6 +821,19 @@ private fun MobileBangumiDetailContent(
                     }
                 }
             }
+
+            detail.section.orEmpty()
+                .filter { !it.episodes.isNullOrEmpty() }
+                .forEachIndexed { index, section ->
+                    item {
+                        BangumiSectionPreview(
+                            title = resolveBangumiSectionTitle(section, index),
+                            episodes = section.episodes.orEmpty(),
+                            onEpisodeClick = onEpisodeClick,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                    }
+                }
             
             // 相关季度
             if (!detail.seasons.isNullOrEmpty() && detail.seasons.size > 1) {
@@ -821,7 +851,7 @@ private fun MobileBangumiDetailContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(detail.seasons) { season ->
+                        items(detail.seasons, key = { it.seasonId }) { season ->
                             val isCurrentSeason = season.seasonId == detail.seasonId
                             Surface(
                                 modifier = Modifier.clickable {
@@ -933,6 +963,94 @@ private fun MobileBangumiDetailContent(
 }
 
 @Composable
+private fun BangumiDetailMetaSection(
+    detail: BangumiDetail,
+    modifier: Modifier = Modifier
+) {
+    val metaChips = remember(detail) { resolveBangumiDetailMetaChips(detail) }
+    val restrictionLabels = remember(detail) { resolveBangumiRestrictionLabels(detail) }
+    if (metaChips.isEmpty() && restrictionLabels.isEmpty()) return
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        val restrictionColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
+        if (metaChips.isNotEmpty()) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 0.dp)
+            ) {
+                items(metaChips, key = { it }) { chip ->
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                text = chip,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    )
+                }
+            }
+        }
+        if (restrictionLabels.isNotEmpty()) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 0.dp)
+            ) {
+                items(restrictionLabels, key = { it }) { label ->
+                    SuggestionChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                text = label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = restrictionColors.backgroundColor,
+                            labelColor = restrictionColors.contentColor
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BangumiSectionPreview(
+    title: String,
+    episodes: List<BangumiEpisode>,
+    onEpisodeClick: (BangumiEpisode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (episodes.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(episodes.take(20), key = { it.id }) { episode ->
+                EpisodeChip(
+                    episode = episode,
+                    onClick = { onEpisodeClick(episode) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BangumiFollowStatusDialog(
     currentStatus: Int,
     onSelect: (Int) -> Unit,
@@ -1028,17 +1146,18 @@ private fun EpisodeChip(
                 
                 // 角标（如：会员）
                 if (episode.badge.isNotEmpty()) {
+                    val badgeColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = badgeColors.backgroundColor,
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             text = episode.badge,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = badgeColors.contentColor,
                             fontSize = 9.sp
                         )
                     }
@@ -1132,7 +1251,7 @@ private fun EpisodeSelectionSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    items(detail.seasons) { season ->
+                    items(detail.seasons, key = { it.seasonId }) { season ->
                         val isCurrentSeason = season.seasonId == detail.seasonId
                         
                         Surface(
@@ -1194,7 +1313,7 @@ private fun EpisodeSelectionSheet(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    items(totalPages) { page ->
+                    items(totalPages, key = { it }) { page ->
                         val start = page * episodesPerPage + 1
                         val end = minOf((page + 1) * episodesPerPage, episodes.size)
                         val isCurrentPage = page == selectedPage
@@ -1277,17 +1396,18 @@ private fun EpisodeListItem(
             
             // VIP 角标
             if (episode.badge.isNotEmpty()) {
+                val badgeColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(2.dp),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = badgeColors.backgroundColor,
                     shape = RoundedCornerShape(2.dp)
                 ) {
                     Text(
                         text = episode.badge,
                         modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = badgeColors.contentColor,
                         fontSize = 8.sp
                     )
                 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.data.repository.LiveRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun LiveFollowingScreen(
@@ -49,13 +52,28 @@ fun LiveFollowingScreen(
     val metrics = resolveLivePiliPlusHomeMetrics()
     val colorScheme = MaterialTheme.colorScheme
     var isLoading by remember { mutableStateOf(true) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(false) }
+    var nextPage by remember { mutableStateOf(1) }
     var error by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<LiveRoom>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun mergeRooms(current: List<LiveRoom>, next: List<LiveRoom>, refresh: Boolean): List<LiveRoom> {
+        return if (refresh) {
+            next.distinctBy { it.roomid }
+        } else {
+            (current + next).distinctBy { it.roomid }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        LiveRepository.getFollowedLive(page = 1)
-            .onSuccess {
-                items = it
+        LiveRepository.getFollowedLivePage(page = 1)
+            .onSuccess { page ->
+                items = mergeRooms(emptyList(), page.items, refresh = true)
+                hasMore = page.hasMore
+                nextPage = page.nextPage
                 isLoading = false
             }
             .onFailure {
@@ -88,6 +106,26 @@ fun LiveFollowingScreen(
                 fontSize = 20.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
             )
+            Box(modifier = Modifier.weight(1f))
+            Button(
+                enabled = !isLoading && !isRefreshing,
+                onClick = {
+                    coroutineScope.launch {
+                        isRefreshing = true
+                        error = null
+                        LiveRepository.getFollowedLivePage(page = 1)
+                            .onSuccess { page ->
+                                items = mergeRooms(emptyList(), page.items, refresh = true)
+                                hasMore = page.hasMore
+                                nextPage = page.nextPage
+                            }
+                            .onFailure { error = it.message ?: "刷新关注直播失败" }
+                        isRefreshing = false
+                    }
+                }
+            ) {
+                Text(if (isRefreshing) "刷新中" else "刷新")
+            }
         }
 
         when {
@@ -112,6 +150,29 @@ fun LiveFollowingScreen(
                     items(items, key = { it.roomid }) { item ->
                         LiveFollowPiliPlusCard(item = item) {
                             onLiveClick(item.roomid, item.title, item.uname)
+                        }
+                    }
+                    item {
+                        if (hasMore || isLoadingMore) {
+                            Button(
+                                enabled = !isLoadingMore,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isLoadingMore = true
+                                        LiveRepository.getFollowedLivePage(page = nextPage)
+                                            .onSuccess { page ->
+                                                items = mergeRooms(items, page.items, refresh = false)
+                                                hasMore = page.hasMore
+                                                nextPage = page.nextPage
+                                            }
+                                            .onFailure { error = it.message ?: "加载更多失败" }
+                                        isLoadingMore = false
+                                    }
+                                }
+                            ) {
+                                Text(if (isLoadingMore) "加载中" else "加载更多")
+                            }
                         }
                     }
                 }

@@ -78,4 +78,39 @@ class BangumiPlayUrlResponseParsingTest {
         assertEquals(64, videoInfo.quality)
         assertEquals("https://video.cdn/example-64.mp4", videoInfo.durl?.firstOrNull()?.url)
     }
+
+    @Test
+    fun `decodeBangumiPlayUrlPayload keeps empty result without crashing`() {
+        val payload = decodeBangumiPlayUrlPayload(
+            """
+            {
+              "code": 0,
+              "message": "0",
+              "result": null
+            }
+            """.trimIndent(),
+            json
+        )
+
+        assertEquals(0, payload.code)
+        assertEquals(null, payload.videoInfo)
+    }
+
+    @Test
+    fun `decodeBangumiPlayUrlPayload keeps auth error code and message`() {
+        val payload = decodeBangumiPlayUrlPayload(
+            """
+            {
+              "code": -10403,
+              "message": "大会员专享",
+              "result": null
+            }
+            """.trimIndent(),
+            json
+        )
+
+        assertEquals(-10403, payload.code)
+        assertEquals("大会员专享", payload.message)
+        assertEquals(null, payload.videoInfo)
+    }
 }

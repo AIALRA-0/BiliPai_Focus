@@ -14,10 +14,7 @@ import com.android.purebilibili.data.model.response.SpaceAggregateData
 import com.android.purebilibili.data.model.response.SpaceAggregateImages
 import com.android.purebilibili.data.model.response.SpaceTopArcData
 import com.android.purebilibili.data.model.response.SpaceUserInfo
-import com.android.purebilibili.data.model.response.SpaceVideoData
 import com.android.purebilibili.data.model.response.SpaceVideoItem
-import com.android.purebilibili.data.model.response.SpaceVideoList
-import com.android.purebilibili.data.model.response.SpacePage
 import com.android.purebilibili.data.model.response.VideoSortOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -108,57 +105,6 @@ class SpaceLoadPolicyTest {
     }
 
     @Test
-    fun `suspicious initial video result retries for default empty space load`() {
-        assertTrue(
-            shouldRetrySuspiciousInitialSpaceVideoResult(
-                order = VideoSortOrder.PUBDATE,
-                tid = 0,
-                keyword = "",
-                firstPageResult = SpaceVideoData(
-                    list = SpaceVideoList(vlist = emptyList()),
-                    page = SpacePage(count = 0)
-                )
-            )
-        )
-        assertTrue(
-            shouldRetrySuspiciousInitialSpaceVideoResult(
-                order = VideoSortOrder.PUBDATE,
-                tid = 0,
-                keyword = "",
-                firstPageResult = null
-            )
-        )
-    }
-
-    @Test
-    fun `suspicious initial video result skips retry for filtered or non default space loads`() {
-        assertFalse(
-            shouldRetrySuspiciousInitialSpaceVideoResult(
-                order = VideoSortOrder.OLDEST_PUBDATE,
-                tid = 0,
-                keyword = "",
-                firstPageResult = SpaceVideoData()
-            )
-        )
-        assertFalse(
-            shouldRetrySuspiciousInitialSpaceVideoResult(
-                order = VideoSortOrder.PUBDATE,
-                tid = 17,
-                keyword = "",
-                firstPageResult = SpaceVideoData()
-            )
-        )
-        assertFalse(
-            shouldRetrySuspiciousInitialSpaceVideoResult(
-                order = VideoSortOrder.PUBDATE,
-                tid = 0,
-                keyword = "测试",
-                firstPageResult = SpaceVideoData()
-            )
-        )
-    }
-
-    @Test
     fun resolveSpaceSearchScope_supportsDynamicAndVideoContributionOnly() {
         assertEquals(
             SpaceSearchScope.DYNAMIC,
@@ -188,6 +134,79 @@ class SpaceLoadPolicyTest {
         assertEquals("搜索 TA 的动态", resolveSpaceSearchPlaceholder(SpaceSearchScope.DYNAMIC))
         assertEquals("搜索 TA 的视频", resolveSpaceSearchPlaceholder(SpaceSearchScope.VIDEO))
         assertEquals("", resolveSpaceSearchPlaceholder(SpaceSearchScope.NONE))
+    }
+
+    @Test
+    fun resolveSpaceSearchBarGridItemIndex_keepsSearchBarVisibleAfterTopBarClick() {
+        assertEquals(
+            2,
+            resolveSpaceSearchBarGridItemIndex(
+                scope = SpaceSearchScope.DYNAMIC,
+                hasContributionToolbar = false
+            )
+        )
+        assertEquals(
+            3,
+            resolveSpaceSearchBarGridItemIndex(
+                scope = SpaceSearchScope.VIDEO,
+                hasContributionToolbar = true
+            )
+        )
+        assertEquals(
+            2,
+            resolveSpaceSearchBarGridItemIndex(
+                scope = SpaceSearchScope.VIDEO,
+                hasContributionToolbar = false
+            )
+        )
+        assertEquals(
+            null,
+            resolveSpaceSearchBarGridItemIndex(
+                scope = SpaceSearchScope.NONE,
+                hasContributionToolbar = true
+            )
+        )
+    }
+
+    @Test
+    fun resolveSpaceSearchBarRevealScrollOffsetPx_placesSearchBelowTopBar() {
+        assertEquals(
+            -72,
+            resolveSpaceSearchBarRevealScrollOffsetPx(
+                topBarHeightPx = 64,
+                extraVisibleMarginPx = 8
+            )
+        )
+        assertEquals(
+            -8,
+            resolveSpaceSearchBarRevealScrollOffsetPx(
+                topBarHeightPx = -1,
+                extraVisibleMarginPx = 8
+            )
+        )
+        assertEquals(
+            -64,
+            resolveSpaceSearchBarRevealScrollOffsetPx(
+                topBarHeightPx = 64,
+                extraVisibleMarginPx = -1
+            )
+        )
+    }
+
+    @Test
+    fun shouldEnableSpaceLazyGridSharedTransition_requiresBothScopes() {
+        assertTrue(
+            shouldEnableSpaceLazyGridSharedTransition(
+                hasSharedTransitionScope = true,
+                hasAnimatedVisibilityScope = true
+            )
+        )
+        assertFalse(
+            shouldEnableSpaceLazyGridSharedTransition(
+                hasSharedTransitionScope = false,
+                hasAnimatedVisibilityScope = true
+            )
+        )
     }
 
     @Test
@@ -264,6 +283,70 @@ class SpaceLoadPolicyTest {
     }
 
     @Test
+    fun resolveEmbeddedCollectionArchives_usesArchivesFromSeasonsSeriesList() {
+        val seasons = listOf(
+            SeasonItem(
+                meta = SeasonMeta(season_id = 11L, name = "合集", total = 2),
+                archives = listOf(
+                    SeasonArchiveItem(bvid = "BVSEASON", title = "合集单集")
+                )
+            ),
+            SeasonItem(meta = SeasonMeta(season_id = 12L, name = "空合集", total = 0))
+        )
+        val series = listOf(
+            SeriesItem(
+                meta = SeriesMeta(series_id = 21L, name = "系列", total = 1),
+                archives = listOf(
+                    SeriesArchiveItem(bvid = "BVSERIES", title = "系列单集")
+                )
+            )
+        )
+
+        val seasonArchives = resolveEmbeddedSeasonArchives(seasons)
+        val seriesArchives = resolveEmbeddedSeriesArchives(series)
+
+        assertEquals(setOf(11L), seasonArchives.keys)
+        assertEquals("BVSEASON", seasonArchives.getValue(11L).single().bvid)
+        assertEquals(setOf(21L), seriesArchives.keys)
+        assertEquals("BVSERIES", seriesArchives.getValue(21L).single().bvid)
+    }
+
+    @Test
+    fun applySpaceSupplementalData_keepsLongerAlreadyLoadedCollectionArchives() {
+        val initial = SpaceUiState.Success(
+            userInfo = SpaceUserInfo(mid = 42L, name = "UP"),
+            seasonArchives = mapOf(
+                11L to listOf(
+                    SeasonArchiveItem(bvid = "BVFULL1"),
+                    SeasonArchiveItem(bvid = "BVFULL2")
+                )
+            ),
+            seriesArchives = mapOf(
+                21L to listOf(
+                    SeriesArchiveItem(bvid = "BVSERIES_FULL1"),
+                    SeriesArchiveItem(bvid = "BVSERIES_FULL2")
+                )
+            )
+        )
+
+        val updated = applySpaceSupplementalData(
+            state = initial,
+            seasons = listOf(SeasonItem(meta = SeasonMeta(season_id = 11L, name = "合集"))),
+            series = listOf(SeriesItem(meta = SeriesMeta(series_id = 21L, name = "系列"))),
+            createdFavoriteFolders = emptyList(),
+            collectedFavoriteFolders = emptyList(),
+            seasonArchives = mapOf(11L to listOf(SeasonArchiveItem(bvid = "BVPREVIEW"))),
+            seriesArchives = mapOf(21L to listOf(SeriesArchiveItem(bvid = "BVSERIES_PREVIEW")))
+        )
+
+        assertEquals(listOf("BVFULL1", "BVFULL2"), updated.seasonArchives.getValue(11L).map { it.bvid })
+        assertEquals(
+            listOf("BVSERIES_FULL1", "BVSERIES_FULL2"),
+            updated.seriesArchives.getValue(21L).map { it.bvid }
+        )
+    }
+
+    @Test
     fun `mapSeasonArchiveToVideoItem preserves danmaku count`() {
         val item = mapSeasonArchiveToVideoItem(
             item = SeasonArchiveItem(
@@ -280,6 +363,36 @@ class SpaceLoadPolicyTest {
     }
 
     @Test
+    fun `mapSeasonArchiveToVideoItem uses space owner name when archive author is blank`() {
+        val item = mapSeasonArchiveToVideoItem(
+            item = SeasonArchiveItem(
+                bvid = "BVSEASON",
+                title = "合集视频"
+            ),
+            mid = 42L,
+            ownerName = "影视飓风"
+        )
+
+        assertEquals(42L, item.owner.mid)
+        assertEquals("影视飓风", item.owner.name)
+    }
+
+    @Test
+    fun `mapSeasonArchiveToVideoItem keeps archive author for collaborative videos`() {
+        val item = mapSeasonArchiveToVideoItem(
+            item = SeasonArchiveItem(
+                bvid = "BVCOOP",
+                title = "联合投稿",
+                author = "联合投稿UP"
+            ),
+            mid = 42L,
+            ownerName = "影视飓风"
+        )
+
+        assertEquals("联合投稿UP", item.owner.name)
+    }
+
+    @Test
     fun `mapSeriesArchiveToVideoItem preserves danmaku count`() {
         val item = mapSeriesArchiveToVideoItem(
             item = SeriesArchiveItem(
@@ -293,6 +406,77 @@ class SpaceLoadPolicyTest {
         assertEquals(200, item.stat.view)
         assertEquals(34, item.stat.danmaku)
         assertEquals(8, item.stat.reply)
+    }
+
+    @Test
+    fun `mapSeriesArchiveToVideoItem uses space owner name when archive author is blank`() {
+        val item = mapSeriesArchiveToVideoItem(
+            item = SeriesArchiveItem(
+                bvid = "BVSERIES",
+                title = "系列视频"
+            ),
+            mid = 42L,
+            ownerName = "影视飓风"
+        )
+
+        assertEquals(42L, item.owner.mid)
+        assertEquals("影视飓风", item.owner.name)
+    }
+
+    @Test
+    fun `resolveSpaceContentGridColumnCount keeps at least two columns on phones`() {
+        assertEquals(2, resolveSpaceContentGridColumnCount(widthDp = 360))
+        assertEquals(2, resolveSpaceContentGridColumnCount(widthDp = 412))
+        assertEquals(3, resolveSpaceContentGridColumnCount(widthDp = 700))
+        assertEquals(4, resolveSpaceContentGridColumnCount(widthDp = 960))
+    }
+
+    @Test
+    fun `contribution video layout defaults to grid and toggles to single column`() {
+        assertEquals(SpaceContributionVideoLayoutMode.GRID, defaultSpaceContributionVideoLayoutMode())
+        assertEquals(
+            SpaceContributionVideoLayoutMode.SINGLE_COLUMN,
+            toggleSpaceContributionVideoLayoutMode(SpaceContributionVideoLayoutMode.GRID)
+        )
+        assertEquals(
+            SpaceContributionVideoLayoutMode.GRID,
+            toggleSpaceContributionVideoLayoutMode(SpaceContributionVideoLayoutMode.SINGLE_COLUMN)
+        )
+    }
+
+    @Test
+    fun `single column contribution video layout spans the full content row`() {
+        assertEquals(
+            1,
+            resolveSpaceContributionVideoGridSpan(
+                layoutMode = SpaceContributionVideoLayoutMode.GRID,
+                maxLineSpan = 4
+            )
+        )
+        assertEquals(
+            4,
+            resolveSpaceContributionVideoGridSpan(
+                layoutMode = SpaceContributionVideoLayoutMode.SINGLE_COLUMN,
+                maxLineSpan = 4
+            )
+        )
+    }
+
+    @Test
+    fun `contribution video item key changes with layout mode`() {
+        val gridKey = resolveSpaceContributionVideoItemKey(
+            layoutMode = SpaceContributionVideoLayoutMode.GRID,
+            bvid = "BV1xx",
+            aid = 123
+        )
+        val singleColumnKey = resolveSpaceContributionVideoItemKey(
+            layoutMode = SpaceContributionVideoLayoutMode.SINGLE_COLUMN,
+            bvid = "BV1xx",
+            aid = 123
+        )
+
+        assertEquals("space_video_GRID_BV1xx_123", gridKey)
+        assertEquals("space_video_SINGLE_COLUMN_BV1xx_123", singleColumnKey)
     }
 
     @Test

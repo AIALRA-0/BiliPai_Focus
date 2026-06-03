@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.profile
 
 import com.android.purebilibili.data.model.response.SplashItem
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SplashWallpaperRandomPoolPolicyTest {
@@ -34,5 +36,18 @@ class SplashWallpaperRandomPoolPolicyTest {
         )
 
         assertEquals(listOf("https://a.jpg", "https://b.jpg"), pool)
+    }
+
+    @Test
+    fun `normalizeSplashWallpaperUrl keeps local content Uri unchanged`() {
+        val uri = "content://com.android.providers.media.documents/document/image%3A42"
+
+        assertEquals(uri, normalizeSplashWallpaperUrl(uri))
+    }
+
+    @Test
+    fun `user selected splash wallpaper uri detects content document`() {
+        assertTrue(isUserSelectedSplashWallpaperUri("content://com.android.providers.media.documents/document/image%3A42"))
+        assertFalse(isUserSelectedSplashWallpaperUri("https://i0.hdslb.com/bfs/splash.jpg"))
     }
 }

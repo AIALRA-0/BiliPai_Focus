@@ -19,6 +19,8 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
         assertEquals(52, policy.bottomInputSpacerHeightDp)
         assertEquals(4, policy.bottomInputLiftDp)
         assertEquals(15, policy.titleFontSp)
+        assertEquals(116, policy.topScrimHeightDp)
+        assertEquals(300, policy.bottomTextScrimHeightDp)
     }
 
     @Test
@@ -33,6 +35,8 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
         assertEquals(54, policy.bottomInputSpacerHeightDp)
         assertEquals(4, policy.bottomInputLiftDp)
         assertEquals(15, policy.titleFontSp)
+        assertEquals(136, policy.topScrimHeightDp)
+        assertEquals(340, policy.bottomTextScrimHeightDp)
     }
 
     @Test
@@ -47,6 +51,8 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
         assertEquals(56, policy.bottomInputSpacerHeightDp)
         assertEquals(5, policy.bottomInputLiftDp)
         assertEquals(16, policy.titleFontSp)
+        assertEquals(148, policy.topScrimHeightDp)
+        assertEquals(372, policy.bottomTextScrimHeightDp)
     }
 
     @Test
@@ -61,5 +67,16 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
         assertEquals(64, policy.bottomInputSpacerHeightDp)
         assertEquals(6, policy.bottomInputLiftDp)
         assertEquals(18, policy.titleFontSp)
+        assertEquals(168, policy.topScrimHeightDp)
+        assertEquals(440, policy.bottomTextScrimHeightDp)
+    }
+
+    @Test
+    fun scrimAlpha_keepsBottomTextMoreReadableThanTopControls() {
+        val policy = resolvePortraitFullscreenOverlayLayoutPolicy(widthDp = 411)
+
+        assertEquals(0.42f, policy.topScrimStartAlpha)
+        assertEquals(0.68f, policy.bottomTextScrimEndAlpha)
+        assertTrue(policy.bottomTextScrimEndAlpha > policy.topScrimStartAlpha)
     }
 }

@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.danmaku
 
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
@@ -22,6 +23,75 @@ class DanmakuProtoPolicyTest {
         assertEquals(360_000L, dmSge.pageSize)
         assertEquals(16L, dmSge.total)
         assertEquals(16_000L, reply.count)
+    }
+
+    @Test
+    fun parseWebViewReply_readsDocumentedNewSchemaWithoutFieldCollisions() {
+        val dmSge = buildList<Byte> {
+            addFieldVarint(fieldNumber = 1, value = 360_000L)
+            addFieldVarint(fieldNumber = 2, value = 4L)
+        }.toByteArray()
+        val flag = buildList<Byte> {
+            addFieldVarint(fieldNumber = 1, value = 1L)
+            addFieldBytes(fieldNumber = 2, value = "推荐开启云屏蔽".encodeToByteArray())
+            addFieldVarint(fieldNumber = 3, value = 1L)
+        }.toByteArray()
+        val command = buildList<Byte> {
+            addFieldVarint(fieldNumber = 1, value = 38469676112019463L)
+            addFieldVarint(fieldNumber = 2, value = 236871317L)
+            addFieldVarint(fieldNumber = 3, value = 501183549L)
+            addFieldBytes(fieldNumber = 4, value = "#ATTENTION#".encodeToByteArray())
+            addFieldBytes(fieldNumber = 5, value = "关注按钮".encodeToByteArray())
+            addFieldVarint(fieldNumber = 6, value = 157818L)
+            addFieldBytes(
+                fieldNumber = 9,
+                value = """{"duration":6000,"posX":240,"posY":160,"icon":"https://example.com/follow.png","type":2}""".encodeToByteArray()
+            )
+            addFieldBytes(fieldNumber = 10, value = "38469676112019463".encodeToByteArray())
+        }.toByteArray()
+        val dmSetting = buildList<Byte> {
+            addFieldVarint(fieldNumber = 1, value = 1L)
+            addFieldVarint(fieldNumber = 4, value = 1L)
+            addFieldVarint(fieldNumber = 5, value = 0L)
+            addFieldVarint(fieldNumber = 6, value = 1L)
+            addFieldVarint(fieldNumber = 7, value = 1L)
+            addFieldVarint(fieldNumber = 8, value = 0L)
+            addFieldFloat(fieldNumber = 11, value = 0.65f)
+            addFieldVarint(fieldNumber = 12, value = 75L)
+            addFieldFloat(fieldNumber = 13, value = 1.25f)
+            addFieldFloat(fieldNumber = 14, value = 1.1f)
+        }.toByteArray()
+        val payload = buildList<Byte> {
+            addFieldVarint(fieldNumber = 1, value = 0L)
+            addFieldBytes(fieldNumber = 2, value = "text".encodeToByteArray())
+            addFieldBytes(fieldNumber = 3, value = "side".encodeToByteArray())
+            addFieldBytes(fieldNumber = 4, value = dmSge)
+            addFieldBytes(fieldNumber = 5, value = flag)
+            addFieldBytes(fieldNumber = 6, value = "https://i0.hdslb.com/bfs/dm/special.bin".encodeToByteArray())
+            addFieldVarint(fieldNumber = 7, value = 0L)
+            addFieldVarint(fieldNumber = 8, value = 4200L)
+            addFieldBytes(fieldNumber = 9, value = command)
+            addFieldBytes(fieldNumber = 10, value = dmSetting)
+        }.toByteArray()
+
+        val reply = DanmakuProto.parseWebViewReply(payload)
+
+        assertEquals(listOf("https://i0.hdslb.com/bfs/dm/special.bin"), reply.specialDms)
+        assertFalse(reply.checkBox)
+        assertEquals(4200L, reply.count)
+        assertEquals(1, reply.commandDms.size)
+        val item = reply.commandDms.first()
+        assertEquals(501183549L, item.mid)
+        assertEquals("#ATTENTION#", item.command)
+        assertEquals("""{"duration":6000,"posX":240,"posY":160,"icon":"https://example.com/follow.png","type":2}""", item.extra)
+        val setting = assertNotNull(reply.dmSetting)
+        assertEquals(true, setting.dmSwitch)
+        assertEquals(true, setting.blocktop)
+        assertEquals(false, setting.blockscroll)
+        assertEquals(0.65f, setting.opacity)
+        assertEquals(75, setting.dmarea)
+        assertEquals(1.25f, setting.speedplus)
+        assertEquals(1.1f, setting.fontsize)
     }
 
     @Test
@@ -109,6 +179,15 @@ class DanmakuProtoPolicyTest {
         addAll(encodeVarint(((fieldNumber shl 3) or 2).toLong()))
         addAll(encodeVarint(value.size.toLong()))
         value.forEach { add(it) }
+    }
+
+    private fun MutableList<Byte>.addFieldFloat(fieldNumber: Int, value: Float) {
+        addAll(encodeVarint(((fieldNumber shl 3) or 5).toLong()))
+        val bits = java.lang.Float.floatToIntBits(value)
+        add((bits and 0xFF).toByte())
+        add(((bits ushr 8) and 0xFF).toByte())
+        add(((bits ushr 16) and 0xFF).toByte())
+        add(((bits ushr 24) and 0xFF).toByte())
     }
 
     private fun encodeVarint(value: Long): List<Byte> {

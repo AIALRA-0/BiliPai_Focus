@@ -10,6 +10,14 @@ import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.random.Random
 
+internal fun shouldNotifyParticleAnimationComplete(
+    hasAnimationCompleted: Boolean,
+    currentTimeSec: Float,
+    animationDurationSec: Float
+): Boolean {
+    return !hasAnimationCompleted && currentTimeSec > animationDurationSec
+}
+
 class ParticleRenderer(
     private val textureBitmap: Bitmap?,
     private val onAnimationComplete: () -> Unit,
@@ -38,6 +46,7 @@ class ParticleRenderer(
     private lateinit var startTimeBuffer: FloatBuffer
     
     private var isFirstFrame = true
+    private var hasAnimationCompleted = false
 
     private val vertexShaderCode = """
         uniform float u_Time;
@@ -174,8 +183,9 @@ class ParticleRenderer(
             onFirstFrame()
         }
 
-        if (currentTime > animationDurationSec) {
-             onAnimationComplete()
+        if (shouldNotifyParticleAnimationComplete(hasAnimationCompleted, currentTime, animationDurationSec)) {
+            hasAnimationCompleted = true
+            onAnimationComplete()
         }
     }
     

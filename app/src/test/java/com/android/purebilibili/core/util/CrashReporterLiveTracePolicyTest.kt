@@ -38,6 +38,12 @@ class CrashReporterLiveTracePolicyTest {
     }
 
     @Test
+    fun localCrashSnapshotPersistsRegardlessOfCrashTrackingConsent() {
+        assertTrue(shouldPersistLocalCrashSnapshot(crashTrackingEnabled = true))
+        assertTrue(shouldPersistLocalCrashSnapshot(crashTrackingEnabled = false))
+    }
+
+    @Test
     fun sensitiveCrashFieldsAndUserIdAreBlocked() {
         assertTrue(isSensitiveCrashCustomKey("video_bvid"))
         assertTrue(isSensitiveCrashCustomKey("danmaku_cid"))

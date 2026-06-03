@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -28,6 +31,9 @@ import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_UNFOLLOW
 import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_WATCHING
 import com.android.purebilibili.feature.bangumi.isBangumiFollowed
 import com.android.purebilibili.feature.bangumi.resolveBangumiFollowStatusLabel
+import com.android.purebilibili.feature.video.ui.components.VideoCommentMainList
+import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import kotlinx.coroutines.launch
 
 /**
  * 番剧播放内容区域
@@ -36,16 +42,38 @@ import com.android.purebilibili.feature.bangumi.resolveBangumiFollowStatusLabel
 fun BangumiPlayerContent(
     detail: BangumiDetail,
     currentEpisode: BangumiEpisode,
+    commentViewModel: VideoCommentViewModel,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onFollowStatusSelect: (Int) -> Unit
 ) {
     val isFollowing = isBangumiFollowed(detail.userStatus)
     var showFollowStatusDialog by remember { mutableStateOf(false) }
-    
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp)
-    ) {
+    val tabs = listOf("简介", "评论 ${detail.stat?.reply?.takeIf { it > 0L } ?: ""}".trim())
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = pagerState.currentPage == index,
+                    onClick = {
+                        scope.launch { pagerState.animateScrollToPage(index) }
+                    },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f)
+        ) { page ->
+            when (page) {
+                0 -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
         // 标题和信息
         item {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -78,12 +106,13 @@ fun BangumiPlayerContent(
             }
         }
         
-        // 追番按钮
+        // 追番操作
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
                     onClick = {
@@ -140,7 +169,7 @@ fun BangumiPlayerContent(
                         Surface(
                             onClick = { showJumpDialog = true },
                             color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(20.dp)
+                            shape = AppShapes.container(ContainerLevel.Sheet)
                         ) {
                             Text(
                                 text = "跳转",
@@ -189,7 +218,7 @@ fun BangumiPlayerContent(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
-                        items(totalPages) { page ->
+                        items(totalPages, key = { it }) { page ->
                             val start = page * episodesPerPage + 1
                             val end = minOf((page + 1) * episodesPerPage, detail.episodes.size)
                             val isCurrentPage = page == selectedPage
@@ -197,7 +226,7 @@ fun BangumiPlayerContent(
                             Surface(
                                 onClick = { selectedPage = page },
                                 color = if (isCurrentPage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(16.dp)
+                                shape = AppShapes.container(ContainerLevel.Dialog)
                             ) {
                                 Text(
                                     text = "$start-$end",
@@ -218,7 +247,7 @@ fun BangumiPlayerContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(pageEpisodes) { episode ->
+                        items(pageEpisodes, key = { it.id }) { episode ->
                             EpisodeChipSelectable(
                                 episode = episode,
                                 isSelected = episode.id == currentEpisode.id,
@@ -234,7 +263,7 @@ fun BangumiPlayerContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(detail.episodes) { episode ->
+                        items(detail.episodes, key = { it.id }) { episode ->
                             EpisodeChipSelectable(
                                 episode = episode,
                                 isSelected = episode.id == currentEpisode.id,
@@ -265,6 +294,35 @@ fun BangumiPlayerContent(
                 )
             }
         }
+                }
+
+                1 -> {
+                    if (currentEpisode.aid > 0L) {
+                        VideoCommentMainList(
+                            viewModel = commentViewModel,
+                            showIdentityDecorations = false,
+                            onRootCommentClick = {},
+                            onReplyClick = {},
+                            onUserClick = {},
+                            onCommentUrlClick = {},
+                            onTimestampClick = null,
+                            maxTimestampMs = currentEpisode.duration.takeIf { it > 0L },
+                            onImagePreview = { _, _, _, _ -> }
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "当前剧集暂无评论区",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (showFollowStatusDialog) {
@@ -279,7 +337,7 @@ fun BangumiPlayerContent(
                                 showFollowStatusDialog = false
                                 onFollowStatusSelect(option.status)
                             },
-                            shape = RoundedCornerShape(8.dp),
+                            shape = AppShapes.container(ContainerLevel.Chip),
                             color = if (detail.userStatus?.followStatus == option.status) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
@@ -329,7 +387,7 @@ fun EpisodeChipSelectable(
 
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = AppShapes.container(ContainerLevel.Chip),
         color = if (isSelected) selectedColors.backgroundColor else MaterialTheme.colorScheme.surfaceVariant
     ) {
         Text(

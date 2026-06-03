@@ -212,7 +212,8 @@ object PlayUrlCache {
                 return@forEach
             }
 
-            if (candidate == null || entry.timestamp > candidate!!.second.timestamp) {
+            val currentCandidate = candidate
+            if (currentCandidate == null || entry.timestamp > currentCandidate.second.timestamp) {
                 candidate = key to entry
             }
         }

@@ -29,6 +29,7 @@ import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.NetworkUtils
 import kotlinx.coroutines.delay
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  *  离线缓存列表页面
@@ -41,10 +42,10 @@ fun DownloadListScreen(
     onOfflineVideoClick: (String) -> Unit = {}  // 🔧 [新增] taskId - 离线播放
 ) {
     val context = LocalContext.current
-    val tasks by DownloadManager.tasks.collectAsState()
+    val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     var isNetworkAvailable by remember(context) { mutableStateOf(NetworkUtils.isNetworkAvailable(context)) }
-    val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsState(initial = null)
-    val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsState(initial = null)
+    val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsStateWithLifecycle(initialValue = null)
+    val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsStateWithLifecycle(initialValue = null)
     val taskList = tasks.values.toList().sortedByDescending { it.createdAt }
     val currentDir = resolveDisplayedDownloadLocation(
         defaultManagedPath = remember(context) { SettingsManager.getDefaultDownloadPath(context) },
@@ -319,11 +320,28 @@ private fun DownloadTaskItem(
                     text = statusText,
                     fontSize = 11.sp,
                     color = when (task.status) {
-                        DownloadStatus.COMPLETED -> Color(0xFF4CAF50)
+                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
                         DownloadStatus.FAILED -> com.android.purebilibili.core.theme.iOSRed
                         else -> MaterialTheme.colorScheme.primary
                     }
                 )
+
+                val assetSummary = resolveDownloadAssetSummary(task)
+                val assetTexts = listOfNotNull(
+                    assetSummary.videoText,
+                    assetSummary.audioText,
+                    assetSummary.danmakuText
+                )
+                if (assetTexts.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = assetTexts.joinToString(" · "),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 if (task.isComplete && !offlinePlayable) {
                     Spacer(modifier = Modifier.height(4.dp))

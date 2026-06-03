@@ -3,15 +3,69 @@
     <!-- 🎀 BiliPai 品牌色 -->
     <color name="bili_pink">#FB7299</color>
     <color name="splash_background">@android:color/white</color>
+    <color name="splash_bilipai_white_background">#EAF8FD</color>
     
     <!-- 🚀 启动屏主题 (浅色模式) - 使用白色背景 -->
     <style name="Theme.PureBiliBili" parent="Theme.SplashScreen.IconBackground">
         <!-- 🎨 Splash Screen 背景色 - 浅色模式使用白色 -->
         <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <!-- ⏱️ 图标动画时长 -->
         <item name="windowSplashScreenAnimationDuration">300</item>
         <!-- 🔄 Splash 结束后的主题 -->
         <item name="postSplashScreenTheme">@style/Theme.PureBiliBili.Main</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.Icon3D" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_3d</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.BiliPai" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.BiliPaiPink" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai_pink</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.BiliPaiWhite" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenBackground">@color/splash_bilipai_white_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai_white</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.BiliPaiMonet" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai_monet</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.Flat" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_flat</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.TelegramBlue" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_telegram_blue</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.TelegramDark" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_telegram_dark</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.Yuki" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.Anime" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_anime</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.Headphone" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_headphone</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.NoIcon" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_no_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="windowSplashScreenAnimationDuration">0</item>
     </style>
     
     <!-- 主应用主题 (浅色模式) -->

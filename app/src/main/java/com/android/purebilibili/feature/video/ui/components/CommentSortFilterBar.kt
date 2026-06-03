@@ -1,32 +1,50 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.resolveCompactCapsuleChromeSpec
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.Person
-import io.github.alexzhirkevich.cupertino.icons.outlined.Person
+
+internal data class CommentSortSegmentedControlSpec(
+    val itemWidthDp: Int,
+    val heightDp: Int,
+    val indicatorHeightDp: Int
+)
+
+internal fun resolveCommentSortSegmentedControlSpec(itemCount: Int): CommentSortSegmentedControlSpec {
+    val compactChrome = resolveCompactCapsuleChromeSpec(UiPreset.IOS, AndroidNativeVariant.MATERIAL3)
+    return CommentSortSegmentedControlSpec(
+        itemWidthDp = if (itemCount >= 4) 56 else 66,
+        heightDp = compactChrome.primaryHeightDp,
+        indicatorHeightDp = 30
+    )
+}
+
+internal fun hasCommentSortIndicatorScaleClearance(
+    containerHeightDp: Int,
+    indicatorHeightDp: Int
+): Boolean {
+    val bottomBarScale = 78f / 56f
+    return containerHeightDp >= indicatorHeightDp * bottomBarScale + 2f
+}
 
 /**
  *  评论排序筛选栏 (iOS Style)
@@ -45,11 +63,13 @@ fun CommentSortFilterBar(
     val sortModes = remember { CommentSortMode.entries.toList() }
     val appearance = rememberVideoCommentAppearance()
 
-    Row(
+    FlowRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 16.dp)
+            .padding(top = 12.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         //  Left: Title
@@ -78,7 +98,7 @@ fun CommentSortFilterBar(
             iOSToggleButton(
                 isChecked = upOnly,
                 onToggle = onUpOnlyToggle,
-                icon = CupertinoIcons.Default.Person
+                icon = CupertinoIcons.Filled.Person
             )
 
             // Segmented Control
@@ -94,7 +114,7 @@ fun CommentSortFilterBar(
 }
 
 /**
- * iOS Style Segmented Control
+ * Bottom-bar matched segmented control.
  */
 @Composable
 fun iOSSegmentedControl(
@@ -102,61 +122,19 @@ fun iOSSegmentedControl(
     selectedIndex: Int,
     onScaleChange: (Int) -> Unit
 ) {
-    val appearance = rememberVideoCommentAppearance()
-    val backgroundColor = appearance.segmentedBackgroundColor
-    val indicatorColor = appearance.segmentedIndicatorColor
-    val selectedTextColor = appearance.segmentedSelectedTextColor
-    val unselectedTextColor = appearance.segmentedUnselectedTextColor
-    val cornerRadius = 8.dp
-    val segmentWidth = if (items.size >= 4) 52.dp else 60.dp
-
-    Box(
-        modifier = Modifier
-            .height(32.dp)
-            .background(backgroundColor, RoundedCornerShape(cornerRadius))
-            .padding(2.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEachIndexed { index, text ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f, fill = false) 
-                        .width(segmentWidth)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(cornerRadius - 2.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null // No ripple for iOS feel
-                        ) { onScaleChange(index) }
-                        .then(
-                            if (selectedIndex == index) {
-                                Modifier
-                                    .background(indicatorColor, RoundedCornerShape(cornerRadius - 2.dp))
-                                    .padding(vertical = 1.dp) // Subtle shadow inset simulation
-                            } else {
-                                Modifier
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Shadow simulation for selected item
-                    if (selectedIndex == index) {
-                         // In a real iOS implementation this would have a shadow
-                    }
-                    
-                    Text(
-                        text = text,
-                        fontSize = 13.sp,
-                        fontWeight = if (selectedIndex == index) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (selectedIndex == index) selectedTextColor else unselectedTextColor
-                    )
-                }
-            }
-        }
+    val spec = remember(items.size) {
+        resolveCommentSortSegmentedControlSpec(itemCount = items.size)
     }
+    BottomBarLiquidSegmentedControl(
+        items = items,
+        selectedIndex = selectedIndex,
+        onSelected = onScaleChange,
+        itemWidth = spec.itemWidthDp.dp,
+        height = spec.heightDp.dp,
+        indicatorHeight = spec.indicatorHeightDp.dp,
+        labelFontSize = 13.sp,
+        tapPressRefractionEnabled = false
+    )
 }
 
 /**

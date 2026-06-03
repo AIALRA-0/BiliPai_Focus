@@ -2,8 +2,17 @@ package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.data.model.response.ReplyContent
+import com.android.purebilibili.data.model.response.ReplyCursor
+import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
+import com.android.purebilibili.data.model.response.ReplyPage
+import com.android.purebilibili.data.model.response.ReplySailingCardBg
+import com.android.purebilibili.data.model.response.ReplySailingFan
+import com.android.purebilibili.data.model.response.ReplyUserSailing
+import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyLoadedTotalCount
+import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyRemoteTotalCount
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,6 +23,160 @@ class SubReplyDetailPresentationPolicyTest {
     @Test
     fun `section title should include current reply count`() {
         assertEquals("相关回复共14条", resolveSubReplyDetailSectionTitle(replyCount = 14))
+    }
+
+    @Test
+    fun `sub reply detail reveal motion staggers by hierarchy`() {
+        assertEquals(40, resolveSubReplyDetailRevealDelayMillis(levelIndex = 0))
+        assertEquals(95, resolveSubReplyDetailRevealDelayMillis(levelIndex = 1))
+        assertEquals(150, resolveSubReplyDetailRevealDelayMillis(levelIndex = 2))
+        assertEquals(360, resolveSubReplyDetailRevealDelayMillis(levelIndex = 20))
+    }
+
+    @Test
+    fun `sub reply target list index resolves root and child positions`() {
+        val replies = listOf(
+            ReplyItem(rpid = 20L),
+            ReplyItem(rpid = 30L)
+        )
+
+        assertEquals(
+            0,
+            resolveSubReplyTargetListIndex(
+                rootReplyId = 10L,
+                visibleReplies = replies,
+                targetReplyId = 10L
+            )
+        )
+        assertEquals(
+            2,
+            resolveSubReplyTargetListIndex(
+                rootReplyId = 10L,
+                visibleReplies = replies,
+                targetReplyId = 30L
+            )
+        )
+        assertEquals(
+            null,
+            resolveSubReplyTargetListIndex(
+                rootReplyId = 10L,
+                visibleReplies = replies,
+                targetReplyId = 99L
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply detail reveal motion stays blur free`() {
+        val spec = resolveSubReplyDetailRevealSpec(levelIndex = 2)
+
+        assertEquals(150, spec.delayMillis)
+        assertEquals(300, spec.durationMillis)
+        assertEquals(0f, spec.initialBlurRadiusDp)
+        assertEquals(14, spec.initialOffsetDp)
+    }
+
+    @Test
+    fun `sub reply detail component does not apply compose blur`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt").readText()
+
+        assertFalse(source.contains(".blur("))
+        assertFalse(source.contains("getCommentSubReplyRevealBlurEnabled"))
+        assertFalse(source.contains("animateBounds"))
+    }
+
+    @Test
+    fun `sub reply detail list avoids per reply reveal wrappers and eager footer loading`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt").readText()
+
+        assertFalse(source.contains("revealKey = \"reply_"))
+        assertFalse(source.contains("LaunchedEffect(isLoading, isEnd)"))
+    }
+
+    @Test
+    fun `sub reply detail removes centered down arrow drag handle`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/SubReplyDetailComponents.kt").readText()
+
+        assertFalse(source.contains("SubReplyDismissDragHandle("))
+        assertFalse(source.contains("rememberAppChevronDownIcon"))
+        assertFalse(source.contains("contentDescription = \"下拉关闭楼中楼\""))
+    }
+
+    @Test
+    fun `sub reply detail display count keeps root declared total when page only loaded partially`() {
+        assertEquals(
+            8,
+            resolveSubReplyDetailDisplayCount(
+                rootReply = ReplyItem(rcount = 8, replies = listOf(ReplyItem(rpid = 1))),
+                loadedReplyCount = 3
+            )
+        )
+        assertEquals(
+            5,
+            resolveSubReplyDetailDisplayCount(
+                rootReply = ReplyItem(rcount = 2),
+                loadedReplyCount = 5
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply detail display count uses remote total from loaded detail response`() {
+        assertEquals(
+            12,
+            resolveSubReplyDetailDisplayCount(
+                rootReply = ReplyItem(rcount = 2),
+                loadedReplyCount = 4,
+                remoteReplyCount = 12
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply detail display count lets detail response correct stale root preview count`() {
+        assertEquals(
+            1,
+            resolveSubReplyDetailDisplayCount(
+                rootReply = ReplyItem(count = 2, rcount = 2),
+                loadedReplyCount = 1,
+                remoteReplyCount = 1
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply loaded total count prefers remote detail count over stale root preview count`() {
+        assertEquals(
+            12,
+            resolveSubReplyLoadedTotalCount(
+                rootReply = ReplyItem(count = 2, rcount = 2),
+                loadedReplyCount = 4,
+                remoteReplyCount = 12
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply loaded total count lets detail response correct stale root preview count`() {
+        assertEquals(
+            1,
+            resolveSubReplyLoadedTotalCount(
+                rootReply = ReplyItem(count = 2, rcount = 2),
+                loadedReplyCount = 1,
+                remoteReplyCount = 1
+            )
+        )
+    }
+
+    @Test
+    fun `sub reply remote total count follows reply detail page count before root count`() {
+        val data = ReplyData(
+            cursor = ReplyCursor(allCount = 2),
+            page = ReplyPage(count = 1),
+            root = ReplyItem(count = 2, rcount = 1)
+        )
+
+        assertEquals(1, resolveSubReplyRemoteTotalCount(data))
     }
 
     @Test
@@ -127,7 +290,7 @@ class SubReplyDetailPresentationPolicyTest {
     @Test
     fun `auxiliary label should prefer garb card number when available`() {
         assertEquals(
-            "NO.013992",
+            "CO.013992",
             resolveSubReplyAuxiliaryLabel(
                 item = buildReply(
                     message = "test",
@@ -143,6 +306,30 @@ class SubReplyDetailPresentationPolicyTest {
             null,
             resolveSubReplyAuxiliaryLabel(
                 item = buildReply(message = "test")
+            )
+        )
+    }
+
+    @Test
+    fun `auxiliary label should read user sailing fan number when legacy garb field is missing`() {
+        assertEquals(
+            "CO.008502",
+            resolveSubReplyAuxiliaryLabel(
+                item = buildReply(
+                    message = "test",
+                    userSailingV2 = ReplyUserSailing(
+                        cardBg = ReplySailingCardBg(
+                            image = "https://example.com/fan.png",
+                            fan = ReplySailingFan(
+                                isFan = 1,
+                                number = 8502,
+                                color = "#7B7F88",
+                                name = "测试装扮",
+                                numDesc = "008502"
+                            )
+                        )
+                    )
+                )
             )
         )
     }
@@ -203,6 +390,7 @@ class SubReplyDetailPresentationPolicyTest {
         rpid: Long = 200L,
         message: String,
         garbCardNumber: String = "",
+        userSailingV2: ReplyUserSailing? = null,
         parent: Long = 0L,
         dialog: Long = 0L
     ): ReplyItem {
@@ -213,7 +401,8 @@ class SubReplyDetailPresentationPolicyTest {
             member = ReplyMember(
                 mid = "12",
                 uname = "ReplyUser",
-                garbCardNumber = garbCardNumber
+                garbCardNumber = garbCardNumber,
+                userSailingV2 = userSailingV2
             ),
             content = ReplyContent(message = message)
         )

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
@@ -9,14 +10,56 @@ import org.junit.Test
 class HomePullRefreshUiPolicyTest {
 
     @Test
-    fun `md3 preset uses material refresh motion style`() {
+    fun `material md3 preset uses native refresh motion style`() {
         assertEquals(
             HomePullRefreshMotionStyle.MD3,
-            resolveHomePullRefreshMotionStyle(UiPreset.MD3)
+            resolveHomePullRefreshMotionStyle(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3
+            )
         )
         assertEquals(
             HomePullRefreshMotionStyle.IOS,
-            resolveHomePullRefreshMotionStyle(UiPreset.IOS)
+            resolveHomePullRefreshMotionStyle(
+                uiPreset = UiPreset.IOS,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3
+            )
+        )
+    }
+
+    @Test
+    fun `miuix variant keeps material pull motion for previous md3 behavior`() {
+        assertEquals(
+            HomePullRefreshMotionStyle.MD3,
+            resolveHomePullRefreshMotionStyle(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `pull refresh indicator style routes md3 screenshot and miuix legacy material separately`() {
+        assertEquals(
+            HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE,
+            resolveHomePullRefreshIndicatorStyle(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3
+            )
+        )
+        assertEquals(
+            HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT,
+            resolveHomePullRefreshIndicatorStyle(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            HomePullRefreshIndicatorStyle.IOS,
+            resolveHomePullRefreshIndicatorStyle(
+                uiPreset = UiPreset.IOS,
+                androidNativeVariant = AndroidNativeVariant.MATERIAL3
+            )
         )
     }
 
@@ -113,171 +156,6 @@ class HomePullRefreshUiPolicyTest {
     }
 
     @Test
-    fun `shouldResetFollowToTopAfterRefreshCompletion only triggers for unhandled follow event`() {
-        assertTrue(
-            shouldResetFollowToTopAfterRefreshCompletion(
-                currentCategory = HomeCategory.FOLLOW,
-                resetKey = 2L,
-                handledKey = 1L
-            )
-        )
-        assertFalse(
-            shouldResetFollowToTopAfterRefreshCompletion(
-                currentCategory = HomeCategory.FOLLOW,
-                resetKey = 2L,
-                handledKey = 2L
-            )
-        )
-        assertFalse(
-            shouldResetFollowToTopAfterRefreshCompletion(
-                currentCategory = HomeCategory.POPULAR,
-                resetKey = 2L,
-                handledKey = 1L
-            )
-        )
-    }
-
-    @Test
-    fun `follow refresh presentation should commit only after pull state is fully settled`() {
-        assertFalse(
-            shouldCommitFollowRefreshPresentationAfterPullSettles(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true,
-                isRefreshing = true,
-                isStateAnimating = true,
-                distanceFraction = 0.8f,
-                contentOffsetFraction = 0.8f
-            )
-        )
-        assertFalse(
-            shouldCommitFollowRefreshPresentationAfterPullSettles(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true,
-                isRefreshing = false,
-                isStateAnimating = true,
-                distanceFraction = 0.2f,
-                contentOffsetFraction = 0.2f
-            )
-        )
-        assertFalse(
-            shouldCommitFollowRefreshPresentationAfterPullSettles(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true,
-                isRefreshing = false,
-                isStateAnimating = false,
-                distanceFraction = 0.2f,
-                contentOffsetFraction = 0.2f
-            )
-        )
-        assertTrue(
-            shouldCommitFollowRefreshPresentationAfterPullSettles(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true,
-                isRefreshing = false,
-                isStateAnimating = false,
-                distanceFraction = 0f,
-                contentOffsetFraction = 0f
-            )
-        )
-    }
-
-    @Test
-    fun `follow refresh presentation should wait for animated content bounce to finish`() {
-        assertFalse(
-            shouldCommitFollowRefreshPresentationAfterPullSettles(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true,
-                isRefreshing = false,
-                isStateAnimating = false,
-                distanceFraction = 0f,
-                contentOffsetFraction = 0.08f
-            )
-        )
-        assertTrue(
-            shouldCommitFollowRefreshPresentationAfterPullSettles(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true,
-                isRefreshing = false,
-                isStateAnimating = false,
-                distanceFraction = 0f,
-                contentOffsetFraction = 0f
-            )
-        )
-    }
-
-    @Test
-    fun `follow refresh presentation commit delay applies only to pending follow refresh`() {
-        assertEquals(
-            280L,
-            resolveFollowRefreshPresentationCommitDelayMillis(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true
-            )
-        )
-        assertEquals(
-            0L,
-            resolveFollowRefreshPresentationCommitDelayMillis(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = false
-            )
-        )
-        assertEquals(
-            0L,
-            resolveFollowRefreshPresentationCommitDelayMillis(
-                currentCategory = HomeCategory.POPULAR,
-                hasPendingPresentation = true
-            )
-        )
-    }
-
-    @Test
-    fun `strict follow settle motion applies only while follow has pending presentation`() {
-        assertTrue(
-            shouldUseStrictFollowRefreshSettleMotion(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = true
-            )
-        )
-        assertFalse(
-            shouldUseStrictFollowRefreshSettleMotion(
-                currentCategory = HomeCategory.FOLLOW,
-                hasPendingPresentation = false
-            )
-        )
-        assertFalse(
-            shouldUseStrictFollowRefreshSettleMotion(
-                currentCategory = HomeCategory.POPULAR,
-                hasPendingPresentation = true
-            )
-        )
-    }
-
-    @Test
-    fun `follow refresh preview should be deferred while visible follow page is still refreshing`() {
-        assertTrue(
-            shouldDeferFollowRefreshPreviewWhilePullRefreshing(
-                currentCategory = HomeCategory.FOLLOW,
-                isRefreshing = true,
-                hasPendingPresentation = false
-            )
-        )
-        assertTrue(
-            shouldDeferFollowRefreshPreviewWhilePullRefreshing(
-                currentCategory = HomeCategory.FOLLOW,
-                isRefreshing = false,
-                hasPendingPresentation = true
-            )
-        )
-        assertFalse(
-            shouldDeferFollowRefreshPreviewWhilePullRefreshing(
-                currentCategory = HomeCategory.POPULAR,
-                isRefreshing = true,
-                hasPendingPresentation = true
-            )
-        )
-    }
-
-    @Test
     fun `resolvePullRefreshHintText shows pull text while indicator animates back`() {
         assertEquals(
             "下拉刷新...",
@@ -350,12 +228,290 @@ class HomePullRefreshUiPolicyTest {
     }
 
     @Test
-    fun `resolvePullContentOffsetFraction keeps md3 content pinned during pull`() {
+    fun `resolvePullContentOffsetFraction lets md3 content follow finger during pull`() {
         assertEquals(
-            0f,
+            0.6f,
             resolvePullContentOffsetFraction(
                 distanceFraction = 1.2f,
                 isRefreshing = false,
+                motionStyle = HomePullRefreshMotionStyle.MD3
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `md3 screenshot pull indicator uses ios content motion curve`() {
+        val lightPull = resolvePullContentOffsetFraction(
+            distanceFraction = 0.4f,
+            isRefreshing = false,
+            motionStyle = HomePullRefreshMotionStyle.MD3,
+            indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+        )
+        val heavyPull = resolvePullContentOffsetFraction(
+            distanceFraction = 1.2f,
+            isRefreshing = false,
+            motionStyle = HomePullRefreshMotionStyle.MD3,
+            indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+        )
+
+        assertTrue(lightPull > 0f)
+        assertTrue(heavyPull > lightPull)
+        assertEquals(0.4f, lightPull, 0.001f)
+        assertEquals(1.12f, heavyPull, 0.001f)
+        assertTrue(heavyPull <= 1.12f)
+    }
+
+    @Test
+    fun `md3 screenshot pull offset reserves room for indicator at refresh threshold`() {
+        val indicatorHeight = resolveMd3ScreenshotRefreshIndicatorHeightDp(
+            progress = 1f,
+            isRefreshing = false
+        )
+        val indicatorTotalHeight = resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(
+            indicatorHeightDp = indicatorHeight,
+            hasHintText = true
+        )
+        val contentOffset = resolvePullContentMaxOffsetDp(HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE) *
+            resolvePullContentOffsetFraction(
+                distanceFraction = 1f,
+                isRefreshing = false,
+                motionStyle = HomePullRefreshMotionStyle.MD3,
+                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+            )
+
+        assertTrue(contentOffset >= indicatorTotalHeight + 8f)
+    }
+
+    @Test
+    fun `miuix material indicator uses ios content motion curve`() {
+        assertEquals(
+            0.3f,
+            resolvePullContentOffsetFraction(
+                distanceFraction = 0.6f,
+                isRefreshing = false,
+                motionStyle = HomePullRefreshMotionStyle.MD3,
+                indicatorStyle = HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT
+            ),
+            0.001f
+        )
+        assertEquals(
+            0.6f,
+            resolvePullContentOffsetFraction(
+                distanceFraction = 1.2f,
+                isRefreshing = false,
+                motionStyle = HomePullRefreshMotionStyle.MD3,
+                indicatorStyle = HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `md3 screenshot pull content max offset reserves indicator distance`() {
+        assertEquals(
+            196f,
+            resolvePullContentMaxOffsetDp(HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `md3 screenshot pull indicator releases cards back to neutral when refreshing`() {
+        assertEquals(
+            0f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 1.15f,
+                isRefreshing = true,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.9f,
+                motionStyle = HomePullRefreshMotionStyle.MD3,
+                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `stable md3 screenshot pull offset follows finger back toward top`() {
+        assertEquals(
+            0.5f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 0.5f,
+                isRefreshing = false,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.9f,
+                motionStyle = HomePullRefreshMotionStyle.MD3,
+                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `md3 screenshot pull indicator stretches with pull distance`() {
+        val initialHeight = resolveMd3ScreenshotRefreshIndicatorHeightDp(
+            progress = 0f,
+            isRefreshing = false
+        )
+        val releaseHeight = resolveMd3ScreenshotRefreshIndicatorHeightDp(
+            progress = 1f,
+            isRefreshing = false
+        )
+
+        assertEquals(44f, initialHeight, 0.001f)
+        assertTrue(releaseHeight > initialHeight)
+        assertEquals(42f, resolveMd3ScreenshotRefreshIndicatorHeightDp(progress = 1f, isRefreshing = true), 0.001f)
+    }
+
+    @Test
+    fun `md3 screenshot pull indicator total height includes hint row`() {
+        assertEquals(
+            132f,
+            resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(
+                indicatorHeightDp = 86f,
+                hasHintText = true
+            ),
+            0.001f
+        )
+        assertEquals(
+            102f,
+            resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(
+                indicatorHeightDp = 86f,
+                hasHintText = false
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `md3 screenshot pull indicator stays centered between tabs and pushed cards`() {
+        assertEquals(
+            10f,
+            resolveMd3ScreenshotRefreshIndicatorTranslationY(
+                dragOffsetPx = 140f,
+                indicatorTotalHeightPx = 120f,
+                minGapPx = 8f
+            ),
+            0.001f
+        )
+        assertEquals(
+            0f,
+            resolveMd3ScreenshotRefreshIndicatorTranslationY(
+                dragOffsetPx = 80f,
+                indicatorTotalHeightPx = 120f,
+                minGapPx = 8f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `stable pull content offset follows finger upward`() {
+        assertEquals(
+            0.3f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 0.6f,
+                isRefreshing = false,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.8f,
+                motionStyle = HomePullRefreshMotionStyle.IOS
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `stable pull content offset grows with finger while pulling down`() {
+        assertEquals(
+            0.6f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 1.2f,
+                isRefreshing = false,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.3f,
+                motionStyle = HomePullRefreshMotionStyle.IOS
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `stable pull content offset resets after pull returns to idle`() {
+        assertEquals(
+            0f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 0f,
+                isRefreshing = false,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.8f,
+                motionStyle = HomePullRefreshMotionStyle.IOS
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `stable pull content offset clears while refresh is active`() {
+        assertEquals(
+            0f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 1.2f,
+                isRefreshing = true,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.8f,
+                motionStyle = HomePullRefreshMotionStyle.IOS
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `pull offset snaps to finger only during active drag`() {
+        assertTrue(
+            shouldSnapPullOffsetToFinger(
+                distanceFraction = 0.6f,
+                isRefreshing = false,
+                isStateAnimating = false
+            )
+        )
+        assertFalse(
+            shouldSnapPullOffsetToFinger(
+                distanceFraction = 0.6f,
+                isRefreshing = false,
+                isStateAnimating = true
+            )
+        )
+        assertFalse(
+            shouldSnapPullOffsetToFinger(
+                distanceFraction = 0.6f,
+                isRefreshing = true,
+                isStateAnimating = false
+            )
+        )
+    }
+
+    @Test
+    fun `md3 screenshot pull offset stays finger driven while material state animates`() {
+        assertTrue(
+            shouldSnapPullOffsetToFinger(
+                distanceFraction = 0.6f,
+                isRefreshing = false,
+                isStateAnimating = true,
+                indicatorStyle = HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+            )
+        )
+    }
+
+    @Test
+    fun `stable pull content offset lets md3 content follow finger`() {
+        assertEquals(
+            0.6f,
+            resolveStablePullContentOffsetFraction(
+                distanceFraction = 1.2f,
+                isRefreshing = false,
+                isStateAnimating = false,
+                previousOffsetFraction = 0.8f,
                 motionStyle = HomePullRefreshMotionStyle.MD3
             ),
             0.001f

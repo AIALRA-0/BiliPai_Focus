@@ -44,6 +44,11 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoshotData
 import kotlin.math.roundToInt
 
+internal data class SeekPreviewDestinationRect(
+    val offset: IntOffset,
+    val size: IntSize
+)
+
 internal enum class SeekPreviewBubblePlacement {
     Anchored,
     Centered
@@ -121,6 +126,40 @@ internal fun resolveSeekPreviewAnchorPositionMs(
         positionMs = targetPositionMs,
         durationMs = durationMs
     ) ?: targetPositionMs.coerceAtLeast(0L)
+}
+
+internal fun resolveSeekPreviewDestinationRect(
+    sourceWidthPx: Int,
+    sourceHeightPx: Int,
+    containerWidthPx: Int,
+    containerHeightPx: Int
+): SeekPreviewDestinationRect {
+    val safeSourceWidth = sourceWidthPx.coerceAtLeast(1)
+    val safeSourceHeight = sourceHeightPx.coerceAtLeast(1)
+    val safeContainerWidth = containerWidthPx.coerceAtLeast(1)
+    val safeContainerHeight = containerHeightPx.coerceAtLeast(1)
+
+    val sourceAspectRatio = safeSourceWidth.toFloat() / safeSourceHeight.toFloat()
+    val containerAspectRatio = safeContainerWidth.toFloat() / safeContainerHeight.toFloat()
+    val (destinationWidth, destinationHeight) = if (sourceAspectRatio >= containerAspectRatio) {
+        val height = (safeContainerWidth / sourceAspectRatio)
+            .roundToInt()
+            .coerceIn(1, safeContainerHeight)
+        safeContainerWidth to height
+    } else {
+        val width = (safeContainerHeight * sourceAspectRatio)
+            .roundToInt()
+            .coerceIn(1, safeContainerWidth)
+        width to safeContainerHeight
+    }
+
+    return SeekPreviewDestinationRect(
+        offset = IntOffset(
+            x = ((safeContainerWidth - destinationWidth) / 2f).roundToInt(),
+            y = ((safeContainerHeight - destinationHeight) / 2f).roundToInt()
+        ),
+        size = IntSize(destinationWidth, destinationHeight)
+    )
 }
 
 @Composable
@@ -270,15 +309,25 @@ private fun SeekPreviewImage(
                 val scaleY = bitmap.height.toFloat() / expectedHeight.toFloat()
                 val cropOffsetX = (spriteOffsetX * scaleX).roundToInt().coerceAtLeast(0)
                 val cropOffsetY = (spriteOffsetY * scaleY).roundToInt().coerceAtLeast(0)
-                val cropWidth = (videoshotData.img_x_size * scaleX).roundToInt().coerceAtLeast(1)
-                val cropHeight = (videoshotData.img_y_size * scaleY).roundToInt().coerceAtLeast(1)
+                val cropWidth = (videoshotData.img_x_size * scaleX)
+                    .roundToInt()
+                    .coerceIn(1, (bitmap.width - cropOffsetX).coerceAtLeast(1))
+                val cropHeight = (videoshotData.img_y_size * scaleY)
+                    .roundToInt()
+                    .coerceIn(1, (bitmap.height - cropOffsetY).coerceAtLeast(1))
+                val destinationRect = resolveSeekPreviewDestinationRect(
+                    sourceWidthPx = cropWidth,
+                    sourceHeightPx = cropHeight,
+                    containerWidthPx = size.width.roundToInt(),
+                    containerHeightPx = size.height.roundToInt()
+                )
 
                 drawImage(
                     image = bitmap.asImageBitmap(),
                     srcOffset = IntOffset(cropOffsetX, cropOffsetY),
                     srcSize = IntSize(cropWidth, cropHeight),
-                    dstOffset = IntOffset.Zero,
-                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                    dstOffset = destinationRect.offset,
+                    dstSize = destinationRect.size
                 )
             }
         }

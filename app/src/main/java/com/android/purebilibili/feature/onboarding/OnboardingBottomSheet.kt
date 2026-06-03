@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import dev.chrisbanes.haze.HazeState
@@ -51,7 +52,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 //  Lottie 动画
 import com.airbnb.lottie.compose.*
-import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.LottieUrls
 import com.android.purebilibili.core.theme.LocalUiPreset

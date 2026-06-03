@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -45,6 +47,70 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
+    fun resolveRecommendFeedRequestIndex_advancesForManualRefreshAndLoadMore() {
+        assertEquals(
+            0,
+            resolveRecommendFeedRequestIndex(
+                isLoadMore = false,
+                isManualRefresh = false,
+                currentRefreshIndex = 0
+            )
+        )
+        assertEquals(
+            4,
+            resolveRecommendFeedRequestIndex(
+                isLoadMore = false,
+                isManualRefresh = true,
+                currentRefreshIndex = 3
+            )
+        )
+        assertEquals(
+            4,
+            resolveRecommendFeedRequestIndex(
+                isLoadMore = true,
+                isManualRefresh = false,
+                currentRefreshIndex = 3
+            )
+        )
+    }
+
+    @Test
+    fun shouldAdvanceRecommendFeedRequestIndex_whenRecommendRequestReturnedAnyValidVideo() {
+        assertTrue(
+            shouldAdvanceRecommendFeedRequestIndex(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = false,
+                isManualRefresh = true,
+                validVideoCount = 8
+            )
+        )
+        assertTrue(
+            shouldAdvanceRecommendFeedRequestIndex(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = true,
+                isManualRefresh = false,
+                validVideoCount = 8
+            )
+        )
+        assertFalse(
+            shouldAdvanceRecommendFeedRequestIndex(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = false,
+                isManualRefresh = true,
+                validVideoCount = 0
+            )
+        )
+        assertFalse(
+            shouldAdvanceRecommendFeedRequestIndex(
+                category = HomeCategory.POPULAR,
+                isLoadMore = false,
+                isManualRefresh = true,
+                validVideoCount = 8
+            )
+        )
+    }
+
+    @Test
     fun shouldHandleRefreshNewItemsEvent_requiresPositiveAndGreaterKey() {
         assertFalse(shouldHandleRefreshNewItemsEvent(refreshKey = 0L, handledKey = 0L))
         assertFalse(shouldHandleRefreshNewItemsEvent(refreshKey = 10L, handledKey = 10L))
@@ -53,15 +119,33 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
+    fun homeScreen_waitsForNewItemsBeforeRefreshScrollsToTop() {
+        val source = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
+        ).first { it.exists() }.readText()
+
+        assertFalse(
+            source.contains("LaunchedEffect(isRefreshing, state.currentCategory, state.popularSubCategory)"),
+            "松手进入刷新时旧卡片应留在当前位置，不能在 isRefreshing 变 true 时立即回顶"
+        )
+        assertTrue(
+            source.contains("LaunchedEffect(refreshNewItemsKey, isRefreshing, currentCategory)"),
+            "新卡片到达后再处理回顶和新增提示"
+        )
+        assertTrue(source.indexOf("shouldResetToTopAfterIncrementalRefresh(") > source.indexOf("refreshNewItemsKey"))
+    }
+
+    @Test
     fun buildHomeRefreshUndoSnapshot_returnsNull_forNonRecommendCategory() {
         val snapshot = buildHomeRefreshUndoSnapshot(
             refreshingCategory = HomeCategory.POPULAR,
             recommendCategoryState = CategoryContent(
-                videos = listOf(VideoItem(bvid = "BV1")),
+                videos = listOf(VideoItem(bvid = "BV1")).toImmutableList(),
                 pageIndex = 3,
                 hasMore = false
             ),
-            fallbackVideos = listOf(VideoItem(bvid = "BV2"))
+            fallbackVideos = listOf(VideoItem(bvid = "BV2")).toImmutableList()
         )
 
         assertEquals(null, snapshot)
@@ -71,8 +155,8 @@ class HomeRefreshPolicyTest {
     fun buildHomeRefreshUndoSnapshot_returnsNull_whenRecommendListEmpty() {
         val snapshot = buildHomeRefreshUndoSnapshot(
             refreshingCategory = HomeCategory.RECOMMEND,
-            recommendCategoryState = CategoryContent(videos = emptyList()),
-            fallbackVideos = emptyList()
+            recommendCategoryState = CategoryContent(videos = persistentListOf()),
+            fallbackVideos = persistentListOf()
         )
 
         assertEquals(null, snapshot)
@@ -84,11 +168,11 @@ class HomeRefreshPolicyTest {
         val snapshot = buildHomeRefreshUndoSnapshot(
             refreshingCategory = HomeCategory.RECOMMEND,
             recommendCategoryState = CategoryContent(
-                videos = videos,
+                videos = videos.toImmutableList(),
                 pageIndex = 4,
                 hasMore = false
             ),
-            fallbackVideos = emptyList()
+            fallbackVideos = persistentListOf()
         )
 
         assertEquals(20, snapshot?.videos?.size)
@@ -101,7 +185,7 @@ class HomeRefreshPolicyTest {
     @Test
     fun applyHomeRefreshUndoSnapshot_restoresVideosAndPagingState() {
         val oldState = CategoryContent(
-            videos = listOf(VideoItem(bvid = "NEW")),
+            videos = listOf(VideoItem(bvid = "NEW")).toImmutableList(),
             pageIndex = 8,
             hasMore = true
         )

@@ -4,6 +4,7 @@ import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomePerformancePolicyTest {
@@ -27,11 +28,11 @@ class HomePerformancePolicyTest {
         assertFalse(config.bottomBarBlurEnabled)
         assertTrue(config.topBarLiquidGlassEnabled)
         assertFalse(config.bottomBarLiquidGlassEnabled)
-        assertTrue(config.isAnyLiquidGlassEnabled)
+        assertFalse(config.isAnyLiquidGlassEnabled)
         assertFalse(config.cardAnimationEnabled)
         assertTrue(config.cardTransitionEnabled)
         assertFalse(config.isDataSaverActive)
-        assertEquals(3, config.preloadAheadCount)
+        assertEquals(2, config.preloadAheadCount)
     }
 
     @Test
@@ -70,7 +71,7 @@ class HomePerformancePolicyTest {
 
         assertFalse(config.isDataSaverActive)
         assertTrue(config.isAnyLiquidGlassEnabled)
-        assertEquals(3, config.preloadAheadCount)
+        assertEquals(2, config.preloadAheadCount)
     }
 
     @Test
@@ -88,17 +89,78 @@ class HomePerformancePolicyTest {
             normalPreloadAheadCount = 5
         )
 
-        assertEquals(3, config.preloadAheadCount)
+        assertEquals(2, config.preloadAheadCount)
     }
 
     @Test
-    fun md3Preset_preservesLiquidGlassWhenStoredSettingIsOn() {
+    fun coverPreloadRange_waitsUntilFeedScrollSettles() {
+        assertNull(
+            resolveHomeCoverPreloadRange(
+                isDataSaverActive = false,
+                isScrollInProgress = true,
+                lastVisibleIndex = 8,
+                totalItemCount = 20,
+                preloadAheadCount = 2
+            )
+        )
+    }
+
+    @Test
+    fun coverPreloadRange_usesConservativeWindowAfterSettledScroll() {
+        assertEquals(
+            9 until 11,
+            resolveHomeCoverPreloadRange(
+                isDataSaverActive = false,
+                isScrollInProgress = false,
+                lastVisibleIndex = 8,
+                totalItemCount = 20,
+                preloadAheadCount = 4
+            )
+        )
+    }
+
+    @Test
+    fun coverPreloadRange_disablesWhenDataSaverActive() {
+        assertNull(
+            resolveHomeCoverPreloadRange(
+                isDataSaverActive = true,
+                isScrollInProgress = false,
+                lastVisibleIndex = 8,
+                totalItemCount = 20,
+                preloadAheadCount = 2
+            )
+        )
+    }
+
+    @Test
+    fun md3Preset_requiresAndroidNativeGlobalOptInOnlyForBottomLiquidGlass() {
         val config = resolveHomePerformanceConfig(
             uiPreset = UiPreset.MD3,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
             topBarLiquidGlassEnabled = true,
             bottomBarLiquidGlassEnabled = true,
+            androidNativeLiquidGlassEnabled = false,
+            cardAnimationEnabled = true,
+            cardTransitionEnabled = true,
+            isDataSaverActive = false,
+            smartVisualGuardEnabled = false,
+            normalPreloadAheadCount = 5
+        )
+
+        assertTrue(config.topBarLiquidGlassEnabled)
+        assertFalse(config.bottomBarLiquidGlassEnabled)
+    }
+
+    @Test
+    fun md3Preset_allowsIndependentTopDockAndBottomLiquidGlassWhenAndroidNativeOptInIsEnabled() {
+        val config = resolveHomePerformanceConfig(
+            uiPreset = UiPreset.MD3,
+            headerBlurEnabled = true,
+            bottomBarBlurEnabled = true,
+            topBarLiquidGlassEnabled = true,
+            bottomBarLiquidGlassEnabled = true,
+            androidNativeLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
             isDataSaverActive = false,

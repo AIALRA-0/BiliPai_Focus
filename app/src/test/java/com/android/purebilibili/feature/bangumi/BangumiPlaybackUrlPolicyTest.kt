@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.bangumi
 
 import com.android.purebilibili.data.model.response.Durl
 import com.android.purebilibili.core.network.BANGUMI_PLAY_URL_PATH
+import com.android.purebilibili.data.repository.BangumiPlayUrlPayload
+import com.android.purebilibili.data.repository.shouldFallbackToLegacyBangumiPlayUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -12,6 +14,30 @@ class BangumiPlaybackUrlPolicyTest {
     @Test
     fun `bangumi playurl path matches PiliPlus v2 endpoint`() {
         assertEquals("pgc/player/web/v2/playurl", BANGUMI_PLAY_URL_PATH)
+    }
+
+    @Test
+    fun `playurl should fallback to legacy only for empty or route errors`() {
+        assertTrue(
+            shouldFallbackToLegacyBangumiPlayUrl(
+                BangumiPlayUrlPayload(code = 0, message = "0", videoInfo = null)
+            )
+        )
+        assertTrue(
+            shouldFallbackToLegacyBangumiPlayUrl(
+                BangumiPlayUrlPayload(code = -404, message = "not found", videoInfo = null)
+            )
+        )
+        assertFalse(
+            shouldFallbackToLegacyBangumiPlayUrl(
+                BangumiPlayUrlPayload(code = -101, message = "账号未登录", videoInfo = null)
+            )
+        )
+        assertFalse(
+            shouldFallbackToLegacyBangumiPlayUrl(
+                BangumiPlayUrlPayload(code = -10403, message = "大会员", videoInfo = null)
+            )
+        )
     }
 
     @Test

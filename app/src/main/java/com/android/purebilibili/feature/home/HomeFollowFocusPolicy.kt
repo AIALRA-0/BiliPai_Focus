@@ -241,6 +241,17 @@ internal fun canRevealMorePresentedHomeFollowVideos(
     return presentedVisibleCount > displayedVisibleCount
 }
 
+internal data class HomeFollowUserCursor(
+    val offset: String = "",
+    val hasMore: Boolean = true,
+    val initialized: Boolean = false
+)
+
+internal data class HomeFollowFastCursor(
+    val visibleUserMidsInOrder: List<Long> = emptyList(),
+    val userStates: Map<Long, HomeFollowUserCursor> = emptyMap()
+)
+
 internal fun hasMoreHomeFollowUsers(
     cursor: HomeFollowFastCursor?
 ): Boolean {

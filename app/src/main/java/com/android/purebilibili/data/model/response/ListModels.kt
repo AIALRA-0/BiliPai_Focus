@@ -76,6 +76,21 @@ data class RelationTagMemberItem(
     val mid: Long = 0
 )
 
+@Serializable
+data class RelationBlacksResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0,
+    val data: RelationBlacksData = RelationBlacksData()
+)
+
+@Serializable
+data class RelationBlacksData(
+    val list: List<FollowingUser> = emptyList(),
+    val total: Int = 0,
+    val re_version: Int = 0
+)
+
 // --- 0.2 收藏状态响应 ---
 @Serializable
 data class FavouredResponse(
@@ -145,11 +160,22 @@ data class FollowingsData(
 )
 
 @Serializable
+data class RelationTagFollowingsResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0,
+    val data: List<FollowingUser> = emptyList()
+)
+
+@Serializable
 data class FollowingUser(
     val mid: Long = 0,
     val uname: String = "",
     val face: String = "",
-    val sign: String = ""
+    val sign: String = "",
+    val mtime: Long = 0,
+    @SerialName("official_verify")
+    val officialVerify: OfficialVerify = OfficialVerify()
 )
 
 // --- 1. 核心通用视频模型 (UI层使用) ---
@@ -164,6 +190,8 @@ data class VideoItem(
     val pic: String = "",
     val owner: Owner = Owner(),
     val stat: Stat = Stat(),
+    val tid: Int = 0,
+    val tname: String = "",
     val duration: Int = 0,
     val progress: Int = -1,
     val view_at: Long = 0,
@@ -249,6 +277,8 @@ data class RecommendItem(
     val pubdate: Long? = null,
     val owner: RecommendOwner? = null,
     val stat: RecommendStat? = null,
+    val tid: Int = 0,
+    val tname: String = "",
     //  [新增] 视频尺寸信息 (用于判断竖屏视频)
     val dimension: Dimension? = null,
     val rights: VideoRights? = null
@@ -262,7 +292,14 @@ data class RecommendItem(
             title = title ?: "",
             pic = pic ?: "",
             owner = Owner(mid = owner?.mid ?: 0, name = owner?.name ?: "", face = owner?.face ?: ""),
-            stat = Stat(view = requestStatConvert(stat?.view), like = requestStatConvert(stat?.like), danmaku = requestStatConvert(stat?.danmaku)),
+            stat = Stat(
+                view = requestStatConvert(stat?.view),
+                like = requestStatConvert(stat?.like),
+                danmaku = requestStatConvert(stat?.danmaku),
+                reply = requestStatConvert(stat?.reply)
+            ),
+            tid = tid,
+            tname = tname,
             duration = duration ?: 0,
             pubdate = pubdate ?: 0L,
             isVertical = dimension?.isVertical == true,
@@ -283,7 +320,8 @@ data class RecommendOwner(
 data class RecommendStat(
     val view: Long = 0,
     val like: Long = 0,
-    val danmaku: Long = 0
+    val danmaku: Long = 0,
+    val reply: Long = 0
 )
 
 // --- 4. 热门视频 Response ---
@@ -305,6 +343,8 @@ data class PopularItem(
     val aid: Long = 0,
     val bvid: String = "",
     val cid: Long = 0,
+    val tid: Int = 0,
+    val tname: String = "",
     val pic: String = "",
     val title: String = "",
     val duration: Int = 0,
@@ -323,7 +363,17 @@ data class PopularItem(
             title = title,
             pic = pic,
             owner = owner,
-            stat = Stat(view = stat.view, like = stat.like, danmaku = stat.danmaku),
+            stat = Stat(
+                view = stat.view,
+                like = stat.like,
+                danmaku = stat.danmaku,
+                reply = stat.reply,
+                coin = stat.coin,
+                favorite = stat.favorite,
+                share = stat.share
+            ),
+            tid = tid,
+            tname = tname,
             duration = duration,
             pubdate = pubdate,
             rights = rights
@@ -441,6 +491,8 @@ data class DynamicRegionItem(
     val aid: Long = 0,
     val bvid: String = "",
     val cid: Long = 0,
+    val tid: Int = 0,
+    val tname: String = "",
     val pic: String = "",
     val title: String = "",
     val duration: Int = 0,
@@ -467,6 +519,8 @@ data class DynamicRegionItem(
                 favorite = stat.favorite,
                 share = stat.share
             ),
+            tid = tid,
+            tname = tname,
             duration = duration,
             pubdate = pubdate,
             rights = rights

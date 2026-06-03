@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
 import androidx.compose.ui.graphics.Color
 
 data class TabletVideoLayoutPolicy(
@@ -17,7 +18,6 @@ data class TabletCinemaLayoutPolicy(
 
 internal enum class CinemaMetaPanelBlock {
     ACTIONS,
-    UP_INFO,
     INTRO,
     COLLECTION,
     PAGES
@@ -87,11 +87,19 @@ fun resolveTabletVideoLayoutPolicy(
     }
 }
 
+internal fun resolveTabletSecondaryDefaultTab(
+    replyCount: Int,
+    hasRelatedVideos: Boolean
+): Int {
+    return if (replyCount == 0 && hasRelatedVideos) 1 else 0
+}
+
 fun resolveTabletCinemaLayoutPolicy(
-    widthDp: Int
+    widthDp: Int,
+    commentWidthPreset: TabletCommentPanelWidthPreset = TabletCommentPanelWidthPreset.STANDARD
 ): TabletCinemaLayoutPolicy {
     val normalizedWidth = widthDp.coerceIn(960, 1800)
-    val curtainOpenWidthDp = interpolateByWidth(
+    val baseCurtainOpenWidthDp = interpolateByWidth(
         widthDp = normalizedWidth,
         minWidthDp = 960,
         maxWidthDp = 1800,
@@ -119,6 +127,24 @@ fun resolveTabletCinemaLayoutPolicy(
         minValue = 980,
         maxValue = 1280
     )
+    val minimumPlayerWidthDp = interpolateByWidth(
+        widthDp = normalizedWidth,
+        minWidthDp = 960,
+        maxWidthDp = 1800,
+        minValue = 600,
+        maxValue = 960
+    )
+    val targetCurtainOpenWidthDp = when (commentWidthPreset) {
+        TabletCommentPanelWidthPreset.COMPACT -> (baseCurtainOpenWidthDp * 0.85f).toInt()
+        TabletCommentPanelWidthPreset.STANDARD -> baseCurtainOpenWidthDp
+        TabletCommentPanelWidthPreset.WIDE -> (baseCurtainOpenWidthDp * 1.15f).toInt()
+        TabletCommentPanelWidthPreset.ULTRA_WIDE -> (baseCurtainOpenWidthDp * 1.30f).toInt()
+    }
+    val maxCurtainWidthWithPlayerGuard =
+        widthDp - horizontalPaddingDp * 2 - minimumPlayerWidthDp - 4
+    val curtainOpenWidthDp = targetCurtainOpenWidthDp
+        .coerceIn(280, 560)
+        .coerceAtMost(maxCurtainWidthWithPlayerGuard.coerceAtLeast(280))
 
     return TabletCinemaLayoutPolicy(
         curtainPeekWidthDp = curtainPeekWidthDp,
@@ -166,13 +192,8 @@ internal fun resolveCinemaSideCurtainSelectedTab(
     currentSelectedTab: Int,
     replyCount: Int,
     isRepliesLoading: Boolean,
-    hasRelatedVideos: Boolean,
-    showRelatedVideosSection: Boolean
+    hasRelatedVideos: Boolean
 ): Int {
-    if (!showRelatedVideosSection) {
-        return 0
-    }
-
     return if (
         currentSelectedTab == 0 &&
         replyCount == 0 &&
@@ -182,60 +203,6 @@ internal fun resolveCinemaSideCurtainSelectedTab(
         1
     } else {
         currentSelectedTab
-    }
-}
-
-internal fun shouldShowVideoRelatedVideosSection(
-    showRelatedVideosSection: Boolean,
-    relatedVideoCount: Int
-): Boolean {
-    return showRelatedVideosSection && relatedVideoCount > 0
-}
-
-internal fun resolveTabletSecondaryDefaultTab(
-    replyCount: Int,
-    hasRelatedVideos: Boolean,
-    showRelatedVideosSection: Boolean
-): Int {
-    return if (replyCount == 0 && hasRelatedVideos && showRelatedVideosSection) 1 else 0
-}
-
-internal fun resolveTabletSecondaryTabs(
-    replyCount: Int,
-    showRelatedVideosSection: Boolean
-): List<String> {
-    val commentsTabTitle = if (replyCount > 0) {
-        "评论 ($replyCount)"
-    } else {
-        "评论"
-    }
-    return buildList {
-        add(commentsTabTitle)
-        if (showRelatedVideosSection) {
-            add("相关推荐")
-        }
-    }
-}
-
-internal fun resolveVideoCommentEmptyStateHint(
-    hasRelatedVideos: Boolean,
-    showRelatedVideosSection: Boolean
-): String? {
-    return if (hasRelatedVideos && showRelatedVideosSection) {
-        "先看看相关推荐"
-    } else {
-        null
-    }
-}
-
-internal fun resolveVideoCommentEmptyStateActionLabel(
-    hasRelatedVideos: Boolean,
-    showRelatedVideosSection: Boolean
-): String? {
-    return if (hasRelatedVideos && showRelatedVideosSection) {
-        "切换到相关推荐"
-    } else {
-        null
     }
 }
 
@@ -262,15 +229,11 @@ internal fun resolveCinemaIntroCardContainerColor(
 }
 
 internal fun resolveCinemaMetaPanelBlocks(
-    hasOwner: Boolean,
     hasCollection: Boolean,
     hasMultiplePages: Boolean
 ): List<CinemaMetaPanelBlock> {
     return buildList {
         add(CinemaMetaPanelBlock.ACTIONS)
-        if (hasOwner) {
-            add(CinemaMetaPanelBlock.UP_INFO)
-        }
         add(CinemaMetaPanelBlock.INTRO)
         if (hasCollection) {
             add(CinemaMetaPanelBlock.COLLECTION)

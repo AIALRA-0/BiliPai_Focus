@@ -39,7 +39,6 @@ internal fun resolveLivePlayback(
 ): ResolvedLivePlayback? {
     val candidates = data.playurl_info?.playurl?.stream
         .orEmpty()
-        .sortedBy { streamProtocolPriority(it.protocolName) }
         .flatMap { stream ->
             stream.format.orEmpty().flatMap { format ->
                 format.codec.orEmpty().mapNotNull { codec ->
@@ -65,6 +64,11 @@ internal fun resolveLivePlayback(
                 }
             }
         }
+        .sortedWith(
+            compareBy<LivePlaybackCandidate> { streamProtocolPriority(it.protocolName) }
+                .thenBy { streamFormatPriority(it.formatName) }
+                .thenBy { streamCodecPriority(it.codecName) }
+        )
 
     if (candidates.isEmpty()) {
         return null
@@ -160,6 +164,23 @@ private fun streamProtocolPriority(protocolName: String): Int {
     return when (protocolName) {
         "http_hls" -> 0
         "http_stream" -> 1
+        else -> 2
+    }
+}
+
+private fun streamFormatPriority(formatName: String): Int {
+    return when (formatName) {
+        "fmp4" -> 0
+        "ts" -> 1
+        "flv" -> 2
+        else -> 3
+    }
+}
+
+private fun streamCodecPriority(codecName: String): Int {
+    return when (codecName) {
+        "avc" -> 0
+        "hevc" -> 1
         else -> 2
     }
 }

@@ -24,11 +24,17 @@ object DanmakuMerger {
      *
      * @param list 原始弹幕列表 (必须已按时间排序)
      * @param intervalMs 合并的时间窗口 (毫秒)，默认 500ms
+     * @param countThreshold 显示 xN 计数的最小重复数，默认 2
      * @return Pair(标准弹幕列表, 高级合并弹幕列表)
      *         标准弹幕继续在原层渲染；不再将重复弹幕转换为黄色高级弹幕。
      */
-    fun merge(list: List<DanmakuData>, intervalMs: Long = 500): Pair<List<DanmakuData>, List<AdvancedDanmakuData>> {
+    fun merge(
+        list: List<DanmakuData>,
+        intervalMs: Long = 500,
+        countThreshold: Int = 2
+    ): Pair<List<DanmakuData>, List<AdvancedDanmakuData>> {
         if (list.isEmpty()) return Pair(list, emptyList())
+        val normalizedCountThreshold = countThreshold.coerceAtLeast(2)
 
         val standardList = mutableListOf<DanmakuData>()
         
@@ -62,7 +68,7 @@ object DanmakuMerger {
                             currentBatch.add(item)
                         } else {
                             // 结算上一批
-                            processBatch(currentBatch, standardList)
+                            processBatch(currentBatch, standardList, normalizedCountThreshold)
                             if (currentBatch.size > 1) mergedCount += (currentBatch.size - 1)
                             
                             // 开启新的一批
@@ -74,7 +80,7 @@ object DanmakuMerger {
                 
                 // 结算最后一批
                 if (currentBatch.isNotEmpty()) {
-                    processBatch(currentBatch, standardList)
+                    processBatch(currentBatch, standardList, normalizedCountThreshold)
                     if (currentBatch.size > 1) mergedCount += (currentBatch.size - 1)
                 }
             }
@@ -93,7 +99,8 @@ object DanmakuMerger {
      */
     private fun processBatch(
         batch: List<TextData>, 
-        standardOut: MutableList<DanmakuData>
+        standardOut: MutableList<DanmakuData>,
+        countThreshold: Int
     ) {
         if (batch.isEmpty()) return
         
@@ -101,13 +108,13 @@ object DanmakuMerger {
             standardOut.add(batch[0])
         } else {
             // 继续以标准弹幕形式存在，但带上 xN 标记，不再升级为中央黄色高级弹幕。
-            standardOut.add(combineBatch(batch))
+            standardOut.add(combineBatch(batch, countThreshold))
         }
     }
     /**
      * 将一批 TextData 合并为一个
      */
-    private fun combineBatch(batch: List<TextData>): TextData {
+    private fun combineBatch(batch: List<TextData>, countThreshold: Int): TextData {
         if (batch.size == 1) return batch[0]
         
         // 取第一个作为基准
@@ -128,7 +135,11 @@ object DanmakuMerger {
         } else {
             TextData()
         }
-        mergedText.text = "${base.text} x$count"
+        mergedText.text = if (count >= countThreshold) {
+            "${base.text} x$count"
+        } else {
+            base.text
+        }
         mergedText.showAtTime = base.showAtTime
         mergedText.textColor = base.textColor
         mergedText.textSize = base.textSize

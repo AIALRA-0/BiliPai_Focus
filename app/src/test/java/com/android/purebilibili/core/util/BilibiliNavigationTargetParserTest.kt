@@ -38,6 +38,35 @@ class BilibiliNavigationTargetParserTest {
     }
 
     @Test
+    fun parse_articleReadUrl_resolvesArticleTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/read/cv12345"
+        )
+
+        assertIs<BilibiliNavigationTarget.Article>(target)
+        assertEquals(12345L, target.articleId)
+    }
+
+    @Test
+    fun parse_articleMobileReadUrl_resolvesArticleTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/read/mobile?id=67890"
+        )
+
+        assertIs<BilibiliNavigationTarget.Article>(target)
+        assertEquals(67890L, target.articleId)
+    }
+
+    @Test
+    fun parse_nonReadBilibiliUrlWithId_doesNotResolveArticleTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "https://www.bilibili.com/blackboard/activity-test?id=12345"
+        )
+
+        assertNull(target)
+    }
+
+    @Test
     fun parse_followingDetailDeepLink_resolvesDynamicTarget() {
         val target = BilibiliNavigationTargetParser.parse(
             "bilibili://following/detail/1015637114125025318"
@@ -45,6 +74,16 @@ class BilibiliNavigationTargetParserTest {
 
         assertIs<BilibiliNavigationTarget.Dynamic>(target)
         assertEquals("1015637114125025318", target.dynamicId)
+    }
+
+    @Test
+    fun parse_videoDeepLinkWithLikelyDynamicId_resolvesDynamicTarget() {
+        val target = BilibiliNavigationTargetParser.parse(
+            "bilibili://video/1199344045210468386"
+        )
+
+        assertIs<BilibiliNavigationTarget.Dynamic>(target)
+        assertEquals("1199344045210468386", target.dynamicId)
     }
 
     @Test

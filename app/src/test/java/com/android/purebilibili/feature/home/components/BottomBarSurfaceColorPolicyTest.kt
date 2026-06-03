@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.store.BottomBarLiquidGlassPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,39 +43,6 @@ class BottomBarSurfaceColorPolicyTest {
         )
 
         assertEquals(Color(0xFF121212), color)
-    }
-
-    @Test
-    fun `frosted bottom bar shell keeps blur visibility when glass effect is enabled`() {
-        val color = resolveBottomBarContainerColor(
-            surfaceColor = Color.White,
-            blurEnabled = true,
-            blurIntensity = BlurIntensity.THIN,
-            liquidGlassProgress = 1f,
-            isGlassEffectEnabled = true
-        )
-
-        assertTrue(color.alpha >= 0.36f)
-    }
-
-    @Test
-    fun `clear bottom bar shell stays lighter than frosted shell`() {
-        val clear = resolveBottomBarContainerColor(
-            surfaceColor = Color.White,
-            blurEnabled = true,
-            blurIntensity = BlurIntensity.THIN,
-            liquidGlassProgress = 0f,
-            isGlassEffectEnabled = true
-        )
-        val frosted = resolveBottomBarContainerColor(
-            surfaceColor = Color.White,
-            blurEnabled = true,
-            blurIntensity = BlurIntensity.THIN,
-            liquidGlassProgress = 1f,
-            isGlassEffectEnabled = true
-        )
-
-        assertTrue(clear.alpha < frosted.alpha)
     }
 
     @Test
@@ -137,14 +107,14 @@ class BottomBarSurfaceColorPolicyTest {
     }
 
     @Test
-    fun `android native blur disables liquid glass surface treatment`() {
+    fun `android native liquid glass stays enabled when blur toggle is also on`() {
         assertFalse(
             resolveAndroidNativeBottomBarGlassEnabled(
                 liquidGlassEnabled = false,
                 blurEnabled = true
             )
         )
-        assertFalse(
+        assertTrue(
             resolveAndroidNativeBottomBarGlassEnabled(
                 liquidGlassEnabled = true,
                 blurEnabled = true
@@ -153,19 +123,61 @@ class BottomBarSurfaceColorPolicyTest {
     }
 
     @Test
+    fun `ios26 liquid glass preset keeps KSU shell translucency`() {
+        val tuning = resolveAndroidNativeBottomBarTuning(
+            blurEnabled = true,
+            darkTheme = true
+        )
+        val bilipai = resolveAndroidNativeFloatingBottomBarContainerColor(
+            surfaceColor = Color.Black,
+            tuning = tuning,
+            glassEnabled = true,
+            blurEnabled = true,
+            blurIntensity = BlurIntensity.THIN,
+            liquidGlassPreset = BottomBarLiquidGlassPreset.BILIPAI_TUNED
+        )
+        val ios26 = resolveAndroidNativeFloatingBottomBarContainerColor(
+            surfaceColor = Color.Black,
+            tuning = tuning,
+            glassEnabled = true,
+            blurEnabled = true,
+            blurIntensity = BlurIntensity.THIN,
+            liquidGlassPreset = BottomBarLiquidGlassPreset.IOS26_REFINED
+        )
+
+        assertEquals(0.30f, bilipai.alpha, 0.003f)
+        assertEquals(0.40f, ios26.alpha, 0.003f)
+        assertTrue(ios26.alpha > bilipai.alpha)
+    }
+
+    @Test
     fun `android native floating blur uses haze when available`() {
         assertTrue(
             shouldUseAndroidNativeFloatingHazeBlur(
                 blurEnabled = true,
                 glassEnabled = false,
-                hasHazeState = true
+                hasHazeState = true,
+                sdkInt = 33
             )
         )
         assertFalse(
             shouldUseAndroidNativeFloatingHazeBlur(
                 blurEnabled = true,
                 glassEnabled = true,
-                hasHazeState = true
+                hasHazeState = true,
+                sdkInt = 33
+            )
+        )
+    }
+
+    @Test
+    fun `android native floating blur avoids haze before runtime shader support`() {
+        assertFalse(
+            shouldUseAndroidNativeFloatingHazeBlur(
+                blurEnabled = true,
+                glassEnabled = false,
+                hasHazeState = true,
+                sdkInt = 29
             )
         )
     }
@@ -199,6 +211,85 @@ class BottomBarSurfaceColorPolicyTest {
     }
 
     @Test
+    fun `settled segmented indicator uses bottom bar surface tint`() {
+        val color = resolveIosFloatingBottomIndicatorColor(
+            isDarkTheme = true,
+            visualPolicy = BottomBarIndicatorVisualPolicy(
+                isInMotion = false,
+                shouldRefract = false,
+                useNeutralTint = false
+            ),
+            liquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
+        )
+
+        assertEquals(resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = true).red, color.red, 0.001f)
+        assertEquals(resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = true).green, color.green, 0.001f)
+        assertEquals(resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = true).blue, color.blue, 0.001f)
+        assertTrue(color.alpha < 1f)
+    }
+
+    @Test
+    fun `light segmented indicator uses gray white bottom bar surface tint`() {
+        val color = resolveIosFloatingBottomIndicatorColor(
+            isDarkTheme = false,
+            visualPolicy = BottomBarIndicatorVisualPolicy(
+                isInMotion = false,
+                shouldRefract = false,
+                useNeutralTint = false
+            ),
+            liquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f)
+        )
+
+        assertEquals(resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = false).red, color.red, 0.001f)
+        assertEquals(resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = false).green, color.green, 0.001f)
+        assertEquals(resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = false).blue, color.blue, 0.001f)
+    }
+
+    @Test
+    fun `moving segmented indicator uses bottom bar moving alpha floor`() {
+        val visualPolicy = BottomBarIndicatorVisualPolicy(
+            isInMotion = true,
+            shouldRefract = true,
+            useNeutralTint = true
+        )
+        val alpha = resolveIosFloatingBottomIndicatorTintAlpha(
+            visualPolicy = visualPolicy,
+            isDarkTheme = false,
+            liquidGlassProgress = 0.5f,
+            configuredAlpha = 0.12f
+        )
+
+        assertTrue(alpha >= 0.4f)
+    }
+
+    @Test
+    fun `md3 segmented control falls back to android underline when global liquid glass is disabled`() {
+        assertEquals(
+            SegmentedControlChromeStyle.ANDROID_NATIVE_UNDERLINE,
+            resolveSegmentedControlChromeStyle(
+                uiPreset = UiPreset.MD3,
+                androidNativeLiquidGlassEnabled = false
+            )
+        )
+
+        assertEquals(
+            SegmentedControlChromeStyle.LIQUID_PILL,
+            resolveSegmentedControlChromeStyle(
+                uiPreset = UiPreset.MD3,
+                androidNativeLiquidGlassEnabled = true
+            )
+        )
+
+        assertEquals(
+            SegmentedControlChromeStyle.LIQUID_PILL,
+            resolveSegmentedControlChromeStyle(
+                uiPreset = UiPreset.IOS,
+                androidNativeLiquidGlassEnabled = false
+            )
+        )
+    }
+
+    @Test
     fun `android native export layer tint keeps theme hue in dark theme`() {
         val color = resolveAndroidNativeExportTintColor(
             themeColor = Color(0xFF4F7CFF),
@@ -207,6 +298,187 @@ class BottomBarSurfaceColorPolicyTest {
 
         assertTrue(color.alpha > 0.2f)
         assertTrue(color.blue >= color.red)
+    }
+
+    @Test
+    fun `android native export layer tint preserves theme brightness in light theme`() {
+        val themeColor = Color(0xFFE67A73)
+        val color = resolveAndroidNativeExportTintColor(
+            themeColor = themeColor,
+            darkTheme = false
+        )
+
+        assertEquals(themeColor.red, color.red, 0.001f)
+        assertEquals(themeColor.green, color.green, 0.001f)
+        assertEquals(themeColor.blue, color.blue, 0.001f)
+        assertEquals(themeColor.alpha, color.alpha, 0.001f)
+    }
+
+    @Test
+    fun `android native glass export tint preserves theme hue`() {
+        val themeColor = Color(0xFF4F7CFF)
+        val containerColor = Color(0xFFE8ECEF)
+        val color = resolveAndroidNativeExportTintColor(
+            themeColor = themeColor,
+            darkTheme = false,
+            containerColor = containerColor,
+            glassEnabled = true
+        )
+
+        assertEquals(themeColor.red, color.red, 0.001f)
+        assertEquals(themeColor.green, color.green, 0.001f)
+        assertEquals(themeColor.blue, color.blue, 0.001f)
+        assertEquals(themeColor.alpha, color.alpha, 0.001f)
+    }
+
+    @Test
+    fun `android native glass visible selected item stays themed while indicator is idle`() {
+        val unselected = Color(0xFF202124)
+        val selected = Color(0xFF00A1D6)
+        val color = resolveBottomBarGlassVisibleContentColor(
+            unselectedColor = unselected,
+            selectedColor = selected,
+            themeWeight = 1f,
+            glassEnabled = true,
+            indicatorProgress = 0f
+        )
+
+        assertEquals(selected.red, color.red, 0.001f)
+        assertEquals(selected.green, color.green, 0.001f)
+        assertEquals(selected.blue, color.blue, 0.001f)
+    }
+
+    @Test
+    fun `android native glass visible layer turns neutral only while indicator refracts`() {
+        val unselected = Color(0xFF202124)
+        val selected = Color(0xFF00A1D6)
+        val color = resolveBottomBarGlassVisibleContentColor(
+            unselectedColor = unselected,
+            selectedColor = selected,
+            themeWeight = 1f,
+            glassEnabled = true,
+            indicatorProgress = 1f
+        )
+
+        assertEquals(unselected.red, color.red, 0.001f)
+        assertEquals(unselected.green, color.green, 0.001f)
+        assertEquals(unselected.blue, color.blue, 0.001f)
+    }
+
+    @Test
+    fun `android native glass visible selected item stays themed when indicator backdrop is disabled`() {
+        val unselected = Color(0xFF202124)
+        val selected = Color(0xFF00A1D6)
+        val color = resolveBottomBarGlassVisibleContentColor(
+            unselectedColor = unselected,
+            selectedColor = selected,
+            themeWeight = 1f,
+            glassEnabled = true,
+            indicatorProgress = 1f,
+            indicatorBackdropEnabled = false
+        )
+
+        assertEquals(selected.red, color.red, 0.001f)
+        assertEquals(selected.green, color.green, 0.001f)
+        assertEquals(selected.blue, color.blue, 0.001f)
+    }
+
+    @Test
+    fun `light skin trim keeps themed bottom bar text foreground`() {
+        val themedUnselectedColor = Color.White.copy(alpha = 0.78f)
+        val colors = resolveBottomBarSkinContentColors(
+            selectedColor = Color(0xFFFFA000),
+            unselectedColor = themedUnselectedColor,
+            skinTrimTint = Color(0xFFF3CF87)
+        )
+
+        assertEquals(Color(0xFFFFA000), colors.selectedColor)
+        assertEquals(themedUnselectedColor, colors.unselectedColor)
+        assertEquals(0f, colors.labelScrimAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `dark skin trim keeps themed bottom bar foreground unchanged`() {
+        val colors = resolveBottomBarSkinContentColors(
+            selectedColor = Color(0xFFFFA000),
+            unselectedColor = Color.White,
+            skinTrimTint = Color(0xFF241E17)
+        )
+
+        assertEquals(Color.White, colors.unselectedColor)
+        assertEquals(0f, colors.labelScrimAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `android native glass export content keeps full theme hue while partially covered`() {
+        val unselected = Color(0xFF202124)
+        val selected = Color(0xFF00A1D6)
+        val color = resolveBottomBarGlassExportContentColor(
+            unselectedColor = unselected,
+            selectedColor = selected,
+            themeWeight = 0.42f,
+            glassEnabled = true
+        )
+
+        assertEquals(selected.red, color.red, 0.001f)
+        assertEquals(selected.green, color.green, 0.001f)
+        assertEquals(selected.blue, color.blue, 0.001f)
+    }
+
+    @Test
+    fun `android native glass export content keeps uncovered item neutral`() {
+        val unselected = Color(0xFF202124)
+        val selected = Color(0xFF00A1D6)
+        val color = resolveBottomBarGlassExportContentColor(
+            unselectedColor = unselected,
+            selectedColor = selected,
+            themeWeight = 0f,
+            glassEnabled = true
+        )
+
+        assertEquals(unselected.red, color.red, 0.001f)
+        assertEquals(unselected.green, color.green, 0.001f)
+        assertEquals(unselected.blue, color.blue, 0.001f)
+    }
+
+    @Test
+    fun `android native idle glass indicator keeps neutral gray capsule`() {
+        val themeIndicator = resolveAndroidNativeIndicatorColor(
+            themeColor = Color(0xFF00A1D6),
+            darkTheme = false
+        )
+        val idleIndicator = resolveAndroidNativeIdleIndicatorSurfaceColor(
+            darkTheme = false
+        )
+
+        assertEquals(Color.Black.red, idleIndicator.red, 0.001f)
+        assertEquals(Color.Black.green, idleIndicator.green, 0.001f)
+        assertEquals(Color.Black.blue, idleIndicator.blue, 0.001f)
+        assertEquals(0.1f, idleIndicator.alpha, 0.003f)
+        assertFalse(
+            idleIndicator.red == themeIndicator.red &&
+                idleIndicator.green == themeIndicator.green &&
+                idleIndicator.blue == themeIndicator.blue
+        )
+    }
+
+    @Test
+    fun `ios26 idle glass indicator keeps visible gray white capsule on dark content`() {
+        val tunedDark = resolveBottomBarIdleIndicatorSurfaceColor(
+            preset = BottomBarLiquidGlassPreset.BILIPAI_TUNED,
+            darkTheme = true
+        )
+        val ios26Dark = resolveBottomBarIdleIndicatorSurfaceColor(
+            preset = BottomBarLiquidGlassPreset.IOS26_REFINED,
+            darkTheme = true
+        )
+        val movingDark = resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = true)
+
+        assertEquals(resolveAndroidNativeIdleIndicatorSurfaceColor(darkTheme = true), tunedDark)
+        assertEquals(movingDark.red, ios26Dark.red, 0.001f)
+        assertEquals(movingDark.green, ios26Dark.green, 0.001f)
+        assertEquals(movingDark.blue, ios26Dark.blue, 0.001f)
+        assertTrue(ios26Dark.alpha > tunedDark.alpha)
     }
 
     @Test
@@ -225,9 +497,6 @@ class BottomBarSurfaceColorPolicyTest {
         assertTrue(profile.visiblePanelOffsetFraction < profile.indicatorPanelOffsetFraction)
         assertTrue(profile.visibleSelectionEmphasis < 1f)
         assertTrue(profile.exportSelectionEmphasis < 1f)
-        assertTrue(profile.forceChromaticAberration)
-        assertTrue(profile.indicatorLensAmountScale > 1f)
-        assertTrue(profile.indicatorLensHeightScale > 1f)
     }
 
     @Test

@@ -47,11 +47,12 @@ internal fun BatchDownloadDialog(
     qualityOptions: List<Pair<Int, String>>,
     currentQuality: Int,
     downloadedIds: Set<String>,
-    onConfirm: (Int, List<BatchDownloadCandidate>) -> Unit,
+    onConfirm: (Int, DownloadOptions, List<BatchDownloadCandidate>) -> Unit,
     onDismiss: () -> Unit
 ) {
     var workingCandidates by remember(candidates) { mutableStateOf(candidates) }
     var selectedQuality by remember(currentQuality) { mutableIntStateOf(currentQuality) }
+    var includeDanmaku by remember { mutableStateOf(true) }
 
     Dialog(onDismissRequest = onDismiss) {
         BoxWithConstraints(
@@ -200,6 +201,25 @@ internal fun BatchDownloadDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { includeDanmaku = !includeDanmaku }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = includeDanmaku,
+                            onCheckedChange = { includeDanmaku = it }
+                        )
+                        Text(
+                            text = "同时缓存弹幕",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Text(
                         text = "统一画质",
                         style = MaterialTheme.typography.titleMedium,
@@ -239,7 +259,13 @@ internal fun BatchDownloadDialog(
                             Text("取消")
                         }
                         Button(
-                            onClick = { onConfirm(selectedQuality, workingCandidates) },
+                            onClick = {
+                                onConfirm(
+                                    selectedQuality,
+                                    DownloadOptions(includeDanmaku = includeDanmaku),
+                                    workingCandidates
+                                )
+                            },
                             modifier = Modifier.weight(1f),
                             enabled = canConfirmBatchDownload(workingCandidates)
                         ) {

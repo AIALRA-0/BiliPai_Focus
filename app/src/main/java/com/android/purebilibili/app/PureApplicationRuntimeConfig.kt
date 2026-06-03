@@ -21,16 +21,24 @@ internal object PureApplicationRuntimeConfig {
 
     fun dex2OatProfileInstallDelayMs(): Long = 2_500L
 
-    fun resolveImageMemoryCachePercent(): Double = 0.15
+    fun resolveImageMemoryCachePercent(): Double = 0.10
 
-    fun shouldClearImageMemoryCacheOnTrimLevel(level: Int): Boolean {
+    fun resolveImageMemoryCacheTrimLevel(level: Int): Int? {
         return when (level) {
-            ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN,
+            ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
-            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> true
-            else -> false
+            ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+            ComponentCallbacks2.TRIM_MEMORY_MODERATE,
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> level
+            else -> null
         }
+    }
+
+    fun shouldClearImageMemoryCacheOnTrimLevel(level: Int): Boolean {
+        return level == ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ||
+            level == ComponentCallbacks2.TRIM_MEMORY_MODERATE ||
+            level == ComponentCallbacks2.TRIM_MEMORY_COMPLETE
     }
 
     fun createTelemetryBackgroundStateListener(): BackgroundManager.BackgroundStateListener =

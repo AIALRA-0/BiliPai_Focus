@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
@@ -46,9 +46,20 @@ import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
-import com.android.purebilibili.feature.dynamic.resolveDynamicUserLiveBadgeReservedSpace
+import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarDividerTopOffset
+import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarReturnHeaderHeightDp
 import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.SidebarUser
+import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.util.rememberHapticFeedback
+
+internal fun performDynamicSidebarUserAvatarClick(
+    haptic: (HapticType) -> Unit,
+    onClick: () -> Unit
+) {
+    haptic(HapticType.LIGHT)
+    onClick()
+}
 
 /**
  *  动态侧边栏 - 显示关注的UP主（支持展开/收起、在线状态）
@@ -59,7 +70,6 @@ fun DynamicSidebar(
     selectedUserId: Long?,
     isExpanded: Boolean,
     userListState: androidx.compose.foundation.lazy.LazyListState,
-    emptyMessage: String?,
     onUserClick: (Long?) -> Unit,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
@@ -82,6 +92,7 @@ fun DynamicSidebar(
     // 读取模糊强度设置
     val blurIntensity = currentUnifiedBlurIntensity()
     val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
+    val returnHeaderHeight = resolveDynamicSidebarReturnHeaderHeightDp().dp
     
     // 侧边栏容器 - Glassmorphism 升级版
     Box(
@@ -92,11 +103,6 @@ fun DynamicSidebar(
             .background(
                 MaterialTheme.colorScheme.surface // 纯白背景，减少割裂感
             )
-            .border(
-                width = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                shape = androidx.compose.ui.graphics.RectangleShape // [修复] 直角
-            )
     ) {
         // 内容层 - 使用 Box 重新组织布局以支持模糊
         Box(modifier = Modifier.fillMaxSize()) {
@@ -105,12 +111,12 @@ fun DynamicSidebar(
                 state = userListState,
                 horizontalAlignment = Alignment.CenterHorizontally,
                 contentPadding = PaddingValues(
-                    top = topPadding + 52.dp, // 为顶部返回按钮留出空间
+                    top = topPadding + returnHeaderHeight, // 与右侧动态顶栏同高，保证视觉中线一致
                     bottom = 16.dp
                 ),
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(sidebarHazeState) // 设置模糊源
+                    .hazeSourceCompat(sidebarHazeState) // 设置模糊源
             ) {
                 // 隐藏用户切换按钮 (胶囊样式)
                 if (hiddenCount > 0 || showHiddenUsers) {
@@ -138,23 +144,6 @@ fun DynamicSidebar(
                 }
 
                 // 关注的UP主列表 - 带瀑布入场动画
-                if (users.isEmpty() && !emptyMessage.isNullOrBlank()) {
-                    item(key = "empty_state") {
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = emptyMessage,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
                 itemsIndexed(users, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
                     CascadeSidebarItem(
                         index = index,
@@ -176,7 +165,7 @@ fun DynamicSidebar(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(topPadding + 52.dp)
+                    .height(topPadding + returnHeaderHeight)
                     .unifiedBlur(sidebarHazeState) // 应用模糊
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha))
                     .align(Alignment.TopCenter)
@@ -184,7 +173,7 @@ fun DynamicSidebar(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .height(returnHeaderHeight)
                         .align(Alignment.BottomCenter)
                         .clickable { onBackClick() },
                     contentAlignment = Alignment.Center
@@ -202,7 +191,8 @@ fun DynamicSidebar(
         // 右侧边框线 - 极细
         Box(
             modifier = Modifier
-                .align(Alignment.CenterEnd)
+                .align(Alignment.TopEnd)
+                .padding(top = resolveDynamicSidebarDividerTopOffset(topPadding))
                 .fillMaxHeight()
                 .width(0.5.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
@@ -316,6 +306,7 @@ fun SidebarUserItem(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val displayName = if (user.isHidden) "${user.name}(隐)" else user.name
+    val haptic = rememberHapticFeedback()
 
     Box {
         Column(
@@ -329,7 +320,12 @@ fun SidebarUserItem(
                     else Modifier
                 )
                 .combinedClickable(
-                    onClick = onClick,
+                    onClick = {
+                        performDynamicSidebarUserAvatarClick(
+                            haptic = haptic,
+                            onClick = onClick
+                        )
+                    },
                     onLongClick = { showMenu = true }
                 )
                 .padding(vertical = 8.dp) // 内部间距
@@ -349,39 +345,30 @@ fun SidebarUserItem(
                 }
 
                 Box(
-                    modifier = Modifier.padding(bottom = resolveDynamicUserLiveBadgeReservedSpace())
+                    modifier = Modifier
+                        .size(44.dp)
+                        .then(
+                            if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                        )
+                        .padding(2.dp)
                 ) {
-                    Box(
+                    AsyncImage(
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(faceUrl.ifEmpty { null })
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = user.name,
                         modifier = Modifier
-                            .size(44.dp) // 稍大一点的头像
-                            // 选中态边框
-                            .then(
-                                if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
-                            )
-                            .padding(2.dp)
-                    ) {
-                        AsyncImage(
-                            model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                .data(faceUrl.ifEmpty { null })
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = user.name,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-
-                    if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                        DynamicUserLiveBadge(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .offset(y = resolveDynamicUserLiveBadgeReservedSpace() / 2)
-                        )
-                    }
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
                 }
+            }
+
+            if (shouldShowDynamicUserLiveBadge(user.isLive)) {
+                DynamicUserLiveBadge(modifier = Modifier.padding(top = 2.dp))
             }
 
             if (showLabel) {

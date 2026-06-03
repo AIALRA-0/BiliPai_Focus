@@ -277,21 +277,26 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun bufferingIndicatorCanShowDuringScrubbingEvenWhenControlsVisible() {
+    fun bufferingIndicatorShowsDuringPlaybackStartup() {
         assertTrue(
             shouldShowBufferingIndicator(
                 isBuffering = true,
                 isQualitySwitching = false,
-                isVisible = true,
-                isScrubbing = true
+                playWhenReady = true
             )
         )
         assertFalse(
             shouldShowBufferingIndicator(
                 isBuffering = true,
                 isQualitySwitching = false,
-                isVisible = true,
-                isScrubbing = false
+                playWhenReady = false
+            )
+        )
+        assertFalse(
+            shouldShowBufferingIndicator(
+                isBuffering = true,
+                isQualitySwitching = true,
+                playWhenReady = true
             )
         )
     }

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings.webdav
 
 import android.content.Context
 import com.android.purebilibili.BuildConfig
+import com.android.purebilibili.core.network.NetworkModule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
@@ -30,6 +31,7 @@ class WebDavBackupService(private val context: Context) {
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .protocols(NetworkModule.resolveSharedNetworkProtocols())
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)

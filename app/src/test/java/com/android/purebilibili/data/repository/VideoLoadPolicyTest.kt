@@ -230,6 +230,28 @@ class VideoLoadPolicyTest {
     }
 
     @Test
+    fun `shouldCachePlayUrlResult rejects downgraded high quality startup result`() {
+        assertFalse(
+            shouldCachePlayUrlResult(
+                source = PlayUrlSource.DASH,
+                audioLang = null,
+                requestedQuality = 80,
+                returnedQuality = 32,
+                dashVideoIds = listOf(32)
+            )
+        )
+        assertTrue(
+            shouldCachePlayUrlResult(
+                source = PlayUrlSource.DASH,
+                audioLang = null,
+                requestedQuality = 80,
+                returnedQuality = 64,
+                dashVideoIds = listOf(80, 64, 32)
+            )
+        )
+    }
+
+    @Test
     fun `shouldEnableDirectedTrafficMode only when enabled on mobile network`() {
         assertTrue(
             shouldEnableDirectedTrafficMode(
@@ -370,9 +392,9 @@ class VideoLoadPolicyTest {
     }
 
     @Test
-    fun `resolveVideoPlaybackAuthState treats access token as authenticated`() {
+    fun `resolveVideoPlaybackAuthState requires session cookie for web playurl auth`() {
         assertTrue(resolveVideoPlaybackAuthState(hasSessionCookie = true, hasAccessToken = false))
-        assertTrue(resolveVideoPlaybackAuthState(hasSessionCookie = false, hasAccessToken = true))
+        assertFalse(resolveVideoPlaybackAuthState(hasSessionCookie = false, hasAccessToken = true))
         assertFalse(resolveVideoPlaybackAuthState(hasSessionCookie = false, hasAccessToken = false))
     }
 

@@ -60,9 +60,11 @@ data class FavFolder(
     val fid: Long = 0,
     val mid: Long = 0,
     val title: String = "",
+    val cover: String = "",
     val media_count: Int = 0,
     val fav_state: Int = 0,
     val type: Int = 0,
+    val upper: Upper? = null,
     val source: FavFolderSource = FavFolderSource.OWNED
 )
 
@@ -86,18 +88,25 @@ data class FavoriteData(
     val cnt_info: CntInfo? = null,
     val ugc: FavoriteUgc? = null
 ) {
-    fun toVideoItem(): VideoItem {
+    fun toVideoItem(
+        ownerFallbackMid: Long = 0L,
+        ownerFallbackName: String = "",
+        ownerFallbackFace: String = ""
+    ): VideoItem {
+        val resolvedOwnerMid = upper?.mid?.takeIf { it > 0L } ?: ownerFallbackMid
+        val resolvedOwnerName = upper?.name?.takeIf { it.isNotBlank() } ?: ownerFallbackName
+        val resolvedOwnerFace = upper?.face?.takeIf { it.isNotBlank() } ?: ownerFallbackFace
         if (type == 21) {
             val resolvedCollectionId = season_id.takeIf { it > 0L } ?: id
             return VideoItem(
                 id = id,
                 title = title,
                 pic = cover,
-                owner = Owner(mid = upper?.mid ?: 0, name = upper?.name ?: "", face = upper?.face ?: ""),
+                owner = Owner(mid = resolvedOwnerMid, name = resolvedOwnerName, face = resolvedOwnerFace),
                 stat = Stat(favorite = cnt_info?.collect ?: 0),
                 isCollectionResource = true,
                 collectionId = resolvedCollectionId,
-                collectionMid = upper?.mid ?: 0,
+                collectionMid = resolvedOwnerMid,
                 collectionMediaCount = media_count,
                 collectionSubtitle = intro
             )
@@ -110,7 +119,7 @@ data class FavoriteData(
             cid = ugc?.first_cid ?: 0L,
             title = title,
             pic = cover,
-            owner = Owner(mid = upper?.mid ?: 0, name = upper?.name ?: "", face = upper?.face ?: ""),
+            owner = Owner(mid = resolvedOwnerMid, name = resolvedOwnerName, face = resolvedOwnerFace),
             stat = Stat(view = cnt_info?.play ?: 0, danmaku = cnt_info?.danmaku ?: 0),
             duration = duration,
             progress = progress,
@@ -156,9 +165,11 @@ data class WatchLaterData(
 data class WatchLaterItem(
     val aid: Long = 0,
     val bvid: String? = null,
+    val cid: Long? = null,
     val title: String? = null,
     val pic: String? = null,
     val duration: Int? = null,
+    val progress: Int? = null,
     val pubdate: Long? = null,
     val owner: WatchLaterOwner? = null,
     val stat: WatchLaterStat? = null

@@ -77,7 +77,7 @@ internal fun resolveSelectedCacheBytes(
     return selectedTargets.sumOf { target ->
         when (target) {
             CacheClearTarget.PLAYBACK_QUALITY -> breakdown.playUrlMemoryCache
-            CacheClearTarget.NETWORK -> breakdown.httpCache
+            CacheClearTarget.NETWORK -> breakdown.networkCache
             CacheClearTarget.IMAGE_PREVIEW -> breakdown.imageCache
             CacheClearTarget.SUBTITLE_DANMAKU -> breakdown.subtitleDanmakuMemoryCache
             CacheClearTarget.TEMP_FILES_AND_LOGS -> breakdown.otherCache

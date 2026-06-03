@@ -11,6 +11,8 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.data.model.response.*
+import com.android.purebilibili.feature.video.progress.PbpProgressData
+import com.android.purebilibili.feature.video.progress.parsePbpProgressData
 import com.android.purebilibili.feature.video.subtitle.SubtitleCue
 import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitleUrl
 import com.android.purebilibili.feature.video.subtitle.parseBiliSubtitleBody
@@ -359,7 +361,15 @@ object VideoRepository {
             requestKind = PlayUrlRequestKind.INITIAL
         ) ?: return@withContext null
 
-        if (shouldCachePlayUrlResult(fetchResult.source, audioLang)) {
+        val dashVideoIds = fetchResult.data.dash?.video?.map { it.id }?.distinct() ?: emptyList()
+        if (shouldCachePlayUrlResult(
+                source = fetchResult.source,
+                audioLang = audioLang,
+                requestedQuality = startQuality,
+                returnedQuality = fetchResult.data.quality,
+                dashVideoIds = dashVideoIds
+            )
+        ) {
             PlayUrlCache.put(
                 bvid = bvid,
                 cid = cid,
@@ -627,7 +637,12 @@ object VideoRepository {
         cid: Long,
         playedTime: Long = 0,
         realPlayedTime: Long = playedTime,
-        startTsSec: Long = System.currentTimeMillis() / 1000L
+        startTsSec: Long = System.currentTimeMillis() / 1000L,
+        aid: Long = 0L,
+        epid: Long = 0L,
+        sid: Long = 0L,
+        videoType: Int = 3,
+        subType: Int? = null
     ) = withContext(Dispatchers.IO) {
         try {
             //  隐私无痕模式检查：如果启用则跳过上报
@@ -636,19 +651,28 @@ object VideoRepository {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", " Privacy mode enabled, skipping heartbeat report")
                 return@withContext true  // 返回成功但不实际上报
             }
+
+            val fields = buildPlaybackHeartbeatFields(
+                bvid = bvid,
+                aid = aid,
+                cid = cid,
+                epid = epid,
+                sid = sid,
+                mid = com.android.purebilibili.core.store.TokenManager.midCache,
+                playedTimeSec = playedTime,
+                realPlayedTimeSec = realPlayedTime,
+                startTsSec = startTsSec,
+                csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty(),
+                videoType = videoType,
+                subType = subType
+            )
             
             com.android.purebilibili.core.util.Logger.d(
                 "VideoRepo",
-                "🔴 Reporting heartbeat: bvid=$bvid, cid=$cid, " +
+                "🔴 Reporting heartbeat: bvid=$bvid, aid=$aid, cid=$cid, epid=$epid, sid=$sid, type=$videoType, " +
                     "playedTime=$playedTime, realPlayedTime=$realPlayedTime, startTs=$startTsSec"
             )
-            val resp = api.reportHeartbeat(
-                bvid = bvid,
-                cid = cid,
-                playedTime = playedTime,
-                realPlayedTime = realPlayedTime,
-                startTs = startTsSec
-            )
+            val resp = api.reportHeartbeat(fields)
             com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔴 Heartbeat response: code=${resp.code}, msg=${resp.message}")
             resp.code == 0
         } catch (e: Exception) {
@@ -864,7 +888,14 @@ object VideoRepository {
             if (!hasDash && !hasDurl) throw Exception("播放地址解析失败 (无 dash/durl)")
 
             //  [优化] 缓存结果 (仅默认语言缓存)
-            if (shouldCachePlayUrlResult(fetchResult.source, audioLang)) {
+            if (shouldCachePlayUrlResult(
+                    source = fetchResult.source,
+                    audioLang = audioLang,
+                    requestedQuality = startQuality,
+                    returnedQuality = playData.quality,
+                    dashVideoIds = dashVideoIds
+                )
+            ) {
                 PlayUrlCache.put(
                     bvid = cacheBvid,
                     cid = cid,
@@ -1061,11 +1092,11 @@ object VideoRepository {
         )?.data
     }
 
-    suspend fun getTvCastPlayUrl(
+    suspend fun getTvCastPlayData(
         aid: Long,
         cid: Long,
         qn: Int
-    ): String? = withContext(Dispatchers.IO) {
+    ): PlayUrlData? = withContext(Dispatchers.IO) {
         if (aid <= 0L || cid <= 0L) return@withContext null
 
         try {
@@ -1084,12 +1115,18 @@ object VideoRepository {
                 )
                 return@withContext null
             }
-            extractTvCastPlayableUrl(response.data)
+            response.data
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.w("VideoRepo", " tvPlayUrl exception: ${e.message}")
             null
         }
     }
+
+    suspend fun getTvCastPlayUrl(
+        aid: Long,
+        cid: Long,
+        qn: Int
+    ): String? = extractTvCastPlayableUrl(getTvCastPlayData(aid, cid, qn))
 
 
     private data class PlayUrlFetchResult(
@@ -1640,6 +1677,28 @@ object VideoRepository {
         }
     }
 
+    suspend fun getPbpProgressData(
+        bvid: String,
+        cid: Long,
+        aid: Long = 0L
+    ): Result<PbpProgressData> = withContext(Dispatchers.IO) {
+        try {
+            if (cid <= 0L) {
+                return@withContext Result.failure(
+                    IllegalArgumentException("PBP cid invalid: $cid")
+                )
+            }
+            val body = api.getPbpData(
+                cid = cid,
+                bvid = bvid.takeIf { it.isNotBlank() },
+                aid = aid.takeIf { it > 0L }
+            )
+            Result.success(parsePbpProgressData(body.string()))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getSubtitleCues(
         subtitleUrl: String,
         bvid: String,
@@ -1687,7 +1746,7 @@ object VideoRepository {
                         IllegalStateException("字幕请求失败: HTTP ${call.code}")
                     )
                 }
-                val rawJson = call.body?.string().orEmpty()
+                val rawJson = call.body.string()
                 val cues = parseBiliSubtitleBody(rawJson)
                 if (subtitleCueCache.size >= SUBTITLE_CUE_CACHE_MAX_ENTRIES) {
                     subtitleCueCache.clear()

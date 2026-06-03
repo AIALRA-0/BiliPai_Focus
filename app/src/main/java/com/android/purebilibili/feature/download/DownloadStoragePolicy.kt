@@ -1,8 +1,9 @@
 package com.android.purebilibili.feature.download
 
 import java.io.File
-import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import com.android.purebilibili.core.util.decodeUrlComponentCompat
+
 private val INVALID_FILE_NAME_CHARS = Regex("[\\\\/:*?\"<>|\\n\\r\\t]")
 private val MULTI_UNDERSCORE = Regex("_+")
 private val MULTI_SPACE = Regex("\\s+")
@@ -73,6 +74,7 @@ fun resolveDisplayedDownloadLocation(
         ?: customManagedPath?.takeIf { it.isNotBlank() }
         ?: defaultManagedPath
 }
+
 private fun sanitizeFileNamePart(value: String): String {
     return value
         .replace(INVALID_FILE_NAME_CHARS, "_")
@@ -94,7 +96,7 @@ private fun resolveExportTreeDisplayPath(treeUri: String): String? {
         .takeIf { it.isNotBlank() }
         ?: return null
 
-    val documentId = URLDecoder.decode(encodedTreeId, StandardCharsets.UTF_8)
+    val documentId = decodeUrlComponentCompat(encodedTreeId, StandardCharsets.UTF_8)
     val volumeId = documentId.substringBefore(':', missingDelimiterValue = "")
     val relativePath = documentId.substringAfter(':', missingDelimiterValue = "")
         .trim('/')

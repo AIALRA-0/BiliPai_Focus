@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -42,7 +43,7 @@ class DynamicCommentReplyPolicyTest {
     @Test
     fun `sub reply append failure preserves existing items`() {
         val currentState = SubReplyUiState(
-            items = listOf(ReplyItem(rpid = 1L), ReplyItem(rpid = 2L)),
+            items = listOf(ReplyItem(rpid = 1L), ReplyItem(rpid = 2L)).toImmutableList(),
             isLoading = true,
             page = 2
         )
@@ -60,7 +61,7 @@ class DynamicCommentReplyPolicyTest {
     @Test
     fun `sub reply append success deduplicates while preserving previous items`() {
         val currentState = SubReplyUiState(
-            items = listOf(ReplyItem(rpid = 1L), ReplyItem(rpid = 2L)),
+            items = listOf(ReplyItem(rpid = 1L), ReplyItem(rpid = 2L)).toImmutableList(),
             isLoading = true,
             page = 1
         )

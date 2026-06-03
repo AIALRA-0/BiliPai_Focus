@@ -1,9 +1,17 @@
 package com.android.purebilibili.navigation
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
 sealed class ScreenRoutes(val route: String) {
     object Home : ScreenRoutes("home")
     object Search : ScreenRoutes("search")
     object SearchTrending : ScreenRoutes("search_trending")
+    object TopicDetail : ScreenRoutes("topic/{topicId}") {
+        fun createRoute(topicId: Long): String {
+            return "topic/$topicId"
+        }
+    }
     object Settings : ScreenRoutes("settings")
     object Login : ScreenRoutes("login")
     object Profile : ScreenRoutes("profile")
@@ -43,9 +51,16 @@ sealed class ScreenRoutes(val route: String) {
     object Dynamic : ScreenRoutes("dynamic")
 
     //  动态详情页面
-    object DynamicDetail : ScreenRoutes("dynamic_detail/{dynamicId}") {
-        fun createRoute(dynamicId: String): String {
-            return "dynamic_detail/${android.net.Uri.encode(dynamicId)}"
+    object DynamicDetail : ScreenRoutes("dynamic_detail/{dynamicId}?commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}") {
+        fun createRoute(
+            dynamicId: String,
+            commentRootRpid: Long = 0L,
+            commentTargetRpid: Long = 0L
+        ): String {
+            val encodedDynamicId = URLEncoder.encode(dynamicId, StandardCharsets.UTF_8.name())
+            return "dynamic_detail/$encodedDynamicId" +
+                "?commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}" +
+                "&commentTargetRpid=${commentTargetRpid.coerceAtLeast(0L)}"
         }
     }
 
@@ -65,6 +80,7 @@ sealed class ScreenRoutes(val route: String) {
     //  二级设置页面
     object AppearanceSettings : ScreenRoutes("appearance_settings")
     object PlaybackSettings : ScreenRoutes("playback_settings")
+    object FocusSettings : ScreenRoutes("focus_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  //  权限管理
     object PluginsSettings : ScreenRoutes("plugins_settings?importUrl={importUrl}") {  //  插件中心
         fun createRoute(importUrl: String? = null): String {
@@ -73,7 +89,6 @@ sealed class ScreenRoutes(val route: String) {
         }
     }
     object BottomBarSettings : ScreenRoutes("bottom_bar_settings")  //  底栏管理
-    object FocusSettings : ScreenRoutes("focus_settings")
     object SettingsShare : ScreenRoutes("settings_share")
     object WebDavBackup : ScreenRoutes("webdav_backup") // WebDAV 备份中心
     object TipsSettings : ScreenRoutes("tips_settings") // [Feature] 小贴士 & 隐藏操作
@@ -83,14 +98,15 @@ sealed class ScreenRoutes(val route: String) {
     object AnimationSettings : ScreenRoutes("animation_settings")  // 动画设置
 
     // [修复] 添加 aid 参数支持，用于移动端推荐流（可能只返回 aid）
-    object VideoPlayer : ScreenRoutes("video_player/{bvid}?cid={cid}&aid={aid}&commentRootRpid={commentRootRpid}") {
+    object VideoPlayer : ScreenRoutes("video_player/{bvid}?cid={cid}&aid={aid}&commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}") {
         fun createRoute(
             bvid: String,
             cid: Long = 0,
             aid: Long = 0,
-            commentRootRpid: Long = 0
+            commentRootRpid: Long = 0,
+            commentTargetRpid: Long = 0
         ): String {
-            return "video_player/$bvid?cid=$cid&aid=$aid&commentRootRpid=$commentRootRpid"
+            return "video_player/$bvid?cid=$cid&aid=$aid&commentRootRpid=$commentRootRpid&commentTargetRpid=$commentTargetRpid"
         }
     }
     
@@ -102,11 +118,12 @@ sealed class ScreenRoutes(val route: String) {
     }
 
     //  [新增] 合集/系列详情页面
-    object SeasonSeriesDetail : ScreenRoutes("season_series_detail/{type}/{id}?mid={mid}&title={title}") {
-        fun createRoute(type: String, id: Long, mid: Long, title: String): String {
+    object SeasonSeriesDetail : ScreenRoutes("season_series_detail/{type}/{id}?mid={mid}&title={title}&ownerName={ownerName}") {
+        fun createRoute(type: String, id: Long, mid: Long, title: String, ownerName: String = ""): String {
             // Encode title to handle special characters
             val encodedTitle = android.net.Uri.encode(title)
-            return "season_series_detail/$type/$id?mid=$mid&title=$encodedTitle"
+            val encodedOwnerName = android.net.Uri.encode(ownerName)
+            return "season_series_detail/$type/$id?mid=$mid&title=$encodedTitle&ownerName=$encodedOwnerName"
         }
     }
     
@@ -136,9 +153,19 @@ sealed class ScreenRoutes(val route: String) {
     }
     
     //  [新增] 番剧播放页面
-    object BangumiPlayer : ScreenRoutes("bangumi/play/{seasonId}/{epId}") {
-        fun createRoute(seasonId: Long, epId: Long): String {
-            return "bangumi/play/$seasonId/$epId"
+    object BangumiPlayer : ScreenRoutes("bangumi/play/{seasonId}/{epId}?resumePositionMs={resumePositionMs}") {
+        fun createRoute(
+            seasonId: Long,
+            epId: Long,
+            resumePositionMs: Long = 0L
+        ): String {
+            val route = "bangumi/play/$seasonId/$epId"
+            val resumePosition = resumePositionMs.coerceAtLeast(0L)
+            return if (resumePosition > 0L) {
+                "$route?resumePositionMs=$resumePosition"
+            } else {
+                route
+            }
         }
     }
     
@@ -190,4 +217,3 @@ sealed class ScreenRoutes(val route: String) {
         }
     }
 }
-

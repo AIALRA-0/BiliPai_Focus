@@ -4,7 +4,10 @@ import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.DynamicMajor
 import com.android.purebilibili.data.model.response.DynamicModules
+import com.android.purebilibili.data.model.response.OpusMajor
+import com.android.purebilibili.data.model.response.OpusSummary
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.test.assertFalse
@@ -37,5 +40,37 @@ class DynamicDetailFallbackPolicyTest {
             )
         )
         assertTrue(shouldFallbackForDynamicDetail(item))
+    }
+
+    @Test
+    fun shouldFetchOpusDetail_returnsTrueForPreviewOnlyOpusMajor() {
+        val item = DynamicItem(
+            id_str = "1201902028962398230",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    desc = DynamicDesc(text = "预览摘要"),
+                    major = DynamicMajor(
+                        type = "MAJOR_TYPE_OPUS",
+                        opus = OpusMajor(summary = OpusSummary(text = "预览摘要"))
+                    )
+                )
+            )
+        )
+
+        assertTrue(shouldFetchOpusDetailForDynamicDetail(item))
+    }
+
+    @Test
+    fun shouldFetchOpusDetail_returnsFalseForOrdinaryTextDynamic() {
+        val item = DynamicItem(
+            id_str = "987654321",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    desc = DynamicDesc(text = "普通动态正文")
+                )
+            )
+        )
+
+        assertFalse(shouldFetchOpusDetailForDynamicDetail(item))
     }
 }

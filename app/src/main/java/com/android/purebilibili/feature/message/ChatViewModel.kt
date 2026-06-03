@@ -11,6 +11,7 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.EmoteInfo
 import com.android.purebilibili.data.model.response.PrivateMessageItem
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.data.repository.MessageSessionControlInfo
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,9 @@ data class ChatUiState(
     val minSeqno: Long = 0,
     val error: String? = null,
     val sendError: String? = null,
+    val sessionControlInfo: MessageSessionControlInfo = MessageSessionControlInfo(),
+    val isSessionControlLoading: Boolean = false,
+    val isSessionControlUpdating: Boolean = false,
     val videoPreviews: Map<String, VideoPreviewInfo> = emptyMap()  // bvid -> VideoPreviewInfo
 )
 
@@ -71,6 +75,7 @@ class ChatViewModel(
     
     init {
         loadMessages()
+        loadSessionControlInfo()
     }
     
     /**
@@ -206,15 +211,6 @@ class ChatViewModel(
         }
     }
     
-    private val kotlinx.serialization.json.JsonElement.jsonObject
-        get() = this as? kotlinx.serialization.json.JsonObject
-    
-    private val kotlinx.serialization.json.JsonElement.jsonPrimitive
-        get() = this as? kotlinx.serialization.json.JsonPrimitive
-    
-    private val kotlinx.serialization.json.JsonPrimitive.content: String
-        get() = this.toString().trim('"')
-    
     /**
      * 加载更多历史消息
      */
@@ -326,6 +322,64 @@ class ChatViewModel(
                     _uiState.value = _uiState.value.copy(
                         isUploadingImage = false,
                         sendError = error.message ?: "图片发送失败"
+                    )
+                }
+            )
+        }
+    }
+
+    fun loadSessionControlInfo() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSessionControlLoading = true)
+            MessageRepository.getSessionControlInfo(talkerId, sessionType)
+                .onSuccess { info ->
+                    _uiState.value = _uiState.value.copy(
+                        sessionControlInfo = info,
+                        isSessionControlLoading = false
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(isSessionControlLoading = false)
+                }
+        }
+    }
+
+    fun toggleDnd() {
+        val current = _uiState.value.sessionControlInfo.isDnd == true
+        updateSessionControl {
+            MessageRepository.setSessionDnd(talkerId, sessionType, !current)
+        }
+    }
+
+    fun togglePushMuted() {
+        if (sessionType != 1) return
+        val current = _uiState.value.sessionControlInfo.pushMuted == true
+        updateSessionControl {
+            MessageRepository.setSessionPushMuted(talkerId, !current)
+        }
+    }
+
+    fun toggleIntercept() {
+        if (sessionType != 1) return
+        val current = _uiState.value.sessionControlInfo.isIntercept == true
+        updateSessionControl {
+            MessageRepository.setSessionIntercept(talkerId, !current)
+        }
+    }
+
+    private fun updateSessionControl(action: suspend () -> Result<Unit>) {
+        if (_uiState.value.isSessionControlUpdating) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSessionControlUpdating = true, sendError = null)
+            action().fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(isSessionControlUpdating = false)
+                    loadSessionControlInfo()
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isSessionControlUpdating = false,
+                        sendError = error.message ?: "更新会话设置失败"
                     )
                 }
             )

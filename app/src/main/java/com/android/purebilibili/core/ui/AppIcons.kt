@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.ThumbUpOffAlt
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.BarChart
@@ -499,6 +500,12 @@ fun rememberAppNotificationIcon(): ImageVector = resolveAppNotificationIcon(Loca
 @Composable
 fun rememberAppSparklesIcon(): ImageVector = resolveAppSparklesIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
 
+@Composable
+fun rememberAppWatchLaterIcon(): ImageVector = resolveAppWatchLaterIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
+
+@Composable
+fun rememberAppCoinIcon(): ImageVector = resolveAppCoinIcon(LocalUiPreset.current, LocalAndroidNativeVariant.current)
+
 private fun resolvePlatformIcon(
     uiPreset: UiPreset,
     androidNativeVariant: AndroidNativeVariant,
@@ -736,3 +743,13 @@ fun resolveAppSparklesIcon(
     uiPreset: UiPreset,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.AutoAwesome, CupertinoIcons.Outlined.Sparkles)
+
+fun resolveAppWatchLaterIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = resolvePlatformIcon(uiPreset, androidNativeVariant, Icons.Outlined.WatchLater, CupertinoIcons.Outlined.Clock)
+
+fun resolveAppCoinIcon(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): ImageVector = AppIcons.BiliCoin

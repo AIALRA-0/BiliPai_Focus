@@ -17,6 +17,13 @@ data class HistoryResponse(
 )
 
 @Serializable
+data class HistoryShadowResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: Boolean = false
+)
+
+@Serializable
 data class HistoryListData(
     val list: List<HistoryData>? = null,
     val cursor: HistoryCursor? = null

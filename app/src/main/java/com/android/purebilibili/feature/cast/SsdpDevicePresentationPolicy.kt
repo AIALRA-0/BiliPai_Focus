@@ -10,6 +10,18 @@ internal fun shouldIncludeClingDevice(
     hasAvTransport: Boolean
 ): Boolean = hasAvTransport
 
+internal inline fun <T, K, V> Iterable<T>.associateNotNullBy(
+    keySelector: (T) -> K,
+    valueSelector: (T) -> V?
+): Map<K, V> {
+    val result = LinkedHashMap<K, V>()
+    for (item in this) {
+        val value = runCatching { valueSelector(item) }.getOrNull() ?: continue
+        result[keySelector(item)] = value
+    }
+    return result
+}
+
 internal fun resolveVisibleSsdpDevices(
     clingDevices: List<CastDeviceInfo>,
     ssdpDevices: List<SsdpDiscovery.SsdpDevice>,

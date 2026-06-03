@@ -21,6 +21,7 @@ internal enum class DynamicRichTextOpenMode {
 
 private val DYNAMIC_RICH_TEXT_URL_PATTERN =
     """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
+private val DYNAMIC_IMAGE_PLACEHOLDERS = setOf("[图片]", "【图片】")
 
 internal fun buildDynamicRichTextAnnotatedString(
     desc: DynamicDesc,
@@ -43,6 +44,67 @@ internal fun buildDynamicRichTextAnnotatedString(
             )
         }
     }
+}
+
+internal fun resolveDynamicDescForImages(
+    desc: DynamicDesc,
+    hasImages: Boolean
+): DynamicDesc {
+    if (!hasImages) return desc
+    return desc.copy(
+        text = stripDynamicImagePlaceholders(desc.text),
+        rich_text_nodes = desc.rich_text_nodes.filterNot { node ->
+            isDynamicStandaloneImagePlaceholder(node.text)
+        }.map { node ->
+            node.copy(text = stripDynamicImagePlaceholders(node.text))
+        }.filterNot { node ->
+            node.text.isBlank() && node.emoji == null && node.jump_url.isNullOrBlank()
+        }
+    )
+}
+
+internal fun resolveDynamicOpusSummaryDescForImages(
+    text: String,
+    richTextNodes: List<RichTextNode>,
+    hasImages: Boolean
+): DynamicDesc? {
+    val desc = resolveDynamicDescForImages(
+        desc = DynamicDesc(
+            text = text,
+            rich_text_nodes = richTextNodes
+        ),
+        hasImages = hasImages
+    )
+    return desc.takeIf(::shouldRenderDynamicRichText)
+}
+
+internal fun shouldRenderDynamicRichText(desc: DynamicDesc?): Boolean {
+    if (desc == null) return false
+    if (desc.text.isNotBlank()) return true
+    return desc.rich_text_nodes.any { node ->
+        node.text.isNotBlank() && !isDynamicStandaloneImagePlaceholder(node.text)
+    }
+}
+
+private fun isDynamicStandaloneImagePlaceholder(text: String): Boolean {
+    return text.trim() in DYNAMIC_IMAGE_PLACEHOLDERS
+}
+
+private fun stripDynamicImagePlaceholders(text: String): String {
+    if (text.isBlank()) return text
+    if (!DYNAMIC_IMAGE_PLACEHOLDERS.any { placeholder -> text.contains(placeholder) }) {
+        return text
+    }
+    var sanitized = text
+    // B 站图片动态会把真实图片另外放在媒体区，正文里的占位符不应再重复显示。
+    DYNAMIC_IMAGE_PLACEHOLDERS.forEach { placeholder ->
+        sanitized = sanitized.replace(placeholder, "")
+    }
+    return sanitized
+        .lines()
+        .map { line -> line.trimEnd() }
+        .filterNot { line -> line.isBlank() }
+        .joinToString(separator = "\n")
 }
 
 internal fun resolveDynamicRichTextOpenMode(

@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -25,11 +26,16 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.DrawerValue
@@ -46,20 +52,21 @@ import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.settings.GITHUB_URL
-import com.android.purebilibili.core.store.FocusSettings
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
-import com.android.purebilibili.core.store.HomeTopTabSettings
 import com.android.purebilibili.core.store.AppNavigationSettings
 import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 import com.android.purebilibili.core.store.resolveEffectiveLiquidGlassEnabled
 import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
+import com.android.purebilibili.core.plugin.skin.rememberUiSkinState
 //  从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
 import com.android.purebilibili.feature.home.components.FluidHomeTopBar
@@ -67,10 +74,11 @@ import com.android.purebilibili.feature.home.components.FrostedSideBar
 import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  //  iOS 大标题头部
 import com.android.purebilibili.feature.home.components.iOSRefreshIndicator  //  iOS 下拉刷新指示器
+import com.android.purebilibili.feature.home.components.Md3ScreenshotRefreshIndicator
 import com.android.purebilibili.feature.home.components.HomeInteractionMotionBudget
+import com.android.purebilibili.feature.home.components.rememberHomeUiSkinDecoration
 import com.android.purebilibili.feature.home.components.resolveHomeInteractionMotionBudget
 import com.android.purebilibili.feature.home.components.resolveHomeDrawerScrimAlpha
-import com.android.purebilibili.feature.home.components.shouldSnapHomeTopTabSelection
 import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 import com.android.purebilibili.feature.home.components.resolveHomeTopChromeMaterialMode
 import com.android.purebilibili.feature.home.components.resolveHomeTopSearchBarHeight
@@ -89,18 +97,23 @@ import com.android.purebilibili.feature.home.policy.resolveHomeHeaderOffsetForSe
 import com.android.purebilibili.feature.home.policy.resolveHomePagerSettledAction
 import com.android.purebilibili.feature.home.policy.shouldAnimateHomePagerToCategory
 import com.android.purebilibili.feature.home.policy.HomePagerSettledAction
+import com.android.purebilibili.feature.home.policy.resolveHomeInitialTopTabPage
+import com.android.purebilibili.feature.home.policy.shouldSkipHomePagerStateDrive
+import com.android.purebilibili.feature.home.policy.shouldTreatInitialHomePagerPageAsSyncedWithState
 import com.android.purebilibili.feature.home.policy.shouldUseInitialHomePagerSnap
 //  从 cards 子包导入卡片组件
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard   //  故事卡片
 import com.android.purebilibili.core.ui.LoadingAnimation
-import com.android.purebilibili.core.ui.VideoCardSkeleton
 import com.android.purebilibili.core.ui.ErrorState as ModernErrorState
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
-import com.android.purebilibili.core.ui.shimmer
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope  //  共享过渡
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard  //  粒子消散动画
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve      // 📳 iOS 风格抖动效果
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
@@ -108,14 +121,18 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.motion.pullRefreshReleaseSpring
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
 import com.android.purebilibili.core.ui.performance.TrackJankStateValue
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.yield
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
@@ -126,6 +143,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import com.android.purebilibili.data.model.response.VideoItem // [Fix] Import VideoItem
 import com.android.purebilibili.feature.home.components.VideoPreviewDialog // [Fix] Import VideoPreviewDialog
+import com.android.purebilibili.feature.partition.PartitionContent
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 // [新增] 全局回顶事件通道
 val LocalHomeScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
@@ -133,6 +152,7 @@ val LocalHomeScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
 // [New] Global Scroll Offset for Liquid Glass Effect
 // Used to pass scroll position from HomeScreen to BottomBar without causing recomposition
 val LocalHomeScrollOffset = compositionLocalOf { androidx.compose.runtime.mutableFloatStateOf(0f) }
+val LocalHomeFeedScrollInProgress = compositionLocalOf { mutableStateOf(false) }
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
@@ -151,6 +171,18 @@ fun HomeScreen(
     onHistoryClick: () -> Unit = {},
     //  新增：分区回调
     onPartitionClick: () -> Unit = {},
+    partitionVideoSourceRoute: String = "partition",
+    onPartitionVideoClick: (VideoItem) -> Unit = { video ->
+        onVideoClick(
+            HomeVideoClickRequest(
+                bvid = video.bvid,
+                cid = video.cid,
+                coverUrl = video.pic,
+                isVerticalVideo = video.isVertical,
+                source = HomeVideoClickSource.GRID
+            )
+        )
+    },
     //  新增：直播点击回调
     onLiveClick: (Long, String, String) -> Unit = { _, _, _ -> },  // roomId, title, uname
     //  [修复] 番剧/影视回调，接受类型参数 (1=番剧 2=电影 等)
@@ -164,19 +196,59 @@ fun HomeScreen(
     onDownloadClick: () -> Unit = {},  // 离线缓存页面
     onInboxClick: () -> Unit = {},  // 私信页面
     onStoryClick: () -> Unit = {},  //  [新增] 竖屏短视频
+    onSpaceClick: (Long) -> Unit = {},
     globalHazeState: dev.chrisbanes.haze.HazeState? = null,  //  [新增] 全局底栏模糊状态
-    predictiveStableBackRouteMotionEnabled: Boolean = false
+    isReturningFromVideoDetail: Boolean = false,
+    isQuickReturningFromVideoDetail: Boolean = false,
+    onVideoDetailReturnAnimationConsumed: () -> Unit = {}
 ) {
-    val state by viewModel.uiState.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val currentCategory by viewModel.currentCategory.collectAsStateWithLifecycle()
+    val displayedTabIndexFromState by viewModel.displayedTabIndex.collectAsStateWithLifecycle()
+    val popularSubCategory by viewModel.popularSubCategory.collectAsStateWithLifecycle()
+    val liveSubCategory by viewModel.liveSubCategory.collectAsStateWithLifecycle()
+    val user by viewModel.user.collectAsStateWithLifecycle()
+    val messageUnreadCount by viewModel.messageUnreadCount.collectAsStateWithLifecycle()
+    val refreshKey by viewModel.refreshKey.collectAsStateWithLifecycle()
+    val refreshMessage by viewModel.refreshMessage.collectAsStateWithLifecycle()
+    val refreshNewItemsCount by viewModel.refreshNewItemsCount.collectAsStateWithLifecycle()
+    val refreshNewItemsKey by viewModel.refreshNewItemsKey.collectAsStateWithLifecycle()
+    val refreshNewItemsHandledKey by viewModel.refreshNewItemsHandledKey.collectAsStateWithLifecycle()
+    val recommendOldContentAnchorBvid by viewModel.recommendOldContentAnchorBvid.collectAsStateWithLifecycle()
+    val recommendOldContentStartIndex by viewModel.recommendOldContentStartIndex.collectAsStateWithLifecycle()
+    val recommendOldContentRevealKey by viewModel.recommendOldContentRevealKey.collectAsStateWithLifecycle()
+    val todayWatchMode by viewModel.todayWatchMode.collectAsStateWithLifecycle()
+    val todayWatchPlan by viewModel.todayWatchPlan.collectAsStateWithLifecycle()
+    val todayWatchLoading by viewModel.todayWatchLoading.collectAsStateWithLifecycle()
+    val todayWatchError by viewModel.todayWatchError.collectAsStateWithLifecycle()
+    val todayWatchPluginEnabled by viewModel.todayWatchPluginEnabled.collectAsStateWithLifecycle()
+    val todayWatchCollapsed by viewModel.todayWatchCollapsed.collectAsStateWithLifecycle()
+    val todayWatchCardConfig by viewModel.todayWatchCardConfig.collectAsStateWithLifecycle()
+    val undoAvailable by viewModel.undoAvailable.collectAsStateWithLifecycle()
 // val pullRefreshState = rememberPullToRefreshState() // [Removed] Moved inside HorizontalPager
     val context = LocalContext.current
+    val uiSkinState by rememberUiSkinState(context)
+    val homeUiSkinDecoration = rememberHomeUiSkinDecoration(uiSkinState)
     val overlayMotionSpec = remember { resolveHomeOverlayMotionSpec() }
     //  [Refactor] Use a map of grid states for each category to support HorizontalPager
     // [Refactor] Use a map of grid states for each category to support HorizontalPager
     val gridStates = remember { mutableMapOf<HomeCategory, LazyGridState>() }
     HomeCategory.entries.forEach { category ->
-        gridStates[category] = rememberLazyGridState()
+        gridStates[category] = rememberSaveable(
+            category.name,
+            saver = LazyGridState.Saver
+        ) {
+            LazyGridState()
+        }
+    }
+    val popularGridStates = remember { mutableMapOf<PopularSubCategory, LazyGridState>() }
+    PopularSubCategory.entries.forEach { subCategory ->
+        popularGridStates[subCategory] = rememberSaveable(
+            "popular_${subCategory.name}",
+            saver = LazyGridState.Saver
+        ) {
+            LazyGridState()
+        }
     }
     val staggeredGridState = rememberLazyStaggeredGridState() // 🌊 瀑布流状态
     val localHazeState = rememberRecoverableHazeState(initialBlurEnabled = true)
@@ -189,11 +261,48 @@ fun HomeScreen(
     val homeBackdrop = rememberLayerBackdrop()
 
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
+    val globalScrollOffset = LocalHomeScrollOffset.current
+    val globalFeedScrollInProgress = LocalHomeFeedScrollInProgress.current
     // [Header] 首页重选/双击回顶时需要强制恢复顶部，避免自动收缩后残留空白区域
     var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var headerSettleAnimationJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var delayTopTabsUntilCardSettled by remember { mutableStateOf(false) }
     var hideTopTabsForForwardDetailNav by remember { mutableStateOf(false) }
     var returnAnimationStartElapsedMs by remember { mutableLongStateOf(0L) }
+    var topTabsRevealJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    fun setHeaderOffsetImmediate(value: Float) {
+        headerSettleAnimationJob?.cancel()
+        headerSettleAnimationJob = null
+        headerOffsetHeightPx = value
+    }
+
+    fun animateHeaderOffsetTo(targetValue: Float) {
+        val transition = resolveHomeHeaderSettleTransition(
+            currentHeaderOffsetPx = headerOffsetHeightPx,
+            targetHeaderOffsetPx = targetValue
+        )
+        if (!transition.shouldAnimate) {
+            setHeaderOffsetImmediate(transition.targetOffsetPx)
+            return
+        }
+        headerSettleAnimationJob?.cancel()
+        headerSettleAnimationJob = coroutineScope.launch {
+            animate(
+                initialValue = headerOffsetHeightPx,
+                targetValue = transition.targetOffsetPx,
+                animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing)
+            ) { value, _ ->
+                headerOffsetHeightPx = value
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (headerSettleAnimationJob === job) {
+                    headerSettleAnimationJob = null
+                }
+            }
+        }
+    }
 
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
@@ -201,8 +310,12 @@ fun HomeScreen(
         scrollChannel?.receiveAsFlow()?.collect {
             launch {
                 // 双击首页回顶时强制展开顶部，避免收缩头部与回顶状态错位导致空白
-                headerOffsetHeightPx = 0f
-                val gridState = gridStates[state.currentCategory]
+                setHeaderOffsetImmediate(0f)
+                val gridState = if (currentCategory == HomeCategory.POPULAR) {
+                    popularGridStates[popularSubCategory]
+                } else {
+                    gridStates[currentCategory]
+                }
                 val isAtTop = gridState == null || (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50)
 
                 if (isAtTop) {
@@ -218,131 +331,114 @@ fun HomeScreen(
                     }
                     listState.animateScrollToItem(plan.animateTargetIndex)
                 }
-                headerOffsetHeightPx = 0f
+                setHeaderOffsetImmediate(0f)
+                globalScrollOffset.floatValue = 0f
             }
         }
     }
 
-    // [P2] 顶栏自定义：顺序与可见项从设置读取
-    val defaultTopTabIds = remember { resolveDefaultHomeTopTabIds() }
-    val topTabSettings by SettingsManager.getHomeTopTabSettings(context).collectAsState(
-        initial = HomeTopTabSettings(
-            orderIds = defaultTopTabIds,
-            visibleIds = defaultTopTabIds.toSet()
-        )
+    val homeTopTabSettings by SettingsManager.getHomeTopTabSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeTopTabSettings(),
+        context = kotlin.coroutines.EmptyCoroutineContext
     )
-    val focusSettingsState by SettingsManager.getFocusSettings(context).collectAsState(
-        initial = null as FocusSettings?
+    val focusSettings by SettingsManager.getFocusSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.FocusSettings(),
+        context = kotlin.coroutines.EmptyCoroutineContext
     )
-    val focusSettingsHydrated = focusSettingsState != null
-    val focusSettings = focusSettingsState ?: FocusSettings()
+    // 顶部标签顺序和可见项交给设置页控制；默认仍是六项。
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 iOSHomeHeader
-    val topCategories = remember(topTabSettings, focusSettingsState) {
-        resolveHydratedHomeTopCategories(
-            categories = resolveHomeTopCategories(
-                customOrderIds = topTabSettings.orderIds,
-                visibleIds = topTabSettings.visibleIds
+    val topTabEntries = remember(homeTopTabSettings, focusSettings) {
+        resolveFocusHomeTopTabEntries(
+            entries = resolveHomeTopTabEntries(
+                customOrderIds = homeTopTabSettings.orderIds,
+                visibleIds = homeTopTabSettings.visibleIds
             ),
-            focusSettings = focusSettingsState
+            focusSettings = focusSettings
         )
     }
-    val localizedTopCategoryLabels = topCategories.map { category ->
-        stringResource(resolveHomeCategoryLabelRes(category))
+    val localizedTopTabLabels = topTabEntries.map { entry ->
+        when (entry) {
+            is HomeTopTabEntry.Category -> stringResource(resolveHomeCategoryLabelRes(entry.category))
+            HomeTopTabEntry.Partition -> resolveHomeTopTabEntryLabel(entry)
+        }
     }
-    val hasVisibleTopCategories = topCategories.isNotEmpty()
-    val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) {
-        topCategories.size.coerceAtLeast(1)
+    val initialPage = resolveHomeInitialTopTabPage(
+        topTabEntries = topTabEntries,
+        currentCategory = currentCategory,
+        displayedTabIndex = displayedTabIndexFromState
+    )
+    val initialPageSyncedWithState = shouldTreatInitialHomePagerPageAsSyncedWithState(
+        initialEntry = resolveHomeTopTabEntryOrNull(topTabEntries, initialPage),
+        currentCategory = currentCategory
+    )
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topTabEntries.size }
+    var hasSyncedPagerWithState by remember(topTabEntries) { mutableStateOf(initialPageSyncedWithState) }
+    var lastDrivenPagerCategory by remember(topTabEntries) {
+        mutableStateOf(if (initialPageSyncedWithState) currentCategory else null)
     }
-    var hasSyncedPagerWithState by remember(topCategories) { mutableStateOf(false) }
     var programmaticPageSwitchInProgress by remember { mutableStateOf(false) }
+    val currentDisplayedTabIndex by rememberUpdatedState(displayedTabIndexFromState)
     TrackJankStateFlag(
         stateName = "home:pager_swipe",
-        isActive = hasVisibleTopCategories && pagerState.isScrollInProgress
+        isActive = pagerState.isScrollInProgress
     )
     TrackJankStateValue(
         stateName = "home:current_category",
-        stateValue = state.currentCategory.name
+        stateValue = currentCategory.name
     )
 
     // [修复] 仅在完成首次“状态->Pager”对齐后，才允许“Pager->状态”反向同步，避免返回首页时误跳分类。
-    LaunchedEffect(pagerState, topCategories, hasSyncedPagerWithState, state.currentCategory) {
-        if (!hasVisibleTopCategories) return@LaunchedEffect
+    LaunchedEffect(pagerState, topTabEntries, hasSyncedPagerWithState, currentCategory) {
         if (!hasSyncedPagerWithState) return@LaunchedEffect
         snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { (page, scrolling) ->
-                val currentCategoryIndex = resolveHomeTopTabIndex(state.currentCategory, topCategories)
+                if (!scrolling && currentDisplayedTabIndex != page) {
+                    viewModel.updateDisplayedTabIndex(page)
+                }
+                val currentCategoryIndex = topTabEntries
+                    .indexOf(HomeTopTabEntry.Category(currentCategory))
+                    .takeIf { it >= 0 } ?: 0
+                val settledEntry = resolveHomeTopTabEntryOrNull(topTabEntries, page)
+                val settledCategory = (settledEntry as? HomeTopTabEntry.Category)?.category
                 when (resolveHomePagerSettledAction(
                         hasSyncedPagerWithState = hasSyncedPagerWithState,
                         pagerCurrentPage = page,
                         pagerScrolling = scrolling,
                         currentCategoryIndex = currentCategoryIndex,
-                        settledCategory = resolveHomeCategoryForTopTab(
-                            index = page,
-                            topCategories = topCategories
-                        )
+                        settledCategory = settledCategory,
+                        programmaticPageSwitchInProgress = programmaticPageSwitchInProgress
                     )
                 ) {
                     HomePagerSettledAction.NONE -> return@collect
-                    HomePagerSettledAction.OPEN_LIVE_PAGE -> {
-                        val returnPage = currentCategoryIndex
-                            .takeIf { it >= 0 && it != page }
-                            ?: topCategories.indexOfFirst { it != HomeCategory.LIVE }
-                                .takeIf { it >= 0 }
-                            ?: 0
-                        programmaticPageSwitchInProgress = true
-                        pagerState.scrollToPage(returnPage)
-                        programmaticPageSwitchInProgress = false
-                        onLiveListClick()
-                    }
                     HomePagerSettledAction.SWITCH_CATEGORY -> {
-                        viewModel.switchCategory(
-                            resolveHomeCategoryForTopTab(
-                                index = page,
-                                topCategories = topCategories
-                            )
-                        )
+                        viewModel.switchCategory(settledCategory ?: return@collect)
                     }
                 }
             }
     }
 
     // [P2] 当前分类被隐藏时，自动落到首个可见分类
-    LaunchedEffect(topCategories, focusSettingsHydrated, state.currentCategory) {
-        if (!hasVisibleTopCategories) {
-            hasSyncedPagerWithState = false
-            return@LaunchedEffect
-        }
-        val firstVisible = topCategories.firstOrNull() ?: return@LaunchedEffect
-        if (shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
-                currentCategory = state.currentCategory,
-                topCategories = topCategories,
-                focusSettingsHydrated = focusSettingsHydrated
-            )
-        ) {
+    LaunchedEffect(topTabEntries) {
+        val visibleCategories = topTabEntries.mapNotNull { (it as? HomeTopTabEntry.Category)?.category }
+        val firstVisible = visibleCategories.firstOrNull() ?: return@LaunchedEffect
+        if (currentCategory !in visibleCategories) {
             viewModel.updateDisplayedTabIndex(0)
             viewModel.switchCategory(firstVisible)
         }
     }
 
     // [CrashFix] 顶栏配置变化导致页数收缩时，先钳制 pager 当前页，避免越界
-    LaunchedEffect(topCategories.size) {
-        if (!hasVisibleTopCategories) return@LaunchedEffect
-        val lastIndex = topCategories.lastIndex
+    LaunchedEffect(topTabEntries.size) {
+        if (topTabEntries.isEmpty()) return@LaunchedEffect
+        val lastIndex = topTabEntries.lastIndex
         if (pagerState.currentPage > lastIndex) {
             pagerState.scrollToPage(lastIndex)
         }
     }
 
     // [修复] 状态变化时驱动 Pager：首次使用无动画对齐，后续用动画跟随
-    LaunchedEffect(state.currentCategory, topCategories) {
-        if (!hasVisibleTopCategories) {
-            hasSyncedPagerWithState = false
-            return@LaunchedEffect
-        }
-        val targetPage = topCategories.indexOf(state.currentCategory)
+    LaunchedEffect(currentCategory, topTabEntries) {
+        val targetPage = topTabEntries.indexOf(HomeTopTabEntry.Category(currentCategory))
         if (targetPage < 0) return@LaunchedEffect
         if (shouldUseInitialHomePagerSnap(
                 hasSyncedPagerWithState = hasSyncedPagerWithState,
@@ -351,6 +447,19 @@ fun HomeScreen(
         ) {
             pagerState.scrollToPage(targetPage)
             hasSyncedPagerWithState = true
+            lastDrivenPagerCategory = currentCategory
+            return@LaunchedEffect
+        }
+        if (shouldSkipHomePagerStateDrive(
+                hasSyncedPagerWithState = hasSyncedPagerWithState,
+                lastDrivenCategory = lastDrivenPagerCategory,
+                currentCategory = currentCategory
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        if (targetPage == pagerState.currentPage && !pagerState.isScrollInProgress) {
+            lastDrivenPagerCategory = currentCategory
             return@LaunchedEffect
         }
         if (shouldAnimateHomePagerToCategory(
@@ -361,44 +470,19 @@ fun HomeScreen(
                 programmaticPageSwitchInProgress = programmaticPageSwitchInProgress
             )
         ) {
-            pagerState.animateScrollToPage(targetPage)
+            programmaticPageSwitchInProgress = true
+            try {
+                pagerState.animateScrollToPage(targetPage)
+            } finally {
+                programmaticPageSwitchInProgress = false
+            }
+            lastDrivenPagerCategory = currentCategory
         }
-    }
-
-    // [修复] 刷新时仅在列表不在顶部时回顶，避免与下拉手势状态冲突导致“卡一下”
-    LaunchedEffect(isRefreshing, state.currentCategory) {
-        if (!isRefreshing) return@LaunchedEffect
-        if (state.currentCategory == HomeCategory.FOLLOW) return@LaunchedEffect
-        val gridState = gridStates[state.currentCategory] ?: return@LaunchedEffect
-        if (!shouldResetToTopOnRefreshStart(
-                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
-            )
-        ) {
-            return@LaunchedEffect
-        }
-        gridState.animateScrollToItem(0)
-    }
-
-    LaunchedEffect(state.followPresentationTopResetKey, state.followPresentationTopResetHandledKey, state.currentCategory) {
-        val resetKey = state.followPresentationTopResetKey
-        if (!shouldResetFollowToTopAfterRefreshCompletion(
-                currentCategory = state.currentCategory,
-                resetKey = resetKey,
-                handledKey = state.followPresentationTopResetHandledKey
-            )
-        ) {
-            return@LaunchedEffect
-        }
-        val followGridState = gridStates[HomeCategory.FOLLOW] ?: return@LaunchedEffect
-        yield()
-        followGridState.scrollToItem(0)
-        viewModel.markFollowPresentationTopResetHandled(resetKey)
     }
 
     //  [新增] JSON 插件过滤提示
     val snackbarHostState = remember { SnackbarHostState() }
-    val lastFilteredCount by com.android.purebilibili.core.plugin.json.JsonPluginManager.lastFilteredCount.collectAsState()
+    val lastFilteredCount by com.android.purebilibili.core.plugin.json.JsonPluginManager.lastFilteredCount.collectAsStateWithLifecycle()
     
     //  当有视频被过滤时显示提示
     LaunchedEffect(lastFilteredCount) {
@@ -416,10 +500,10 @@ fun HomeScreen(
     }
     
     //  [埋点] 分类切换追踪
-    LaunchedEffect(state.currentCategory) {
+    LaunchedEffect(currentCategory) {
         com.android.purebilibili.core.util.AnalyticsHelper.logCategoryView(
-            categoryName = state.currentCategory.label,
-            categoryId = state.currentCategory.tid
+            categoryName = currentCategory.label,
+            categoryId = currentCategory.tid
         )
     }
 
@@ -427,12 +511,22 @@ fun HomeScreen(
     // Create the state here and provide it
 
     //  [性能优化] 合并首页设置为单一 Flow，减少 6 个 collectAsState → 1 个
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
-        initial = com.android.purebilibili.core.store.HomeSettings()
+    val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
+        context = kotlin.coroutines.EmptyCoroutineContext
     )
     val uiPreset = LocalUiPreset.current
-    val pullRefreshMotionStyle = remember(uiPreset) {
-        resolveHomePullRefreshMotionStyle(uiPreset)
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val pullRefreshMotionStyle = remember(uiPreset, androidNativeVariant) {
+        resolveHomePullRefreshMotionStyle(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
+    }
+    val pullRefreshIndicatorStyle = remember(uiPreset, androidNativeVariant) {
+        resolveHomePullRefreshIndicatorStyle(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
     }
 
     
@@ -440,9 +534,9 @@ fun HomeScreen(
     var refreshDeltaTipText by remember { mutableStateOf<String?>(null) }
     
     //  [彩蛋] 下拉刷新成功后显示趣味提示（仅在开关开启时）
-    LaunchedEffect(state.refreshKey, homeSettings.easterEggEnabled) {
-        val message = state.refreshMessage
-        if (message != null && state.refreshKey > 0 && homeSettings.easterEggEnabled) {
+    LaunchedEffect(refreshKey, homeSettings.easterEggEnabled) {
+        val message = refreshMessage
+        if (message != null && refreshKey > 0 && homeSettings.easterEggEnabled) {
             val result = snackbarHostState.showSnackbar(
                 message = message,
                 actionLabel = "关闭彩蛋",
@@ -454,16 +548,16 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(state.refreshNewItemsKey, isRefreshing, state.currentCategory) {
-        val refreshKey = state.refreshNewItemsKey
-        if (!shouldHandleRefreshNewItemsEvent(refreshKey, state.refreshNewItemsHandledKey)) {
+    LaunchedEffect(refreshNewItemsKey, isRefreshing, currentCategory) {
+        val refreshKey = refreshNewItemsKey
+        if (!shouldHandleRefreshNewItemsEvent(refreshKey, refreshNewItemsHandledKey)) {
             return@LaunchedEffect
         }
-        val count = state.refreshNewItemsCount ?: return@LaunchedEffect
-        if (state.currentCategory == HomeCategory.RECOMMEND && count > 0) {
+        val count = refreshNewItemsCount ?: return@LaunchedEffect
+        if (currentCategory == HomeCategory.RECOMMEND && count > 0) {
             val recommendGridState = gridStates[HomeCategory.RECOMMEND]
             if (recommendGridState != null && shouldResetToTopAfterIncrementalRefresh(
-                    currentCategory = state.currentCategory,
+                    currentCategory = currentCategory,
                     newItemsCount = count,
                     isRefreshing = isRefreshing,
                     firstVisibleItemIndex = recommendGridState.firstVisibleItemIndex,
@@ -483,29 +577,32 @@ fun HomeScreen(
 
     // 仅在推荐页检测“刷新后是否已下滑”，用于激活旧内容分割线
     LaunchedEffect(
-        state.currentCategory,
-        state.refreshNewItemsKey,
-        state.recommendOldContentAnchorBvid,
-        state.categoryStates[HomeCategory.RECOMMEND]?.videos
+        currentCategory,
+        refreshNewItemsKey,
+        refreshNewItemsCount,
+        recommendOldContentAnchorBvid,
+        recommendOldContentRevealKey
     ) {
-        if (state.currentCategory != HomeCategory.RECOMMEND) return@LaunchedEffect
-        if ((state.refreshNewItemsCount ?: 0) <= 0) return@LaunchedEffect
-        val targetKey = state.refreshNewItemsKey
-        if (targetKey <= 0L || state.recommendOldContentRevealKey == targetKey) return@LaunchedEffect
+        if (currentCategory != HomeCategory.RECOMMEND) return@LaunchedEffect
+        if ((refreshNewItemsCount ?: 0) <= 0) return@LaunchedEffect
+        val targetKey = refreshNewItemsKey
+        if (targetKey <= 0L || recommendOldContentRevealKey == targetKey) return@LaunchedEffect
 
-        val anchorBvid = state.recommendOldContentAnchorBvid ?: return@LaunchedEffect
-        val recommendVideos = state.categoryStates[HomeCategory.RECOMMEND]?.videos ?: return@LaunchedEffect
-        val anchorIndex = recommendVideos.indexOfFirst { it.bvid == anchorBvid }
-        if (anchorIndex <= 0) return@LaunchedEffect
-
+        val anchorBvid = recommendOldContentAnchorBvid ?: return@LaunchedEffect
         val recommendState = gridStates[HomeCategory.RECOMMEND] ?: return@LaunchedEffect
-        snapshotFlow {
-            val layoutInfo = recommendState.layoutInfo
-            val reachedByVisible = layoutInfo.visibleItemsInfo.any { it.index == anchorIndex }
-            val reachedByIndex = recommendState.firstVisibleItemIndex >= anchorIndex
-            reachedByVisible || reachedByIndex
-        }.first { it }
-        viewModel.markRecommendOldContentDividerRevealed(targetKey)
+        viewModel.getCategoryState(HomeCategory.RECOMMEND)
+            .map { content -> content.videos.indexOfFirst { it.bvid == anchorBvid } }
+            .distinctUntilChanged()
+            .collectLatest { anchorIndex ->
+                if (anchorIndex <= 0) return@collectLatest
+                snapshotFlow {
+                    val layoutInfo = recommendState.layoutInfo
+                    val reachedByVisible = layoutInfo.visibleItemsInfo.any { it.index == anchorIndex }
+                    val reachedByIndex = recommendState.firstVisibleItemIndex >= anchorIndex
+                    reachedByVisible || reachedByIndex
+                }.first { it }
+                viewModel.markRecommendOldContentDividerRevealed(targetKey)
+            }
     }
     
     //  [彩蛋] 关闭确认对话框
@@ -520,7 +617,7 @@ fun HomeScreen(
             },
             text = { 
                 Text(
-                    "关闭后下拉刷新将不再显示趣味消息\n\n你可以在「设置」中随时重新开启",
+                    "关闭后下拉刷新将不再显示趣味消息。\n\n你可以在「设置」中随时重新开启。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ) 
             },
@@ -539,7 +636,7 @@ fun HomeScreen(
                     onClick = { showEasterEggDialog = false }
                 ) { Text("保留彩蛋", color = MaterialTheme.colorScheme.primary) }
             },
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = AppSurfaceTokens.cardContainer()
         )
     }
     
@@ -570,18 +667,16 @@ fun HomeScreen(
     val baseIsBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
     val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
     val baseCardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
-    val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled &&
-        !predictiveStableBackRouteMotionEnabled // 预测返回稳定路由模式下禁用首页共享元素，避免叠层滞留
-    val baseTopBarLiquidGlassEnabled = remember(homeSettings.isTopBarLiquidGlassEnabled, uiPreset) {
-        resolveEffectiveLiquidGlassEnabled(
-            requestedEnabled = homeSettings.isTopBarLiquidGlassEnabled,
-            uiPreset = uiPreset
-        )
-    }
-    val baseBottomBarLiquidGlassEnabled = remember(homeSettings.isBottomBarLiquidGlassEnabled, uiPreset) {
+    val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled
+    val baseBottomBarLiquidGlassEnabled = remember(
+        homeSettings.isBottomBarLiquidGlassEnabled,
+        homeSettings.androidNativeLiquidGlassEnabled,
+        uiPreset
+    ) {
         resolveEffectiveLiquidGlassEnabled(
             requestedEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
-            uiPreset = uiPreset
+            uiPreset = uiPreset,
+            androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
         )
     }
     val baseIsDataSaverActive = remember(context) {
@@ -590,18 +685,19 @@ fun HomeScreen(
     val homePerformanceConfig = remember(
         baseIsHeaderBlurEnabled,
         baseIsBottomBarBlurEnabled,
-        baseTopBarLiquidGlassEnabled,
         baseBottomBarLiquidGlassEnabled,
         baseCardAnimationEnabled,
         baseCardTransitionEnabled,
-        baseIsDataSaverActive
+        baseIsDataSaverActive,
+        homeSettings.androidNativeLiquidGlassEnabled
     ) {
         resolveHomePerformanceConfig(
             uiPreset = uiPreset,
             headerBlurEnabled = baseIsHeaderBlurEnabled,
             bottomBarBlurEnabled = baseIsBottomBarBlurEnabled,
-            topBarLiquidGlassEnabled = baseTopBarLiquidGlassEnabled,
+            topBarLiquidGlassEnabled = homeSettings.isTopBarLiquidGlassEnabled,
             bottomBarLiquidGlassEnabled = baseBottomBarLiquidGlassEnabled,
+            androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
             cardAnimationEnabled = baseCardAnimationEnabled,
             cardTransitionEnabled = baseCardTransitionEnabled,
             isDataSaverActive = baseIsDataSaverActive,
@@ -610,16 +706,28 @@ fun HomeScreen(
     }
     val isHeaderBlurEnabled = homePerformanceConfig.headerBlurEnabled
     val isBottomBarBlurEnabled = homePerformanceConfig.bottomBarBlurEnabled
-    val cardAnimationEnabled = homePerformanceConfig.cardAnimationEnabled
+    // [统一门控] 系统「减弱动效」是所有界面动效的通用开关:开启时关闭卡片进场/消散等所有卡片动效,
+    // 各功能面自身的开关(此处为卡片动画开关)仍各自独立。与设置页入场动画共用同一 reduce-motion 判定。
+    val systemReduceMotion = rememberSystemReduceMotion()
+    val cardAnimationEnabled = homePerformanceConfig.cardAnimationEnabled && !systemReduceMotion
     val cardTransitionEnabled = homePerformanceConfig.cardTransitionEnabled
-    val isTopBarLiquidGlassEnabled = homePerformanceConfig.topBarLiquidGlassEnabled
     val isBottomBarLiquidGlassEnabled = homePerformanceConfig.bottomBarLiquidGlassEnabled
     val isLiquidGlassEnabled = homePerformanceConfig.isAnyLiquidGlassEnabled
     val isDataSaverActive = homePerformanceConfig.isDataSaverActive
     val preloadAheadCount = homePerformanceConfig.preloadAheadCount
+    val configuredHomeWallpaperUri by SettingsManager.getHomeWallpaperUri(context).collectAsStateWithLifecycle(initialValue = ""
+        )
+    val splashWallpaperUri by SettingsManager.getSplashWallpaperUri(context).collectAsStateWithLifecycle(initialValue = ""
+        )
+    val homeWallpaperUri = remember(configuredHomeWallpaperUri, splashWallpaperUri) {
+        resolveHomeWallpaperUri(
+            homeWallpaperUri = configuredHomeWallpaperUri,
+            splashWallpaperUri = splashWallpaperUri
+        )
+    }
 
-    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context).collectAsState(
-        initial = AppNavigationSettings()
+    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context).collectAsStateWithLifecycle(initialValue = AppNavigationSettings(),
+        context = kotlin.coroutines.EmptyCoroutineContext
     )
     // 将字符串 ID 转换为 BottomNavItem 枚举
     val visibleBottomBarItems = remember(appNavigationSettings.orderedVisibleTabIds) {
@@ -646,11 +754,33 @@ fun HomeScreen(
         isTabletLayout = windowSizeClass.isTablet,
         cardAnimationEnabled = cardAnimationEnabled,
         cardTransitionEnabled = cardTransitionEnabled,
-        isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail
+        isQuickReturnFromDetail = isQuickReturningFromVideoDetail
     )
+    // Navigation 返回不一定触发首页 Lifecycle.ON_START，顶栏恢复必须直接跟随返回态。
+    LaunchedEffect(isReturningFromVideoDetail, cardTransitionEnabled, isQuickReturningFromVideoDetail) {
+        if (!isReturningFromVideoDetail) return@LaunchedEffect
+        topTabsRevealJob?.cancel()
+        returnAnimationStartElapsedMs = SystemClock.elapsedRealtime()
+        hideTopTabsForForwardDetailNav = false
+        val revealDelayMs = resolveHomeTopTabsRevealDelayMs(
+            isReturningFromDetail = true,
+            cardTransitionEnabled = cardTransitionEnabled,
+            isQuickReturnFromDetail = isQuickReturningFromVideoDetail
+        )
+        if (revealDelayMs > 0L) {
+            delayTopTabsUntilCardSettled = true
+            topTabsRevealJob = coroutineScope.launch {
+                delay(revealDelayMs)
+                delayTopTabsUntilCardSettled = false
+            }
+        } else {
+            delayTopTabsUntilCardSettled = false
+        }
+    }
+
     // 从详情页返回时延后清理“返回中”状态，避免卡片进场动画在共享转场期间抢跑造成闪屏。
-    LaunchedEffect(returnAnimationSuppressionDurationMs, CardPositionManager.isReturningFromDetail) {
-        if (CardPositionManager.isReturningFromDetail) {
+    LaunchedEffect(returnAnimationSuppressionDurationMs, isReturningFromVideoDetail) {
+        if (isReturningFromVideoDetail) {
             val startElapsedMs = if (returnAnimationStartElapsedMs > 0L) {
                 returnAnimationStartElapsedMs
             } else {
@@ -658,14 +788,14 @@ fun HomeScreen(
             }
             delay(returnAnimationSuppressionDurationMs)
             val actualDurationMs = (SystemClock.elapsedRealtime() - startElapsedMs).coerceAtLeast(0L)
-            val isQuickReturn = CardPositionManager.isQuickReturnFromDetail
+            val isQuickReturn = isQuickReturningFromVideoDetail
             val sharedTransitionReady = cardTransitionEnabled &&
                 CardPositionManager.lastClickedCardBounds != null &&
                 CardPositionManager.isCardFullyVisible
 
-            // 先解除“返回中”状态，避免后续埋点统计导致首页手势恢复滞后。
+            // 先清除"返回中"状态，让后续 LaunchedEffect 恢复底栏
             returnAnimationStartElapsedMs = 0L
-            CardPositionManager.clearReturning()
+            onVideoDetailReturnAnimationConsumed()
 
             val builtinPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledCount()
             val playerPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledPlayerPlugins().size
@@ -709,26 +839,17 @@ fun HomeScreen(
     // 是否为单列模式 (Story or Cinematic)
     val isSingleColumnMode = displayMode == 1
     
-    val adaptiveColumns = remember(contentWidth, displayMode, homeSettings.gridColumnCount) {
-        // [新增] 如果用户自定义了列数 (且非单列模式)，优先使用用户设置
-        if (!isSingleColumnMode && homeSettings.gridColumnCount > 0) {
-            return@remember homeSettings.gridColumnCount
-        }
-
-        val minColumnWidth = if (isSingleColumnMode) 280.dp else 180.dp // 单列模式给更宽的基准
-        val maxColumns = if (isSingleColumnMode) 2 else 6
-        val columns = (contentWidth / minColumnWidth).toInt()
-        columns.coerceIn(1, maxColumns)
-    }
-    
-    val gridColumns = if (!isSingleColumnMode && homeSettings.gridColumnCount > 0) {
-        homeSettings.gridColumnCount
-    } else if (windowSizeClass.isExpandedScreen) {
-        adaptiveColumns
-    } else {
-        com.android.purebilibili.core.util.rememberResponsiveValue(
-            compact = if (isSingleColumnMode) 1 else 2,  // 手机：单列模式1列，其他2列
-            medium = if (isSingleColumnMode) 2 else 3    // 中等宽度：单列模式2列，其它3列
+    val gridColumns = remember(
+        contentWidth,
+        displayMode,
+        homeSettings.gridColumnCount,
+        homeSettings.homeFeedCardWidthPreset
+    ) {
+        resolveHomeFeedGridColumns(
+            contentWidthDp = contentWidth.value.toInt(),
+            displayMode = displayMode,
+            fixedColumnCount = homeSettings.gridColumnCount,
+            cardWidthPreset = homeSettings.homeFeedCardWidthPreset
         )
     }
     
@@ -754,8 +875,21 @@ fun HomeScreen(
 
     //  [修复] 恢复状态栏样式：确保从视频详情页返回后状态栏正确
     // 当使用滑动动画时，Theme.kt 的 SideEffect 可能不会重新执行
-    val backgroundColor = MaterialTheme.colorScheme.background
+    val backgroundColor = AppSurfaceTokens.chromeBackground()
     val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
+    val homeWallpaperBackdropAppearance = remember(
+        homeWallpaperUri,
+        homeSettings.homeWallpaperEffectMode,
+        isLightBackground,
+        isDataSaverActive
+    ) {
+        resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = homeWallpaperUri.isNotBlank(),
+            effectMode = homeSettings.homeWallpaperEffectMode,
+            isDarkTheme = !isLightBackground,
+            isDataSaverActive = isDataSaverActive
+        )
+    }
     
     if (!view.isInEditMode) {
         SideEffect {
@@ -767,9 +901,9 @@ fun HomeScreen(
             insetsController.isAppearanceLightNavigationBars = isLightBackground
             //  确保状态栏可见且透明
             insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            com.android.purebilibili.core.ui.setWindowStatusBarColor(window, android.graphics.Color.TRANSPARENT)
             //  [修复] 导航栏也设为透明，确保底栏隐藏时手势区域沉浸
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            com.android.purebilibili.core.ui.setWindowNavigationBarColor(window, android.graphics.Color.TRANSPARENT)
         }
     }
 
@@ -792,8 +926,12 @@ fun HomeScreen(
         when (item) {
             BottomNavItem.HOME -> {
                 coroutineScope.launch { 
-                    headerOffsetHeightPx = 0f
-                    val gridState = gridStates[state.currentCategory]
+                    setHeaderOffsetImmediate(0f)
+                    val gridState = if (currentCategory == HomeCategory.POPULAR) {
+                        popularGridStates[popularSubCategory]
+                    } else {
+                        gridStates[currentCategory]
+                    }
                     val isAtTop = gridState == null || (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50)
                     
                     if (isAtTop) {
@@ -806,7 +944,8 @@ fun HomeScreen(
                         }
                         listState.animateScrollToItem(0)
                     } 
-                    headerOffsetHeightPx = 0f
+                    setHeaderOffsetImmediate(0f)
+                    globalScrollOffset.floatValue = 0f
                 }
             }
             BottomNavItem.DYNAMIC -> onDynamicClick()
@@ -852,19 +991,41 @@ fun HomeScreen(
     
     //  [修复] 跟踪是否正在导航到/从视频页 - 必须在 LaunchedEffect 之前声明
     var isVideoNavigating by remember { mutableStateOf(false) }
+    var isHomeContentInteractionRestored by remember { mutableStateOf(true) }
+
+    LaunchedEffect(isReturningFromVideoDetail, cardTransitionEnabled, isQuickReturningFromVideoDetail) {
+        if (!isReturningFromVideoDetail) return@LaunchedEffect
+        val restoreDelayMs = resolveHomeContentInteractionRestoreDelayMs(
+            cardTransitionEnabled = cardTransitionEnabled,
+            isQuickReturnFromDetail = isQuickReturningFromVideoDetail
+        )
+        if (restoreDelayMs > 0L) {
+            delay(restoreDelayMs)
+        }
+        isHomeContentInteractionRestored = true
+        isVideoNavigating = false
+    }
     
     //  [新增] 滚动方向检测状态（用于上滑隐藏模式）
-    var bottomBarScrollState by remember(state.currentCategory) {
+    var bottomBarScrollState by remember(currentCategory, popularSubCategory) {
         mutableStateOf(
             HomeBottomBarScrollState(
-                firstVisibleItem = gridStates[state.currentCategory]?.firstVisibleItemIndex ?: 0,
-                scrollOffset = gridStates[state.currentCategory]?.firstVisibleItemScrollOffset ?: 0
+                firstVisibleItem = if (currentCategory == HomeCategory.POPULAR) {
+                    popularGridStates[popularSubCategory]?.firstVisibleItemIndex ?: 0
+                } else {
+                    gridStates[currentCategory]?.firstVisibleItemIndex ?: 0
+                },
+                scrollOffset = if (currentCategory == HomeCategory.POPULAR) {
+                    popularGridStates[popularSubCategory]?.firstVisibleItemScrollOffset ?: 0
+                } else {
+                    gridStates[currentCategory]?.firstVisibleItemScrollOffset ?: 0
+                }
             )
         )
     }
     
     //  [新增] 滚动方向检测逻辑
-    LaunchedEffect(state.currentCategory, bottomBarVisibilityMode, useSideNavigation) {
+    LaunchedEffect(currentCategory, popularSubCategory, bottomBarVisibilityMode, useSideNavigation) {
         resolveHomeBottomBarBaseVisibility(
             useSideNavigation = useSideNavigation,
             mode = bottomBarVisibilityMode
@@ -874,7 +1035,11 @@ fun HomeScreen(
         }
         
         // 上滑隐藏模式：监听滚动方向
-        val currentGridState = gridStates[state.currentCategory] ?: return@LaunchedEffect
+        val currentGridState = if (currentCategory == HomeCategory.POPULAR) {
+            popularGridStates[popularSubCategory]
+        } else {
+            gridStates[currentCategory]
+        } ?: return@LaunchedEffect
         snapshotFlow {
             Pair(currentGridState.firstVisibleItemIndex, currentGridState.firstVisibleItemScrollOffset)
         }
@@ -884,7 +1049,8 @@ fun HomeScreen(
                 previousState = bottomBarScrollState,
                 firstVisibleItem = firstVisibleItem,
                 scrollOffset = scrollOffset,
-                isVideoNavigating = isVideoNavigating
+                isVideoNavigating = isVideoNavigating,
+                contentInteractionRestored = isHomeContentInteractionRestored
             )
 
             bottomBarScrollState = scrollUpdate.state
@@ -920,81 +1086,96 @@ fun HomeScreen(
         }
     }
     
-    // [P2] 优先按当前可见顶栏计算索引，避免自定义排序后高亮错位
-    val currentCategoryIndex = topCategories.indexOf(state.currentCategory)
-    val displayedTabIndex = if (hasVisibleTopCategories && currentCategoryIndex >= 0) {
-        currentCategoryIndex
-    } else {
-        state.displayedTabIndex.coerceIn(0, (topCategories.size - 1).coerceAtLeast(0))
+    // 选中槽位以 Pager 当前页为准，分区页不写入 currentCategory 也能保持高亮正确。
+    val displayedTabIndex by remember(pagerState, topTabEntries) {
+        derivedStateOf {
+            pagerState.currentPage.coerceIn(0, (topTabEntries.size - 1).coerceAtLeast(0))
+        }
     }
 
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
     var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
-    var areTopTabsManuallyCollapsed by rememberSaveable { mutableStateOf(false) }
     
     // Constants
-    val topTabStyle = remember(isBottomBarFloating, isHeaderBlurEnabled, isTopBarLiquidGlassEnabled) {
+    val topTabStyle = remember(isBottomBarFloating, isHeaderBlurEnabled) {
         resolveTopTabStyle(
             isBottomBarFloating = isBottomBarFloating,
             isBottomBarBlurEnabled = isHeaderBlurEnabled,
-            isLiquidGlassEnabled = isTopBarLiquidGlassEnabled
+            isLiquidGlassEnabled = false
         )
     }
-    val topChromeMaterialMode = remember(isHeaderBlurEnabled, isTopBarLiquidGlassEnabled) {
+    val topChromeMaterialMode = remember(isHeaderBlurEnabled) {
         resolveHomeTopChromeMaterialMode(
             isHeaderBlurEnabled = isHeaderBlurEnabled,
             isBottomBarBlurEnabled = false,
-            isLiquidGlassEnabled = isTopBarLiquidGlassEnabled
+            isLiquidGlassEnabled = false
         )
     }
-    val searchBarHeightDp = resolveHomeTopSearchBarHeight(uiPreset)
+    val searchBarHeightDp = resolveHomeTopSearchBarHeight(
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
+    )
     val tabRowHeightDp = resolveHomeTopTabRowHeight(
         isTabFloating = topTabStyle.floating,
         uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant,
         labelMode = homeSettings.topTabLabelMode
     )
     val searchCollapseDistanceDp = resolveHomeTopSearchCollapseDistance(
         searchBarHeight = searchBarHeightDp,
-        uiPreset = uiPreset
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
     )
     val listTopPadding = resolveHomeTopReservedListPadding(
         statusBarHeight = statusBarHeight,
         searchBarHeight = searchBarHeightDp,
         tabRowHeight = tabRowHeightDp,
-        uiPreset = uiPreset
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
     )
     
     // Pixels
     val searchCollapseDistancePx = with(density) { searchCollapseDistanceDp.toPx() }
+    val headerCollapseMode = homeSettings.homeHeaderCollapseMode
+    val collapseSearchOnScroll = headerCollapseMode.collapseSearch
+    val collapseTabsOnScroll = headerCollapseMode.collapseTabs
+    val isAnyHeaderCollapseEnabled = headerCollapseMode.hasAnyCollapse
+    val headerAutoCollapseDistancePx = when {
+        collapseSearchOnScroll -> searchCollapseDistancePx
+        collapseTabsOnScroll -> 1f
+        else -> 0f
+    }
 
-    LaunchedEffect(pagerState, topCategories, searchCollapseDistancePx, hasVisibleTopCategories) {
-        if (!hasVisibleTopCategories) return@LaunchedEffect
+    LaunchedEffect(pagerState, topTabEntries, headerAutoCollapseDistancePx, isAnyHeaderCollapseEnabled) {
         snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { (page, scrolling) ->
                 if (scrolling) return@collect
-                val settledCategory = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@collect
+                val settledEntry = resolveHomeTopTabEntryOrNull(topTabEntries, page)
+                val settledCategory = (settledEntry as? HomeTopTabEntry.Category)?.category ?: return@collect
                 val settledGridState = gridStates[settledCategory] ?: return@collect
-                val settledHeaderOffsetPx = resolveHomeHeaderOffsetForSettledPage(
-                    firstVisibleItemIndex = settledGridState.firstVisibleItemIndex,
-                    firstVisibleItemScrollOffset = settledGridState.firstVisibleItemScrollOffset,
-                    maxHeaderCollapsePx = searchCollapseDistancePx
-                )
+                val settledHeaderOffsetPx = if (isAnyHeaderCollapseEnabled) {
+                    resolveHomeHeaderOffsetForSettledPage(
+                        firstVisibleItemIndex = settledGridState.firstVisibleItemIndex,
+                        firstVisibleItemScrollOffset = settledGridState.firstVisibleItemScrollOffset,
+                        maxHeaderCollapsePx = headerAutoCollapseDistancePx
+                    )
+                } else {
+                    0f
+                }
                 if (kotlin.math.abs(headerOffsetHeightPx - settledHeaderOffsetPx) > 0.5f) {
-                    headerOffsetHeightPx = settledHeaderOffsetPx
+                    animateHeaderOffsetTo(settledHeaderOffsetPx)
                 }
             }
     }
     
-    // [Feature] Sticky Header Options
-    // If true, header will shrink but stay visible. If false, it scrolls away.
-    val isHeaderCollapseEnabled = homeSettings.isHeaderCollapseEnabled // Enable shrinking based on settings
-    val areTopTabsAutoCollapsed by remember(headerOffsetHeightPx, isHeaderCollapseEnabled) {
+    // 顶部搜索行与标签页分别由设置控制，避免一个开关隐式改变另一块区域。
+    val areTopTabsAutoCollapsed by remember(headerOffsetHeightPx, collapseTabsOnScroll) {
         derivedStateOf {
             resolveHomeTopTabsAutoCollapsed(
                 currentHeaderOffsetPx = headerOffsetHeightPx,
-                isHeaderCollapseEnabled = isHeaderCollapseEnabled
+                isTopTabAutoCollapseEnabled = collapseTabsOnScroll
             )
         }
     }
@@ -1004,8 +1185,11 @@ fun HomeScreen(
     val bottomBarVisibleState = LocalSetBottomBarVisible.current
     
     // [Feature] Global Scroll Offset for Liquid Glass
-    val globalScrollOffset = LocalHomeScrollOffset.current
-    val activeGridState = gridStates[state.currentCategory]
+    val activeGridState = if (currentCategory == HomeCategory.POPULAR) {
+        popularGridStates[popularSubCategory]
+    } else {
+        gridStates[currentCategory]
+    }
     val canRevealHeader by remember(activeGridState) {
         derivedStateOf {
             activeGridState != null &&
@@ -1015,7 +1199,8 @@ fun HomeScreen(
     }
 
     val nestedScrollConnection = remember(
-        isHeaderCollapseEnabled,
+        isAnyHeaderCollapseEnabled,
+        headerAutoCollapseDistancePx,
         isBottomBarAutoHideEnabled,
         useSideNavigation,
         isLiquidGlassEnabled,
@@ -1023,12 +1208,17 @@ fun HomeScreen(
     ) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (!shouldHandleHomeVerticalPreScroll(deltaX = available.x, deltaY = available.y)) {
+                    return Offset.Zero
+                }
+                headerSettleAnimationJob?.cancel()
+                headerSettleAnimationJob = null
                 val scrollUpdate = reduceHomePreScroll(
                     currentHeaderOffsetPx = headerOffsetHeightPx,
                     deltaY = available.y,
-                    minHeaderOffsetPx = -searchCollapseDistancePx,
+                    minHeaderOffsetPx = -headerAutoCollapseDistancePx,
                     canRevealHeader = canRevealHeader,
-                    isHeaderCollapseEnabled = isHeaderCollapseEnabled,
+                    isHeaderCollapseEnabled = isAnyHeaderCollapseEnabled,
                     isBottomBarAutoHideEnabled = isBottomBarAutoHideEnabled,
                     useSideNavigation = useSideNavigation,
                     liquidGlassEnabled = isLiquidGlassEnabled,
@@ -1049,18 +1239,18 @@ fun HomeScreen(
             }
         }
     }
-    var bottomBarRestoreJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var topTabsRevealJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    
-
     //  包装 onVideoClick：点击视频时先隐藏底栏再导航
-    val wrappedOnVideoClick: (HomeVideoClickRequest) -> Unit = remember(onVideoClick, setBottomBarVisible) {
+    val wrappedOnVideoClick: (HomeVideoClickRequest) -> Unit = remember(
+        onVideoClick,
+        setBottomBarVisible
+    ) {
         { request ->
-             hideTopTabsForForwardDetailNav = true
-             delayTopTabsUntilCardSettled = false
-             setBottomBarVisible(false)
-             isVideoNavigating = true
-             onVideoClick(request)
+            hideTopTabsForForwardDetailNav = true
+            delayTopTabsUntilCardSettled = false
+            setBottomBarVisible(false)
+            isVideoNavigating = true
+            isHomeContentInteractionRestored = false
+            onVideoClick(request)
         }
     }
     val onTodayWatchVideoClick: (VideoItem) -> Unit = remember(viewModel, wrappedOnVideoClick) {
@@ -1071,6 +1261,7 @@ fun HomeScreen(
                     bvid = video.bvid,
                     cid = video.cid,
                     coverUrl = video.pic,
+                    isVerticalVideo = video.isVertical,
                     source = HomeVideoClickSource.TODAY_WATCH
                 )
             )
@@ -1079,30 +1270,31 @@ fun HomeScreen(
 
     // [TodayWatch首曝] 冷启动启动窗口内自动回顶一次，确保用户能看到今日推荐单卡片。
     LaunchedEffect(
-        state.todayWatchPluginEnabled,
-        state.todayWatchPlan?.generatedAt,
-        state.currentCategory
+        todayWatchPluginEnabled,
+        todayWatchPlan?.generatedAt,
+        currentCategory
     ) {
         if (todayWatchStartupRevealHandled) return@LaunchedEffect
 
         val recommendGridState = gridStates[HomeCategory.RECOMMEND] ?: return@LaunchedEffect
         val decision = decideTodayWatchStartupReveal(
             startupElapsedMs = SystemClock.elapsedRealtime() - homeStartupElapsedAt,
-            isPluginEnabled = state.todayWatchPluginEnabled,
-            currentCategory = state.currentCategory,
-            hasTodayPlan = state.todayWatchPlan != null && !state.todayWatchCollapsed,
+            isPluginEnabled = todayWatchPluginEnabled,
+            currentCategory = currentCategory,
+            hasTodayPlan = todayWatchPlan != null && !todayWatchCollapsed,
             firstVisibleItemIndex = recommendGridState.firstVisibleItemIndex,
             firstVisibleItemOffset = recommendGridState.firstVisibleItemScrollOffset
         )
 
         when (decision) {
             TodayWatchStartupRevealDecision.REVEAL -> {
-                headerOffsetHeightPx = 0f
+                setHeaderOffsetImmediate(0f)
                 if (recommendGridState.firstVisibleItemIndex > 12) {
                     recommendGridState.scrollToItem(12)
                 }
                 recommendGridState.animateScrollToItem(0)
-                headerOffsetHeightPx = 0f
+                setHeaderOffsetImmediate(0f)
+                globalScrollOffset.floatValue = 0f
                 todayWatchStartupRevealHandled = true
             }
             TodayWatchStartupRevealDecision.SKIP -> {
@@ -1118,7 +1310,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection),
-                containerColor = MaterialTheme.colorScheme.background,
+                containerColor = AppSurfaceTokens.chromeBackground(),
                 bottomBar = {
                    // BottomBar logic handled by parent
                 },
@@ -1132,138 +1324,180 @@ fun HomeScreen(
                             .fillMaxSize()
                             .layerBackdrop(homeBackdrop)
                             // 首页使用 Pager + Lazy 子层，source 挂在外层容器更稳定。
-                            .hazeSource(state = hazeState)
+                            .hazeSourceCompat(state = hazeState)
                     ) {
-                        if (!hasVisibleTopCategories) {
-                            HomeNoTitleEmptyState(
-                                modifier = Modifier.fillMaxSize(),
-                                topPadding = listTopPadding,
-                                onSettingsClick = onSettingsClick
-                            )
-                        } else {
-                        // [Fix] Re-enabled default overscroll for better feedback
-                            HorizontalPager(
-                                state = pagerState,
-                                beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
-                                modifier = Modifier.fillMaxSize(),
-                                key = { index -> resolveHomeTopCategoryKey(topCategories, index) }
-                            ) { page ->
-                        val category = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@HorizontalPager
-                        val categoryState = state.categoryStates[category] ?: com.android.purebilibili.feature.home.CategoryContent()
+                    HomeWallpaperBackdrop(
+                        wallpaperUri = homeWallpaperUri,
+                        appearance = homeWallpaperBackdropAppearance,
+                        baseColor = AppSurfaceTokens.chromeBackground()
+                    )
+                    // [Fix] Re-enabled default overscroll for better feedback
+                        HorizontalPager(
+                            state = pagerState,
+                            beyondViewportPageCount = 0,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .homeFeedTopVideoFadeMask(listTopPadding + 36.dp),
+                            key = { index -> resolveHomeTopTabEntryKey(topTabEntries, index) }
+                        ) { page ->
+                        when (val entry = resolveHomeTopTabEntryOrNull(topTabEntries, page)) {
+                            HomeTopTabEntry.Partition -> {
+                                CompositionLocalProvider(
+                                    LocalVideoCardSharedElementSourceRoute provides partitionVideoSourceRoute
+                                ) {
+                                    PartitionContent(
+                                        contentPadding = PaddingValues(
+                                            top = listTopPadding,
+                                            bottom = homeListBottomPadding,
+                                            start = 16.dp,
+                                            end = 16.dp
+                                        ),
+                                        onVideoClick = onPartitionVideoClick
+                                    )
+                                }
+                            }
+                            is HomeTopTabEntry.Category -> {
+                        val category = entry.category
+                        val categoryStateFlow = remember(viewModel, category, popularSubCategory) {
+                            if (category == HomeCategory.POPULAR) {
+                                viewModel.getPopularCategoryState(popularSubCategory)
+                            } else {
+                                viewModel.getCategoryState(category)
+                            }
+                        }
+                        val categoryState by categoryStateFlow.collectAsStateWithLifecycle()
                         
                         //  独立的 PullToRefreshState，避免所有页面共享一个状态导致冲突
                         val pullRefreshState = rememberPullToRefreshState()
                         val pullDistanceFraction = pullRefreshState.distanceFraction
-                        val isPageRefreshing = isRefreshing && state.currentCategory == category
-                        val isPullRefreshStateAnimating = pullRefreshState.isAnimating
+                        val isPageRefreshing = isRefreshing && currentCategory == category
+                        var stablePullOffsetFraction by remember { mutableFloatStateOf(0f) }
 
-                        //  [新增] 下拉回弹物理动画状态 (Moved from outer scope)
-                        val targetPullOffset = resolvePullContentOffsetFraction(
+                        //  下拉物理由策略区分：MD3 截图式跟随当前手指距离回收，旧 iOS 弹性保留防抖滞后。
+                        val resolvedStablePullOffsetFraction = resolveStablePullContentOffsetFraction(
                             distanceFraction = pullDistanceFraction,
                             isRefreshing = isPageRefreshing,
-                            motionStyle = pullRefreshMotionStyle
+                            isStateAnimating = pullRefreshState.isAnimating,
+                            previousOffsetFraction = stablePullOffsetFraction,
+                            motionStyle = pullRefreshMotionStyle,
+                            indicatorStyle = pullRefreshIndicatorStyle
                         )
-                        val useStrictFollowRefreshSettleMotion = shouldUseStrictFollowRefreshSettleMotion(
-                            currentCategory = category,
-                            hasPendingPresentation = state.followRefreshPresentationPending
-                        )
+                        SideEffect {
+                            stablePullOffsetFraction = resolvedStablePullOffsetFraction
+                        }
                         
                         //  使用 animateFloatAsState 包装偏移量
                         val animatedDragOffsetFraction by androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = targetPullOffset,
-                            animationSpec = if (useStrictFollowRefreshSettleMotion) {
-                                androidx.compose.animation.core.spring(
-                                    dampingRatio = 1f,
-                                    stiffness = 900f
+                            targetValue = resolvedStablePullOffsetFraction,
+                            animationSpec = if (
+                                shouldSnapPullOffsetToFinger(
+                                    distanceFraction = pullDistanceFraction,
+                                    isRefreshing = isPageRefreshing,
+                                    isStateAnimating = pullRefreshState.isAnimating,
+                                    indicatorStyle = pullRefreshIndicatorStyle
                                 )
+                            ) {
+                                androidx.compose.animation.core.snap()
                             } else {
-                                androidx.compose.animation.core.spring(
-                                    dampingRatio = 0.5f,  // 0.5 = 明显的弹性 (Bouncy)
-                                    stiffness = 350f      // 350 = 中等刚度
-                                )
+                                pullRefreshReleaseSpring()
                             },
                             label = "pull_bounce"
                         )
 
                         //  Defers calculation to graphicsLayer
-                        val calculateDragOffset: androidx.compose.ui.unit.Density.() -> Float = remember(animatedDragOffsetFraction) {
+                        val calculateDragOffset: androidx.compose.ui.unit.Density.() -> Float = remember(
+                            animatedDragOffsetFraction,
+                            pullRefreshIndicatorStyle
+                        ) {
                             {
-                                val maxPx = 140.dp.toPx()
+                                val maxPx = resolvePullContentMaxOffsetDp(pullRefreshIndicatorStyle).dp.toPx()
                                 maxPx * animatedDragOffsetFraction
                             }
                         }
                         
                         //  每个页面独立的 GridState
                         //  使用 saveable 记住滚动位置
-                        val pageGridState = gridStates[category] ?: rememberLazyGridState()
-
-                        LaunchedEffect(
-                            category,
-                            state.currentCategory,
-                            state.followRefreshPresentationPending,
-                            isPageRefreshing,
-                            isPullRefreshStateAnimating,
-                            pullDistanceFraction,
-                            animatedDragOffsetFraction
-                        ) {
-                            if (!shouldCommitFollowRefreshPresentationAfterPullSettles(
-                                    currentCategory = category,
-                                    hasPendingPresentation = state.followRefreshPresentationPending,
-                                    isRefreshing = isPageRefreshing,
-                                    isStateAnimating = isPullRefreshStateAnimating,
-                                    distanceFraction = pullDistanceFraction,
-                                    contentOffsetFraction = animatedDragOffsetFraction
-                                )
-                            ) {
-                                return@LaunchedEffect
-                            }
-                            val commitDelayMillis = resolveFollowRefreshPresentationCommitDelayMillis(
-                                currentCategory = category,
-                                hasPendingPresentation = state.followRefreshPresentationPending
-                            )
-                            if (commitDelayMillis > 0L) {
-                                delay(commitDelayMillis)
-                            }
-                            viewModel.commitPendingFollowRefreshPresentationAfterUiSettles()
+                        val pageGridState = if (category == HomeCategory.POPULAR) {
+                            popularGridStates[popularSubCategory] ?: rememberLazyGridState()
+                        } else {
+                            gridStates[category] ?: rememberLazyGridState()
                         }
                         
                         //  把 GridState 提升给父级用于控制 Header? 
                         
                         ComfortablePullToRefreshBox(
-                            isRefreshing = isRefreshing && state.currentCategory == category,
-                            onRefresh = { viewModel.refresh(category) },
+                            isRefreshing = isRefreshing && currentCategory == category,
+                            onRefresh = {
+                                if (category == HomeCategory.FOLLOW) {
+                                    viewModel.refresh(category)
+                                } else {
+                                    viewModel.refresh()
+                                }
+                            },
                             state = pullRefreshState,
                             modifier = Modifier.fillMaxSize(),
-                             //  iOS 风格下拉刷新指示器 (位于内容上方)
+                             //  不同原生外观使用不同下拉刷新指示器，位移策略仍由 policy 统一控制。
                              indicator = {
-                                if (pullRefreshMotionStyle == HomePullRefreshMotionStyle.MD3) {
-                                    PullToRefreshDefaults.Indicator(
-                                        modifier = Modifier
-                                            .align(Alignment.TopCenter)
-                                            .padding(top = listTopPadding),
-                                        isRefreshing = isPageRefreshing,
-                                        state = pullRefreshState
-                                    )
-                                } else {
-                                    iOSRefreshIndicator(
-                                        state = pullRefreshState,
-                                        isRefreshing = isPageRefreshing,
-                                        modifier = Modifier
-                                            .align(Alignment.TopCenter)
-                                            .padding(top = listTopPadding)
-                                            .graphicsLayer {
-                                                val currentDragOffset = calculateDragOffset()
-                                                val indicatorHeight = 40.dp.toPx()
-                                                val minGap = 8.dp.toPx()
-                                                translationY = resolvePullIndicatorTranslationY(
-                                                    dragOffsetPx = currentDragOffset,
-                                                    indicatorHeightPx = indicatorHeight,
-                                                    minGapPx = minGap,
-                                                    isRefreshing = isPageRefreshing
-                                                )
-                                            }
-                                            .fillMaxWidth()
-                                    )
+                                when (pullRefreshIndicatorStyle) {
+                                    HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT -> {
+                                        PullToRefreshDefaults.Indicator(
+                                            modifier = Modifier
+                                                .align(Alignment.TopCenter)
+                                                .padding(top = listTopPadding),
+                                            isRefreshing = isPageRefreshing,
+                                            state = pullRefreshState
+                                        )
+                                    }
+                                    HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE -> {
+                                        val indicatorHeight = resolveMd3ScreenshotRefreshIndicatorHeightDp(
+                                            progress = pullDistanceFraction,
+                                            isRefreshing = isPageRefreshing
+                                        ).dp
+                                        val indicatorTotalHeight = resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(
+                                            indicatorHeightDp = indicatorHeight.value,
+                                            hasHintText = pullDistanceFraction > 0f || isPageRefreshing
+                                        ).dp
+                                        Md3ScreenshotRefreshIndicator(
+                                            state = pullRefreshState,
+                                            isRefreshing = isPageRefreshing,
+                                            indicatorHeight = indicatorHeight,
+                                            modifier = Modifier
+                                                .align(Alignment.TopCenter)
+                                                .padding(top = listTopPadding)
+                                                .zIndex(1f)
+                                                .graphicsLayer {
+                                                    val currentDragOffset = calculateDragOffset()
+                                                    translationY = resolveMd3ScreenshotRefreshIndicatorTranslationY(
+                                                        dragOffsetPx = currentDragOffset,
+                                                        indicatorTotalHeightPx = indicatorTotalHeight.toPx(),
+                                                        minGapPx = 8.dp.toPx()
+                                                    )
+                                                }
+                                                .fillMaxWidth()
+                                        )
+                                    }
+                                    HomePullRefreshIndicatorStyle.IOS -> {
+                                        iOSRefreshIndicator(
+                                            state = pullRefreshState,
+                                            isRefreshing = isPageRefreshing,
+                                            modifier = Modifier
+                                                .align(Alignment.TopCenter)
+                                                .padding(top = listTopPadding)
+                                                .zIndex(1f)
+                                                .graphicsLayer {
+                                                    val currentDragOffset = calculateDragOffset()
+                                                    val indicatorHeight = 40.dp.toPx()
+                                                    val minGap = 8.dp.toPx()
+                                                    translationY = resolvePullIndicatorTranslationY(
+                                                        dragOffsetPx = currentDragOffset,
+                                                        indicatorHeightPx = indicatorHeight,
+                                                        minGapPx = minGap,
+                                                        isRefreshing = isPageRefreshing
+                                                    )
+                                                }
+                                                .fillMaxWidth()
+                                        )
+                                    }
                                 }
                              }
                         ) {
@@ -1271,12 +1505,14 @@ fun HomeScreen(
                              Box(
                                  modifier = Modifier
                                      .fillMaxSize()
+                                     .zIndex(0f)
                                      .graphicsLayer {
                                          translationY = calculateDragOffset()
                                      }
                              ) {
-                             if (categoryState.isLoading && categoryState.videos.isEmpty() && categoryState.liveRooms.isEmpty()) {
+                             if (category != HomeCategory.POPULAR && categoryState.isLoading && categoryState.videos.isEmpty() && categoryState.liveRooms.isEmpty()) {
                                  // Loading Skeleton per page
+                                 val skeletonPulse = rememberHomeFeedSkeletonPulse()
                                  LazyVerticalGrid(
                                      columns = GridCells.Fixed(gridColumns),
                                      contentPadding = PaddingValues(
@@ -1289,165 +1525,241 @@ fun HomeScreen(
                                  ) {
                                      // [Fix] Dynamic skeleton count to fill tablet screens (at least 5 rows)
                                      val skeletonItemCount = gridColumns * 5
-                                     // [Fix] Use modulo to prevent excessive delay for large item counts on tablet
-                                     // Cap the animation wave to ~10 items (approx 800ms max delay) to ensure visibility
-                                     items(skeletonItemCount) { index -> VideoCardSkeleton(index = index % 10) }
+                                     items(
+                                         count = skeletonItemCount,
+                                         key = { it },
+                                         contentType = { "home_feed_skeleton_card" }
+                                     ) {
+                                         HomeFeedSkeletonCard(
+                                             pulse = skeletonPulse,
+                                             wallpaperTintEnabled = homeWallpaperBackdropAppearance.visible,
+                                             wallpaperEffectMode = homeSettings.homeWallpaperEffectMode,
+                                             isDataSaverActive = isDataSaverActive
+                                         )
+                                     }
                                  }
-                             } else if (categoryState.error != null && categoryState.videos.isEmpty()) {
+                             } else {
+                                 val categoryError = categoryState.error
+                                 if (categoryError != null && categoryState.videos.isEmpty()) {
                                  // Error State per page
                                  Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                      ModernErrorState(
-                                         message = categoryState.error,
-                                         onRetry = { viewModel.refresh(category) }
+                                         message = categoryError,
+                                         onRetry = { viewModel.refresh() }
                                      )
                                  }
-                             } else {
+                                 } else {
                                  // Data Content
                                  // [性能优化] Stabilize event callbacks to prevent recomposition on scroll
-                                 val onLoadMoreCallback = remember(viewModel, category) {
-                                     { viewModel.loadMore(category) }
-                                 }
-                                 val onDismissVideoCallback = remember(viewModel, category) {
+                                 val onLoadMoreCallback = remember(viewModel) { { viewModel.loadMore() } }
+                                 val onDismissVideoCallback = remember(viewModel, cardAnimationEnabled) {
                                      { bvid: String ->
-                                         viewModel.rememberInteractedCategory(category)
-                                         viewModel.startVideoDissolve(bvid)
+                                         val transition = resolveHomeDismissVisualTransition(
+                                             isFeedbackRecorded = true,
+                                             cardAnimationEnabled = cardAnimationEnabled
+                                         )
+                                         if (transition.shouldStartDissolve) {
+                                             viewModel.startVideoDissolve(bvid)
+                                         } else if (transition.shouldRemoveImmediately) {
+                                             viewModel.completeVideoDissolve(bvid)
+                                         }
                                      }
                                  }
                                  val onWatchLaterCallback = remember(viewModel) { { bvid: String, aid: Long -> viewModel.addToWatchLater(bvid, aid) } }
-                                 val onDissolveCompleteCallback = remember(viewModel, category) {
-                                     { bvid: String -> viewModel.completeVideoDissolve(bvid, category) }
-                                 }
-                                 val onLongPressCallback = remember(targetVideoItemState, viewModel, category) {
-                                     { item: VideoItem ->
-                                         viewModel.rememberInteractedCategory(category)
-                                         targetVideoItemState.value = item
-                                     }
-                                 }
-                                 val onLiveClickCallback = remember(onLiveClick, viewModel, category) {
-                                     { roomId: Long, title: String, uname: String ->
-                                         viewModel.rememberInteractedCategory(category)
-                                         onLiveClick(roomId, title, uname)
-                                     }
-                                 }
-                                 val onVideoClickCallback = remember(viewModel, category, wrappedOnVideoClick) {
-                                     { request: HomeVideoClickRequest ->
-                                         viewModel.rememberInteractedCategory(category)
-                                         wrappedOnVideoClick(request)
-                                     }
-                                 }
+                                 val onDissolveCompleteCallback = remember(viewModel) { { bvid: String -> viewModel.completeVideoDissolve(bvid) } }
+                                 val onLongPressCallback = remember(targetVideoItemState) { { item: VideoItem -> targetVideoItemState.value = item } }
+                                 val onLiveClickCallback = remember(onLiveClick) { onLiveClick }
                                  val onTodayWatchModeChange = remember(viewModel) { { mode: TodayWatchMode -> viewModel.switchTodayWatchMode(mode) } }
                                  val onTodayWatchCollapsedChange = remember(viewModel) { { collapsed: Boolean -> viewModel.setTodayWatchCollapsed(collapsed) } }
                                  val onTodayWatchRefresh = remember(viewModel) { { viewModel.refreshTodayWatchOnly() } }
+                                 val onTodayWatchUpClick = remember(onSpaceClick) { { mid: Long -> onSpaceClick(mid) } }
+                                 val onHomeFeedUpClick = remember(onSpaceClick) { { mid: Long -> onSpaceClick(mid) } }
                                  val onPopularSubCategoryChange = remember(viewModel) {
                                      { subCategory: PopularSubCategory -> viewModel.switchPopularSubCategory(subCategory) }
                                  }
-                                 val onFollowScrollInteraction = remember(viewModel) {
-                                     { viewModel.markFollowLoadMoreGestureObserved() }
-                                 }
 
+                                 val homePageContentPadding = PaddingValues(
+                                     bottom = homeListBottomPadding,
+                                     start = 8.dp,
+                                     end = 8.dp,
+                                     top = listTopPadding
+                                 )
+                                 val renderHomeCategoryPage: @Composable (
+                                     CategoryContent,
+                                     LazyGridState,
+                                     PopularSubCategory,
+                                     () -> Unit
+                                 ) -> Unit = { pageCategoryState, contentGridState, selectedPopularSubCategory, onPageLoadMore ->
+                                 val pageDissolvingVideos by viewModel.dissolvingVideos.collectAsStateWithLifecycle()
+                                 val pageFollowingMids by viewModel.followingMids.collectAsStateWithLifecycle()
                                  HomeCategoryPageContent(
                                      category = category,
-                                     categoryState = categoryState,
-                                     gridState = pageGridState,
+                                     categoryState = pageCategoryState,
+                                     gridState = contentGridState,
                                      gridColumns = gridColumns,
-                                     contentPadding = PaddingValues(
-                                         bottom = homeListBottomPadding,
-                                         start = 8.dp, end = 8.dp, top = listTopPadding 
-                                     ),
-                                     dissolvingVideos = state.dissolvingVideos,
-                                     followingMids = state.followingMids,
-                                     onVideoClick = onVideoClickCallback,
+                                     contentPadding = homePageContentPadding,
+                                     dissolvingVideos = pageDissolvingVideos,
+                                     followingMids = pageFollowingMids,
+                                     onVideoClick = wrappedOnVideoClick,
+                                     onUpClick = onHomeFeedUpClick,
                                      onLiveClick = onLiveClickCallback,
-                                     onLoadMore = onLoadMoreCallback,
+                                     onLoadMore = onPageLoadMore,
                                      onDismissVideo = onDismissVideoCallback,
                                      onWatchLater = onWatchLaterCallback,
                                      onDissolveComplete = onDissolveCompleteCallback,
                                      longPressCallback = onLongPressCallback, // [Feature] Pass callback
                                      displayMode = displayMode,
-                                     autoLoadMoreEnabled = category != HomeCategory.FOLLOW || state.followAutoLoadMoreEnabled,
                                      cardAnimationEnabled = cardAnimationEnabled,
                                      cardMotionTier = cardMotionTier,
                                      cardTransitionEnabled = cardTransitionEnabled,
+                                     isReturningFromVideoDetail = isReturningFromVideoDetail,
+                                     isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                      smartVisualGuardEnabled = false,
                                      isDataSaverActive = isDataSaverActive,
                                      preferLowQualityCover = homeSettings.lowQualityHomeCoverInDataSaver,
                                      compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      showCoverGlassBadges = homeSettings.showHomeCoverGlassBadges,
                                      showInfoGlassBadges = homeSettings.showHomeInfoGlassBadges,
-                                     followLoadMoreArmed = category != HomeCategory.FOLLOW || state.followLoadMoreArmed,
-                                     onFollowScrollInteraction = onFollowScrollInteraction,
+                                     wallpaperTintEnabled = homeWallpaperBackdropAppearance.visible,
+                                     wallpaperEffectMode = homeSettings.homeWallpaperEffectMode,
                                      showUpBadges = homeSettings.showHomeUpBadges,
                                      showDurationBadges = homeSettings.showHomeVideoDurationBadges,
                                      oldContentAnchorBvid = if (shouldShowRecommendOldContentDivider(
                                              currentCategory = category,
-                                             refreshNewItemsKey = state.refreshNewItemsKey,
-                                             revealedRefreshKey = state.recommendOldContentRevealKey,
-                                             anchorBvid = state.recommendOldContentAnchorBvid,
-                                             oldContentStartIndex = state.recommendOldContentStartIndex
+                                             refreshNewItemsKey = refreshNewItemsKey,
+                                             revealedRefreshKey = recommendOldContentRevealKey,
+                                             anchorBvid = recommendOldContentAnchorBvid,
+                                             oldContentStartIndex = recommendOldContentStartIndex
                                          )
                                      ) {
-                                         state.recommendOldContentAnchorBvid
+                                         recommendOldContentAnchorBvid
                                      } else {
                                          null
                                      },
                                      oldContentStartIndex = if (shouldShowRecommendOldContentDivider(
                                              currentCategory = category,
-                                             refreshNewItemsKey = state.refreshNewItemsKey,
-                                             revealedRefreshKey = state.recommendOldContentRevealKey,
-                                             anchorBvid = state.recommendOldContentAnchorBvid,
-                                             oldContentStartIndex = state.recommendOldContentStartIndex
+                                             refreshNewItemsKey = refreshNewItemsKey,
+                                             revealedRefreshKey = recommendOldContentRevealKey,
+                                             anchorBvid = recommendOldContentAnchorBvid,
+                                             oldContentStartIndex = recommendOldContentStartIndex
                                          )
                                      ) {
-                                         state.recommendOldContentStartIndex
+                                         recommendOldContentStartIndex
                                      } else {
                                          null
                                      },
-                                     todayWatchEnabled = category == HomeCategory.RECOMMEND && state.todayWatchPluginEnabled,
-                                     todayWatchMode = state.todayWatchMode,
-                                     todayWatchPlan = if (category == HomeCategory.RECOMMEND) state.todayWatchPlan else null,
-                                     todayWatchLoading = category == HomeCategory.RECOMMEND && state.todayWatchLoading,
-                                     todayWatchError = if (category == HomeCategory.RECOMMEND) state.todayWatchError else null,
-                                     todayWatchCollapsed = category == HomeCategory.RECOMMEND && state.todayWatchCollapsed,
-                                     todayWatchCardConfig = state.todayWatchCardConfig,
+                                     todayWatchEnabled = category == HomeCategory.RECOMMEND && todayWatchPluginEnabled,
+                                     todayWatchMode = todayWatchMode,
+                                     todayWatchPlan = if (category == HomeCategory.RECOMMEND) todayWatchPlan else null,
+                                     todayWatchLoading = category == HomeCategory.RECOMMEND && todayWatchLoading,
+                                     todayWatchError = if (category == HomeCategory.RECOMMEND) todayWatchError else null,
+                                     todayWatchCollapsed = category == HomeCategory.RECOMMEND && todayWatchCollapsed,
+                                     todayWatchCardConfig = todayWatchCardConfig,
                                      onTodayWatchModeChange = onTodayWatchModeChange,
                                      onTodayWatchCollapsedChange = onTodayWatchCollapsedChange,
                                      onTodayWatchRefresh = onTodayWatchRefresh,
-                                     popularSubCategory = state.popularSubCategory,
+                                     onTodayWatchUpClick = onTodayWatchUpClick,
+                                     popularSubCategory = selectedPopularSubCategory,
                                      onPopularSubCategoryChange = onPopularSubCategoryChange,
                                      onTodayWatchVideoClick = onTodayWatchVideoClick,
+                                     uiSkinDecoration = homeUiSkinDecoration,
                                      firstGridItemModifier = Modifier
                                  )
+                                 }
+                                 if (category == HomeCategory.POPULAR) {
+                                     val popularSubCategories = PopularSubCategory.entries
+                                     val selectedPopularPage = popularSubCategories
+                                         .indexOf(popularSubCategory)
+                                         .coerceAtLeast(0)
+                                     val popularPagerState = rememberPagerState(
+                                         initialPage = selectedPopularPage
+                                     ) { popularSubCategories.size }
+
+                                     LaunchedEffect(popularPagerState, selectedPopularPage) {
+                                         if (popularPagerState.currentPage != selectedPopularPage &&
+                                             popularPagerState.targetPage != selectedPopularPage
+                                         ) {
+                                             popularPagerState.animateScrollToPage(selectedPopularPage)
+                                         }
+                                     }
+                                     LaunchedEffect(popularPagerState) {
+                                         snapshotFlow { popularPagerState.settledPage }
+                                             .distinctUntilChanged()
+                                             .collect { page ->
+                                                 val settledSubCategory = popularSubCategories.getOrNull(page) ?: return@collect
+                                                 viewModel.switchPopularSubCategory(settledSubCategory)
+                                             }
+                                     }
+
+                                     HorizontalPager(
+                                         state = popularPagerState,
+                                         beyondViewportPageCount = 0,
+                                         modifier = Modifier.fillMaxSize(),
+                                         key = { index -> popularSubCategories[index].name }
+                                     ) { subPage ->
+                                         val subCategory = popularSubCategories[subPage]
+                                         val subCategoryStateFlow = remember(viewModel, subCategory) {
+                                             viewModel.getPopularCategoryState(subCategory)
+                                         }
+                                         val subCategoryState by subCategoryStateFlow.collectAsStateWithLifecycle()
+                                         val subCategoryGridState = popularGridStates[subCategory] ?: rememberLazyGridState()
+                                         val onSubCategoryLoadMore = if (subCategory == popularSubCategory) {
+                                             onLoadMoreCallback
+                                         } else {
+                                             {}
+                                         }
+                                         renderHomeCategoryPage(
+                                             subCategoryState,
+                                             subCategoryGridState,
+                                             subCategory,
+                                             onSubCategoryLoadMore
+                                         )
+                                     }
+                                 } else {
+                                     renderHomeCategoryPage(
+                                         categoryState,
+                                         pageGridState,
+                                         popularSubCategory,
+                                         onLoadMoreCallback
+                                     )
+                                 }
+                             }
                              }
                              } // Close Box wrapper
                         }
-                } // Close HorizontalPager lambda
+                            }
+                            null -> Unit
                         }
+                } // Close HorizontalPager lambda
             } // Close Box wrapper
         } // Close Scaffold lambda
         
         //  ===== Header Overlay (毛玻璃效果) =====
         //  Header 现在在外层 Box 内、hazeSource 外部，可以正确模糊内层内容
-        val isSkeletonState = state.isLoading && state.videos.isEmpty() && state.liveRooms.isEmpty()
-        val isErrorState = state.error != null && 
-            ((state.currentCategory == HomeCategory.LIVE && state.liveRooms.isEmpty()) ||
-             (state.currentCategory != HomeCategory.LIVE && state.videos.isEmpty()))
-
         //  [Restored] Header 始终显示，不再随 Loading/Error 状态隐藏
         //  这保证了 Tab 指示器状态的连续性，防止消失或重置
         val isFeedScrollInProgress by remember(activeGridState) {
             derivedStateOf { activeGridState?.isScrollInProgress == true }
+        }
+        SideEffect {
+            globalFeedScrollInProgress.value = isFeedScrollInProgress
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                globalFeedScrollInProgress.value = false
+            }
         }
         val homeInteractionMotionBudget = resolveHomeInteractionMotionBudget(
             isPagerScrolling = pagerState.isScrollInProgress,
             isProgrammaticPageSwitchInProgress = programmaticPageSwitchInProgress,
             isFeedScrolling = isFeedScrollInProgress
         )
-        val isHeaderTransitionRunning by remember(pagerState, isFeedScrollInProgress) {
+        val isHeaderTransitionRunning by remember(pagerState, headerSettleAnimationJob, isFeedScrollInProgress) {
             derivedStateOf {
                 resolveHomeHeaderTransitionRunning(
                     isFeedScrolling = isFeedScrollInProgress,
                     isPagerScrolling = pagerState.isScrollInProgress,
-                    isHeaderSettleAnimating = false
+                    isHeaderSettleAnimating = headerSettleAnimationJob != null
                 )
             }
         }
@@ -1470,19 +1782,25 @@ fun HomeScreen(
             glassEnabled = isLiquidGlassEnabled,
             blurEnabled = isHeaderBlurEnabled || isBottomBarBlurEnabled,
             emphasized = true,
-            baseColor = MaterialTheme.colorScheme.surface
+            baseColor = AppSurfaceTokens.cardContainer()
         )
         
         // Calculate parameters based on scroll
-        // 1. Search Bar Collapse (First phase)
+        val topTabsCollapsedForHeader = if (collapseTabsOnScroll) {
+            areTopTabsAutoCollapsed
+        } else {
+            false
+        }
         iOSHomeHeader(
             headerOffsetProvider = { headerOffsetHeightPx }, // [Optimization] Pass lambda to defer state read
-            isHeaderCollapseEnabled = isHeaderCollapseEnabled,
-            user = state.user,
+            isHeaderCollapseEnabled = collapseSearchOnScroll,
+            isTopTabsAutoCollapseEnabled = collapseTabsOnScroll,
+            isTopTabsManualCollapseEnabled = false,
+            user = user,
             onAvatarClick = {
                 when (
                     resolveHomeAvatarAction(
-                        isLoggedIn = state.user.isLogin,
+                        isLoggedIn = user.isLogin,
                         isHomeDrawerEnabled = isHomeDrawerEnabled
                     )
                 ) {
@@ -1492,26 +1810,36 @@ fun HomeScreen(
                 }
             },
             onSettingsClick = onSettingsClick,
+            onInboxClick = onInboxClick,
+            topRightUnreadCount = messageUnreadCount,
             onSearchClick = onSearchClick,
-            topCategories = localizedTopCategoryLabels,
-            topCategoryKeys = topCategories.map { it.name },
+            topCategories = localizedTopTabLabels,
+            topCategoryKeys = topTabEntries.map { it.id },
             categoryIndex = displayedTabIndex,
-            onCategorySelected = { index ->
+            onCategorySelected = onCategorySelected@ { index ->
                 viewModel.updateDisplayedTabIndex(index)
-                topCategories.getOrNull(index)?.let { selectedCategory ->
-                    if (shouldSnapHomeTopTabSelection(pagerState.currentPage, index)) {
-                        coroutineScope.launch {
-                            programmaticPageSwitchInProgress = true
-                            pagerState.scrollToPage(index)
+                val selectedEntry = topTabEntries.getOrNull(index) ?: return@onCategorySelected
+                if (pagerState.currentPage != index) {
+                    programmaticPageSwitchInProgress = true
+                    coroutineScope.launch {
+                        try {
+                            pagerState.animateScrollToPage(
+                                page = index,
+                                animationSpec = tween(
+                                    durationMillis = 240,
+                                    easing = LinearOutSlowInEasing
+                                )
+                            )
+                        } finally {
                             programmaticPageSwitchInProgress = false
                         }
                     }
-                    viewModel.switchCategory(selectedCategory)
+                }
+                if (selectedEntry is HomeTopTabEntry.Category) {
+                    viewModel.switchCategory(selectedEntry.category)
                 }
             },
             onPartitionClick = onPartitionClick,
-            onLiveClick = onLiveListClick,  // [修复] 直播分区点击导航到独立页面
-            showPartitionButton = hasVisibleTopCategories && focusSettings.showHomePartitionButton,
             // isScrollingUp = isHeaderVisible, // [Removed] logic moved to offset
             hazeState = if (topChromeMaterialMode != com.android.purebilibili.feature.home.components.TopTabMaterialMode.PLAIN) {
                 hazeState
@@ -1520,8 +1848,9 @@ fun HomeScreen(
             },
             onStatusBarDoubleTap = {
                 coroutineScope.launch {
-                    gridStates[state.currentCategory]?.animateScrollToItem(0)
-                    headerOffsetHeightPx = 0f // [Refinement] Reset header on double tap
+                    activeGridState?.animateScrollToItem(0)
+                    setHeaderOffsetImmediate(0f) // [Refinement] Reset header on double tap
+                    globalScrollOffset.floatValue = 0f
                 }
             },
             isRefreshing = isRefreshing,
@@ -1529,26 +1858,20 @@ fun HomeScreen(
             pagerState = pagerState,
             backdrop = homeBackdrop,
             homeSettings = effectiveHomeSettings,
-            topTabsVisible = hasVisibleTopCategories && resolveHomeTopTabsVisible(
+            topTabsVisible = resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = delayTopTabsUntilCardSettled,
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
-                isReturningFromDetail = CardPositionManager.isReturningFromDetail
+                isReturningFromDetail = isReturningFromVideoDetail,
+                topTabsCollapsed = topTabsCollapsedForHeader
             ),
-            topTabsCollapsed = if (isHeaderCollapseEnabled) {
-                areTopTabsAutoCollapsed
-            } else {
-                areTopTabsManuallyCollapsed
-            },
-            onTopTabsCollapsedChange = { collapsed ->
-                if (!isHeaderCollapseEnabled) {
-                    areTopTabsManuallyCollapsed = collapsed
-                }
-            },
+            topTabsCollapsed = topTabsCollapsedForHeader,
+            onTopTabsCollapsedChange = {},
             motionTier = deviceUiProfile.motionTier,
             isScrolling = isFeedScrollInProgress,
             isTransitionRunning = isHeaderTransitionRunning,
             forceLowBlurBudget = forceLowBlurBudget,
-            interactionBudget = homeInteractionMotionBudget
+            interactionBudget = homeInteractionMotionBudget,
+            uiSkinDecoration = homeUiSkinDecoration
         )
 
         AnimatedVisibility(
@@ -1571,7 +1894,7 @@ fun HomeScreen(
                 contentAlignment = Alignment.TopCenter
             ) {
                 Surface(
-                    shape = RoundedCornerShape(999.dp),
+                    shape = AppShapes.container(ContainerLevel.Pill),
                     color = if (refreshTipAppearance.surfaceStyle == HomeRefreshTipSurfaceStyle.PLAIN) {
                         MaterialTheme.colorScheme.surfaceContainerHigh
                     } else {
@@ -1599,7 +1922,7 @@ fun HomeScreen(
         }
 
         //  [新增] 刷新撤销悬浮按钮（右下角，5秒后自动消失）
-        val undoVisible = state.undoAvailable && state.currentCategory == HomeCategory.RECOMMEND
+        val undoVisible = undoAvailable && currentCategory == HomeCategory.RECOMMEND
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1625,7 +1948,7 @@ fun HomeScreen(
                     contentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 border = BorderStroke(0.8.dp, overlayPillColors.borderColor),
-                shape = RoundedCornerShape(999.dp),
+                shape = AppShapes.container(ContainerLevel.Pill),
                 elevation = androidx.compose.material3.ButtonDefaults.buttonElevation(
                     defaultElevation = 4.dp,
                     pressedElevation = 2.dp
@@ -1678,6 +2001,7 @@ fun HomeScreen(
                              bvid = item.bvid,
                              cid = item.cid,
                              coverUrl = item.pic,
+                             isVerticalVideo = item.isVertical,
                              source = HomeVideoClickSource.PREVIEW
                          )
                      )
@@ -1716,7 +2040,11 @@ fun HomeScreen(
                     targetVideoItemState.value = null
                 },
                 onNotInterested = {
-                    viewModel.markNotInterested(item.bvid)
+                    viewModel.markNotInterested(item.bvid, cardAnimationEnabled = cardAnimationEnabled)
+                    targetVideoItemState.value = null
+                },
+                onBlockCreator = {
+                    viewModel.blockCreator(item)
                     targetVideoItemState.value = null
                 },
                 onGetPreviewUrl = { bvid, cid ->
@@ -1737,7 +2065,7 @@ fun HomeScreen(
                 drawerContent = {
                     MineSideDrawer(
                         drawerState = drawerState,
-                        user = state.user,
+                        user = user,
                         onLogout = resolveHomeDrawerLogoutAction(
                             onLogout = onLogout,
                             onProfileClick = onProfileClick
@@ -1763,10 +2091,12 @@ fun HomeScreen(
     }
 
     
-    //  [修复] 使用生命周期事件控制底栏可见性
-    // ON_START: 恢复底栏（仅在从视频页返回时）
-    // ON_STOP: 隐藏底栏（导航到其他页面时，避免影响导航栏区域）
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    //  使用生命周期事件：
+    // ON_START: 非视频返回底栏立即恢复
+    // ON_STOP: 清理定时器
+    // 视频返回的顶栏/底栏恢复统一由导航返回态 LaunchedEffect 处理，避免依赖不稳定的页面生命周期。
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val currentBottomBarVisible by rememberUpdatedState(bottomBarVisible)
     DisposableEffect(lifecycleOwner, useSideNavigation) {
         if (useSideNavigation) {
             return@DisposableEffect onDispose { }
@@ -1774,51 +2104,14 @@ fun HomeScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_START -> {
-                    topTabsRevealJob?.cancel()
-                    val returningFromDetail = CardPositionManager.isReturningFromDetail
-                    if (hideTopTabsForForwardDetailNav || returningFromDetail) {
-                        if (returningFromDetail) {
-                            returnAnimationStartElapsedMs = SystemClock.elapsedRealtime()
-                        }
-                        hideTopTabsForForwardDetailNav = false
-                        val revealDelayMs = resolveHomeTopTabsRevealDelayMs(
-                            isReturningFromDetail = returningFromDetail,
-                            cardTransitionEnabled = cardTransitionEnabled,
-                            isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail
-                        )
-                        if (revealDelayMs > 0L) {
-                            delayTopTabsUntilCardSettled = true
-                            topTabsRevealJob = coroutineScope.launch {
-                                delay(revealDelayMs)
-                                delayTopTabsUntilCardSettled = false
-                            }
-                        } else {
-                            delayTopTabsUntilCardSettled = false
-                        }
-                    }
-                    //  关键修复：只在底栏当前隐藏时才恢复可见
-                    if (!bottomBarVisible && isVideoNavigating) {
-                        val bottomBarRestoreDelayMs = resolveBottomBarRestoreDelayMs(
-                            cardTransitionEnabled = cardTransitionEnabled,
-                            isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail
-                        )
-                        val resetNavigationDelayMs = if (cardTransitionEnabled) 200L else 80L
-                        bottomBarRestoreJob = kotlinx.coroutines.MainScope().launch {
-                            kotlinx.coroutines.delay(bottomBarRestoreDelayMs)
-                            setBottomBarVisible(true)
-                            kotlinx.coroutines.delay(resetNavigationDelayMs)
-                            isVideoNavigating = false
-                        }
-                    } else if (!bottomBarVisible && !isVideoNavigating) {
-                        //  [新增] 从设置等非视频页面返回时，立即显示底栏（无延迟）
+                    //  底栏由动画完成 LaunchedEffect 统一恢复，此处不再独立计时
+                    if (!currentBottomBarVisible && !isVideoNavigating) {
+                        //  从设置等非视频页面返回时，立即显示底栏（无延迟）
                         setBottomBarVisible(true)
                     }
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
-                    //  [修复] 移除此处隐藏底栏的逻辑
-                    //  防止切换到其他Tab（如动态/历史）时底栏消失
-                    bottomBarRestoreJob?.cancel()
-                    bottomBarRestoreJob = null
+                    topTabsRevealJob?.cancel()
                     // setBottomBarVisible(false) // REMOVED
                 }
                 else -> { /* 其他事件不处理 */ }
@@ -1826,7 +2119,6 @@ fun HomeScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            bottomBarRestoreJob?.cancel()
             topTabsRevealJob?.cancel()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
@@ -1861,7 +2153,11 @@ fun HomeScreen(
     //  计算滚动偏移量用于头部动画 -  优化：量化减少重组
     val scrollOffset by remember {
         derivedStateOf {
-            val currentGridState = gridStates[state.currentCategory]
+            val currentGridState = if (currentCategory == HomeCategory.POPULAR) {
+                popularGridStates[popularSubCategory]
+            } else {
+                gridStates[currentCategory]
+            }
             if (currentGridState == null) return@derivedStateOf 0f
             
             val firstVisibleItem = currentGridState.firstVisibleItemIndex
@@ -1877,36 +2173,48 @@ fun HomeScreen(
 
     //  [性能优化] 图片预加载 - 提前加载即将显示的视频封面
     // 📉 [省流量] 省流量模式下禁用预加载
-    LaunchedEffect(state.currentCategory, isDataSaverActive, preloadAheadCount) {
+    LaunchedEffect(currentCategory, popularSubCategory, isDataSaverActive, preloadAheadCount) {
         // 📉 省流量模式下跳过预加载
         if (isDataSaverActive) return@LaunchedEffect
         if (preloadAheadCount <= 0) return@LaunchedEffect
         
-        val currentGridState = gridStates[state.currentCategory] ?: return@LaunchedEffect
+        val currentGridState = if (currentCategory == HomeCategory.POPULAR) {
+            popularGridStates[popularSubCategory]
+        } else {
+            gridStates[currentCategory]
+        } ?: return@LaunchedEffect
         
-        snapshotFlow { currentGridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
-            .distinctUntilChanged()  //  只在索引变化时触发
-            .collect { lastVisibleIndex ->
-                // Move heavy lifting to IO thread
+        snapshotFlow {
+            val lastVisibleIndex = currentGridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisibleIndex to currentGridState.isScrollInProgress
+        }
+            .distinctUntilChanged()
+            .collect { (lastVisibleIndex, isScrollInProgress) ->
+                val videos = viewModel.getPreloadVideosSnapshot(
+                    category = currentCategory,
+                    popularSubCategory = popularSubCategory
+                )
+                val preloadRange = resolveHomeCoverPreloadRange(
+                    isDataSaverActive = isDataSaverActive,
+                    isScrollInProgress = isScrollInProgress,
+                    lastVisibleIndex = lastVisibleIndex,
+                    totalItemCount = videos.size,
+                    preloadAheadCount = preloadAheadCount
+                ) ?: return@collect
+                val imageUrls = preloadRange.mapNotNull { index -> videos.getOrNull(index)?.pic }
+                if (imageUrls.isEmpty()) return@collect
+
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val videos = state.categoryStates[state.currentCategory]?.videos ?: state.videos
-                    val preloadStart = (lastVisibleIndex + 1).coerceAtMost(videos.size)
-                    val preloadEnd = (lastVisibleIndex + 1 + preloadAheadCount).coerceAtMost(videos.size)
-                    
-                    if (preloadStart < preloadEnd) {
-                        for (i in preloadStart until preloadEnd) {
-                            val imageUrl = videos.getOrNull(i)?.pic ?: continue
-                            // [Optimization] Run validation and request building off main thread
-                            val fixedUrl = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(imageUrl)
-                            
-                            val request = coil.request.ImageRequest.Builder(context)
-                                .data(fixedUrl)
-                                .size(360, 225)  //  预加载也使用限制尺寸
-                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                                .build()
-                            context.imageLoader.enqueue(request)
-                        }
+                    for (imageUrl in imageUrls) {
+                        val fixedUrl = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(imageUrl)
+
+                        val request = coil.request.ImageRequest.Builder(context)
+                            .data(fixedUrl)
+                            .size(360, 225)  //  预加载也使用限制尺寸
+                            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                            .build()
+                        context.imageLoader.enqueue(request)
                     }
                 }
             }
@@ -1918,76 +2226,30 @@ fun HomeScreen(
     //  [已移除] 特殊分类（ANIME, MOVIE等）不再在首页切换，直接导航到独立页面
     
     //  [修复] 如果当前在直播-关注分类且列表为空，返回时先切换到热门，再切换到推荐
-    val isEmptyLiveFollowed = state.currentCategory == HomeCategory.LIVE && 
-                               state.liveSubCategory == LiveSubCategory.FOLLOWED &&
-                               state.liveRooms.isEmpty() && 
-                               !state.isLoading
+    val liveCategoryStateFlow = remember(viewModel) {
+        viewModel.getCategoryState(HomeCategory.LIVE)
+    }
+    val liveCategoryState by liveCategoryStateFlow.collectAsStateWithLifecycle()
+    val isEmptyLiveFollowed = currentCategory == HomeCategory.LIVE &&
+                               liveSubCategory == LiveSubCategory.FOLLOWED &&
+                               liveCategoryState.followedLiveRooms.isEmpty() &&
+                               !liveCategoryState.isLoading
     androidx.activity.compose.BackHandler(enabled = isEmptyLiveFollowed) {
         // 切换到热门直播
         viewModel.switchLiveSubCategory(LiveSubCategory.POPULAR)
     }
 
     //  [修复] 如果当前在直播分类（非关注空列表情况），返回时切换到推荐
-    val isLiveCategoryNotHome = state.currentCategory == HomeCategory.LIVE && !isEmptyLiveFollowed
-    val liveCategoryBackTarget = remember(topCategories, state.currentCategory) {
-        topCategories.firstOrNull { it != HomeCategory.LIVE } ?: topCategories.firstOrNull() ?: state.currentCategory
-    }
-    androidx.activity.compose.BackHandler(enabled = hasVisibleTopCategories && isLiveCategoryNotHome) {
-        viewModel.switchCategory(liveCategoryBackTarget)
+    val isLiveCategoryNotHome = currentCategory == HomeCategory.LIVE && !isEmptyLiveFollowed
+    androidx.activity.compose.BackHandler(enabled = isLiveCategoryNotHome) {
+        viewModel.switchCategory(HomeCategory.RECOMMEND)
     }
     
 // [Removed] Animation logic moved inside HorizontalPager where the active state exists
     
     // 指示器位置逻辑也移入 graphicsLayer
-    
-    // 📱 [平板适配] 导航模式切换动画
-    // 始终使用 Row 布局，通过动画控制侧边栏的显示/隐藏
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-        AnimatedVisibility(
-            visible = useSideNavigation,
-            enter = slideInHorizontally(
-                initialOffsetX = { -it },
-                animationSpec = tween(
-                    overlayMotionSpec.sideNavEnterSlideDurationMillis,
-                    easing = LinearOutSlowInEasing
-                )
-            ) + fadeIn(animationSpec = tween(overlayMotionSpec.sideNavFadeDurationMillis)),
-            exit = slideOutHorizontally(
-                targetOffsetX = { -it },
-                animationSpec = tween(
-                    overlayMotionSpec.sideNavExitSlideDurationMillis,
-                    easing = FastOutLinearInEasing
-                )
-            ) + fadeOut(animationSpec = tween(overlayMotionSpec.sideNavFadeDurationMillis))
-        ) {
-            FrostedSideBar(
-                currentItem = currentNavItem,
-                onItemClick = handleNavItemClick,
-                firstItemModifier = Modifier,
-                onHomeDoubleTap = {
-                    coroutineScope.launch {
-                        headerOffsetHeightPx = 0f
-                        gridStates[state.currentCategory]?.animateScrollToItem(0)
-                        headerOffsetHeightPx = 0f
-                    }
-                },
-                hazeState = if (isBottomBarBlurEnabled) hazeState else null,
-                visibleItems = visibleBottomBarItems,
-                itemColorIndices = bottomBarItemColors,
-                onToggleSidebar = onToggleNavigationMode
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .weight(1f)
-        ) {
-            scaffoldContent()
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        scaffoldContent()
     }
 }
 
@@ -2026,22 +2288,42 @@ internal fun resolveReturnAnimationSuppressionDurationMs(
     isQuickReturnFromDetail: Boolean
 ): Long {
     if (cardTransitionEnabled && isQuickReturnFromDetail) {
-        return if (isTabletLayout) 500L else 380L
+        return if (isTabletLayout) 540L else 420L
     }
     if (cardTransitionEnabled) {
-        if (!cardAnimationEnabled) return if (isTabletLayout) 420L else 360L
-        return if (isTabletLayout) 420L else 360L
+        if (!cardAnimationEnabled) return if (isTabletLayout) 460L else 400L
+        return if (isTabletLayout) 460L else 400L
     }
     if (!cardAnimationEnabled) return 220L
     return if (isTabletLayout) 220L else 240L
 }
 
-internal fun resolveBottomBarRestoreDelayMs(
+internal fun resolveHomeContentInteractionRestoreDelayMs(
     cardTransitionEnabled: Boolean,
     isQuickReturnFromDetail: Boolean
 ): Long {
-    if (!cardTransitionEnabled) return 150L
-    if (isQuickReturnFromDetail) return 300L
-    return 360L
+    // 视觉返场保护仍由 suppression / 底栏恢复窗口负责；
+    // 首页列表手势应在页面重新可见时立即恢复，避免第一下滑动被导航态吞掉。
+    return 0L
 }
 
+private fun Modifier.homeFeedTopVideoFadeMask(fadeHeight: Dp): Modifier {
+    return graphicsLayer {
+        compositingStrategy = CompositingStrategy.Offscreen
+    }.drawWithContent {
+        drawContent()
+        val fadeHeightPx = fadeHeight.toPx().coerceAtLeast(1f)
+        drawRect(
+            brush = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to Color.Transparent,
+                    0.42f to Color.Black,
+                    1f to Color.Black
+                ),
+                startY = 0f,
+                endY = fadeHeightPx
+            ),
+            blendMode = BlendMode.DstIn
+        )
+    }
+}

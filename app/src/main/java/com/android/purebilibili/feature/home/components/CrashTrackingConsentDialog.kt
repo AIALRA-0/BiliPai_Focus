@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +14,9 @@ import androidx.compose.ui.window.Dialog
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import kotlinx.coroutines.launch
 
 /**
@@ -31,8 +33,8 @@ fun CrashTrackingConsentDialog(
     
     Dialog(onDismissRequest = { /* 不允许点击外部关闭 */ }) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
+            shape = AppShapes.container(ContainerLevel.Dialog),
+            color = AppSurfaceTokens.cardContainer(),
             tonalElevation = 6.dp,
             shadowElevation = 8.dp
         ) {
@@ -81,7 +83,7 @@ fun CrashTrackingConsentDialog(
                         checked = isEnabled,
                         onCheckedChange = { isEnabled = it },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.surface,
+                            checkedThumbColor = AppSurfaceTokens.cardContainer(),
                             checkedTrackColor = BiliPink
                         )
                     )
@@ -107,7 +109,7 @@ fun CrashTrackingConsentDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = AppShapes.container(ContainerLevel.Card),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = BiliPink
                     )

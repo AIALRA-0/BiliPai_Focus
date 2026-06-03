@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
 import java.util.concurrent.ConcurrentHashMap
@@ -119,7 +119,7 @@ internal fun rememberVideoCardOnlineCount(
             cid = video.cid
         )
     }
-    val onlineCount by onlineCountFlow.collectAsState()
+    val onlineCount by onlineCountFlow.collectAsStateWithLifecycle()
 
     LaunchedEffect(showOnlineCount, video.bvid, video.cid) {
         if (shouldLoadVideoCardOnlineCount(showOnlineCount, video.bvid, video.cid)) {

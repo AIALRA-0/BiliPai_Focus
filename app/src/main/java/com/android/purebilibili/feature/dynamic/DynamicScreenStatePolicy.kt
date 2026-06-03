@@ -2,16 +2,22 @@ package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
-import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.data.model.response.DynamicItem
+import kotlinx.collections.immutable.toImmutableList
 
-internal const val DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE = 8
+private const val DynamicTopBarReservedHeightDp = 60
+private const val DynamicHorizontalExpandedHeaderReservedHeightDp = 184
 
 internal fun resolveDynamicListTopPaddingExtraDp(
     isHorizontalMode: Boolean,
     isHorizontalUserListCollapsed: Boolean = false
 ): Int {
-    return if (isHorizontalMode && !isHorizontalUserListCollapsed) 168 else 100
+    return when {
+        // 横向关注列表展开时，头像下方可能同时有直播标记和 UP 名称两行。
+        isHorizontalMode && !isHorizontalUserListCollapsed -> DynamicHorizontalExpandedHeaderReservedHeightDp
+        isHorizontalMode -> DynamicTopBarReservedHeightDp
+        else -> DynamicTopBarReservedHeightDp
+    }
 }
 
 internal fun shouldCollapseDynamicHorizontalUserList(
@@ -35,6 +41,22 @@ internal fun shouldUseSelectedUserDynamicFeed(
     selectedUserId: Long?
 ): Boolean {
     return selectedTab == 4 && selectedUserId != null
+}
+
+internal fun resolveDynamicSelectedUserForTab(
+    selectedTab: Int,
+    selectedUserId: Long?
+): Long? {
+    return selectedUserId.takeIf { selectedTab == 4 }
+}
+
+internal fun shouldResetDynamicFeedScrollOnSourceChange(
+    previousTab: Int,
+    nextTab: Int,
+    previousSelectedUserId: Long?,
+    nextSelectedUserId: Long?
+): Boolean {
+    return previousTab != nextTab || previousSelectedUserId != nextSelectedUserId
 }
 
 internal fun resolveDynamicTabAfterUserSelection(
@@ -108,44 +130,11 @@ internal fun shouldShowDynamicNoMoreFooter(
     return !hasMore && activeItemsCount > 0
 }
 
-internal data class DynamicVisiblePaginationState(
-    val visibleHasMore: Boolean,
-    val continuationAllowed: Boolean
-)
-
-internal fun resolveDynamicVisiblePaginationState(
-    visibleItemCount: Int,
-    sourceHasMore: Boolean,
-    minimumVisibleItemCountBeforePause: Int = DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE
-): DynamicVisiblePaginationState {
-    val minimumVisibleCount = minimumVisibleItemCountBeforePause.coerceAtLeast(1)
-    return DynamicVisiblePaginationState(
-        visibleHasMore = sourceHasMore || visibleItemCount > 0,
-        continuationAllowed = sourceHasMore || visibleItemCount < minimumVisibleCount
-    )
-}
-
-internal fun shouldLoadMoreDynamicFeed(
-    totalItems: Int,
-    lastVisibleItemIndex: Int,
-    visibleItemCount: Int,
-    isLoading: Boolean,
-    sourceHasMore: Boolean,
-    visibleHasMore: Boolean = true,
-    continuationAllowed: Boolean = true,
-    minimumVisibleItemCountBeforePause: Int = 0,
-    preloadThreshold: Int = 3
+internal fun shouldRevealDynamicBottomBarForStaticContent(
+    activeItemsCount: Int,
+    isLoading: Boolean
 ): Boolean {
-    if (!visibleHasMore || !continuationAllowed) return false
-    return shouldLoadMorePaginatedContent(
-        totalItems = totalItems,
-        lastVisibleItemIndex = lastVisibleItemIndex,
-        contentItemCount = visibleItemCount,
-        isLoading = isLoading,
-        hasMore = sourceHasMore,
-        preloadThreshold = preloadThreshold,
-        minimumVisibleItemCountBeforePause = minimumVisibleItemCountBeforePause
-    )
+    return activeItemsCount == 0 && !isLoading
 }
 
 internal fun shouldShowDynamicCommentSheet(selectedDynamicId: String?): Boolean {
@@ -157,6 +146,25 @@ internal fun resolveDynamicCommentSheetTotalCount(
     fallbackCount: Int
 ): Int {
     return if (liveCount > 0) liveCount else fallbackCount.coerceAtLeast(0)
+}
+
+internal fun resolveDynamicStateAfterAuthorUnfollow(
+    currentState: DynamicUiState,
+    authorMid: Long
+): DynamicUiState {
+    if (authorMid <= 0L) return currentState
+    return currentState.copy(
+        items = currentState.items.filterNot { it.modules.module_author?.mid == authorMid }.toImmutableList(),
+        userItems = currentState.userItems.filterNot { it.modules.module_author?.mid == authorMid }.toImmutableList()
+    )
+}
+
+internal fun resolveFollowedUsersAfterAuthorUnfollow(
+    users: List<SidebarUser>,
+    authorMid: Long
+): List<SidebarUser> {
+    if (authorMid <= 0L) return users
+    return users.filterNot { it.uid == authorMid }
 }
 
 internal fun shouldResetFollowedUserListToTopOnRefresh(
@@ -221,12 +229,14 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         incrementalRefreshEnabled &&
         currentState.timelineRequestType == requestType
     val mergedItems = when {
-        canUseIncrementalRefresh -> prependDistinctByKey(
-            existing = currentItems,
-            incoming = incomingItems,
-            keySelector = ::dynamicFeedItemKey
+        canUseIncrementalRefresh -> sortDynamicTimelineItemsByPublishTime(
+            prependDistinctByKey(
+                existing = currentItems,
+                incoming = incomingItems,
+                keySelector = ::dynamicFeedItemKey
+            )
         )
-        isRefresh -> incomingItems
+        isRefresh -> sortDynamicTimelineItemsByPublishTime(incomingItems)
         else -> appendDistinctByKey(
             existing = currentItems,
             incoming = incomingItems,
@@ -248,16 +258,27 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         )
     }
     return currentState.copy(
-        items = mergedItems,
+        items = mergedItems.toImmutableList(),
         isLoading = false,
         error = null,
         errorSource = DynamicFeedErrorSource.NONE,
         hasMore = hasMore,
-        sourceHasMore = hasMore,
         timelineRequestType = requestType,
         incrementalRefreshBoundaryKey = boundary.boundaryKey,
         incrementalPrependedCount = boundary.prependedCount
     )
+}
+
+internal fun sortDynamicTimelineItemsByPublishTime(items: List<DynamicItem>): List<DynamicItem> {
+    if (items.size <= 1) return items
+    return items
+        .mapIndexed { index, item -> index to item }
+        .sortedWith(
+            compareByDescending<Pair<Int, DynamicItem>> { (_, item) ->
+                item.modules.module_author?.pub_ts ?: 0L
+            }.thenBy { (index, _) -> index }
+        )
+        .map { (_, item) -> item }
 }
 
 internal fun resolveDynamicFeedStateAfterFailure(

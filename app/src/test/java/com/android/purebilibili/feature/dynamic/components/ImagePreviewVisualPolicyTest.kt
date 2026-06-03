@@ -55,4 +55,40 @@ class ImagePreviewVisualPolicyTest {
         assertEquals(false, shouldShowImagePreviewText(hasText = true, textVisible = false))
         assertEquals(false, shouldShowImagePreviewText(hasText = false, textVisible = true))
     }
+
+    @Test
+    fun `initial caption visibility follows user default only when text exists`() {
+        assertEquals(true, resolveImagePreviewInitialTextVisibility(hasText = true, defaultVisible = true))
+        assertEquals(false, resolveImagePreviewInitialTextVisibility(hasText = true, defaultVisible = false))
+        assertEquals(false, resolveImagePreviewInitialTextVisibility(hasText = false, defaultVisible = true))
+    }
+
+    @Test
+    fun `comment preview page transform rotates around inner edges`() {
+        val centered = resolveCommentImagePreviewPageTransform(pageOffsetFraction = 0f, containerWidthPx = 390f)
+        val leftPanel = resolveCommentImagePreviewPageTransform(pageOffsetFraction = 1f, containerWidthPx = 390f)
+        val rightPanel = resolveCommentImagePreviewPageTransform(pageOffsetFraction = -1f, containerWidthPx = 390f)
+
+        assertEquals(0f, centered.rotationY, 0.001f)
+        assertEquals(0.5f, centered.pivotFractionX, 0.001f)
+
+        assertTrue(leftPanel.rotationY < -60f)
+        assertEquals(1f, leftPanel.pivotFractionX, 0.001f)
+        assertTrue(leftPanel.translationXPx < 0f)
+
+        assertTrue(rightPanel.rotationY > 60f)
+        assertEquals(0f, rightPanel.pivotFractionX, 0.001f)
+        assertTrue(rightPanel.translationXPx > 0f)
+
+        assertEquals(leftPanel.rotationY, -rightPanel.rotationY, 0.001f)
+        assertEquals(leftPanel.alpha, rightPanel.alpha, 0.001f)
+        assertTrue(leftPanel.scale < centered.scale)
+    }
+
+    @Test
+    fun `comment original image size label uses k and m units`() {
+        assertEquals("查看原图", resolveCommentImageOriginalSizeLabel(null))
+        assertEquals("查看原图 (369K)", resolveCommentImageOriginalSizeLabel(369f))
+        assertEquals("查看原图 (1.1M)", resolveCommentImageOriginalSizeLabel(1126f))
+    }
 }

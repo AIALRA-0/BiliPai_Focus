@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class VideoSettingsPanelActionPolicyTest {
 
@@ -37,4 +39,15 @@ class VideoSettingsPanelActionPolicyTest {
         assertEquals(19, policy.pillIconSizeDp)
         assertEquals(16, policy.pillHorizontalPaddingDp)
     }
+
+    @Test
+    fun videoSettingsPanel_exposesLongPressSpeedLockSwitch() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/VideoSettingsPanel.kt")
+            .readText()
+
+        assertTrue(source.contains("长按倍速锁定"))
+        assertTrue(source.contains("长按后拖至上下区域保持倍速"))
+        assertTrue(source.contains("setLongPressSpeedLockEnabled"))
+    }
+
 }

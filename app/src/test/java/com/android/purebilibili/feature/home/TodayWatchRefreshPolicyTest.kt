@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -48,7 +49,7 @@ class TodayWatchRefreshPolicyTest {
                 VideoItem(bvid = "a", title = "A"),
                 VideoItem(bvid = "b", title = "B"),
                 VideoItem(bvid = "c", title = "C")
-            )
+            ).toImmutableList()
         )
 
         val consumed = collectTodayWatchConsumedForManualRefresh(
@@ -65,7 +66,7 @@ class TodayWatchRefreshPolicyTest {
             videoQueue = listOf(
                 VideoItem(bvid = "", title = "NoId"),
                 VideoItem(bvid = "b", title = "B")
-            )
+            ).toImmutableList()
         )
 
         val consumed = collectTodayWatchConsumedForManualRefresh(

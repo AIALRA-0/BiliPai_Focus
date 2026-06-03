@@ -41,6 +41,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.ui.PlayerView
+import com.android.purebilibili.core.ui.rememberAppClearIcon
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 //  已改用 MaterialTheme.colorScheme.primary
 import kotlinx.coroutines.delay
@@ -68,7 +69,8 @@ fun MiniPlayerOverlay(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val clearIcon = rememberAppClearIcon()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     
@@ -579,7 +581,7 @@ fun MiniPlayerOverlay(
                             color = com.android.purebilibili.core.theme.iOSRed.copy(alpha = 0.7f)
                         ) {
                             Icon(
-                                imageVector = CupertinoIcons.Default.Xmark,
+                                imageVector = clearIcon,
                                 contentDescription = "关闭",
                                 tint = Color.White,
                                 modifier = Modifier

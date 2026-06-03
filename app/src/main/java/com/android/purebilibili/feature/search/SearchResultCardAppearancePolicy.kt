@@ -11,7 +11,8 @@ internal data class SearchVideoCardAppearance(
     val glassEnabled: Boolean,
     val blurEnabled: Boolean,
     val showCoverGlassBadges: Boolean,
-    val showInfoGlassBadges: Boolean
+    val showInfoGlassBadges: Boolean,
+    val coverShadowEnabled: Boolean
 )
 
 internal data class SearchResultCardAppearance(
@@ -35,8 +36,9 @@ internal fun resolveSearchVideoCardAppearance(
 ): SearchVideoCardAppearance = SearchVideoCardAppearance(
     glassEnabled = liquidGlassEnabled,
     blurEnabled = blurEnabled,
-    showCoverGlassBadges = showHomeCoverGlassBadges,
-    showInfoGlassBadges = showHomeInfoGlassBadges
+    showCoverGlassBadges = false,
+    showInfoGlassBadges = false,
+    coverShadowEnabled = false
 )
 
 internal fun resolveSearchResultCardAppearance(

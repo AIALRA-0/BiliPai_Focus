@@ -20,6 +20,27 @@ data class SendDanmakuData(
     val visible: Boolean = true
 )
 
+@Serializable
+data class CommandDanmakuResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 1,
+    val data: CommandDanmakuData? = null
+)
+
+@Serializable
+data class CommandDanmakuData(
+    val command: String = "",
+    val content: String = "",
+    val extra: String = "",
+    val id: Long = 0,
+    val idStr: String = "",
+    val mid: Long = 0,
+    val oid: Long = 0,
+    val progress: Long = 0,
+    val type: Int = 0
+)
+
 /**
  * 弹幕操作响应 (撤回/点赞/举报)
  */

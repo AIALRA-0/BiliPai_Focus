@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.article
 
+import com.android.purebilibili.core.ui.transition.BiliPaiSharedElementKey
+import com.android.purebilibili.core.ui.transition.articleCoverSharedElementKey
+
 internal enum class ArticleSharedElementSlot {
     CARD,
     COVER,
@@ -15,21 +18,19 @@ internal fun shouldEnableArticleSharedReturn(
 internal fun resolveArticleSharedTransitionKey(
     articleId: Long,
     slot: ArticleSharedElementSlot
-): String {
+): BiliPaiSharedElementKey {
     val normalizedId = articleId.coerceAtLeast(0L)
     return when (slot) {
-        ArticleSharedElementSlot.CARD -> "article_card_$normalizedId"
-        ArticleSharedElementSlot.COVER -> "article_cover_$normalizedId"
-        ArticleSharedElementSlot.TITLE -> "article_title_$normalizedId"
+        ArticleSharedElementSlot.CARD -> BiliPaiSharedElementKey.Raw("article_card", normalizedId.toString())
+        ArticleSharedElementSlot.COVER -> articleCoverSharedElementKey(normalizedId)
+        ArticleSharedElementSlot.TITLE -> BiliPaiSharedElementKey.Raw("article_title", normalizedId.toString())
     }
 }
 
 internal fun shouldUseArticleNoOpRouteTransition(
     cardTransitionEnabled: Boolean,
-    predictiveBackAnimationEnabled: Boolean,
     sharedTransitionReady: Boolean
 ): Boolean {
     return cardTransitionEnabled &&
-        sharedTransitionReady &&
-        !predictiveBackAnimationEnabled
+        sharedTransitionReady
 }

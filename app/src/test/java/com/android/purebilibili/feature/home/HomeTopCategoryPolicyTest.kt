@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.home
 
-import com.android.purebilibili.core.store.FocusSettings
 import com.android.purebilibili.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,6 +28,25 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
+    fun `top tab entries include partition as sixth default page`() {
+        assertEquals(
+            listOf(
+                HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+                HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+                HomeTopTabEntry.Category(HomeCategory.POPULAR),
+                HomeTopTabEntry.Category(HomeCategory.LIVE),
+                HomeTopTabEntry.Category(HomeCategory.GAME),
+                HomeTopTabEntry.Partition
+            ),
+            resolveHomeTopTabEntries()
+        )
+        assertEquals(
+            listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME", "PARTITION"),
+            resolveDefaultHomeTopTabIds()
+        )
+    }
+
+    @Test
     fun `top categories should keep compact count for header readability`() {
         assertEquals(5, resolveHomeTopCategories().size)
     }
@@ -43,7 +61,16 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `custom order and visibility should be applied without forcing recommend`() {
+    fun `tab entry key and label should support partition`() {
+        val entries = resolveHomeTopTabEntries()
+
+        assertEquals(HomeTopTabEntry.Partition, resolveHomeTopTabEntryOrNull(entries, 5))
+        assertEquals(HomeCategory.entries.size, resolveHomeTopTabEntryKey(entries, 5))
+        assertEquals("分区", resolveHomeTopTabEntryLabel(HomeTopTabEntry.Partition))
+    }
+
+    @Test
+    fun `custom order and visibility should be applied without recommend pinning`() {
         val categories = resolveHomeTopCategories(
             customOrderIds = listOf("LIVE", "TECH", "RECOMMEND", "FOLLOW"),
             visibleIds = setOf("LIVE", "TECH", "FOLLOW")
@@ -56,6 +83,42 @@ class HomeTopCategoryPolicyTest {
                 HomeCategory.FOLLOW
             ),
             categories
+        )
+    }
+
+    @Test
+    fun `custom top tab entries should allow partition or any category first`() {
+        val entries = resolveHomeTopTabEntries(
+            customOrderIds = listOf("PARTITION", "LIVE", "RECOMMEND"),
+            visibleIds = setOf("PARTITION", "LIVE")
+        )
+
+        assertEquals(
+            listOf(
+                HomeTopTabEntry.Partition,
+                HomeTopTabEntry.Category(HomeCategory.LIVE)
+            ),
+            entries
+        )
+    }
+
+    @Test
+    fun `legacy default top tab settings should migrate to inline partition entry`() {
+        val entries = resolveHomeTopTabEntries(
+            customOrderIds = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
+            visibleIds = setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
+        )
+
+        assertEquals(
+            listOf(
+                HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+                HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+                HomeTopTabEntry.Category(HomeCategory.POPULAR),
+                HomeTopTabEntry.Category(HomeCategory.LIVE),
+                HomeTopTabEntry.Category(HomeCategory.GAME),
+                HomeTopTabEntry.Partition
+            ),
+            entries
         )
     }
 
@@ -94,118 +157,6 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
-    fun `focus filters configured home tabs and keeps follow anime knowledge tech by default`() {
-        val categories = applyFocusHomeTopCategories(
-            categories = listOf(
-                HomeCategory.RECOMMEND,
-                HomeCategory.FOLLOW,
-                HomeCategory.POPULAR,
-                HomeCategory.LIVE,
-                HomeCategory.ANIME,
-                HomeCategory.GAME
-            ) + listOf(
-                HomeCategory.KNOWLEDGE,
-                HomeCategory.TECH
-            ),
-            settings = FocusSettings()
-        )
-
-        assertEquals(
-            listOf(
-                HomeCategory.FOLLOW,
-                HomeCategory.ANIME,
-                HomeCategory.KNOWLEDGE,
-                HomeCategory.TECH
-            ),
-            categories
-        )
-    }
-
-    @Test
-    fun `focus falls back to recommend when every controlled title is hidden`() {
-        val categories = applyFocusHomeTopCategories(
-            categories = listOf(
-                HomeCategory.RECOMMEND,
-                HomeCategory.FOLLOW,
-                HomeCategory.POPULAR,
-                HomeCategory.LIVE,
-                HomeCategory.GAME
-            ),
-            settings = FocusSettings(
-                showHomeFollowTab = false,
-                showHomeAnimeTab = false,
-                showHomeKnowledgeTab = false,
-                showHomeTechTab = false
-            )
-        )
-
-        assertEquals(listOf(HomeCategory.RECOMMEND), categories)
-    }
-
-    @Test
-    fun `focus can selectively restore recommend popular and follow`() {
-        val categories = applyFocusHomeTopCategories(
-            categories = listOf(
-                HomeCategory.RECOMMEND,
-                HomeCategory.FOLLOW,
-                HomeCategory.POPULAR,
-                HomeCategory.LIVE
-            ),
-            settings = FocusSettings(
-                showHomeRecommendTab = true,
-                showHomeFollowTab = true,
-                showHomePopularTab = true
-            )
-        )
-
-        assertEquals(
-            listOf(
-                HomeCategory.RECOMMEND,
-                HomeCategory.FOLLOW,
-                HomeCategory.POPULAR
-            ),
-            categories
-        )
-    }
-
-    @Test
-    fun `focus applies recommend follow popular live and game switches while leaving official extra tabs visible`() {
-        val categories = applyFocusHomeTopCategories(
-            categories = listOf(
-                HomeCategory.RECOMMEND,
-                HomeCategory.FOLLOW,
-                HomeCategory.POPULAR,
-                HomeCategory.LIVE,
-                HomeCategory.ANIME,
-                HomeCategory.GAME,
-                HomeCategory.KNOWLEDGE,
-                HomeCategory.TECH
-            ),
-            settings = FocusSettings(
-                showHomeRecommendTab = true,
-                showHomeFollowTab = false,
-                showHomePopularTab = true,
-                showHomeLiveTab = false,
-                showHomeAnimeTab = true,
-                showHomeGameTab = false,
-                showHomeKnowledgeTab = true,
-                showHomeTechTab = false
-            )
-        )
-
-        assertEquals(
-            listOf(
-                HomeCategory.RECOMMEND,
-                HomeCategory.POPULAR,
-                HomeCategory.ANIME,
-                HomeCategory.KNOWLEDGE,
-                HomeCategory.TECH
-            ),
-            categories
-        )
-    }
-
-    @Test
     fun `home top categories should map to localized string resources`() {
         assertEquals(R.string.home_category_recommend, resolveHomeCategoryLabelRes(HomeCategory.RECOMMEND))
         assertEquals(R.string.home_category_follow, resolveHomeCategoryLabelRes(HomeCategory.FOLLOW))
@@ -213,44 +164,4 @@ class HomeTopCategoryPolicyTest {
         assertEquals(R.string.home_category_live, resolveHomeCategoryLabelRes(HomeCategory.LIVE))
         assertEquals(R.string.home_category_game, resolveHomeCategoryLabelRes(HomeCategory.GAME))
     }
-
-    @Test
-    fun `unhydrated focus settings should preserve base top categories`() {
-        val baseCategories = listOf(
-            HomeCategory.FOLLOW,
-            HomeCategory.POPULAR,
-            HomeCategory.LIVE
-        )
-
-        assertEquals(
-            baseCategories,
-            resolveHydratedHomeTopCategories(
-                categories = baseCategories,
-                focusSettings = null
-            )
-        )
-    }
-
-    @Test
-    fun `current category should not fallback before focus settings hydrate`() {
-        assertFalse(
-            shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
-                currentCategory = HomeCategory.POPULAR,
-                topCategories = listOf(HomeCategory.FOLLOW, HomeCategory.LIVE),
-                focusSettingsHydrated = false
-            )
-        )
-    }
-
-    @Test
-    fun `current category should fallback after focus settings hydrate when hidden`() {
-        assertTrue(
-            shouldFallbackCurrentHomeCategoryToVisibleTopCategory(
-                currentCategory = HomeCategory.POPULAR,
-                topCategories = listOf(HomeCategory.FOLLOW, HomeCategory.LIVE),
-                focusSettingsHydrated = true
-            )
-        )
-    }
 }
-

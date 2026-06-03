@@ -71,6 +71,25 @@ internal fun shouldJiggleOnDissolve(
     return isAnyCardDissolving && dissolvingCardId != cardId
 }
 
+internal fun shouldPublishGlobalDissolveState(
+    publishGlobalState: Boolean
+): Boolean {
+    return publishGlobalState
+}
+
+internal fun shouldCreateDissolveBitmap(
+    width: Int,
+    height: Int
+): Boolean {
+    return width > 0 && height > 0
+}
+
+internal fun shouldDispatchDissolveCompletion(
+    hasCompletedCurrentDissolve: Boolean
+): Boolean {
+    return !hasCompletedCurrentDissolve
+}
+
 private data class DissolveAnimationParams(
     val durationSec: Float,
     val particleStep: Int,
@@ -157,11 +176,37 @@ fun DissolvableVideoCard(
     modifier: Modifier = Modifier,
     cardId: String = "",
     preset: DissolveAnimationPreset = DissolveAnimationPreset.CLASSIC,
+    collapseAfterDissolve: Boolean = true,
+    publishGlobalDissolveState: Boolean = true,
+    keepInvisibleAfterDissolve: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val animationParams = remember(preset) { preset.params() }
     var cardSize by remember { mutableStateOf(IntSize.Zero) }
     var shouldCollapse by remember { mutableStateOf(false) }
+    var keepContentHidden by remember { mutableStateOf(false) }
+    var hasCompletedCurrentDissolve by remember(cardId) { mutableStateOf(false) }
+    val publishGlobalState = shouldPublishGlobalDissolveState(publishGlobalDissolveState)
+
+    fun dispatchDissolveCompletionOnce() {
+        if (!shouldDispatchDissolveCompletion(hasCompletedCurrentDissolve)) return
+        hasCompletedCurrentDissolve = true
+        onDissolveComplete()
+        if (publishGlobalState) {
+            DissolveAnimationManager.stopDissolving()
+        }
+    }
+
+    val finishWithoutParticle = {
+        if (!shouldDispatchDissolveCompletion(hasCompletedCurrentDissolve)) {
+            Unit
+        } else if (collapseAfterDissolve) {
+            shouldCollapse = true
+        } else {
+            keepContentHidden = keepInvisibleAfterDissolve
+            dispatchDissolveCompletionOnce()
+        }
+    }
     
     val collapseSpec: AnimationSpec<Float> = remember(animationParams.collapseDurationMs, preset) {
         when (preset) {
@@ -182,10 +227,9 @@ fun DissolvableVideoCard(
         animationSpec = collapseSpec,
         label = "heightCollapse",
         finishedListener = {
-             if (shouldCollapse) {
+             if (shouldCollapse && collapseAfterDissolve) {
                  // Animation fully done, NOW we dismiss
-                 onDissolveComplete()
-                 DissolveAnimationManager.stopDissolving()
+                 dispatchDissolveCompletionOnce()
              }
         }
     )
@@ -201,14 +245,22 @@ fun DissolvableVideoCard(
     
     LaunchedEffect(isDissolving) {
         if (isDissolving) {
+            hasCompletedCurrentDissolve = false
+            keepContentHidden = false
             // Note: startDissolving is called in onFirstFrame callback to sync jiggle with actual animation
             // Trigger Capture
             if (cardWindowBounds != null) {
                 val window = findWindow(context)
                 if (window != null) {
+                    val captureWidth = cardWindowBounds!!.width()
+                    val captureHeight = cardWindowBounds!!.height()
+                    if (!shouldCreateDissolveBitmap(captureWidth, captureHeight)) {
+                        finishWithoutParticle()
+                        return@LaunchedEffect
+                    }
                     val bitmap = Bitmap.createBitmap(
-                        cardWindowBounds!!.width(), 
-                        cardWindowBounds!!.height(), 
+                        captureWidth,
+                        captureHeight,
                         Bitmap.Config.ARGB_8888
                     )
                     
@@ -224,29 +276,31 @@ fun DissolvableVideoCard(
                                     showGLView = true
                                     // Don't hide content yet, wait for GL view to say "I'm drawing"
                                 } else {
-                                    // Fallback? Just collapse
-                                    shouldCollapse = true
-                                    // onDissolveComplete() // Let animation listener handle it
+                                    finishWithoutParticle()
                                 }
                             },
                             Handler(Looper.getMainLooper())
                         )
                     } catch (e: Exception) {
                          e.printStackTrace()
-                         shouldCollapse = true
+                         finishWithoutParticle()
                     }
                 } else {
-                    shouldCollapse = true // No window found
+                    finishWithoutParticle()
                 }
             } else {
-                shouldCollapse = true // No bounds found
+                finishWithoutParticle()
             }
         } else {
             captureBitmap = null
             showGLView = false
             isGLContentReady = false
             shouldCollapse = false
-            if (cardId.isNotEmpty() && DissolveAnimationManager.dissolvingCardId.value == cardId) {
+            if (
+                publishGlobalState &&
+                cardId.isNotEmpty() &&
+                DissolveAnimationManager.dissolvingCardId.value == cardId
+            ) {
                 DissolveAnimationManager.stopDissolving()
             }
         }
@@ -254,7 +308,11 @@ fun DissolvableVideoCard(
 
     DisposableEffect(cardId) {
         onDispose {
-            if (cardId.isNotEmpty() && DissolveAnimationManager.dissolvingCardId.value == cardId) {
+            if (
+                publishGlobalState &&
+                cardId.isNotEmpty() &&
+                DissolveAnimationManager.dissolvingCardId.value == cardId
+            ) {
                 DissolveAnimationManager.stopDissolving()
             }
         }
@@ -290,7 +348,9 @@ fun DissolvableVideoCard(
         // 1. Content Layer
         // Keep visible until GL view renders first frame (seamless transition)
         Box(
-            modifier = Modifier.alpha(if (isGLContentReady) 0f else 1f)
+            modifier = Modifier.alpha(
+                if (isGLContentReady || keepContentHidden) 0f else 1f
+            )
         ) {
             content()
         }
@@ -312,14 +372,20 @@ fun DissolvableVideoCard(
                         )
                         setCallbacks(
                             complete = {
-                                 // onDissolveComplete() // REMOVED: Don't dismiss yet
-                                 // DissolveAnimationManager.stopDissolving() // REMOVED
-                                 shouldCollapse = true // Trigger collapse animation
+                                 if (collapseAfterDissolve) {
+                                     shouldCollapse = true // Trigger collapse animation
+                                 } else {
+                                     keepContentHidden = keepInvisibleAfterDissolve
+                                     dispatchDissolveCompletionOnce()
+                                 }
                             },
                             firstFrame = {
                                 isGLContentReady = true
                                 // Start jiggle effect on other cards now that animation is visible
-                                if (cardId.isNotEmpty()) {
+                                if (
+                                    publishGlobalState &&
+                                    cardId.isNotEmpty()
+                                ) {
                                     DissolveAnimationManager.startDissolving(cardId)
                                 }
                             }
@@ -339,6 +405,9 @@ fun MaybeDissolvableVideoCard(
     modifier: Modifier = Modifier,
     cardId: String = "",
     preset: DissolveAnimationPreset = DissolveAnimationPreset.CLASSIC,
+    collapseAfterDissolve: Boolean = true,
+    publishGlobalDissolveState: Boolean = true,
+    keepInvisibleAfterDissolve: Boolean = false,
     content: @Composable () -> Unit
 ) {
     if (shouldWrapWithDissolveAnimation(isDissolving)) {
@@ -348,6 +417,9 @@ fun MaybeDissolvableVideoCard(
             modifier = modifier,
             cardId = cardId,
             preset = preset,
+            collapseAfterDissolve = collapseAfterDissolve,
+            publishGlobalDissolveState = publishGlobalDissolveState,
+            keepInvisibleAfterDissolve = keepInvisibleAfterDissolve,
             content = content
         )
     } else {

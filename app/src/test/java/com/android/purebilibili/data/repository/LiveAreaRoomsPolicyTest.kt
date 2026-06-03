@@ -49,4 +49,26 @@ class LiveAreaRoomsPolicyTest {
             resolveLiveAreaRoomsErrorMessage(code = -352, message = "")
         )
     }
+
+    @Test
+    fun `room pagination uses total count when has more flag is absent`() {
+        assertTrue(
+            hasMoreLiveAreaRooms(
+                loadedCount = 30,
+                page = 1,
+                pageSize = 30,
+                hasMoreFlag = 0,
+                totalCount = 438
+            )
+        )
+        assertFalse(
+            hasMoreLiveAreaRooms(
+                loadedCount = 18,
+                page = 15,
+                pageSize = 30,
+                hasMoreFlag = 0,
+                totalCount = 438
+            )
+        )
+    }
 }

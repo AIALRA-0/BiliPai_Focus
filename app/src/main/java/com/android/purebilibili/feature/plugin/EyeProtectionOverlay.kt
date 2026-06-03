@@ -27,7 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -45,17 +45,17 @@ import io.github.alexzhirkevich.cupertino.icons.filled.Moon
 
 @Composable
 fun EyeProtectionOverlay() {
-    val plugins by PluginManager.pluginsFlow.collectAsState()
+    val plugins by PluginManager.pluginsFlow.collectAsStateWithLifecycle()
     val pluginInfo = plugins.find { it.plugin.id == "eye_protection" } ?: return
     val plugin = pluginInfo.plugin as? EyeProtectionPlugin ?: return
     val pluginEnabled = pluginInfo.enabled
-    val settingsPreviewEnabled by plugin.settingsPreviewEnabled.collectAsState()
+    val settingsPreviewEnabled by plugin.settingsPreviewEnabled.collectAsStateWithLifecycle()
     if (!pluginEnabled && !settingsPreviewEnabled) return
 
-    val isNightModeActive by plugin.isNightModeActive.collectAsState()
-    val brightnessLevel by plugin.brightnessLevel.collectAsState()
-    val warmFilterStrength by plugin.warmFilterStrength.collectAsState()
-    val careReminder by plugin.careReminder.collectAsState()
+    val isNightModeActive by plugin.isNightModeActive.collectAsStateWithLifecycle()
+    val brightnessLevel by plugin.brightnessLevel.collectAsStateWithLifecycle()
+    val warmFilterStrength by plugin.warmFilterStrength.collectAsStateWithLifecycle()
+    val careReminder by plugin.careReminder.collectAsStateWithLifecycle()
 
     val darknessAlpha by animateFloatAsState(
         targetValue = (1f - brightnessLevel).coerceIn(0f, 0.7f),

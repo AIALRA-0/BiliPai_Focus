@@ -1,9 +1,5 @@
 package com.android.purebilibili.core.util
 
-import android.os.SystemClock
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 
@@ -37,22 +33,12 @@ object CardPositionManager {
      */
     var lastClickedCardCenter: Offset? = null
         private set
-    
-    /**
-     *  是否正在从视频详情页返回
-     * 用于跳过首页卡片的入场动画
-     */
-    var isReturningFromDetail: Boolean by mutableStateOf(false)
+
+    var lastClickedVideoSourceKey: String? = null
         private set
 
-    /**
-     * 是否命中“极快返回”场景（点击进入后快速返回）。
-     * 用于在返回时降级非封面共享元素，优先保证封面连续可见和帧率。
-     */
-    var isQuickReturnFromDetail: Boolean by mutableStateOf(false)
+    var lastClickedVideoSourceCornerDp: Int? = null
         private set
-
-    private var lastDetailEnterUptimeMs: Long = 0L
     
     /**
      *  是否是单列卡片（故事卡片）
@@ -75,13 +61,6 @@ object CardPositionManager {
         private set
 
     /**
-     * 最近一次进入视频详情时的来源路由（去掉 query 参数）。
-     * 用于按来源路由差异化返回时的封面共享过渡策略。
-     */
-    var lastVideoSourceRoute: String? = null
-        private set
-    
-    /**
      * 记录卡片位置
      * @param bounds 卡片在 Root 坐标系中的边界
      * @param screenWidth 屏幕宽度
@@ -98,11 +77,11 @@ object CardPositionManager {
         density: Float = 3f,
         bottomBarHeightDp: Float = 80f  //  底部导航栏默认高度
     ) {
+        lastClickedVideoSourceKey = null
+        lastClickedVideoSourceCornerDp = null
         lastClickedCardBounds = bounds
         lastScreenDensity = density
         isSingleColumnCard = isSingleColumn
-        lastDetailEnterUptimeMs = SystemClock.uptimeMillis()
-        
         //  [修复] 计算可见区域的底边界（屏幕高度减去底部导航栏）
         val bottomBarHeightPx = bottomBarHeightDp * density
         val visibleBottomPx = screenHeight - bottomBarHeightPx
@@ -123,28 +102,34 @@ object CardPositionManager {
             y = visibleCenterY / screenHeight  //  使用可见部分的中心 Y
         )
     }
-    
-    /**
-     *  标记正在返回
-     */
-    fun markReturning() {
-        isReturningFromDetail = true
-        isQuickReturnFromDetail = shouldUseQuickReturnSharedTransitionPolicy(
-            detailEnterUptimeMs = lastDetailEnterUptimeMs,
-            detailReturnUptimeMs = SystemClock.uptimeMillis()
-        )
-    }
 
-    fun recordVideoSourceRoute(route: String?) {
-        lastVideoSourceRoute = route?.substringBefore("?")
-    }
-    
-    /**
-     *  清除返回标记
-     */
-    fun clearReturning() {
-        isReturningFromDetail = false
-        isQuickReturnFromDetail = false
+    fun recordVideoCardPosition(
+        bvid: String,
+        sourceRoute: String?,
+        bounds: Rect,
+        screenWidth: Float,
+        screenHeight: Float,
+        isSingleColumn: Boolean = false,
+        density: Float = 3f,
+        bottomBarHeightDp: Float = 80f,
+        sourceCornerDp: Int? = null
+    ) {
+        recordCardPosition(
+            bounds = bounds,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            isSingleColumn = isSingleColumn,
+            density = density,
+            bottomBarHeightDp = bottomBarHeightDp
+        )
+        val normalizedBvid = bvid.trim()
+        val normalizedRoute = sourceRoute?.substringBefore("?")?.takeIf { it.isNotBlank() }
+        lastClickedVideoSourceKey = if (normalizedBvid.isNotEmpty() && normalizedRoute != null) {
+            "$normalizedRoute:$normalizedBvid"
+        } else {
+            null
+        }
+        lastClickedVideoSourceCornerDp = sourceCornerDp?.coerceAtLeast(0)
     }
     
     /**
@@ -153,14 +138,8 @@ object CardPositionManager {
     fun clear() {
         lastClickedCardBounds = null
         lastClickedCardCenter = null
-        isReturningFromDetail = false
-        isQuickReturnFromDetail = false
-        lastDetailEnterUptimeMs = 0L
-        lastVideoSourceRoute = null
-    }
-
-    fun shouldLimitSharedElementsForQuickReturn(): Boolean {
-        return isReturningFromDetail && isQuickReturnFromDetail
+        lastClickedVideoSourceKey = null
+        lastClickedVideoSourceCornerDp = null
     }
     
     /**

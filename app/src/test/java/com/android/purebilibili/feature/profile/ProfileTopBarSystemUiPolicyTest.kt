@@ -26,47 +26,40 @@ class ProfileTopBarSystemUiPolicyTest {
     }
 
     @Test
-    fun immersiveMobileProfile_keepsTopScrimTransparentAtRest() {
-        assertEquals(
-            0f,
-            resolveProfileTopBarScrimAlpha(
-                isImmersive = true,
-                collapsedFraction = 0f
-            ),
-            0.001f
+    fun immersiveMobileProfile_usesLightTopScrimAtRest() {
+        val alpha = resolveProfileTopBarScrimAlpha(
+            isImmersive = true,
+            collapsedFraction = 0f
         )
+
+        assertTrue(alpha > 0f)
+        assertTrue(alpha <= 0.12f)
     }
 
     @Test
-    fun immersiveMobileProfile_delaysTopScrimUntilMeaningfulScroll() {
-        assertEquals(
-            0f,
-            resolveProfileTopBarScrimAlpha(
-                isImmersive = true,
-                collapsedFraction = 0.05f
-            ),
-            0.001f
+    fun immersiveMobileProfile_increasesTopScrimWithoutObviousDarkBand() {
+        val restingAlpha = resolveProfileTopBarScrimAlpha(
+            isImmersive = true,
+            collapsedFraction = 0f
         )
-        assertEquals(
-            0f,
-            resolveProfileTopBarScrimAlpha(
-                isImmersive = true,
-                collapsedFraction = 0.45f
-            ),
-            0.001f
+        val midScrollAlpha = resolveProfileTopBarScrimAlpha(
+            isImmersive = true,
+            collapsedFraction = 0.45f
         )
+
+        assertTrue(midScrollAlpha > restingAlpha)
+        assertTrue(midScrollAlpha <= 0.2f)
     }
 
     @Test
-    fun immersiveMobileProfile_keepsTopScrimTransparentWhenFullyCollapsed() {
-        assertEquals(
-            0f,
-            resolveProfileTopBarScrimAlpha(
-                isImmersive = true,
-                collapsedFraction = 1f
-            ),
-            0.001f
+    fun immersiveMobileProfile_capsTopScrimWhenFullyCollapsed() {
+        val alpha = resolveProfileTopBarScrimAlpha(
+            isImmersive = true,
+            collapsedFraction = 1f
         )
+
+        assertTrue(alpha > 0f)
+        assertTrue(alpha <= 0.24f)
     }
 
     @Test

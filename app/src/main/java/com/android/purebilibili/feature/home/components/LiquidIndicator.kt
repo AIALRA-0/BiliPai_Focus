@@ -33,6 +33,7 @@ import com.kyant.backdrop.effects.blur
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
 import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
 
@@ -240,7 +241,6 @@ fun SimpleLiquidIndicator(
     itemWidthPx: Float, // [修复] 使用像素值计算
     isDragging: Boolean,
     velocityPxPerSecond: Float = 0f,
-    startPadding: Dp = 0.dp,
     isLiquidGlassEnabled: Boolean = false,
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     liquidGlassTuning: LiquidGlassTuning? = null,
@@ -271,7 +271,6 @@ fun SimpleLiquidIndicator(
     }
     val minWidthPx = with(density) { minWidth.toPx() }
     val horizontalInsetPx = with(density) { horizontalInset.toPx() }
-    val startPaddingPx = with(density) { startPadding.toPx() }
     val indicatorWidthPx = resolveTopTabIndicatorWidthPx(
         itemWidthPx = itemWidthPx,
         widthRatio = widthRatio,
@@ -286,12 +285,12 @@ fun SimpleLiquidIndicator(
     
     val scale by animateFloatAsState(
         targetValue = 1f + lensProfile.motionFraction * (0.12f * styleTuning.deformationMultiplier),
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        animationSpec = AppMotionTokens.expressiveSpec(),
         label = "scale"
     )
     val indicatorAlphaScale by animateFloatAsState(
         targetValue = if (isLiquidGlassEnabled) 0.92f else 1f,
-        animationSpec = tween(180),
+        animationSpec = AppMotionTokens.standardSpec(),
         label = "indicatorAlphaScale"
     )
     val resolvedIndicatorColor = indicatorColor.copy(
@@ -308,7 +307,7 @@ fun SimpleLiquidIndicator(
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    translationX = startPaddingPx + position * itemWidthPx + centerOffsetPx
+                    translationX = position * itemWidthPx + centerOffsetPx
                     translationY = verticalCenterOffsetPx
                     
                     this.scaleX = scale
@@ -616,10 +615,10 @@ private fun DrawScope.drawLiquidSphereSurface(
         drawRect(
             brush = Brush.horizontalGradient(
                 colors = listOf(
-                    Color(0xFF3DA8FF).copy(alpha = fringe),
+                    lerp(baseColor, Color.White, 0.45f).copy(alpha = fringe),
                     Color.Transparent,
                     Color.Transparent,
-                    Color(0xFFFF4F8F).copy(alpha = fringe)
+                    lerp(baseColor, Color.Black, 0.18f).copy(alpha = fringe)
                 )
             )
         )

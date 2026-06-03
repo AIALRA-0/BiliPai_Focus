@@ -10,6 +10,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -55,8 +56,10 @@ object DownloadManager {
     
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private val client = OkHttpClient.Builder()
+        .protocols(com.android.purebilibili.core.network.NetworkModule.resolveSharedNetworkProtocols())
         .followRedirects(true)
         .build()
+    private val assetDownloader = ResumableAssetDownloader(client)
     
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
@@ -70,6 +73,18 @@ object DownloadManager {
     private var downloadDir: File? = null
     private var tasksFile: File? = null
     private var appContext: Context? = null
+
+    private fun safeExternalFilesRoot(context: Context): File? {
+        return runCatching { context.getExternalFilesDir(null) }
+            .onFailure { error ->
+                com.android.purebilibili.core.util.Logger.w(
+                    "DownloadManager",
+                    "⚠️ External files dir unavailable, falling back to internal storage",
+                    error
+                )
+            }
+            .getOrNull()
+    }
     
     /**
      * 初始化（在 Application 中调用）
@@ -145,15 +160,30 @@ object DownloadManager {
         }
         scheduleNextQueuedDownload()
     }
+
+    fun shouldTreatWorkerCancellationAsFinished(taskId: String): Boolean {
+        val status = _tasks.value[taskId]?.status
+        return resolveDownloadWorkerCancellationDecision(status) == DownloadWorkerCancellationDecision.FINISH
+    }
+
+    fun markInterruptedForRetry(taskId: String, errorMessage: String) {
+        updateTask(taskId) { task ->
+            when (task.status) {
+                DownloadStatus.PAUSED,
+                DownloadStatus.COMPLETED -> task
+                else -> task.copy(status = DownloadStatus.PENDING, errorMessage = errorMessage)
+            }
+        }
+    }
     
     /**
      * 暂停下载
      */
     fun pauseDownload(taskId: String) {
         val context = appContext ?: return
-        // 🔧 [修复] 取消 WorkManager 任务
-        DownloadWorker.cancel(context, taskId)
         updateTask(taskId) { it.copy(status = DownloadStatus.PAUSED) }
+        // 先持久化用户暂停状态，再取消 Worker，避免系统取消回调误判为需要重试。
+        DownloadWorker.cancel(context, taskId)
         scheduleNextQueuedDownload()
     }
     
@@ -221,33 +251,116 @@ object DownloadManager {
         
         // 🖼️ 0. 下载封面图片（用于离线显示）
         try {
+            updateAssetState(task.id, DownloadAssetKind.COVER) {
+                it.copy(status = DownloadAssetStatus.DOWNLOADING, errorMessage = null)
+            }
             if (!coverFile.exists() || coverFile.length() <= 0L) {
                 downloadCoverImage(task.cover, coverFile)
                 com.android.purebilibili.core.util.Logger.d("DownloadManager", "🖼️ Cover downloaded: ${coverFile.name}")
             }
-            updateTask(task.id) { it.copy(localCoverPath = coverFile.absolutePath) }
+            updateTask(task.id) {
+                it.copy(localCoverPath = coverFile.absolutePath)
+                    .withAssetState(
+                        DownloadAssetState(
+                            kind = DownloadAssetKind.COVER,
+                            status = DownloadAssetStatus.COMPLETED,
+                            totalBytes = coverFile.length(),
+                            downloadedBytes = coverFile.length(),
+                            filePath = coverFile.absolutePath
+                        )
+                    )
+            }
         } catch (e: Exception) {
+            updateAssetState(task.id, DownloadAssetKind.COVER) {
+                it.copy(status = DownloadAssetStatus.FAILED, errorMessage = e.message)
+            }
             com.android.purebilibili.core.util.Logger.w("DownloadManager", "⚠️ Cover download failed, will use network URL", e)
+        }
+
+        var localDanmakuSegmentPaths = task.localDanmakuSegmentPaths
+        var localDanmakuMetadataPath = task.localDanmakuMetadataPath
+        try {
+            val danmakuResult = DownloadDanmakuAssetService.download(
+                task = task,
+                taskDir = getTaskDir(task.id),
+                updateState = { state ->
+                    updateTask(task.id, persist = false) { it.withAssetState(state) }
+                }
+            )
+            localDanmakuSegmentPaths = danmakuResult.segmentPaths
+            localDanmakuMetadataPath = danmakuResult.metadataPath
+            updateTask(task.id) {
+                it.copy(
+                    localDanmakuSegmentPaths = localDanmakuSegmentPaths,
+                    localDanmakuMetadataPath = localDanmakuMetadataPath
+                )
+            }
+        } catch (e: Exception) {
+            updateAssetState(task.id, DownloadAssetKind.DANMAKU) {
+                it.copy(status = DownloadAssetStatus.FAILED, errorMessage = e.message ?: "弹幕下载失败")
+            }
+            com.android.purebilibili.core.util.Logger.w("DownloadManager", "⚠️ Danmaku download failed, video download continues", e)
         }
         
         // 1. 下载视频流 (如果不是仅音频模式)
         if (!task.isAudioOnly) {
-            downloadFileWithUrlRefresh(task, isVideoStream = true, file = videoFile) { progress ->
+            val videoResult = downloadFileWithUrlRefresh(task, isVideoStream = true, file = videoFile) { progress ->
                 // 如果不仅音频，总进度 = (video + audio) / 2
                 updateTask(task.id, persist = false) {
                     it.copy(videoProgress = progress, progress = (progress + it.audioProgress) / 2)
+                        .withAssetState(
+                            buildDownloadAssetProgressState(
+                                kind = DownloadAssetKind.VIDEO,
+                                file = videoFile,
+                                progress = progress
+                            )
+                        )
                 }
             }
+            updateTask(task.id, persist = false) {
+                it.withAssetState(
+                    DownloadAssetState(
+                        kind = DownloadAssetKind.VIDEO,
+                        status = DownloadAssetStatus.COMPLETED,
+                        totalBytes = videoResult.totalBytes,
+                        downloadedBytes = videoResult.downloadedBytes,
+                        filePath = videoFile.absolutePath,
+                        segmentCount = videoResult.segmentCount
+                    )
+                )
+            }
         } else {
-             updateTask(task.id, persist = false) { it.copy(videoProgress = 1f) }
+             updateTask(task.id, persist = false) {
+                 it.copy(videoProgress = 1f)
+                     .withAssetState(DownloadAssetState(kind = DownloadAssetKind.VIDEO, status = DownloadAssetStatus.SKIPPED))
+             }
         }
         
         // 2. 下载音频流
-        downloadFileWithUrlRefresh(task, isVideoStream = false, file = audioFile) { progress ->
+        val audioResult = downloadFileWithUrlRefresh(task, isVideoStream = false, file = audioFile) { progress ->
             updateTask(task.id, persist = false) {
                 val totalProgress = if (task.isAudioOnly) progress else (it.videoProgress + progress) / 2
                 it.copy(audioProgress = progress, progress = totalProgress)
+                    .withAssetState(
+                        buildDownloadAssetProgressState(
+                            kind = DownloadAssetKind.AUDIO,
+                            file = audioFile,
+                            progress = progress
+                        )
+                    )
             }
+        }
+        updateTask(task.id, persist = false) {
+            it.withAssetState(
+                DownloadAssetState(
+                    kind = DownloadAssetKind.AUDIO,
+                    status = DownloadAssetStatus.COMPLETED,
+                    totalBytes = audioResult.totalBytes,
+                    downloadedBytes = audioResult.downloadedBytes,
+                    filePath = audioFile.absolutePath,
+                    segmentCount = audioResult.segmentCount
+                )
+            )
         }
         
         // 3. 合并音视频 (或直接处理音频)
@@ -288,7 +401,9 @@ object DownloadManager {
                 progress = 1f,
                 filePath = outputFile.absolutePath,
                 exportedFileUri = exportedUri,
-                fileSize = outputFile.length()
+                fileSize = outputFile.length(),
+                localDanmakuSegmentPaths = localDanmakuSegmentPaths,
+                localDanmakuMetadataPath = localDanmakuMetadataPath
             ) 
         }
         scheduleNextQueuedDownload()
@@ -304,44 +419,21 @@ object DownloadManager {
         file: File, 
         taskId: String,
         onProgress: (Float) -> Unit
-    ) = withContext(Dispatchers.IO) {
+    ): HttpDownloadAssetResult = withContext(Dispatchers.IO) {
         ensureTaskCanRun(taskId)
-
-        // 获取用户 Cookie
-        val sessData = com.android.purebilibili.core.store.TokenManager.sessDataCache ?: ""
-        val biliJct = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
-        val buvid3 = com.android.purebilibili.core.store.TokenManager.buvid3Cache ?: ""
-        val cookieString = buildString {
-            if (sessData.isNotEmpty()) append("SESSDATA=$sessData; ")
-            if (biliJct.isNotEmpty()) append("bili_jct=$biliJct; ")
-            if (buvid3.isNotEmpty()) append("buvid3=$buvid3; ")
-        }
-        
-        // 首先获取文件大小
-        val headRequest = Request.Builder()
-            .url(url)
-            .head()
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Referer", "https://www.bilibili.com")
-            .header("Cookie", cookieString)
-            .build()
-        
-        val headResponse = client.newCall(headRequest).execute()
-        val totalBytes = headResponse.header("Content-Length")?.toLongOrNull() ?: 0L
-        val acceptRanges = headResponse.header("Accept-Ranges").equals("bytes", ignoreCase = true)
-        headResponse.close()
-
-        val plan = resolveResumableDownloadPlan(
-            existingBytes = file.takeIf(File::exists)?.length() ?: 0L,
-            totalBytes = totalBytes,
-            acceptsRanges = acceptRanges
+        assetDownloader.download(
+            request = HttpDownloadAssetRequest(
+                url = url,
+                outputFile = file,
+                headers = buildBilibiliDownloadHeaders()
+            ),
+            ensureActive = { ensureTaskCanRun(taskId) },
+            onProgress = { downloadedBytes, totalBytes ->
+                if (totalBytes > 0L) {
+                    onProgress(downloadedBytes.toFloat() / totalBytes.toFloat())
+                }
+            }
         )
-        if (plan.alreadyComplete) {
-            onProgress(1f)
-            return@withContext
-        }
-
-        downloadFileSingleThread(url, file, cookieString, taskId, plan, onProgress)
     }
 
     private suspend fun downloadFileWithUrlRefresh(
@@ -349,7 +441,7 @@ object DownloadManager {
         isVideoStream: Boolean,
         file: File,
         onProgress: (Float) -> Unit
-    ) {
+    ): HttpDownloadAssetResult {
         var activeTask = task
         var initialUrl = if (isVideoStream) activeTask.videoUrl else activeTask.audioUrl
         if (initialUrl.isBlank()) {
@@ -361,7 +453,7 @@ object DownloadManager {
         }
 
         try {
-            downloadFile(initialUrl, file, task.id, onProgress)
+            return downloadFile(initialUrl, file, task.id, onProgress)
         } catch (error: Exception) {
             if (!shouldRefreshDownloadUrlAfterFailure(error)) throw error
 
@@ -375,7 +467,7 @@ object DownloadManager {
                 "DownloadManager",
                 "🔄 Download URL expired, retrying with refreshed source: task=${task.id}, stream=${if (isVideoStream) "video" else "audio"}"
             )
-            downloadFile(refreshedUrl, file, task.id, onProgress)
+            return downloadFile(refreshedUrl, file, task.id, onProgress)
         }
     }
     
@@ -420,7 +512,7 @@ object DownloadManager {
             return@withContext
         }
 
-        val body = response.body ?: throw Exception("Empty response")
+        val body = response.body
         val totalResponseBytes = plan.totalBytes.takeIf { it > 0L } ?: run {
             val bodyBytes = body.contentLength()
             if (bodyBytes > 0L) bodyBytes + plan.initialDownloadedBytes else 0L
@@ -585,7 +677,8 @@ object DownloadManager {
     
     private fun getTaskDir(taskId: String): File {
         val task = _tasks.value[taskId]
-        val appScopedRoot = appContext?.getExternalFilesDir(null)?.absolutePath
+        val externalRoot = appContext?.let(::safeExternalFilesRoot)
+        val appScopedRoot = externalRoot?.absolutePath
         val legacyCustomPath = if (appScopedRoot != null) {
             sanitizeLegacyCustomPath(task?.customSaveDir, appScopedRoot)
         } else {
@@ -625,11 +718,11 @@ object DownloadManager {
             throw Exception("HTTP ${response.code}")
         }
         
-        response.body?.byteStream()?.use { input ->
+        response.body.byteStream().use { input ->
             FileOutputStream(file).use { output ->
                 input.copyTo(output)
             }
-        } ?: throw Exception("Empty response body")
+        }
     }
     
     private fun updateTask(
@@ -637,17 +730,58 @@ object DownloadManager {
         persist: Boolean = true,
         update: (DownloadTask) -> DownloadTask
     ) {
-        val current = _tasks.value[taskId] ?: return
-        val updated = sanitizeDownloadTask(update(current))
-        _tasks.value = _tasks.value + (taskId to updated)
-        if (persist && shouldPersistDownloadTaskUpdate(current, updated)) {
+        var shouldPersist = false
+        _tasks.update { tasks ->
+            val current = tasks[taskId] ?: return
+            val updated = sanitizeDownloadTask(update(current))
+            shouldPersist = persist && shouldPersistDownloadTaskUpdate(current, updated)
+            tasks + (taskId to updated)
+        }
+        if (shouldPersist) {
             saveTasks()
         }
     }
 
+    private fun updateAssetState(
+        taskId: String,
+        kind: DownloadAssetKind,
+        update: (DownloadAssetState) -> DownloadAssetState
+    ) {
+        updateTask(taskId) { task ->
+            val current = task.assetState(kind) ?: DownloadAssetState(kind = kind)
+            task.withAssetState(update(current))
+        }
+    }
+
+    private fun buildDownloadAssetProgressState(
+        kind: DownloadAssetKind,
+        file: File,
+        progress: Float
+    ): DownloadAssetState {
+        val partFile = File(file.parentFile, "${file.name}.part")
+        val downloadedBytes = partFile.takeIf(File::exists)?.length() ?: file.takeIf(File::exists)?.length() ?: 0L
+        val totalBytes = if (progress > 0f) {
+            (downloadedBytes / progress).toLong()
+        } else {
+            0L
+        }
+        return DownloadAssetState(
+            kind = kind,
+            status = DownloadAssetStatus.DOWNLOADING,
+            totalBytes = totalBytes.coerceAtLeast(downloadedBytes),
+            downloadedBytes = downloadedBytes,
+            filePath = file.absolutePath,
+            tempPath = partFile.absolutePath
+        )
+    }
+
     private fun shouldRefreshDownloadUrlAfterFailure(error: Throwable): Boolean {
         val message = error.message?.lowercase().orEmpty()
-        return message.contains("http 403") || message.contains("forbidden")
+        return message.contains("http 401") ||
+            message.contains("http 403") ||
+            message.contains("http 416") ||
+            message.contains("forbidden") ||
+            message.contains("empty response")
     }
 
     private suspend fun refreshTaskDownloadUrls(task: DownloadTask): DownloadTask {
@@ -747,26 +881,32 @@ object DownloadManager {
      * 解析下载目录 (已提取为辅助方法)
      */
     private fun resolveDownloadDir(context: Context, customPath: String?): File {
-        val defaultDir = File(context.getExternalFilesDir(null), "downloads").apply { mkdirs() }
-        
-        if (customPath.isNullOrBlank()) return defaultDir
-        
         return try {
-            val sanitizedPath = sanitizeLegacyCustomPath(
-                customPath = customPath,
-                appScopedRoot = context.getExternalFilesDir(null)?.absolutePath.orEmpty()
-            ) ?: return defaultDir
-            val customFile = File(sanitizedPath)
-            if ((customFile.exists() || customFile.mkdirs()) && customFile.canWrite()) {
-                com.android.purebilibili.core.util.Logger.d("DownloadManager", "✅ Resolved custom dir: ${customFile.absolutePath}")
-                customFile
+            val resolvedDir = resolveManagedDownloadDirectory(
+                filesDir = context.filesDir,
+                externalFilesRoot = safeExternalFilesRoot(context),
+                customPath = customPath
+            )
+            if (customPath.isNullOrBlank()) {
+                com.android.purebilibili.core.util.Logger.d(
+                    "DownloadManager",
+                    "✅ Resolved managed dir: ${resolvedDir.absolutePath}"
+                )
+            } else if (resolvedDir.absolutePath == customPath) {
+                com.android.purebilibili.core.util.Logger.d(
+                    "DownloadManager",
+                    "✅ Resolved custom dir: ${resolvedDir.absolutePath}"
+                )
             } else {
-                com.android.purebilibili.core.util.Logger.w("DownloadManager", "⚠️ Custom path unavailable/writable: $customPath")
-                defaultDir
+                com.android.purebilibili.core.util.Logger.w(
+                    "DownloadManager",
+                    "⚠️ Custom path unavailable/writable, using fallback: $customPath -> ${resolvedDir.absolutePath}"
+                )
             }
+            resolvedDir
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("DownloadManager", "❌ Failed to resolve custom path: $customPath", e)
-            defaultDir
+            File(context.filesDir, "downloads").apply { mkdirs() }
         }
     }
     
@@ -781,7 +921,7 @@ object DownloadManager {
                 .build()
             
             val response = client.newCall(request).execute()
-            val body = response.body ?: return@withContext false
+            val body = response.body
             val bytes = body.bytes()
             
             // 2. 插入 MediaStore

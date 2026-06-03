@@ -8,7 +8,8 @@ data class FavoriteCollectionRoute(
     val type: String,
     val id: Long,
     val mid: Long,
-    val title: String
+    val title: String,
+    val ownerName: String = ""
 )
 
 internal fun mergeFavoriteFoldersForDisplay(
@@ -54,12 +55,13 @@ internal fun resolveFavoriteFolderMediaId(folder: FavFolder): Long {
 
 internal fun resolveSubscribedFavoriteCollectionRoute(folder: FavFolder): FavoriteCollectionRoute? {
     if (folder.source != FavFolderSource.SUBSCRIBED || folder.type != 21) return null
-    if (folder.id <= 0L || folder.mid <= 0L || folder.title.isBlank()) return null
+    if (folder.id <= 0L || folder.title.isBlank()) return null
     return FavoriteCollectionRoute(
-        type = "season",
+        type = "favorite_season",
         id = folder.id,
         mid = folder.mid,
-        title = folder.title
+        title = folder.title,
+        ownerName = folder.upper?.name.orEmpty()
     )
 }
 
@@ -80,6 +82,7 @@ internal fun resolveFavoriteCollectionRoute(item: VideoItem): FavoriteCollection
         type = "season",
         id = item.collectionId,
         mid = item.collectionMid,
-        title = item.title
+        title = item.title,
+        ownerName = item.owner.name
     )
 }

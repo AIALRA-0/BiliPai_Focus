@@ -30,6 +30,14 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- miuix-blur 内部按高版本声明能力，实际调用由运行时能力检测兜底。 -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
+
+    <queries>
+        <package android:name="com.tencent.mm" />
+        <package android:name="com.tencent.mobileqq" />
+    </queries>
+
     <application
         android:name=".app.PureApplication"
         android:allowBackup="true"
@@ -44,7 +52,7 @@
         android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density"
-        android:enableOnBackInvokedCallback="true"
+        android:enableOnBackInvokedCallback="false"
         tools:targetApi="31">
 
         <!-- 📺 DLNA Cling Service (JitPack/Cling)
@@ -57,6 +65,10 @@
             android:name=".feature.cast.CastBridgeService"
             android:exported="false"
             android:process="${castServiceProcess}" />
+
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.android.purebilibili.feature.plugin.googlecast.CastOptionsProvider" />
 
         <activity
             android:name=".MainActivity"
@@ -170,6 +182,126 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".MainActivitySplashIcon3D"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_3d"
+            android:roundIcon="@mipmap/ic_launcher_3d"
+            android:theme="@style/Theme.PureBiliBili.Splash.Icon3D"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashBiliPai"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_bilipai"
+            android:roundIcon="@mipmap/ic_launcher_bilipai"
+            android:theme="@style/Theme.PureBiliBili.Splash.BiliPai"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashBiliPaiPink"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_bilipai_pink"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_pink"
+            android:theme="@style/Theme.PureBiliBili.Splash.BiliPaiPink"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashBiliPaiWhite"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_bilipai_white"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_white"
+            android:theme="@style/Theme.PureBiliBili.Splash.BiliPaiWhite"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashBiliPaiMonet"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_bilipai_monet"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_monet"
+            android:theme="@style/Theme.PureBiliBili.Splash.BiliPaiMonet"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashFlat"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_flat"
+            android:roundIcon="@mipmap/ic_launcher_flat"
+            android:theme="@style/Theme.PureBiliBili.Splash.Flat"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashTelegramBlue"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_telegram_blue"
+            android:roundIcon="@mipmap/ic_launcher_telegram_blue"
+            android:theme="@style/Theme.PureBiliBili.Splash.TelegramBlue"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashTelegramDark"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_telegram_dark"
+            android:roundIcon="@mipmap/ic_launcher_telegram_dark"
+            android:theme="@style/Theme.PureBiliBili.Splash.TelegramDark"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashYuki"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:theme="@style/Theme.PureBiliBili.Splash.Yuki"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashAnime"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_anime"
+            android:roundIcon="@mipmap/ic_launcher_anime"
+            android:theme="@style/Theme.PureBiliBili.Splash.Anime"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashHeadphone"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_headphone"
+            android:roundIcon="@mipmap/ic_launcher_headphone"
+            android:theme="@style/Theme.PureBiliBili.Splash.Headphone"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashNoIcon"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_3d"
+            android:roundIcon="@mipmap/ic_launcher_3d_round"
+            android:theme="@style/Theme.PureBiliBili.Splash.NoIcon"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
         <!-- Yuki 比心少女 (可在设置中切换) -->
         <activity-alias
             android:name=".MainActivityAliasYuki"
@@ -178,7 +310,7 @@
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashYuki">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -194,7 +326,7 @@
             android:icon="@mipmap/ic_launcher_anime"
             android:roundIcon="@mipmap/ic_launcher_anime"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashAnime">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -210,7 +342,7 @@
             android:icon="@mipmap/ic_launcher_headphone"
             android:roundIcon="@mipmap/ic_launcher_headphone"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashHeadphone">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -225,7 +357,7 @@
             android:icon="@mipmap/ic_launcher_3d"
             android:roundIcon="@mipmap/ic_launcher_3d_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashIcon3D">
         <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -244,7 +376,7 @@
             android:icon="@mipmap/ic_launcher_3d"
             android:roundIcon="@mipmap/ic_launcher_3d_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashIcon3D">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -255,13 +387,13 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".MainActivityAliasBlue"
+            android:name=".MainActivityAliasBiliPai"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_blue"
-            android:roundIcon="@mipmap/ic_launcher_blue_round"
+            android:icon="@mipmap/ic_launcher_bilipai"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashBiliPai">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -269,13 +401,41 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".MainActivityAliasBiliPai"
+            android:name=".MainActivityAliasBiliPaiPink"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_bilipai"
-            android:roundIcon="@mipmap/ic_launcher_bilipai_round"
+            android:icon="@mipmap/ic_launcher_bilipai_pink"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_pink_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashBiliPaiPink">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasBiliPaiWhite"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bilipai_white"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_white_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashBiliPaiWhite">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasBiliPaiMonet"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bilipai_monet"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_monet_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashBiliPaiMonet">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -289,27 +449,12 @@
             android:icon="@mipmap/ic_launcher_flat"
             android:roundIcon="@mipmap/ic_launcher_flat_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashFlat">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityAliasNeon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_neon"
-            android:roundIcon="@mipmap/ic_launcher_neon_round"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
 
         <!-- Telegram Style Aliases -->
         <activity-alias
@@ -319,63 +464,7 @@
             android:icon="@mipmap/ic_launcher_telegram_blue"
             android:roundIcon="@mipmap/ic_launcher_telegram_blue_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityAliasTelegramBlueCoin"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_telegram_blue_coin"
-            android:roundIcon="@mipmap/ic_launcher_telegram_blue_coin_round"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityAliasPink"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_telegram_pink"
-            android:roundIcon="@mipmap/ic_launcher_telegram_pink_round"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        
-        <activity-alias
-            android:name=".MainActivityAliasPurple"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_telegram_purple"
-            android:roundIcon="@mipmap/ic_launcher_telegram_purple_round"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityAliasGreen"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_telegram_green"
-            android:roundIcon="@mipmap/ic_launcher_telegram_green_round"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashTelegramBlue">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -389,7 +478,167 @@
             android:icon="@mipmap/ic_launcher_telegram_dark"
             android:roundIcon="@mipmap/ic_launcher_telegram_dark_round"
             android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".MainActivitySplashTelegramDark">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 无图标启动遮罩入口：桌面图标保持所选图标，系统 Splash 使用透明图标。 -->
+        <activity-alias
+            android:name=".MainActivityAlias3DNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_3d"
+            android:roundIcon="@mipmap/ic_launcher_3d_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasBiliPaiNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bilipai"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasBiliPaiPinkNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bilipai_pink"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_pink_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasBiliPaiWhiteNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bilipai_white"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_white_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasBiliPaiMonetNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bilipai_monet"
+            android:roundIcon="@mipmap/ic_launcher_bilipai_monet_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasFlatNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_flat"
+            android:roundIcon="@mipmap/ic_launcher_flat_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasTelegramBlueNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_blue"
+            android:roundIcon="@mipmap/ic_launcher_telegram_blue_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasDarkNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_dark"
+            android:roundIcon="@mipmap/ic_launcher_telegram_dark_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasYukiNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasAnimeNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_anime"
+            android:roundIcon="@mipmap/ic_launcher_anime"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasHeadphoneNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_headphone"
+            android:roundIcon="@mipmap/ic_launcher_headphone"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
             <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

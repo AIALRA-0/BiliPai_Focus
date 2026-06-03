@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.settings.webdav
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +53,7 @@ import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.ui.IOSAlertDialog
 import com.android.purebilibili.core.ui.IOSDialogAction
+import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.iOSLargeTitleBar
 import com.android.purebilibili.core.ui.components.IOSClickableItem
 import com.android.purebilibili.core.ui.components.IOSDivider
@@ -61,7 +61,7 @@ import com.android.purebilibili.core.ui.components.IOSGroup
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.components.IOSSwitchItem
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 
 private enum class WebDavEditMode {
     SERVER,
@@ -79,7 +79,7 @@ fun WebDavBackupScreen(
     val refreshLabel = stringResource(R.string.common_refresh)
     val saveLabel = stringResource(R.string.common_save)
     val cancelLabel = stringResource(R.string.common_cancel)
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
@@ -113,13 +113,13 @@ fun WebDavBackupScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .globalWallpaperAwareBackground()
     ) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState),
+                .hazeSourceCompat(state = hazeState),
             contentPadding = PaddingValues(top = 118.dp, bottom = 24.dp)
         ) {
             item {
@@ -385,7 +385,7 @@ fun WebDavBackupScreen(
             onDismissRequest = { showRestoreConfirm = false },
             title = { Text("确认恢复最新备份") },
             text = {
-                Text("恢复会覆盖当前本地设置与插件配置；建议先执行一次“立即备份”")
+                Text("恢复会覆盖当前本地设置与插件配置。建议先执行一次“立即备份”。")
             },
             confirmButton = {
                 IOSDialogAction(onClick = {

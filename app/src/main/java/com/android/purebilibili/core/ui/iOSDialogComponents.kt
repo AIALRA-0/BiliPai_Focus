@@ -43,6 +43,7 @@ fun IOSAlertDialog(
     text: @Composable (() -> Unit)? = null,
     confirmButton: @Composable (() -> Unit)? = null,
     dismissButton: @Composable (() -> Unit)? = null,
+    presentationProgress: Float = 1f,
     properties: DialogProperties = DialogProperties()
 ) {
     val uiPreset = LocalUiPreset.current
@@ -69,6 +70,12 @@ fun IOSAlertDialog(
         return
     }
 
+    val progressVisual = resolveInteractiveOverlayProgressVisual(
+        presentationProgress = presentationProgress,
+        surfaceType = InteractiveOverlaySurfaceType.DIALOG,
+        blurActive = false,
+        maxScrimAlpha = 0f
+    )
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties
@@ -77,7 +84,9 @@ fun IOSAlertDialog(
             modifier = Modifier
                 .width(270.dp) // Standard iOS Alert width
                 .clip(RoundedCornerShape(14.dp)),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), // Slightly transparent mimic
+            color = MaterialTheme.colorScheme.surface.copy(
+                alpha = 0.95f * progressVisual.surfaceAlphaMultiplier
+            ), // Slightly transparent mimic
             tonalElevation = 0.dp
         ) {
             Column(

@@ -24,4 +24,46 @@ class DanmakuMergerPolicyTest {
         assertTrue(advanced.isEmpty())
         assertEquals("重复弹幕 x5", (standard.first() as TextData).text)
     }
+
+    @Test
+    fun merge_onlyAppendsCountWhenDuplicateThresholdIsReached() {
+        val items = List(2) { index ->
+            TextData().apply {
+                text = "重复弹幕"
+                showAtTime = index * 100L
+                textColor = 0xFFFFFFFF.toInt()
+                layerType = com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
+            }
+        }
+
+        val (standard, advanced) = DanmakuMerger.merge(
+            list = items,
+            intervalMs = 500L,
+            countThreshold = 3
+        )
+
+        assertEquals(1, standard.size)
+        assertTrue(advanced.isEmpty())
+        assertEquals("重复弹幕", (standard.first() as TextData).text)
+    }
+
+    @Test
+    fun merge_respectsCustomMergeWindow() {
+        val items = List(2) { index ->
+            TextData().apply {
+                text = "重复弹幕"
+                showAtTime = index * 600L
+                textColor = 0xFFFFFFFF.toInt()
+                layerType = com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
+            }
+        }
+
+        val (standard, _) = DanmakuMerger.merge(
+            list = items,
+            intervalMs = 500L,
+            countThreshold = 2
+        )
+
+        assertEquals(2, standard.size)
+    }
 }

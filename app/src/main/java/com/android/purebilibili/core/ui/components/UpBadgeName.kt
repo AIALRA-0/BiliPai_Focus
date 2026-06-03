@@ -51,7 +51,10 @@ fun UpBadgeName(
             verticalAlignment = if (shouldShowMeta) Alignment.Top else Alignment.CenterVertically
         ) {
             if (shouldRenderUserUpBadge(showUpBadge)) {
-                UserUpBadge()
+                UserUpBadge(
+                    containerColor = badgeBackgroundColor,
+                    contentColor = badgeTextColor
+                )
                 Spacer(modifier = Modifier.width(spacing))
             }
 

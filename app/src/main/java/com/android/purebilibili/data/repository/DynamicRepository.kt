@@ -16,10 +16,6 @@ import kotlinx.coroutines.withContext
 object DynamicRepository {
     private val feedPagination = DynamicFeedPaginationRegistry()
     private val userFeedPagination = DynamicUserPaginationRegistry()
-    private const val DYNAMIC_SCREEN_MIN_VISIBLE_ITEMS_PER_REQUEST = 8
-    private const val DYNAMIC_SCREEN_MAX_PAGES_PER_REQUEST = 8
-    private const val HOME_FOLLOW_MIN_VISIBLE_ITEMS_PER_REQUEST = 8
-    private const val HOME_FOLLOW_MAX_PAGES_PER_REQUEST = 6
     
     /**
      * 获取动态列表
@@ -31,24 +27,30 @@ object DynamicRepository {
         type: String = "all"
     ): Result<List<DynamicItem>> = withContext(Dispatchers.IO) {
         try {
-            if (refresh) {
-                feedPagination.reset(scope, type)
+            val refreshUpdateBaseline = if (refresh) {
+                feedPagination.updateBaseline(scope, type)
+            } else {
+                ""
             }
-            
+            val refreshPaginationOffset = if (refresh) {
+                feedPagination.offset(scope, type)
+            } else {
+                ""
+            }
             if (!feedPagination.hasMore(scope, type) && !refresh) {
                 return@withContext Result.success(emptyList())
             }
 
             val visibleItems = mutableListOf<DynamicItem>()
             var pagesFetched = 0
-            val minimumVisibleItems = resolveDynamicFeedMinimumVisibleItems(scope)
-            val maxPages = resolveDynamicFeedMaxPages(scope)
+            var requestOffset = if (refresh) "" else feedPagination.offset(scope, type)
             while (true) {
-                val previousOffset = feedPagination.offset(scope, type)
+                val previousOffset = requestOffset
                 val response = fetchDynamicFeedPageWithRetry {
                     NetworkModule.dynamicApi.getDynamicFeed(
                         type = type,
-                        offset = previousOffset
+                        offset = previousOffset,
+                        updateBaseline = if (previousOffset.isBlank()) refreshUpdateBaseline else ""
                     )
                 }.getOrElse { error ->
                     return@withContext Result.failure(error)
@@ -56,12 +58,33 @@ object DynamicRepository {
 
                 val data = response.data
                 if (data == null) {
-                    feedPagination.update(scope = scope, type = type, offset = previousOffset, hasMore = false)
+                    feedPagination.update(
+                        scope = scope,
+                        type = type,
+                        offset = if (refreshUpdateBaseline.isNotBlank()) {
+                            refreshPaginationOffset
+                        } else {
+                            previousOffset
+                        },
+                        updateBaseline = refreshUpdateBaseline,
+                        hasMore = false
+                    )
                     break
                 }
 
                 // 更新分页状态
-                feedPagination.update(scope = scope, type = type, offset = data.offset, hasMore = data.has_more)
+                requestOffset = data.offset
+                feedPagination.update(
+                    scope = scope,
+                    type = type,
+                    offset = if (refreshUpdateBaseline.isNotBlank()) {
+                        refreshPaginationOffset
+                    } else {
+                        data.offset
+                    },
+                    updateBaseline = data.update_baseline.ifBlank { refreshUpdateBaseline },
+                    hasMore = data.has_more
+                )
 
                 // 过滤不可见的动态
                 visibleItems += data.items.filter { it.visible }
@@ -72,9 +95,7 @@ object DynamicRepository {
                         hasMore = data.has_more,
                         previousOffset = previousOffset,
                         nextOffset = data.offset,
-                        pagesFetched = pagesFetched,
-                        minimumVisibleCount = minimumVisibleItems,
-                        maxPages = maxPages
+                        pagesFetched = pagesFetched
                     )
                 ) {
                     break
@@ -172,9 +193,14 @@ object DynamicRepository {
             if (desktopResponse.code == 0) {
                 val item = desktopResponse.data?.item
                     ?: return@withContext Result.failure(Exception("动态详情为空"))
+                if (shouldFetchOpusDetailForDynamicDetail(item)) {
+                    fetchOpusDetailItem(cleanedId)?.let { return@withContext Result.success(it) }
+                }
                 if (!shouldFallbackForDynamicDetail(item)) {
                     return@withContext Result.success(item)
                 }
+
+                fetchOpusDetailItem(cleanedId)?.let { return@withContext Result.success(it) }
 
                 val fallbackResponse = NetworkModule.dynamicApi.getDynamicDetailFallback(id = cleanedId)
                 if (fallbackResponse.code == 0) {
@@ -187,7 +213,9 @@ object DynamicRepository {
                 return@withContext Result.success(item)
             }
 
-            // desktop 接口失败时降级到 web 详情接口（兼容更多动态类型）
+            // desktop 接口失败时先走图文专用接口，再降级到 web 详情接口。
+            fetchOpusDetailItem(cleanedId)?.let { return@withContext Result.success(it) }
+
             val fallbackResponse = NetworkModule.dynamicApi.getDynamicDetailFallback(id = cleanedId)
             if (fallbackResponse.code == 0) {
                 val item = fallbackResponse.data?.item
@@ -206,6 +234,13 @@ object DynamicRepository {
             Result.failure(e)
         }
     }
+
+    private suspend fun fetchOpusDetailItem(dynamicId: String): DynamicItem? {
+        return runCatching {
+            val response = NetworkModule.dynamicApi.getOpusDetail(id = dynamicId)
+            response.data?.item?.takeIf { response.code == 0 }
+        }.getOrNull()
+    }
     
     /**
      * 是否还有更多数据
@@ -215,6 +250,42 @@ object DynamicRepository {
         type: String = "all"
     ): Boolean {
         return feedPagination.hasMore(scope, type)
+    }
+
+    suspend fun getDynamicUpdateCount(
+        scope: DynamicFeedScope = DynamicFeedScope.DYNAMIC_SCREEN,
+        type: String = "all",
+        advanceBaseline: Boolean = true
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val updateBaseline = feedPagination.updateBaseline(scope, type)
+            val response = fetchDynamicFeedPageWithRetry {
+                NetworkModule.dynamicApi.getDynamicFeed(
+                    type = type,
+                    offset = "",
+                    updateBaseline = updateBaseline
+                )
+            }.getOrElse { error ->
+                return@withContext Result.failure(error)
+            }
+            val data = response.data ?: return@withContext Result.failure(Exception("动态更新数为空"))
+            val nextBaseline = resolveDynamicUpdateCountBaseline(
+                currentBaseline = updateBaseline,
+                responseBaseline = data.update_baseline,
+                advanceBaseline = advanceBaseline
+            )
+            if (nextBaseline.isNotBlank() && nextBaseline != updateBaseline) {
+                feedPagination.updateBaseline(
+                    scope = scope,
+                    type = type,
+                    updateBaseline = nextBaseline
+                )
+            }
+            Result.success(data.update_num.coerceAtLeast(0))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
     }
     
     /**
@@ -294,20 +365,16 @@ object DynamicRepository {
         val message = resolveDynamicFriendlyErrorMessage(code = -1, message = lastError?.message.orEmpty())
         return Result.failure(Exception(message, lastError))
     }
+}
 
-    private fun resolveDynamicFeedMinimumVisibleItems(scope: DynamicFeedScope): Int {
-        return when (scope) {
-            DynamicFeedScope.HOME_FOLLOW -> HOME_FOLLOW_MIN_VISIBLE_ITEMS_PER_REQUEST
-            DynamicFeedScope.DYNAMIC_SCREEN -> DYNAMIC_SCREEN_MIN_VISIBLE_ITEMS_PER_REQUEST
-        }
-    }
-
-    private fun resolveDynamicFeedMaxPages(scope: DynamicFeedScope): Int {
-        return when (scope) {
-            DynamicFeedScope.HOME_FOLLOW -> HOME_FOLLOW_MAX_PAGES_PER_REQUEST
-            DynamicFeedScope.DYNAMIC_SCREEN -> DYNAMIC_SCREEN_MAX_PAGES_PER_REQUEST
-        }
-    }
+internal fun resolveDynamicUpdateCountBaseline(
+    currentBaseline: String,
+    responseBaseline: String,
+    advanceBaseline: Boolean
+): String {
+    if (responseBaseline.isBlank()) return currentBaseline
+    if (advanceBaseline) return responseBaseline
+    return currentBaseline.ifBlank { responseBaseline }
 }
 
 enum class DynamicFeedScope {
@@ -317,6 +384,7 @@ enum class DynamicFeedScope {
 
 internal data class DynamicPaginationState(
     var offset: String = "",
+    var updateBaseline: String = "",
     var hasMore: Boolean = true
 )
 
@@ -332,13 +400,37 @@ internal class DynamicFeedPaginationRegistry {
         stateByScope[DynamicFeedPaginationKey(scope = scope, type = type)] = DynamicPaginationState()
     }
 
-    fun update(scope: DynamicFeedScope, type: String = "all", offset: String, hasMore: Boolean) {
+    fun update(
+        scope: DynamicFeedScope,
+        type: String = "all",
+        offset: String,
+        updateBaseline: String = "",
+        hasMore: Boolean
+    ) {
         stateByScope[DynamicFeedPaginationKey(scope = scope, type = type)] =
-            DynamicPaginationState(offset = offset, hasMore = hasMore)
+            DynamicPaginationState(
+                offset = offset,
+                updateBaseline = updateBaseline,
+                hasMore = hasMore
+            )
     }
 
     fun offset(scope: DynamicFeedScope, type: String = "all"): String {
         return stateByScope[DynamicFeedPaginationKey(scope = scope, type = type)]?.offset.orEmpty()
+    }
+
+    fun updateBaseline(scope: DynamicFeedScope, type: String = "all"): String {
+        return stateByScope[DynamicFeedPaginationKey(scope = scope, type = type)]?.updateBaseline.orEmpty()
+    }
+
+    fun updateBaseline(
+        scope: DynamicFeedScope,
+        type: String = "all",
+        updateBaseline: String
+    ) {
+        val key = DynamicFeedPaginationKey(scope = scope, type = type)
+        val current = stateByScope[key] ?: DynamicPaginationState()
+        stateByScope[key] = current.copy(updateBaseline = updateBaseline)
     }
 
     fun hasMore(scope: DynamicFeedScope, type: String = "all"): Boolean {

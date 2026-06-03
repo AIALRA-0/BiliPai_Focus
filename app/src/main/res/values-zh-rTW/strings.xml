@@ -16,7 +16,7 @@
     <string name="playback_settings_title">播放設定</string>
     <string name="animation_effects_title">動畫與效果</string>
     <string name="icon_settings_title">應用圖示</string>
-    <string name="bottom_bar_management_title">底欄管理</string>
+    <string name="bottom_bar_management_title">導航設定</string>
     <string name="permission_management_title">權限管理</string>
     <string name="plugins_center_title">外掛中心</string>
     <string name="open_source_licenses_title">開源授權</string>
@@ -32,7 +32,7 @@
     <string name="appearance_ui_preset_android_miuix_title">Android 原生 · Miuix</string>
     <string name="appearance_ui_preset_android_miuix_summary">保留 Android 資訊架構，但把頂欄與局部容器切換為更貼近小米系統語義的 Miuix 元件風格。</string>
     <string name="appearance_android_native_variant_title">Android 原生風格</string>
-    <string name="appearance_android_native_variant_subtitle">在 Material 3 與 Miuix 兩種 Android 原生子風格之間切換</string>
+    <string name="appearance_android_native_variant_subtitle">在 Material 3 與 Miuix Android 原生子風格之間切換</string>
     <string name="appearance_android_native_variant_material3">Material 3</string>
     <string name="appearance_android_native_variant_miuix">Miuix</string>
     <string name="appearance_theme_mode_title">主題模式</string>

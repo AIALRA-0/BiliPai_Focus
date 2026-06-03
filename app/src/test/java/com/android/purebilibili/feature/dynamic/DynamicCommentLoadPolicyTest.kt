@@ -42,7 +42,7 @@ class DynamicCommentLoadPolicyTest {
             DynamicCommentLoadAttempt(
                 target = DynamicCommentTarget(oid = 326122895L, type = 11),
                 replies = listOf(ReplyItem(rpid = 1L)),
-                totalCount = 122,
+                totalCount = 9,
                 candidateIndex = 1
             ),
             DynamicCommentLoadAttempt(
@@ -53,9 +53,12 @@ class DynamicCommentLoadPolicyTest {
             )
         )
 
-        val selected = selectPreferredDynamicCommentAttempt(attempts = attempts)
+        val selected = selectPreferredDynamicCommentAttempt(
+            attempts = attempts,
+            expectedCount = 9
+        )
 
-        assertEquals(DynamicCommentTarget(oid = 967717348014293017L, type = 17), selected?.target)
+        assertEquals(DynamicCommentTarget(oid = 326122895L, type = 11), selected?.target)
     }
 
     @Test

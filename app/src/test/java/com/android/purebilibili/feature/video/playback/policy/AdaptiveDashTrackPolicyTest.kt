@@ -69,4 +69,56 @@ class AdaptiveDashTrackPolicyTest {
 
         assertEquals(listOf(80, 64, 32), result.videoTracks.map { it.id })
     }
+
+    @Test
+    fun `high speed resolves hi res preference to standard dash audio`() {
+        val effective = resolveSpeedCompatibleAudioQualityPreference(
+            requestedAudioQuality = 30251,
+            playbackSpeed = 2.0f
+        )
+
+        assertEquals(-1, effective)
+    }
+
+    @Test
+    fun `normal speed keeps hi res preference`() {
+        val effective = resolveSpeedCompatibleAudioQualityPreference(
+            requestedAudioQuality = 30251,
+            playbackSpeed = 1.25f
+        )
+
+        assertEquals(30251, effective)
+    }
+
+    @Test
+    fun `high speed keeps standard audio preference`() {
+        val effective = resolveSpeedCompatibleAudioQualityPreference(
+            requestedAudioQuality = 30280,
+            playbackSpeed = 3.0f
+        )
+
+        assertEquals(30280, effective)
+    }
+
+    @Test
+    fun `premium audio refreshes source when speed compatibility bucket changes`() {
+        val shouldRefresh = shouldRefreshPremiumAudioForPlaybackSpeedChange(
+            requestedAudioQuality = 30251,
+            previousPlaybackSpeed = 1.0f,
+            nextPlaybackSpeed = 2.0f
+        )
+
+        assertEquals(true, shouldRefresh)
+    }
+
+    @Test
+    fun `premium audio does not refresh source inside same speed compatibility bucket`() {
+        val shouldRefresh = shouldRefreshPremiumAudioForPlaybackSpeedChange(
+            requestedAudioQuality = 30251,
+            previousPlaybackSpeed = 2.0f,
+            nextPlaybackSpeed = 3.0f
+        )
+
+        assertEquals(false, shouldRefresh)
+    }
 }

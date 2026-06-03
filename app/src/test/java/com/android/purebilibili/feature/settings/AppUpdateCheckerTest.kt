@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.settings
 
-import com.android.purebilibili.BuildConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,27 +45,6 @@ class AppUpdateCheckerTest {
         assertTrue(AppUpdateChecker.isRemoteNewer("7.0.0 RC", "7.0.0 RC2"))
         assertTrue(AppUpdateChecker.isRemoteNewer("7.0.0 RC", "7.0.0"))
         assertFalse(AppUpdateChecker.isRemoteNewer("7.0.0 RC", "7.0.0 Beta5"))
-    }
-
-    @Test
-    fun `focus subversion should compare within same upstream base version`() {
-        assertTrue(AppUpdateChecker.isRemoteNewer("7.1.0", "7.1.0-focus.1"))
-        assertTrue(AppUpdateChecker.isRemoteNewer("7.1.0-focus.1", "7.1.0-focus.2"))
-        assertFalse(AppUpdateChecker.isRemoteNewer("7.1.0-focus.2", "7.1.0-focus.1"))
-    }
-
-    @Test
-    fun `alpha focus subversion should compare within same prerelease version`() {
-        assertTrue(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3", "8.0.0-Alpha3-focus.1"))
-        assertTrue(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.1", "8.0.0-Alpha3-focus.2"))
-        assertFalse(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.2", "8.0.0-Alpha3-focus.1"))
-        assertFalse(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.2", "8.0.0-Alpha3"))
-    }
-
-    @Test
-    fun `stable release should stay newer than prerelease sibling even with focus suffix`() {
-        assertTrue(AppUpdateChecker.isRemoteNewer("8.0.0-Alpha3-focus.2", "8.0.0"))
-        assertFalse(AppUpdateChecker.isRemoteNewer("8.0.0", "8.0.0-Alpha3-focus.2"))
     }
 
     @Test
@@ -145,24 +123,9 @@ class AppUpdateCheckerTest {
         )
 
         assertEquals("7.0.0 RC2", candidate?.tagName)
-        assertEquals(BuildConfig.FOCUS_REPOSITORY_URL, candidate?.releaseUrl)
+        assertEquals("https://github.com/AIALRA-0/BiliPai_Focus", candidate?.releaseUrl)
         assertTrue(candidate?.releaseNotes?.contains("未创建 GitHub Release") == true)
         assertTrue(candidate?.isPrerelease == true)
-    }
-
-    @Test
-    fun `resolveEndpointCandidates should keep build config endpoint first and append focus fallback`() {
-        val primary = AppUpdateEndpointSet(
-            releasesApi = "https://api.github.com/repos/example/demo/releases",
-            repositoryBuildGradleUrl = "https://raw.githubusercontent.com/example/demo/main/app/build.gradle.kts",
-            repositoryUrl = "https://github.com/example/demo",
-            releasesPageUrl = "https://github.com/example/demo/releases"
-        )
-
-        val candidates = AppUpdateChecker.resolveEndpointCandidates(primary)
-
-        assertEquals("https://github.com/example/demo", candidates.first().repositoryUrl)
-        assertTrue(candidates.any { it.repositoryUrl == "https://github.com/AIALRA-0/BiliPai_Focus" })
     }
 
     @Test

@@ -2,10 +2,15 @@
 package com.android.purebilibili.core.theme
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -13,15 +18,27 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.Md3ColorSource
+import com.android.purebilibili.feature.settings.normalizeMd3CustomColorHex
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamiccolor.ColorSpec
+import com.materialkolor.rememberDynamicColorScheme
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -75,23 +92,69 @@ internal fun resolveEffectiveDynamicColorEnabled(
     uiPreset: UiPreset
 ): Boolean = dynamicColorEnabled
 
+internal fun shouldObserveSystemWallpaperForDynamicColor(
+    dynamicColorActive: Boolean,
+    sdkInt: Int
+): Boolean {
+    return dynamicColorActive && sdkInt >= Build.VERSION_CODES.S
+}
+
+internal fun resolveMd3DynamicColorEnabled(
+    source: Md3ColorSource,
+    sdkInt: Int
+): Boolean {
+    return source == Md3ColorSource.FOLLOW_WALLPAPER && sdkInt >= Build.VERSION_CODES.S
+}
+
+internal fun resolveMd3ThemeSeedColor(
+    source: Md3ColorSource,
+    customColorHex: String,
+    themeColorIndex: Int
+): Color {
+    return when (source) {
+        Md3ColorSource.FOLLOW_WALLPAPER -> ThemeColors.getOrElse(
+            normalizeThemeColorIndex(themeColorIndex)
+        ) { iOSSystemBlue }
+        Md3ColorSource.CUSTOM -> parseMd3CustomColorHex(customColorHex)
+    }
+}
+
+internal fun parseMd3CustomColorHex(
+    rawValue: String
+): Color {
+    val normalized = normalizeMd3CustomColorHex(rawValue)
+    val rgb = normalized.removePrefix("#").toLong(radix = 16)
+    return Color(0xFF000000 or rgb)
+}
+
+internal fun formatMd3CustomColorHex(color: Color): String {
+    val rgb = color.toArgb() and 0x00FFFFFF
+    return "#${rgb.toString(16).uppercase().padStart(6, '0')}"
+}
+
 internal fun resolveMiuixColorSchemeMode(
     themeMode: AppThemeMode,
     dynamicColorEnabled: Boolean
 ): ColorSchemeMode {
+    // Material Kolor resolves both wallpaper and static seed palettes before the
+    // Miuix bridge, so keep Miuix on explicit colors instead of its own Monet mode.
     return when (themeMode) {
-        AppThemeMode.FOLLOW_SYSTEM -> {
-            if (dynamicColorEnabled) ColorSchemeMode.MonetSystem else ColorSchemeMode.System
-        }
-
-        AppThemeMode.LIGHT -> {
-            if (dynamicColorEnabled) ColorSchemeMode.MonetLight else ColorSchemeMode.Light
-        }
-
-        AppThemeMode.DARK -> {
-            if (dynamicColorEnabled) ColorSchemeMode.MonetDark else ColorSchemeMode.Dark
-        }
+        AppThemeMode.FOLLOW_SYSTEM -> ColorSchemeMode.System
+        AppThemeMode.LIGHT -> ColorSchemeMode.Light
+        AppThemeMode.DARK -> ColorSchemeMode.Dark
     }
+}
+
+internal fun resolvePaletteStylePreference(rawValue: String?): PaletteStyle {
+    return runCatching {
+        rawValue?.let(PaletteStyle::valueOf)
+    }.getOrNull() ?: PaletteStyle.TonalSpot
+}
+
+internal fun resolveColorSpecPreference(rawValue: String?): ColorSpec.SpecVersion {
+    return runCatching {
+        rawValue?.let(ColorSpec.SpecVersion::valueOf)
+    }.getOrNull() ?: ColorSpec.SpecVersion.SPEC_2021
 }
 
 internal data class MiuixMaterialBridge(
@@ -429,13 +492,7 @@ internal fun createStaticMd3ColorScheme(
     val source = primaryColor.toHslColorModel()
 
     val scheme = if (darkTheme) {
-        val primary = deriveAccentColor(
-            source = source,
-            hueShift = 0f,
-            saturationScale = 0.90f,
-            lightness = maxOf(source.lightness, 0.78f),
-            minimumSaturation = 0.22f
-        )
+        val primary = primaryColor
         val secondary = deriveAccentColor(
             source = source,
             hueShift = 10f,
@@ -555,6 +612,25 @@ internal fun createStaticMd3ColorScheme(
     }
 }
 
+internal fun alignStaticColorSchemeWithThemePrimary(
+    scheme: ColorScheme,
+    themePrimaryColor: Color,
+    darkTheme: Boolean
+): ColorScheme {
+    val primary = themePrimaryColor
+    val primaryContainer = blendColors(
+        background = scheme.background,
+        foreground = primary,
+        foregroundRatio = if (darkTheme) 0.34f else 0.18f
+    )
+    return scheme.copy(
+        primary = primary,
+        onPrimary = chooseReadableOnColor(primary),
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = chooseReadableOnColor(primaryContainer)
+    )
+}
+
 private fun createMd3DarkColorScheme(primaryColor: Color) = createStaticMd3ColorScheme(
     primaryColor = primaryColor,
     darkTheme = true,
@@ -568,6 +644,94 @@ private fun createMd3LightColorScheme(primaryColor: Color) = createStaticMd3Colo
 )
 
 @Composable
+private fun rememberSystemWallpaperRefreshToken(
+    dynamicColorActive: Boolean
+): Int {
+    val context = LocalContext.current
+    var token by remember { mutableIntStateOf(0) }
+    val shouldObserve = shouldObserveSystemWallpaperForDynamicColor(
+        dynamicColorActive = dynamicColorActive,
+        sdkInt = Build.VERSION.SDK_INT
+    )
+
+    DisposableEffect(context, shouldObserve) {
+        if (!shouldObserve) {
+            return@DisposableEffect onDispose { }
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_WALLPAPER_CHANGED) {
+                    token += 1
+                }
+            }
+        }
+        val filter = IntentFilter(Intent.ACTION_WALLPAPER_CHANGED)
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        onDispose {
+            runCatching {
+                context.unregisterReceiver(receiver)
+            }
+        }
+    }
+
+    return token
+}
+
+@Composable
+private fun rememberKernelSuStyleColorScheme(
+    seedColor: Color,
+    darkTheme: Boolean,
+    amoledDarkTheme: Boolean,
+    paletteStyle: PaletteStyle,
+    colorSpec: ColorSpec.SpecVersion,
+    dynamicBaseScheme: ColorScheme? = null
+): ColorScheme {
+    val scheme = if (dynamicBaseScheme != null) {
+        rememberDynamicColorScheme(
+            seedColor = Color.Unspecified,
+            isDark = darkTheme,
+            isAmoled = amoledDarkTheme,
+            style = paletteStyle,
+            specVersion = colorSpec,
+            primary = dynamicBaseScheme.primary,
+            secondary = dynamicBaseScheme.secondary,
+            tertiary = dynamicBaseScheme.tertiary,
+            neutral = dynamicBaseScheme.surface,
+            neutralVariant = dynamicBaseScheme.surfaceVariant,
+            error = dynamicBaseScheme.error
+        )
+    } else {
+        rememberDynamicColorScheme(
+            seedColor = seedColor,
+            isDark = darkTheme,
+            isAmoled = amoledDarkTheme,
+            style = paletteStyle,
+            specVersion = colorSpec
+        )
+    }
+
+    val readableScheme = if (!darkTheme) {
+        enforceDynamicLightTextContrast(scheme)
+    } else {
+        scheme
+    }
+    return if (dynamicBaseScheme == null) {
+        alignStaticColorSchemeWithThemePrimary(
+            scheme = readableScheme,
+            themePrimaryColor = seedColor,
+            darkTheme = darkTheme
+        )
+    } else {
+        readableScheme
+    }
+}
+
+@Composable
 fun PureBiliBiliTheme(
     uiPreset: UiPreset = UiPreset.IOS,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
@@ -576,45 +740,83 @@ fun PureBiliBiliTheme(
     dynamicColor: Boolean = false,
     amoledDarkTheme: Boolean = false,
     themeColorIndex: Int = 0, //  默认 0 = iOS 蓝色
+    md3ColorSource: Md3ColorSource = if (dynamicColor) {
+        Md3ColorSource.FOLLOW_WALLPAPER
+    } else {
+        Md3ColorSource.CUSTOM
+    },
+    md3CustomColorHex: String = "#007AFF",
+    colorStyle: PaletteStyle = PaletteStyle.TonalSpot,
+    colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2021,
     fontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
+    appFontFileName: String = "",
     content: @Composable () -> Unit
 ) {
-    //  🚀 [修复] 强制监听配置变化 (如更换壁纸触发的资源刷新)
-    // 即使 Activity 不重建，Configuration 也会变化，触发重组从而获取最新的 dynamicColorScheme
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val context = LocalContext.current
     
-    //  获取自定义主题色 (默认 iOS 蓝)
-    val customPrimaryColor = ThemeColors.getOrElse(themeColorIndex) { iOSSystemBlue }
+    //  获取 MD3 主题种子色。跟随壁纸时仍保留旧预设色作为非 S 设备后备。
+    val customPrimaryColor = resolveMd3ThemeSeedColor(
+        source = md3ColorSource,
+        customColorHex = md3CustomColorHex,
+        themeColorIndex = themeColorIndex
+    )
 
-    val renderingProfile = resolveUiRenderingProfile(uiPreset)
     val isDynamicColorActive = resolveEffectiveDynamicColorEnabled(
-        dynamicColorEnabled = dynamicColor,
+        dynamicColorEnabled = resolveMd3DynamicColorEnabled(
+            source = md3ColorSource,
+            sdkInt = Build.VERSION.SDK_INT
+        ),
         amoledDarkTheme = amoledDarkTheme,
         uiPreset = uiPreset
-    ) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    )
     val shapes = resolveMaterialShapes(uiPreset, androidNativeVariant)
+    val appFontFamily = remember(context, appFontFileName) {
+        loadStoredAppFontFamily(context, appFontFileName)
+    }
     val materialTypography = resolveMaterialTypography(
         uiPreset = uiPreset,
         androidNativeVariant = androidNativeVariant
     ).scaled(fontSizePreset.multiplier)
-    val miuixTextStyles = remember(fontSizePreset) {
-        defaultTextStyles().scaled(fontSizePreset.multiplier)
+        .withFontFamily(appFontFamily)
+    val materialMotionScheme = remember(uiPreset, androidNativeVariant) {
+        MotionScheme.standard()
     }
-    val lightMaterialScheme = enforceDynamicLightTextContrast(
-        if (renderingProfile.useMaterialChrome) {
-            createMd3LightColorScheme(customPrimaryColor)
-        } else {
-            createLightColorScheme(customPrimaryColor)
+    val miuixTextStyles = remember(fontSizePreset, appFontFamily) {
+        defaultTextStyles()
+            .scaled(fontSizePreset.multiplier)
+            .withFontFamily(appFontFamily)
+    }
+    val systemWallpaperRefreshToken = rememberSystemWallpaperRefreshToken(isDynamicColorActive)
+    val dynamicLightBaseScheme = if (isDynamicColorActive) {
+        key(systemWallpaperRefreshToken) {
+            dynamicLightColorScheme(context)
         }
-    )
-    val darkMaterialScheme = if (amoledDarkTheme) {
-        createAmoledDarkColorScheme(customPrimaryColor)
-    } else if (renderingProfile.useMaterialChrome) {
-        createMd3DarkColorScheme(customPrimaryColor)
     } else {
-        createDarkColorScheme(customPrimaryColor)
+        null
     }
+    val dynamicDarkBaseScheme = if (isDynamicColorActive) {
+        key(systemWallpaperRefreshToken) {
+            dynamicDarkColorScheme(context)
+        }
+    } else {
+        null
+    }
+    val lightMaterialScheme = rememberKernelSuStyleColorScheme(
+        seedColor = customPrimaryColor,
+        darkTheme = false,
+        amoledDarkTheme = false,
+        paletteStyle = colorStyle,
+        colorSpec = colorSpec,
+        dynamicBaseScheme = dynamicLightBaseScheme
+    )
+    val darkMaterialScheme = rememberKernelSuStyleColorScheme(
+        seedColor = customPrimaryColor,
+        darkTheme = true,
+        amoledDarkTheme = amoledDarkTheme,
+        paletteStyle = colorStyle,
+        colorSpec = colorSpec,
+        dynamicBaseScheme = dynamicDarkBaseScheme
+    )
 
     val staticMaterialScheme = if (darkTheme) darkMaterialScheme else lightMaterialScheme
     val miuixLightColors = remember(lightMaterialScheme) {
@@ -646,16 +848,7 @@ fun PureBiliBiliTheme(
             isDark = darkTheme
         )
     }
-    val materialColorScheme = if (isDynamicColorActive) {
-        if (darkTheme) {
-            val dynamicDark = dynamicDarkColorScheme(context)
-            if (amoledDarkTheme) applyAmoledSurfaceOverrides(dynamicDark) else dynamicDark
-        } else {
-            enforceDynamicLightTextContrast(dynamicLightColorScheme(context))
-        }
-    } else {
-        staticMaterialScheme
-    }
+    val materialColorScheme = staticMaterialScheme
 
     //  [新增] 动态设置状态栏图标颜色
     val view = LocalView.current
@@ -686,6 +879,7 @@ fun PureBiliBiliTheme(
                 colorScheme = materialColorScheme,
                 typography = materialTypography,
                 shapes = shapes,
+                motionScheme = materialMotionScheme,
                 content = content
             )
         }

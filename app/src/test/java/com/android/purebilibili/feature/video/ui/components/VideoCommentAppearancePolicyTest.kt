@@ -21,7 +21,6 @@ class VideoCommentAppearancePolicyTest {
 
         assertEquals(Color(0xFFFFFFFF), appearance.panelColor)
         assertEquals(Color(0xFFF1F2F4).copy(alpha = 0.40f), appearance.composerHintBackgroundColor)
-        assertEquals(Color(0xFFF1F2F4).copy(alpha = 0.50f), appearance.segmentedBackgroundColor)
         assertEquals(Color(0xFFD9DCE3), appearance.dividerColor)
         assertEquals(Color(0xFF1B1C1F), appearance.primaryTextColor)
         assertEquals(Color(0xFF6A6F76), appearance.secondaryTextColor)

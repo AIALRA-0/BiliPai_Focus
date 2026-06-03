@@ -6,9 +6,9 @@ import kotlin.test.assertEquals
 class HomeReturnAnimationPolicyTest {
 
     @Test
-    fun quickReturn_withTransition_usesLongerSuppressionOnPhone() {
+    fun quickReturn_withTransition_usesSharedElementSoftLandingSuppressionOnPhone() {
         assertEquals(
-            380L,
+            420L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = false,
                 cardAnimationEnabled = true,
@@ -19,9 +19,9 @@ class HomeReturnAnimationPolicyTest {
     }
 
     @Test
-    fun quickReturn_withTransition_usesLongerSuppressionOnTablet() {
+    fun quickReturn_withTransition_usesSharedElementSoftLandingSuppressionOnTablet() {
         assertEquals(
-            500L,
+            540L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = true,
                 cardAnimationEnabled = true,
@@ -34,7 +34,7 @@ class HomeReturnAnimationPolicyTest {
     @Test
     fun normalReturn_usesOriginalDurations() {
         assertEquals(
-            360L,
+            400L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = false,
                 cardAnimationEnabled = true,
@@ -76,19 +76,26 @@ class HomeReturnAnimationPolicyTest {
     }
 
     @Test
-    fun bottomBarRestoreDelay_respectsTransitionMode() {
+    fun contentInteractionRestore_doesNotWaitForSharedElementSuppression() {
         assertEquals(
-            150L,
-            resolveBottomBarRestoreDelayMs(
-                cardTransitionEnabled = false,
+            0L,
+            resolveHomeContentInteractionRestoreDelayMs(
+                cardTransitionEnabled = true,
                 isQuickReturnFromDetail = false
             )
         )
         assertEquals(
-            300L,
-            resolveBottomBarRestoreDelayMs(
+            0L,
+            resolveHomeContentInteractionRestoreDelayMs(
                 cardTransitionEnabled = true,
                 isQuickReturnFromDetail = true
+            )
+        )
+        assertEquals(
+            0L,
+            resolveHomeContentInteractionRestoreDelayMs(
+                cardTransitionEnabled = false,
+                isQuickReturnFromDetail = false
             )
         )
     }

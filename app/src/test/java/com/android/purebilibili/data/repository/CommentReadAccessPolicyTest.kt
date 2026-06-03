@@ -60,6 +60,34 @@ class CommentReadAccessPolicyTest {
     }
 
     @Test
+    fun `empty renderable success falls back when total count exists`() {
+        assertTrue(
+            shouldFallbackCommentReadOnEmptyRenderableSuccess(
+                responseCode = 0,
+                data = ReplyData(
+                    cursor = ReplyCursor(allCount = 6118, isEnd = true, next = 0),
+                    replies = emptyList(),
+                    hots = emptyList()
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `empty renderable success does not fall back for truly empty comment area`() {
+        assertFalse(
+            shouldFallbackCommentReadOnEmptyRenderableSuccess(
+                responseCode = 0,
+                data = ReplyData(
+                    cursor = ReplyCursor(allCount = 0, isEnd = true, next = 0),
+                    replies = emptyList(),
+                    hots = emptyList()
+                )
+            )
+        )
+    }
+
+    @Test
     fun `guest hot comment read keeps payload when renderable comments exist`() {
         assertFalse(
             shouldFallbackGuestHotCommentReadOnEmptySuccess(

@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.network.socket
 
+import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.core.network.NetworkModule
 import kotlinx.coroutines.CoroutineScope
@@ -33,7 +34,8 @@ import kotlin.math.pow
  * 4. 消息分发 (Backpressure Support)
  */
 class LiveDanmakuClient(
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val clockMs: () -> Long = { SystemClock.elapsedRealtime() }
 ) {
     private val TAG = "LiveDanmakuClient"
     private var webSocket: WebSocket? = null
@@ -53,6 +55,11 @@ class LiveDanmakuClient(
     
     // 心跳任务
     private var heartbeatJob: Job? = null
+
+    // 健康检查任务：直播间安静时仍应收到心跳回复，长时间无任何服务端帧视为静默断流。
+    private var healthCheckJob: Job? = null
+    @Volatile
+    private var connectionHealth = LiveDanmakuConnectionHealth()
     
     // 当前连接参数
     private var currentHostUrl: String = ""
@@ -81,12 +88,14 @@ class LiveDanmakuClient(
             _isConnected.set(true)
             retryCount = 0 // 重置重连计数
             suppressReconnect = false
+            connectionHealth = markLiveDanmakuConnected(connectionHealth, clockMs())
             
             // 发送认证包
             sendAuthPacket()
             
             // 启动心跳
             startHeartbeat()
+            startHealthCheck()
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
@@ -97,6 +106,7 @@ class LiveDanmakuClient(
             Log.d(TAG, "🔴 WebSocket Closed: $code - $reason")
             _isConnected.set(false)
             stopHeartbeat()
+            stopHealthCheck()
             // 只有非正常关闭且未标记抑制重连才重连
             if (code != 1000 && !suppressReconnect) {
                 scheduleReconnect()
@@ -108,6 +118,7 @@ class LiveDanmakuClient(
             Log.e(TAG, "❌ WebSocket Failure: ${t.message}")
             _isConnected.set(false)
             stopHeartbeat()
+            stopHealthCheck()
             if (!suppressReconnect) {
                 scheduleReconnect()
             }
@@ -138,12 +149,18 @@ class LiveDanmakuClient(
         
         this.currentHostUrl = url
         this.currentAuthBody = authJson.toString()
-        
+
+        reconnectJob?.cancel()
         internalConnect()
     }
     
     private fun internalConnect() {
-        disconnect() // 先断开旧连接
+        closeCurrentConnection(
+            suppressNextReconnect = true,
+            markUserDisconnect = false,
+            cancelReconnectJob = false
+        )
+        suppressReconnect = false
         
         Log.d(TAG, "🔗 Connecting to $currentHostUrl...")
         val request = Request.Builder()
@@ -160,9 +177,27 @@ class LiveDanmakuClient(
      */
     fun disconnect() {
         Log.d(TAG, "🔌 Disconnecting...")
+        closeCurrentConnection(
+            suppressNextReconnect = true,
+            markUserDisconnect = true,
+            cancelReconnectJob = true
+        )
+    }
+
+    private fun closeCurrentConnection(
+        suppressNextReconnect: Boolean,
+        markUserDisconnect: Boolean,
+        cancelReconnectJob: Boolean
+    ) {
         stopHeartbeat()
-        reconnectJob?.cancel()
-        suppressReconnect = true
+        stopHealthCheck()
+        if (cancelReconnectJob) {
+            reconnectJob?.cancel()
+        }
+        suppressReconnect = suppressNextReconnect
+        if (markUserDisconnect) {
+            connectionHealth = markLiveDanmakuDisconnectedByUser(connectionHealth)
+        }
         webSocket?.close(1000, "Normal Closure")
         webSocket = null
         _isConnected.set(false)
@@ -203,6 +238,32 @@ class LiveDanmakuClient(
     
     private fun stopHeartbeat() {
         heartbeatJob?.cancel()
+    }
+
+    private fun startHealthCheck() {
+        stopHealthCheck()
+        healthCheckJob = scope.launch(Dispatchers.IO) {
+            while (isActive && isConnected) {
+                delay(LIVE_DANMAKU_HEALTH_CHECK_INTERVAL_MS)
+                if (!isActive || !isConnected) break
+                val action = resolveLiveDanmakuHealthAction(
+                    health = connectionHealth,
+                    nowMs = clockMs()
+                )
+                if (action == LiveDanmakuHealthAction.RECONNECT) {
+                    Log.w(TAG, "⚠️ Live danmaku silent, reconnecting...")
+                    _isConnected.set(false)
+                    stopHeartbeat()
+                    webSocket?.close(4000, "Silent Connection")
+                    scheduleReconnect()
+                    break
+                }
+            }
+        }
+    }
+
+    private fun stopHealthCheck() {
+        healthCheckJob?.cancel()
     }
     
     /**
@@ -249,6 +310,7 @@ class LiveDanmakuClient(
             packets.forEach { packet ->
                 when (packet.operation) {
                     DanmakuProtocol.OP_HEARTBEAT_REPLY -> {
+                        connectionHealth = markLiveDanmakuHeartbeatReply(connectionHealth, clockMs())
                         // 心跳回应，Body 前4字节为人气值
                         if (packet.body.size >= 4) {
                             val popularity = ByteBuffer.wrap(packet.body).order(java.nio.ByteOrder.BIG_ENDIAN).int
@@ -269,6 +331,7 @@ class LiveDanmakuClient(
                         }
                     }
                     DanmakuProtocol.OP_MESSAGE -> {
+                        connectionHealth = markLiveDanmakuBusinessMessage(connectionHealth, clockMs())
                         // 所有的业务消息通知 (弹幕、礼物等)
                         // 缓冲区满时丢弃最旧消息，优先保留最新弹幕
                         _messageFlow.tryEmit(packet)
@@ -287,6 +350,7 @@ class LiveDanmakuClient(
     }
 
     private fun onIncomingMessage(bytes: ByteString) {
+        connectionHealth = markLiveDanmakuServerFrameReceived(connectionHealth, clockMs())
         enqueueMessageFrame(bytes.toByteArray())
     }
 }

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -67,13 +68,14 @@ class CacheClearUiPolicyTest {
             imageDiskCache = 3L * 1024 * 1024,
             imageMemoryCache = 512L * 1024,
             httpCache = 4L * 1024 * 1024,
+            playbackMediaCache = 6L * 1024 * 1024,
             otherCache = 7L * 1024 * 1024,
             playUrlMemoryCache = 256L * 1024,
             subtitleDanmakuMemoryCache = 768L * 1024
         )
 
         assertEquals(
-            (4L * 1024 * 1024) + (256L * 1024),
+            (4L * 1024 * 1024) + (6L * 1024 * 1024) + (256L * 1024),
             resolveSelectedCacheBytes(
                 breakdown = breakdown,
                 selectedTargets = setOf(
@@ -90,6 +92,7 @@ class CacheClearUiPolicyTest {
             imageDiskCache = 2L * 1024 * 1024,
             imageMemoryCache = 0L,
             httpCache = 1536L * 1024,
+            playbackMediaCache = 2L * 1024 * 1024,
             otherCache = 5L * 1024 * 1024,
             playUrlMemoryCache = 512L * 1024,
             subtitleDanmakuMemoryCache = 0L
@@ -103,7 +106,7 @@ class CacheClearUiPolicyTest {
             )
         )
         assertEquals(
-            "已选缓存：6.5 MB",
+            "已选缓存：8.5 MB",
             resolveSelectedCacheSizeSummary(
                 breakdown = breakdown,
                 selectedTargets = setOf(
@@ -112,5 +115,25 @@ class CacheClearUiPolicyTest {
                 )
             )
         )
+    }
+
+    @Test
+    fun cacheClearAnimationDialog_drawsBehindSystemBars() {
+        val source = loadCacheClearAnimationSource()
+
+        assertTrue(
+            source.contains("decorFitsSystemWindows = false"),
+            "Cache clear animation dialog should be edge-to-edge so the scrim covers status and navigation bars"
+        )
+    }
+
+    private fun loadCacheClearAnimationSource(): String {
+        val candidates = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/ui/CacheClearAnimation.kt")
+        )
+        val sourceFile = candidates.firstOrNull { it.exists() }
+            ?: error("Cannot locate CacheClearAnimation.kt from ${File(".").absolutePath}")
+        return sourceFile.readText()
     }
 }

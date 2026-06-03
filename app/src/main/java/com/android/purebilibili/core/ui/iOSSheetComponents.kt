@@ -123,13 +123,31 @@ fun IOSModalBottomSheet(
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     containerColor: Color = MaterialTheme.colorScheme.surface,
     scrimColor: Color = BottomSheetDefaults.ScrimColor,
+    presentationProgress: Float = 1f,
     dragHandle: @Composable (() -> Unit)? = { IOSDragHandle() },
-    windowInsets: androidx.compose.foundation.layout.WindowInsets = androidx.compose.material3.BottomSheetDefaults.windowInsets,
+    windowInsets: androidx.compose.foundation.layout.WindowInsets = androidx.compose.material3.BottomSheetDefaults.modalWindowInsets,
     content: @Composable () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
     val androidNativeVariant = LocalAndroidNativeVariant.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveBottomSheetVisualSpec(uiPreset) }
+    val progressVisual = resolveInteractiveOverlayProgressVisual(
+        presentationProgress = presentationProgress,
+        surfaceType = InteractiveOverlaySurfaceType.BOTTOM_SHEET,
+        blurActive = true,
+        maxScrimAlpha = scrimColor.alpha
+    )
+    val resolvedContainerColor = if (uiPreset == UiPreset.MD3) {
+        if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
+            MaterialTheme.colorScheme.surfaceContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        }
+    } else {
+        containerColor
+    }.let { color ->
+        color.copy(alpha = color.alpha * progressVisual.surfaceAlphaMultiplier)
+    }
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
@@ -138,16 +156,8 @@ fun IOSModalBottomSheet(
             topStart = visualSpec.cornerRadiusDp.dp,
             topEnd = visualSpec.cornerRadiusDp.dp
         ),
-        containerColor = if (uiPreset == UiPreset.MD3) {
-            if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
-                MaterialTheme.colorScheme.surfaceContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            }
-        } else {
-            containerColor
-        },
-        scrimColor = scrimColor,
+        containerColor = resolvedContainerColor,
+        scrimColor = scrimColor.copy(alpha = progressVisual.scrimAlpha),
         dragHandle = if (visualSpec.useMaterialDragHandle) {
             if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
                 { IOSDragHandle() }

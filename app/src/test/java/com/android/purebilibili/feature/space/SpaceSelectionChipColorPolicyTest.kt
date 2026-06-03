@@ -64,10 +64,12 @@ class SpaceSelectionChipColorPolicyTest {
     }
 
     @Test
-    fun `followed button uses theme aware secondary container`() {
+    fun `followed button uses neutral container to match inactive controls`() {
         val scheme = darkColorScheme(
             secondaryContainer = Color(0xFF3D2F14),
             onSecondaryContainer = Color(0xFFFFDFA0),
+            surfaceVariant = Color(0xFF322427),
+            onSurfaceVariant = Color(0xFFE8C6CD),
             primary = Color(0xFF9FCBFF),
             onPrimary = Color(0xFF003258)
         )
@@ -75,22 +77,10 @@ class SpaceSelectionChipColorPolicyTest {
         val followed = resolveSpaceFollowButtonColors(isFollowed = true, colorScheme = scheme)
         val unfollowed = resolveSpaceFollowButtonColors(isFollowed = false, colorScheme = scheme)
 
-        assertEquals(scheme.secondaryContainer, followed.backgroundColor)
-        assertEquals(scheme.onSecondaryContainer, followed.textColor)
+        assertEquals(scheme.surfaceVariant, followed.backgroundColor)
+        assertEquals(scheme.onSurfaceVariant, followed.textColor)
         assertEquals(scheme.primary, unfollowed.backgroundColor)
         assertEquals(scheme.onPrimary, unfollowed.textColor)
     }
 
-    @Test
-    fun `official tag uses theme aware tertiary container`() {
-        val scheme = darkColorScheme(
-            tertiaryContainer = Color(0xFF4A3420),
-            onTertiaryContainer = Color(0xFFFFDCC4)
-        )
-
-        val colors = resolveSpaceOfficialTagColors(scheme)
-
-        assertEquals(scheme.tertiaryContainer, colors.backgroundColor)
-        assertEquals(scheme.onTertiaryContainer, colors.textColor)
-    }
 }

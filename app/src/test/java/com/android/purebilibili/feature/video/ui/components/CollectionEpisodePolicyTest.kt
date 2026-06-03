@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.data.model.response.UgcEpisode
+import com.android.purebilibili.data.model.response.UgcEpisodeArc
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.UgcSection
 import kotlin.test.Test
@@ -91,5 +92,35 @@ class CollectionEpisodePolicyTest {
         )
 
         assertEquals(20L, result)
+    }
+
+    @Test
+    fun `publish time text uses arc pubdate`() {
+        val result = resolveCollectionEpisodePublishTimeText(
+            episode = UgcEpisode(arc = UgcEpisodeArc(pubdate = 1_715_427_472L)),
+            nowMs = 1_715_427_472_000L + 2 * 86_400_000L
+        )
+
+        assertEquals("发布于 2天前", result)
+    }
+
+    @Test
+    fun `publish time text falls back to arc ctime`() {
+        val result = resolveCollectionEpisodePublishTimeText(
+            episode = UgcEpisode(arc = UgcEpisodeArc(ctime = 1_715_427_000L)),
+            nowMs = 1_715_427_000_000L + 3 * 86_400_000L
+        )
+
+        assertEquals("发布于 3天前", result)
+    }
+
+    @Test
+    fun `publish time text is blank without timestamp`() {
+        val result = resolveCollectionEpisodePublishTimeText(
+            episode = UgcEpisode(arc = UgcEpisodeArc()),
+            nowMs = 1_715_427_000_000L
+        )
+
+        assertEquals("", result)
     }
 }

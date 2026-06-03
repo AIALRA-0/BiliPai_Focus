@@ -133,4 +133,103 @@ class TopTabIndicatorGeometryTest {
             0.01f
         )
     }
+
+    @Test
+    fun `floating top tab no longer reserves inner dock spacing`() {
+        assertEquals(0f, resolveTopTabRowHorizontalPaddingDp(isFloatingStyle = true), 0.01f)
+    }
+
+    @Test
+    fun `top tab dock indicator uses flatter geometry with outer chrome`() {
+        assertEquals(
+            3f,
+            resolveTopTabDockIndicatorHorizontalGapDp(hasOuterChromeSurface = true),
+            0.01f
+        )
+        assertEquals(
+            10f,
+            resolveTopTabDockIndicatorVerticalGapDp(hasOuterChromeSurface = true),
+            0.01f
+        )
+    }
+
+    @Test
+    fun `top tab dock indicator preserves legacy gap without outer dock`() {
+        assertEquals(
+            3f,
+            resolveTopTabDockIndicatorHorizontalGapDp(hasOuterChromeSurface = false),
+            0.01f
+        )
+        assertEquals(
+            4f,
+            resolveTopTabDockIndicatorVerticalGapDp(hasOuterChromeSurface = false),
+            0.01f
+        )
+    }
+
+    @Test
+    fun `top tab dock indicator leaves gap inside each slot`() {
+        val horizontalGap = resolveTopTabDockIndicatorHorizontalGapDp(
+            hasOuterChromeSurface = true
+        )
+        val verticalGap = resolveTopTabDockIndicatorVerticalGapDp(
+            hasOuterChromeSurface = true
+        )
+        val width = resolveTopTabDockIndicatorWidthDp(
+            itemWidthDp = 96f,
+            horizontalGapDp = horizontalGap
+        )
+        val height = resolveTopTabDockIndicatorHeightDp(
+            rowHeightDp = 56f,
+            verticalGapDp = verticalGap,
+            minHeightDp = 2f
+        )
+
+        assertEquals(90f, width, 0.01f)
+        assertEquals(36f, height, 0.01f)
+    }
+
+    @Test
+    fun `top tab dock indicator translation starts after inner gap`() {
+        val horizontalGap = resolveTopTabDockIndicatorHorizontalGapDp(
+            hasOuterChromeSurface = true
+        )
+
+        assertEquals(
+            35f,
+            resolveTopTabDockIndicatorOffsetPx(
+                slotTranslationPx = 32f,
+                horizontalGapPx = horizontalGap
+            ),
+            0.01f
+        )
+    }
+
+    @Test
+    fun `md3 top tab row stays vertically centered inside outer chrome`() {
+        assertEquals(
+            0f,
+            resolveMd3TopTabRowVerticalTranslationDp(
+                skinPlainStyle = false,
+                hasOuterChromeSurface = true
+            ),
+            0.01f
+        )
+        assertEquals(
+            -4f,
+            resolveMd3TopTabRowVerticalTranslationDp(
+                skinPlainStyle = false,
+                hasOuterChromeSurface = false
+            ),
+            0.01f
+        )
+        assertEquals(
+            0f,
+            resolveMd3TopTabRowVerticalTranslationDp(
+                skinPlainStyle = true,
+                hasOuterChromeSurface = false
+            ),
+            0.01f
+        )
+    }
 }

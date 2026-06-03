@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 320" width="1400" height="320">
+  <rect width="1400" height="320" fill="#FFFFFF"/>
+
+  <rect x="120" y="56" width="48" height="2" fill="#007AFF"/>
+  <text x="180" y="64" font-family="-apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif" font-size="13" fill="#8E8E93" letter-spacing="2">BILIPAI · v8.0.6 · ANDROID</text>
+
+  <text x="120" y="180" font-family="Georgia, 'Times New Roman', serif" font-size="108" font-weight="400" fill="#0A0A0A" letter-spacing="-3">BiliPai</text>
+  <circle cx="478" cy="148" r="7" fill="#007AFF"/>
+
+  <text x="120" y="232" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="24" font-weight="300" fill="#1C1C1E" letter-spacing="0.3">原生 · 纯净 · 可扩展</text>
+  <text x="120" y="266" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="17" fill="#8E8E93">A native, calm Bilibili client for Android.</text>
+
+  <rect x="120" y="296" width="1160" height="1" fill="#E5E5EA"/>
+</svg>

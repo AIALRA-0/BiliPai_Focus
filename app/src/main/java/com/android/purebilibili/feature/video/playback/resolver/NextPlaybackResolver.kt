@@ -68,7 +68,12 @@ internal fun resolvePlaybackNavigationTargets(
     hasPlaylistTarget: Boolean
 ): List<PlaybackNavigationTarget> {
     if (strategy == AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST) {
-        return listOf(PlaybackNavigationTarget.DIRECT_QUEUE)
+        return buildList {
+            if (hasPageOrSeasonTarget) {
+                add(PlaybackNavigationTarget.PAGE_OR_SEASON)
+            }
+            add(PlaybackNavigationTarget.DIRECT_QUEUE)
+        }
     }
 
     return buildList {

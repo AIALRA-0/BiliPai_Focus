@@ -63,7 +63,25 @@ class HomeVideoNavigationPolicyTest {
         val route = resolveHomeVideoRoute(request)
 
         assertEquals(
-            "video/BV1route?cid=88&cover=https%3A%2F%2Fimg.test.com%2Fa+b.jpg&startAudio=false&autoPortrait=true&fullscreen=false&resumePositionMs=0&commentRootRpid=0",
+            "video/BV1route?cid=88&cover=https%3A%2F%2Fimg.test.com%2Fa+b.jpg&startAudio=false&autoPortrait=true&fullscreen=false&resumePositionMs=0&commentRootRpid=0&commentTargetRpid=0",
+            route
+        )
+    }
+
+    @Test
+    fun resolveRoute_marksVerticalHomeVideoForInitialPortraitEntry() {
+        val request = HomeVideoClickRequest(
+            bvid = "BV1portrait",
+            cid = 66L,
+            coverUrl = "https://img.test.com/portrait.jpg",
+            isVerticalVideo = true,
+            source = HomeVideoClickSource.GRID
+        )
+
+        val route = resolveHomeVideoRoute(request)
+
+        assertEquals(
+            "video/BV1portrait?cid=66&cover=https%3A%2F%2Fimg.test.com%2Fportrait.jpg&startAudio=false&autoPortrait=true&fullscreen=false&resumePositionMs=0&commentRootRpid=0&commentTargetRpid=0&initialVertical=true",
             route
         )
     }
@@ -96,7 +114,7 @@ class HomeVideoNavigationPolicyTest {
 
         assertTrue(target is HomeNavigationTarget.Video)
         assertEquals(
-            "video/BV1route?cid=88&cover=https%3A%2F%2Fimg.test.com%2Fa+b.jpg&startAudio=false&autoPortrait=true&fullscreen=false&resumePositionMs=0&commentRootRpid=0",
+            "video/BV1route?cid=88&cover=https%3A%2F%2Fimg.test.com%2Fa+b.jpg&startAudio=false&autoPortrait=true&fullscreen=false&resumePositionMs=0&commentRootRpid=0&commentTargetRpid=0",
             (target as HomeNavigationTarget.Video).route
         )
     }

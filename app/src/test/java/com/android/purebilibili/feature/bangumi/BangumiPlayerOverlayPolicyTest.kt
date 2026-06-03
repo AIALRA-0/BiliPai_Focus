@@ -135,6 +135,48 @@ class BangumiPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun resolveBangumiPlaybackDebugInfo_marksRenderedFirstFrame() {
+        val info = resolveBangumiPlaybackDebugInfo(
+            BangumiPlaybackDebugSnapshot(
+                episodeId = 39L,
+                cid = 34442052203L,
+                playbackState = androidx.media3.common.Player.STATE_READY,
+                playWhenReady = true,
+                isPlaying = true,
+                firstFrameRendered = true,
+                lastVideoEvent = "first frame rendered"
+            )
+        )
+
+        assertEquals("rendered", info.firstFrame)
+        assertEquals("READY", info.playbackState)
+        assertEquals("true", info.playWhenReady)
+        assertEquals("true", info.isPlaying)
+        assertEquals("episode=39 cid=34442052203 first frame rendered", info.lastVideoEvent)
+    }
+
+    @Test
+    fun resetBangumiPlaybackDebugSnapshot_rebindsDiagnosticsToNewEpisode() {
+        val previous = BangumiPlaybackDebugSnapshot(
+            episodeId = 40L,
+            cid = 400L,
+            playbackState = androidx.media3.common.Player.STATE_READY,
+            playWhenReady = true,
+            isPlaying = true,
+            firstFrameRendered = true,
+            lastVideoEvent = "first frame rendered"
+        )
+
+        val reset = previous.resetForEpisode(episodeId = 39L, cid = 390L)
+        val info = resolveBangumiPlaybackDebugInfo(reset)
+
+        assertEquals(39L, reset.episodeId)
+        assertEquals(390L, reset.cid)
+        assertEquals("", info.firstFrame)
+        assertEquals("episode=39 cid=390 waiting first frame", info.lastVideoEvent)
+    }
+
+    @Test
     fun updateBangumiSuccessInteractionState_replacesInteractionFlags() {
         val updatedState = updateBangumiSuccessInteractionState(
             state = sampleSuccessState(isLiked = false, coinCount = 0),

@@ -10,13 +10,6 @@ internal fun selectPreferredAppUpdateAsset(
             compareBy<AppUpdateAsset> { asset ->
                 val lowercaseName = asset.name.lowercase()
                 when {
-                    "debug" in lowercaseName -> 2
-                    "dev" in lowercaseName -> 1
-                    else -> 0
-                }
-            }.thenBy { asset ->
-                val lowercaseName = asset.name.lowercase()
-                when {
                     "arm64" in lowercaseName -> 1
                     "x86" in lowercaseName -> 1
                     "universal" in lowercaseName -> 0

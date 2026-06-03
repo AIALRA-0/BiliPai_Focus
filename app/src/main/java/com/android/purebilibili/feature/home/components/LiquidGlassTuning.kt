@@ -55,7 +55,7 @@ internal fun resolveLiquidGlassTuning(progress: Float): LiquidGlassTuning {
         refractIntensity = lerp(0.5f, 0.14f, normalizedProgress),
         refractionAmount = lerp(26f, 8f, normalizedProgress),
         refractionHeight = lerp(22f, 8f, normalizedProgress),
-        indicatorTintAlpha = lerp(0.12f, 0.24f, normalizedProgress),
+        indicatorTintAlpha = lerp(0.20f, 0.34f, normalizedProgress),
         indicatorLensBoost = lerp(1.72f, 1.04f, frostWeight),
         indicatorEdgeWarpBoost = lerp(1.78f, 1.08f, frostWeight),
         indicatorChromaticBoost = lerp(1.36f, 0.82f, frostWeight),
@@ -83,7 +83,36 @@ internal fun resolveLiquidGlassTuning(
 }
 
 internal fun resolveLiquidGlassTuning(style: LiquidGlassStyle): LiquidGlassTuning {
-    return resolveLiquidGlassTuning(progress = resolveLegacyLiquidGlassProgress(style))
+    return when (style) {
+        LiquidGlassStyle.SUKISU -> sukisuLiquidGlassTuning()
+        else -> resolveLiquidGlassTuning(progress = resolveLegacyLiquidGlassProgress(style))
+    }
+}
+
+private fun sukisuLiquidGlassTuning(): LiquidGlassTuning {
+    return LiquidGlassTuning(
+        mode = LiquidGlassMode.BALANCED,
+        progress = 0.5f,
+        strength = resolveDefaultLiquidGlassStrength(LiquidGlassMode.BALANCED),
+        backdropBlurRadius = 8f,
+        surfaceAlpha = 0.40f,
+        whiteOverlayAlpha = 0.04f,
+        refractIntensity = 0.28f,
+        refractionAmount = 24f,
+        refractionHeight = 24f,
+        indicatorTintAlpha = 0.28f,
+        indicatorLensBoost = 1.18f,
+        indicatorEdgeWarpBoost = 1.16f,
+        indicatorChromaticBoost = 0.90f,
+        chromaticAberrationEnabled = false,
+        chromaticAberrationAmount = 0f,
+        scrollCoupledRefraction = false,
+        scrollCoupledRefractionAmount = 0f,
+        useNeutralIndicatorTint = false,
+        neutralIndicatorTintAmount = 0f,
+        depthEffectEnabled = true,
+        depthEffectAmount = 1f
+    )
 }
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float {

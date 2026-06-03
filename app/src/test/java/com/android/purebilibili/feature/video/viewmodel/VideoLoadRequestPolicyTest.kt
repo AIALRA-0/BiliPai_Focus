@@ -83,6 +83,42 @@ class VideoLoadRequestPolicyTest {
     }
 
     @Test
+    fun `page switch start position restarts when saved progress is already at end`() {
+        assertEquals(
+            0L,
+            resolvePageSwitchStartPositionMs(
+                cachedPositionMs = 116_000L,
+                pageDurationSeconds = 120L,
+                ignoreSavedProgress = false
+            )
+        )
+    }
+
+    @Test
+    fun `page switch start position keeps normal saved progress`() {
+        assertEquals(
+            36_000L,
+            resolvePageSwitchStartPositionMs(
+                cachedPositionMs = 36_000L,
+                pageDurationSeconds = 120L,
+                ignoreSavedProgress = false
+            )
+        )
+    }
+
+    @Test
+    fun `page switch start position ignores saved progress when requested`() {
+        assertEquals(
+            0L,
+            resolvePageSwitchStartPositionMs(
+                cachedPositionMs = 36_000L,
+                pageDurationSeconds = 120L,
+                ignoreSavedProgress = true
+            )
+        )
+    }
+
+    @Test
     fun `initial playback quality mode defaults to auto`() {
         assertEquals(
             PlaybackQualityMode.AUTO,
@@ -103,6 +139,24 @@ class VideoLoadRequestPolicyTest {
         assertEquals(
             PlaybackQualityMode.AUTO,
             resolvePlaybackQualityModeForQualitySelection(-1)
+        )
+    }
+
+    @Test
+    fun `related playurl preloading is disabled to avoid speculative video traffic`() {
+        assertEquals(
+            0,
+            resolveRelatedPlayUrlPreloadCount(
+                relatedCount = 12,
+                isWifi = true
+            )
+        )
+        assertEquals(
+            0,
+            resolveRelatedPlayUrlPreloadCount(
+                relatedCount = 12,
+                isWifi = false
+            )
         )
     }
 
@@ -163,6 +217,153 @@ class VideoLoadRequestPolicyTest {
 
         assertContains(message, "接口风控")
         assertContains(message, "1 分 35 秒")
+    }
+
+    @Test
+    fun `initial quality unavailable reason explains data saver cap`() {
+        val reason = resolveInitialQualityUnavailableReason(
+            requestedQualityId = 80,
+            actualQualityId = 32,
+            isLoggedIn = true,
+            isVip = false,
+            dataSaverLimited = true
+        )
+
+        assertEquals(InitialQualityUnavailableReason.DATA_SAVER, reason)
+
+        val message = resolveQualitySwitchFailureMessage(
+            requestedQualityLabel = "1080P",
+            initialUnavailableReason = reason
+        )
+
+        assertContains(message, "省流量模式")
+    }
+
+    @Test
+    fun `initial quality unavailable reason explains missing login cookie`() {
+        val reason = resolveInitialQualityUnavailableReason(
+            requestedQualityId = 80,
+            actualQualityId = 32,
+            isLoggedIn = false,
+            isVip = false,
+            dataSaverLimited = false
+        )
+
+        assertEquals(InitialQualityUnavailableReason.LOGIN_REQUIRED, reason)
+
+        val message = resolveQualitySwitchFailureMessage(
+            requestedQualityLabel = "1080P",
+            initialUnavailableReason = reason
+        )
+
+        assertContains(message, "登录 Cookie")
+    }
+
+    @Test
+    fun `initial quality unavailable reason explains vip-only target`() {
+        val reason = resolveInitialQualityUnavailableReason(
+            requestedQualityId = 116,
+            actualQualityId = 80,
+            isLoggedIn = true,
+            isVip = false,
+            dataSaverLimited = false
+        )
+
+        assertEquals(InitialQualityUnavailableReason.VIP_REQUIRED, reason)
+    }
+
+    @Test
+    fun `initial quality unavailable reason skips fulfilled target`() {
+        assertEquals(
+            null,
+            resolveInitialQualityUnavailableReason(
+                requestedQualityId = 80,
+                actualQualityId = 80,
+                isLoggedIn = true,
+                isVip = false,
+                dataSaverLimited = false
+            )
+        )
+    }
+
+    @Test
+    fun `auto highest resolved to video highest does not show initial downgrade dialog`() {
+        val target = resolveInitialQualityWarningTarget(
+            requestedQualityId = 127,
+            isLoggedIn = true,
+            isVip = true,
+            resolvedTargetQuality = 116,
+            dataSaverLimited = false
+        )
+
+        assertEquals(116, target)
+        assertEquals(
+            null,
+            resolveInitialQualityUnavailableReason(
+                requestedQualityId = target,
+                actualQualityId = 116,
+                isLoggedIn = true,
+                isVip = true,
+                dataSaverLimited = false
+            )
+        )
+    }
+
+    @Test
+    fun `auto highest still reports real downgrade below resolved target`() {
+        val target = resolveInitialQualityWarningTarget(
+            requestedQualityId = 127,
+            isLoggedIn = true,
+            isVip = true,
+            resolvedTargetQuality = 120,
+            dataSaverLimited = false
+        )
+
+        assertEquals(120, target)
+        assertEquals(
+            InitialQualityUnavailableReason.SERVER_DOWNGRADED,
+            resolveInitialQualityUnavailableReason(
+                requestedQualityId = target,
+                actualQualityId = 116,
+                isLoggedIn = true,
+                isVip = true,
+                dataSaverLimited = false
+            )
+        )
+    }
+
+    @Test
+    fun `initial quality warning target normalizes auto highest by entitlement`() {
+        assertEquals(
+            80,
+            resolveInitialQualityWarningTarget(
+                requestedQualityId = 127,
+                isLoggedIn = true,
+                isVip = false
+            )
+        )
+        assertEquals(
+            120,
+            resolveInitialQualityWarningTarget(
+                requestedQualityId = 127,
+                isLoggedIn = true,
+                isVip = true
+            )
+        )
+    }
+
+    @Test
+    fun `data saver keeps original auto highest warning target`() {
+        assertEquals(
+            120,
+            resolveInitialQualityWarningTarget(
+                requestedQualityId = 127,
+                isLoggedIn = true,
+                isVip = true,
+                resolvedTargetQuality = 116,
+                dataSaverLimited = true
+            )
+        )
     }
 
     @Test
@@ -537,6 +738,13 @@ class VideoLoadRequestPolicyTest {
             subtitleEnabled = true,
             subtitlePrimaryLanguage = "zh-CN",
             subtitleSecondaryLanguage = "en-US",
+            subtitleTracks = listOf(
+                com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta(
+                    lan = "zh-CN",
+                    lanDoc = "中文",
+                    subtitleUrl = "https://aisubtitle.hdslb.com/bfs/subtitle/zh.json"
+                )
+            ),
             subtitlePrimaryCues = listOf(
                 com.android.purebilibili.feature.video.subtitle.SubtitleCue(
                     startMs = 0L,
@@ -559,6 +767,7 @@ class VideoLoadRequestPolicyTest {
         assertNull(cleared.subtitleSecondaryLanguage)
         assertNull(cleared.subtitlePrimaryTrackKey)
         assertNull(cleared.subtitleSecondaryTrackKey)
+        assertTrue(cleared.subtitleTracks.isEmpty())
         assertTrue(cleared.subtitlePrimaryCues.isEmpty())
         assertTrue(cleared.subtitleSecondaryCues.isEmpty())
     }

@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,7 +83,7 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 
 @Immutable
-private data class LoginPalette(
+internal data class LoginPalette(
     val bgTop: Color,
     val bgMid: Color,
     val bgBottom: Color,
@@ -119,7 +120,60 @@ private data class LoginPalette(
     val accentStart: Color,
     val accentEnd: Color,
     val accentGlow: Color,
+    val success: Color,
+    val qrContent: Color,
 )
+
+internal fun resolveLoginPalette(
+    colorScheme: ColorScheme,
+    darkTheme: Boolean
+): LoginPalette {
+    val accentScrimAlpha = if (darkTheme) 0.28f else 0.16f
+    val subtleStrokeAlpha = if (darkTheme) 0.18f else 0.34f
+    val disabledAlpha = 0.42f
+    val overlayAlpha = if (darkTheme) 0.46f else 0.58f
+
+    return LoginPalette(
+        bgTop = if (darkTheme) colorScheme.background else colorScheme.surfaceContainer,
+        bgMid = colorScheme.background,
+        bgBottom = if (darkTheme) colorScheme.surface else colorScheme.primaryContainer.copy(alpha = 0.34f),
+        bgOverlayLeft = colorScheme.primaryContainer.copy(alpha = overlayAlpha),
+        bgOverlayRight = Color.Transparent,
+        orbBlue = colorScheme.primary.copy(alpha = if (darkTheme) 0.34f else 0.28f),
+        orbPurple = colorScheme.tertiary.copy(alpha = if (darkTheme) 0.28f else 0.24f),
+        orbMint = colorScheme.secondary.copy(alpha = if (darkTheme) 0.24f else 0.22f),
+        panelFill = colorScheme.surface,
+        panelStroke = colorScheme.outlineVariant.copy(alpha = subtleStrokeAlpha),
+        primaryText = colorScheme.onSurface,
+        secondaryText = colorScheme.onSurfaceVariant,
+        tertiaryText = colorScheme.onSurfaceVariant.copy(alpha = 0.74f),
+        segmentTrack = colorScheme.surfaceVariant.copy(alpha = if (darkTheme) 0.52f else 0.64f),
+        segmentSelected = colorScheme.surface.copy(alpha = if (darkTheme) 0.68f else 0.96f),
+        segmentBorder = colorScheme.outlineVariant.copy(alpha = subtleStrokeAlpha),
+        segmentSelectedText = colorScheme.onSurface,
+        segmentUnselectedText = colorScheme.onSurfaceVariant,
+        inputFill = colorScheme.surfaceVariant,
+        inputStroke = colorScheme.outlineVariant.copy(alpha = subtleStrokeAlpha),
+        inputText = colorScheme.onSurface,
+        inputPlaceholder = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+        inputIcon = colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+        buttonFill = colorScheme.primary,
+        buttonDisabled = colorScheme.primary.copy(alpha = disabledAlpha),
+        buttonText = colorScheme.onPrimary,
+        buttonGradientStart = colorScheme.primary,
+        buttonGradientEnd = colorScheme.tertiary,
+        link = colorScheme.primary,
+        error = colorScheme.error,
+        qrShell = colorScheme.surface.copy(alpha = if (darkTheme) 0.82f else 0.96f),
+        closeBg = colorScheme.surfaceVariant.copy(alpha = if (darkTheme) 0.58f else 0.72f),
+        closeFg = colorScheme.onSurface,
+        accentStart = colorScheme.primary,
+        accentEnd = colorScheme.tertiary,
+        accentGlow = colorScheme.secondary.copy(alpha = accentScrimAlpha),
+        success = colorScheme.secondary,
+        qrContent = colorScheme.onPrimary,
+    )
+}
 
 @Composable
 private fun rememberLoginPalette(): LoginPalette {
@@ -127,85 +181,7 @@ private fun rememberLoginPalette(): LoginPalette {
     val cs = MaterialTheme.colorScheme
 
     return remember(dark, cs) {
-        if (dark) {
-            LoginPalette(
-                bgTop = Color(0xFF0D121D),
-                bgMid = Color(0xFF101726),
-                bgBottom = Color(0xFF171526),
-                bgOverlayLeft = Color(0xFF233D74).copy(alpha = 0.46f),
-                bgOverlayRight = Color.Transparent,
-                orbBlue = Color(0xFF4D70FF).copy(alpha = 0.38f),
-                orbPurple = Color(0xFF7B63FF).copy(alpha = 0.28f),
-                orbMint = Color(0xFF3BC2B0).copy(alpha = 0.22f),
-                panelFill = Color(0xD9252A38),
-                panelStroke = Color.White.copy(alpha = 0.1f),
-                primaryText = Color(0xFFF3F5FA),
-                secondaryText = Color(0xFFB0B7C8),
-                tertiaryText = Color(0xFF8A93A8),
-                segmentTrack = Color(0xFF171C2A),
-                segmentSelected = Color(0xFF303750),
-                segmentBorder = Color.White.copy(alpha = 0.08f),
-                segmentSelectedText = Color(0xFFF6F8FC),
-                segmentUnselectedText = Color(0xFFA4ADC1),
-                inputFill = Color(0xFF171D2B),
-                inputStroke = Color.White.copy(alpha = 0.08f),
-                inputText = Color(0xFFF2F5FB),
-                inputPlaceholder = Color(0xFF8C95A8),
-                inputIcon = Color(0xFFA2ABC0),
-                buttonFill = cs.primary,
-                buttonDisabled = cs.primary.copy(alpha = 0.42f),
-                buttonText = Color.White,
-                buttonGradientStart = Color(0xFF6D7BFF),
-                buttonGradientEnd = Color(0xFF4CD2C2),
-                link = cs.primary,
-                error = Color(0xFFFF7886),
-                qrShell = Color(0xFF151B29),
-                closeBg = Color.White.copy(alpha = 0.2f),
-                closeFg = Color(0xFFF3F6FC),
-                accentStart = Color(0xFF7084FF),
-                accentEnd = Color(0xFFA56BFF),
-                accentGlow = Color(0xFF6BE8DC).copy(alpha = 0.33f),
-            )
-        } else {
-            LoginPalette(
-                bgTop = Color(0xFFEAF0FF),
-                bgMid = Color(0xFFF4F7FD),
-                bgBottom = Color(0xFFF8F4FF),
-                bgOverlayLeft = Color(0xFFDCE8FF),
-                bgOverlayRight = Color.Transparent,
-                orbBlue = Color(0xFFAFC5FF).copy(alpha = 0.58f),
-                orbPurple = Color(0xFFCCBEFF).copy(alpha = 0.45f),
-                orbMint = Color(0xFFAAE4D9).copy(alpha = 0.42f),
-                panelFill = Color(0xDBFFFFFF),
-                panelStroke = Color.White.copy(alpha = 0.72f),
-                primaryText = Color(0xFF1B1F2A),
-                secondaryText = Color(0xFF5D667A),
-                tertiaryText = Color(0xFF8E97AA),
-                segmentTrack = Color(0xFFF0F2F7),
-                segmentSelected = Color.White,
-                segmentBorder = Color(0x1222324E),
-                segmentSelectedText = Color(0xFF202636),
-                segmentUnselectedText = Color(0xFF6F798D),
-                inputFill = Color(0xFFF5F7FB),
-                inputStroke = Color(0x1422324E),
-                inputText = Color(0xFF1E2534),
-                inputPlaceholder = Color(0xFF919AAD),
-                inputIcon = Color(0xFF7D879A),
-                buttonFill = cs.primary,
-                buttonDisabled = cs.primary.copy(alpha = 0.42f),
-                buttonText = Color.White,
-                buttonGradientStart = Color(0xFF5C7CFA),
-                buttonGradientEnd = Color(0xFF2CC9C4),
-                link = cs.primary,
-                error = Color(0xFFD94657),
-                qrShell = Color(0xFFF2F5FA),
-                closeBg = Color.White.copy(alpha = 0.84f),
-                closeFg = Color(0xFF1E2534),
-                accentStart = Color(0xFF7EA7FF),
-                accentEnd = Color(0xFFC88BFF),
-                accentGlow = Color(0xFF65D6C8).copy(alpha = 0.38f),
-            )
-        }
+        resolveLoginPalette(cs, dark)
     }
 }
 
@@ -316,7 +292,7 @@ fun GlassCard(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = if (isSystemInDarkTheme()) 0.05f else 0.35f),
+                            palette.primaryText.copy(alpha = if (isSystemInDarkTheme()) 0.05f else 0.35f),
                             Color.Transparent,
                         )
                     )
@@ -549,13 +525,13 @@ fun QrCodeLoginContent(
                             Icon(
                                 imageVector = CupertinoIcons.Filled.Phone,
                                 contentDescription = null,
-                                tint = Color(0xFF20A566),
+                                tint = palette.success,
                                 modifier = Modifier.size(38.dp)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "已扫码，请在手机确认",
-                                color = Color(0xFF1F2431),
+                                color = palette.qrContent,
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -572,7 +548,7 @@ fun QrCodeLoginContent(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "二维码加载失败",
-                                color = Color(0xFF1F2431),
+                                color = palette.qrContent,
                                 fontSize = 13.sp
                             )
                             TextButton(onClick = onRefresh) {
@@ -978,7 +954,7 @@ fun ModernButton(
             .height(50.dp)
             .clip(shape)
             .background(if (isEnabled) gradientBrush else SolidColor(palette.buttonDisabled))
-            .border(1.dp, Color.White.copy(alpha = if (isSystemInDarkTheme()) 0.12f else 0.4f), shape)
+            .border(1.dp, palette.panelStroke, shape)
             .clickable(enabled = isEnabled) { onClick() }
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center

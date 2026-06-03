@@ -54,8 +54,10 @@ import com.android.purebilibili.core.ui.rememberAppWifiIcon
 import com.android.purebilibili.core.ui.components.DefaultPlaybackSpeedPreferenceControl
 import com.android.purebilibili.core.ui.components.formatDefaultPlaybackSpeed
 import com.android.purebilibili.data.model.response.AiAudioInfo
+import com.android.purebilibili.feature.plugin.CdnLineDiagnostic
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private data class VideoSettingsPanelVisualSpec(
     val rowHorizontalPadding: androidx.compose.ui.unit.Dp,
@@ -176,8 +178,11 @@ fun VideoSettingsPanel(
     //  CDN 线路切换
     currentCdnIndex: Int = 0,
     cdnCount: Int = 1,
+    cdnLineDiagnostics: List<CdnLineDiagnostic> = emptyList(),
+    isCdnProbing: Boolean = false,
     onSwitchCdn: () -> Unit = {},
     onSwitchCdnTo: (Int) -> Unit = {},
+    onProbeCdnCandidates: () -> Unit = {},
 
     // [New] Codec & Audio Quality
     // Passed from PlayerViewModel/SettingsManager
@@ -210,35 +215,48 @@ fun VideoSettingsPanel(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val panelSpec = rememberVideoSettingsPanelVisualSpec()
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val actionPolicy = remember(configuration.screenWidthDp) {
+    val actionPolicy = remember(configuration.screenWidthDp, androidNativeVariant) {
         resolveVideoSettingsPanelActionPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = configuration.screenWidthDp,
+            androidNativeVariant = androidNativeVariant
         )
     }
     val scope = rememberCoroutineScope()
     val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekForwardSeconds(context)
-        .collectAsState(initial = 10)
+        .collectAsStateWithLifecycle(initialValue = 10
+        )
     val seekBackwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekBackwardSeconds(context)
-        .collectAsState(initial = 10)
+        .collectAsStateWithLifecycle(initialValue = 10
+        )
     val longPressSpeed by com.android.purebilibili.core.store.SettingsManager
         .getLongPressSpeed(context)
-        .collectAsState(initial = 2.0f)
+        .collectAsStateWithLifecycle(initialValue = 2.0f
+        )
+    val longPressSpeedLockEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getLongPressSpeedLockEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     val twoFingerVerticalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
         .getTwoFingerVerticalSpeedEnabled(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     val twoFingerHorizontalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
         .getTwoFingerHorizontalSpeedEnabled(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getDefaultPlaybackSpeed(context)
-        .collectAsState(initial = 1.0f)
+        .collectAsStateWithLifecycle(initialValue = 1.0f
+        )
     val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getRememberLastPlaybackSpeed(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     val timerIcon = rememberAppTimerIcon()
     val refreshIcon = rememberAppRefreshIcon()
     val photoIcon = rememberAppPhotoIcon()
@@ -764,6 +782,7 @@ fun VideoSettingsPanel(
             //  播放线路 (CDN) - 仅在有多个线路时显示
             if (cdnCount > 1) {
                 item {
+                    val diagnosticsByIndex = cdnLineDiagnostics.associateBy { it.index }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -793,40 +812,25 @@ fun VideoSettingsPanel(
                             )
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        // CDN 线路选项
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Button(
+                            enabled = !isCdnProbing,
+                            onClick = onProbeCdnCandidates,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
+                            Text(if (isCdnProbing) "检测中..." else "检测当前候选线路")
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             repeat(cdnCount) { index ->
-                                val isSelected = index == currentCdnIndex
-                                Surface(
-                                    onClick = { 
-                                        if (!isSelected) {
-                                            onSwitchCdnTo(index)
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isSelected) 
-                                        MaterialTheme.colorScheme.primary 
-                                    else 
-                                        MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 12.dp)
-                                    ) {
-                                        Text(
-                                            text = "线路${index + 1}",
-                                            fontSize = 13.sp,
-                                            color = if (isSelected) 
-                                                MaterialTheme.colorScheme.onPrimary 
-                                            else 
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                val diagnostic = diagnosticsByIndex[index]
+                                CdnLineRow(
+                                    index = index,
+                                    isSelected = index == currentCdnIndex,
+                                    diagnostic = diagnostic,
+                                    onClick = {
+                                        if (index != currentCdnIndex) onSwitchCdnTo(index)
                                     }
-                                }
+                                )
                             }
                         }
                     }
@@ -865,7 +869,6 @@ fun VideoSettingsPanel(
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    // 倍速选项
                     SpeedOptions(
                         currentSpeed = currentSpeed,
                         onSelect = onSpeedChange
@@ -947,7 +950,8 @@ fun VideoSettingsPanel(
                 ) {
                     val doubleTapSeekEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getDoubleTapSeekEnabled(context)
-                        .collectAsState(initial = true)
+                        .collectAsStateWithLifecycle(initialValue = false
+        )
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1074,6 +1078,51 @@ fun VideoSettingsPanel(
                                 com.android.purebilibili.core.store.SettingsManager.setLongPressSpeed(context, speed)
                             }
                         }
+                    )
+                }
+                SettingsDivider()
+            }
+
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = gestureTapIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "长按倍速锁定",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "长按后拖至上下区域保持倍速",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = longPressSpeedLockEnabled,
+                        onCheckedChange = { checked ->
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setLongPressSpeedLockEnabled(context, checked)
+                                if (checked) {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setLongPressSpeedLockHintShown(context, true)
+                                }
+                            }
+                        },
+                        modifier = Modifier.scale(0.8f)
                     )
                 }
                 SettingsDivider()
@@ -1268,6 +1317,79 @@ private fun SettingsDivider() {
         thickness = 0.5.dp,
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = spec.dividerAlpha)
     )
+}
+
+@Composable
+private fun CdnLineRow(
+    index: Int,
+    isSelected: Boolean,
+    diagnostic: CdnLineDiagnostic?,
+    onClick: () -> Unit
+) {
+    val status = diagnostic?.statusLabel ?: "未检测"
+    val host = diagnostic?.host ?: "线路${index + 1}"
+    val metric = buildString {
+        diagnostic?.latencyMs?.let { append("${it}ms") }
+        diagnostic?.speedKbps?.let {
+            if (isNotEmpty()) append(" · ")
+            append("${it / 1024}Mbps")
+        }
+        if ((diagnostic?.errorCount ?: 0) > 0) {
+            if (isNotEmpty()) append(" · ")
+            append("失败${diagnostic?.errorCount}")
+        }
+        if ((diagnostic?.bufferingCount ?: 0) > 0) {
+            if (isNotEmpty()) append(" · ")
+            append("缓冲${diagnostic?.bufferingCount}")
+        }
+    }.ifBlank { "手动检测后显示延迟/速度" }
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "线路${index + 1} · $status",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = host,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = metric,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isSelected) {
+                Text(
+                    text = "当前",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
 }
 
 /**

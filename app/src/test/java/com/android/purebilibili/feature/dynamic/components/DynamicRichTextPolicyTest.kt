@@ -5,10 +5,84 @@ import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.RichTextNode
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DynamicRichTextPolicyTest {
+
+    @Test
+    fun resolveDynamicDescForImages_hidesStandaloneImagePlaceholderWhenMediaExists() {
+        val desc = DynamicDesc(
+            text = "[图片]",
+            rich_text_nodes = listOf(RichTextNode(type = "TEXT", text = "[图片]"))
+        )
+
+        val resolved = resolveDynamicDescForImages(desc, hasImages = true)
+
+        assertFalse(shouldRenderDynamicRichText(resolved))
+    }
+
+    @Test
+    fun resolveDynamicDescForImages_keepsImagePlaceholderWhenMediaMissing() {
+        val desc = DynamicDesc(text = "【图片】")
+
+        val resolved = resolveDynamicDescForImages(desc, hasImages = false)
+
+        assertTrue(shouldRenderDynamicRichText(resolved))
+        assertEquals("【图片】", resolved.text)
+    }
+
+    @Test
+    fun resolveDynamicDescForImages_stripsInlinePlaceholderButKeepsRealText() {
+        val desc = DynamicDesc(text = "正文 [图片]")
+
+        val resolved = resolveDynamicDescForImages(desc, hasImages = true)
+
+        assertTrue(shouldRenderDynamicRichText(resolved))
+        assertEquals("正文", resolved.text)
+    }
+
+    @Test
+    fun resolveDynamicDescForImages_hidesRepeatedPlaceholderLinesWhenMediaExists() {
+        val desc = DynamicDesc(
+            text = "第一行\n[图片]\n【图片】\n第二行",
+            rich_text_nodes = listOf(
+                RichTextNode(type = "TEXT", text = "第一行\n"),
+                RichTextNode(type = "TEXT", text = "[图片]"),
+                RichTextNode(type = "TEXT", text = "【图片】"),
+                RichTextNode(type = "TEXT", text = "\n第二行")
+            )
+        )
+
+        val resolved = resolveDynamicDescForImages(desc, hasImages = true)
+
+        assertTrue(shouldRenderDynamicRichText(resolved))
+        assertEquals("第一行\n第二行", resolved.text)
+        assertEquals("第一行\n\n第二行", resolved.rich_text_nodes.joinToString(separator = "") { it.text })
+    }
+
+    @Test
+    fun resolveDynamicOpusSummaryDescForImages_stripsPlaceholderLinesBeforeRenderingSummary() {
+        val resolved = resolveDynamicOpusSummaryDescForImages(
+            text = "正文\n[图片]\n[图片]\n[图片]",
+            richTextNodes = listOf(
+                RichTextNode(type = "TEXT", text = "正文\n"),
+                RichTextNode(type = "TEXT", text = "[图片]\n"),
+                RichTextNode(type = "TEXT", text = "[图片]\n"),
+                RichTextNode(type = "TEXT", text = "[图片]")
+            ),
+            hasImages = true
+        )
+
+        assertNotNull(resolved)
+        assertEquals("正文", resolved.text)
+        val richNodeText = resolved.rich_text_nodes.joinToString(separator = "") { it.text }
+        assertEquals("正文\n", richNodeText)
+        assertFalse(richNodeText.contains("[图片]"))
+        assertTrue(shouldRenderDynamicRichText(resolved))
+    }
 
     @Test
     fun buildDynamicRichTextAnnotatedString_prefersNodeJumpUrlForClickableLink() {

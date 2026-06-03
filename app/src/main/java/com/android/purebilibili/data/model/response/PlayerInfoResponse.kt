@@ -55,12 +55,103 @@ data class BgmInfo(
     @SerialName("music_title")
     val musicTitle: String = "",
     @SerialName("jump_url")
-    val jumpUrl: String = ""
+    val jumpUrl: String = "",
+    val actor: String = "",
+    @SerialName("cover_url")
+    val coverUrl: String = ""
+)
+
+@Serializable
+data class BgmMultipleMusicResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: BgmMultipleMusicData? = null
+)
+
+@Serializable
+data class BgmMultipleMusicData(
+    val list: List<BgmInfo> = emptyList()
+)
+
+@Serializable
+data class BgmDetailResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: BgmDetailData? = null
+)
+
+@Serializable
+data class BgmDetailData(
+    @SerialName("music_title")
+    val musicTitle: String = "",
+    @SerialName("origin_artist")
+    val originArtist: String = "",
+    @SerialName("mv_cover")
+    val mvCover: String = "",
+    @SerialName("wish_count")
+    val wishCount: Int = 0,
+    @SerialName("music_shares")
+    val musicShares: Int = 0,
+    @SerialName("listen_pv")
+    val listenPv: Long = 0,
+    @SerialName("music_hot")
+    val musicHot: Long = 0,
+    @SerialName("music_relation")
+    val musicRelation: Int = 0,
+    @SerialName("music_comment")
+    val musicComment: BgmCommentInfo? = null,
+    @SerialName("flow_attr")
+    val flowAttr: BgmFlowAttr? = null
+)
+
+@Serializable
+data class BgmCommentInfo(
+    val state: Int = 0,
+    val nums: Int = 0,
+    val oid: Long = 0,
+    @SerialName("page_type")
+    val pageType: Int = 0
+)
+
+@Serializable
+data class BgmFlowAttr(
+    @SerialName("no_share")
+    val noShare: Boolean = false,
+    @SerialName("no_comment")
+    val noComment: Boolean = false
+)
+
+@Serializable
+data class BgmRecommendListResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: BgmRecommendListData? = null
+)
+
+@Serializable
+data class BgmRecommendListData(
+    val list: List<BgmRecommendVideo> = emptyList()
+)
+
+@Serializable
+data class BgmRecommendVideo(
+    val aid: Long = 0,
+    val bvid: String = "",
+    val cid: Long = 0,
+    val cover: String = "",
+    val title: String = "",
+    val mid: Long = 0,
+    @SerialName("up_nick_name")
+    val upNickName: String = "",
+    val play: Int = 0,
+    val danmu: Int = 0,
+    val duration: Int = 0,
+    val label: String = ""
 )
 
 /**
  * 视频章节/看点信息
- * 
+ *
  * 用于在进度条上显示章节标记
  */
 @Serializable

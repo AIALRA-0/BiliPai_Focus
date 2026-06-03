@@ -58,6 +58,51 @@ class InboxUserInfoResolverTest {
     }
 
     @Test
+    fun shouldFetchSessionUserInfo_returnsTrueForUserSessionWithoutAccountInfo() {
+        val session = SessionItem(
+            talker_id = 1006L,
+            session_type = 1,
+            account_info = null
+        )
+
+        assertTrue(InboxUserInfoResolver.shouldFetchSessionUserInfo(session, emptyMap()))
+    }
+
+    @Test
+    fun shouldFetchSessionUserInfo_returnsFalseForNonUserSession() {
+        val session = SessionItem(
+            talker_id = 1007L,
+            session_type = 2,
+            account_info = null
+        )
+
+        assertFalse(InboxUserInfoResolver.shouldFetchSessionUserInfo(session, emptyMap()))
+    }
+
+    @Test
+    fun shouldFetchSessionUserInfo_returnsFalseWhenSessionAccountInfoIsComplete() {
+        val session = SessionItem(
+            talker_id = 1008L,
+            session_type = 1,
+            account_info = SessionAccountInfo(
+                name = "会话内用户名",
+                pic_url = "https://cdn.example/session-avatar.jpg"
+            )
+        )
+
+        assertFalse(InboxUserInfoResolver.shouldFetchSessionUserInfo(session, emptyMap()))
+    }
+
+    @Test
+    fun selectMissingUserInfoMids_keepsAllMissingUsersBeyondFirstBatch() {
+        val mids = (1L..30L).toList()
+
+        val selected = InboxUserInfoResolver.selectMissingUserInfoMids(mids, emptyMap())
+
+        assertEquals(mids, selected)
+    }
+
+    @Test
     fun mergeFetchedUserInfo_keepsExistingFieldsWhenIncomingIsBlank() {
         val existing = UserBasicInfo(
             mid = 1005L,

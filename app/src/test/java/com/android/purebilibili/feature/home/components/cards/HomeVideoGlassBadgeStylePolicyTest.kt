@@ -6,24 +6,24 @@ import org.junit.Test
 class HomeVideoGlassBadgeStylePolicyTest {
 
     @Test
-    fun `cover badges stay visible but become plain when glass style disabled`() {
+    fun `cover badges stay visible but always use plain style after glass retirement`() {
         val policy = resolveHomeVideoGlassBadgeStylePolicy(
-            showCoverGlassBadges = false,
+            showCoverGlassBadges = true,
             showInfoGlassBadges = true
         )
 
         assertEquals(HomeVideoBadgeStyle.PLAIN, policy.coverStyle)
-        assertEquals(HomeVideoBadgeStyle.GLASS, policy.infoStyle)
+        assertEquals(HomeVideoBadgeStyle.PLAIN, policy.infoStyle)
     }
 
     @Test
-    fun `info badges stay visible but become plain when glass style disabled`() {
+    fun `legacy disabled preferences still resolve to plain badges`() {
         val policy = resolveHomeVideoGlassBadgeStylePolicy(
-            showCoverGlassBadges = true,
+            showCoverGlassBadges = false,
             showInfoGlassBadges = false
         )
 
-        assertEquals(HomeVideoBadgeStyle.GLASS, policy.coverStyle)
+        assertEquals(HomeVideoBadgeStyle.PLAIN, policy.coverStyle)
         assertEquals(HomeVideoBadgeStyle.PLAIN, policy.infoStyle)
     }
 }

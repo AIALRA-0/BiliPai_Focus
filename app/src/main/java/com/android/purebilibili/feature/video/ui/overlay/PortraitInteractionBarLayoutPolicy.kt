@@ -7,6 +7,7 @@ data class PortraitInteractionBarLayoutPolicy(
     val iconSizeDp: Int,
     val iconBackingSizeDp: Int,
     val iconBackingInnerPaddingDp: Int,
+    val iconBackingAlpha: Float,
     val labelTopSpacingDp: Int,
     val labelFontSp: Int
 )
@@ -19,9 +20,10 @@ fun resolvePortraitInteractionBarLayoutPolicy(
             endPaddingDp = 18,
             bottomPaddingDp = 220,
             itemSpacingDp = 28,
-            iconSizeDp = 46,
-            iconBackingSizeDp = 58,
+            iconSizeDp = 40,
+            iconBackingSizeDp = 52,
             iconBackingInnerPaddingDp = 6,
+            iconBackingAlpha = 0.16f,
             labelTopSpacingDp = 4,
             labelFontSp = 15
         )
@@ -32,9 +34,10 @@ fun resolvePortraitInteractionBarLayoutPolicy(
             endPaddingDp = 12,
             bottomPaddingDp = 196,
             itemSpacingDp = 24,
-            iconSizeDp = 40,
-            iconBackingSizeDp = 52,
-            iconBackingInnerPaddingDp = 6,
+            iconSizeDp = 35,
+            iconBackingSizeDp = 46,
+            iconBackingInnerPaddingDp = 5,
+            iconBackingAlpha = 0.15f,
             labelTopSpacingDp = 3,
             labelFontSp = 13
         )
@@ -45,9 +48,10 @@ fun resolvePortraitInteractionBarLayoutPolicy(
             endPaddingDp = 10,
             bottomPaddingDp = 188,
             itemSpacingDp = 22,
-            iconSizeDp = 37,
-            iconBackingSizeDp = 48,
+            iconSizeDp = 32,
+            iconBackingSizeDp = 42,
             iconBackingInnerPaddingDp = 5,
+            iconBackingAlpha = 0.14f,
             labelTopSpacingDp = 2,
             labelFontSp = 12
         )
@@ -57,9 +61,10 @@ fun resolvePortraitInteractionBarLayoutPolicy(
         endPaddingDp = 8,
         bottomPaddingDp = 180,
         itemSpacingDp = 20,
-        iconSizeDp = 34,
-        iconBackingSizeDp = 44,
-        iconBackingInnerPaddingDp = 5,
+        iconSizeDp = 29,
+        iconBackingSizeDp = 38,
+        iconBackingInnerPaddingDp = 4,
+        iconBackingAlpha = 0.14f,
         labelTopSpacingDp = 2,
         labelFontSp = 12
     )

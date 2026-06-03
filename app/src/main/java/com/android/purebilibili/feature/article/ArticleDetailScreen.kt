@@ -318,7 +318,7 @@ private fun ArticleDetailContent(
             }
         }
 
-        itemsIndexed(article.blocks) { index, block ->
+        itemsIndexed(article.blocks, key = { index, _ -> index }) { index, block ->
             when (block) {
                 is ArticleContentBlock.Heading -> {
                     Text(
@@ -337,11 +337,22 @@ private fun ArticleDetailContent(
                 }
 
                 is ArticleContentBlock.Image -> {
+                    val imageAspectRatio = resolveArticleImageAspectRatio(
+                        width = block.width,
+                        height = block.height
+                    )
                     AsyncImage(
                         model = block.url,
                         contentDescription = "${article.title}-$index",
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(
+                                if (imageAspectRatio != null) {
+                                    Modifier.aspectRatio(imageAspectRatio)
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .clip(RoundedCornerShape(18.dp))
                             .onGloballyPositioned { coordinates ->
                                 bodyImageSourceRects[index] = coordinates.boundsInWindow()

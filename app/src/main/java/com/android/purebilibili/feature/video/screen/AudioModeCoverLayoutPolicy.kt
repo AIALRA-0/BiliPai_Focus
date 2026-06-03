@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 internal const val AUDIO_MODE_COVER_WIDTH_FRACTION = 0.92f
@@ -56,6 +57,14 @@ internal data class AudioModeArtworkSizeDp(
     val heightDp: Int
 )
 
+internal data class AudioModeVerticalPageTransform(
+    val rotationXDegrees: Float,
+    val translationYDp: Float,
+    val scale: Float,
+    val alpha: Float,
+    val pivotFractionY: Float
+)
+
 internal fun resolveAudioModeArtworkSizeDp(
     availableWidthDp: Int,
     availableHeightDp: Int,
@@ -73,4 +82,20 @@ internal fun resolveAudioModeArtworkSizeDp(
     val width = widthBound.coerceAtMost(widthFromHeight).coerceAtLeast(0)
     val height = (width * aspectHeight.toFloat() / aspectWidth.toFloat()).roundToInt()
     return AudioModeArtworkSizeDp(widthDp = width, heightDp = height)
+}
+
+internal fun resolveAudioModeVerticalPageTransform(
+    pageOffset: Float,
+    style: AudioModeCoverArtworkStyle
+): AudioModeVerticalPageTransform {
+    val clampedOffset = pageOffset.coerceIn(-1f, 1f)
+    val distance = abs(clampedOffset)
+    val maxAlphaLoss = style.maxAlphaLossPercent / 100f
+    return AudioModeVerticalPageTransform(
+        rotationXDegrees = clampedOffset * style.maxRotationDegrees,
+        translationYDp = clampedOffset * -style.maxTranslationDp,
+        scale = 1f,
+        alpha = 1f - (distance * maxAlphaLoss).coerceIn(0f, maxAlphaLoss),
+        pivotFractionY = if (clampedOffset < 0f) 1f else 0f
+    )
 }

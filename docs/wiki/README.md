@@ -1,6 +1,6 @@
 # BiliPai Wiki
 
-最后更新：2026-04-06（按当前 main 分支结构校对）
+最后更新：2026-05-08（按当前 main 分支结构校对）
 
 ## 目录
 
@@ -10,6 +10,7 @@
 - [Miuix 对齐记录](MIUIX_ALIGNMENT.md)
 - [发布流程](RELEASE_WORKFLOW.md)
 - [QA 测试手册](QA.md)
+- [用户常见问题](FAQ.md)
 - [插件开发指南（JSON）](../PLUGIN_DEVELOPMENT.md)
 - [插件开发指南（原生）](../NATIVE_PLUGIN_DEVELOPMENT.md)
 

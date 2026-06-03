@@ -51,6 +51,28 @@ internal fun firstNonBlank(vararg values: String?): String? {
     return values.firstOrNull { !it.isNullOrBlank() }?.trim()
 }
 
+internal fun buildMessageFeedCommentNavigationLink(
+    nativeUri: String?,
+    uri: String?,
+    businessId: Int,
+    subjectId: Long,
+    rootId: Long,
+    sourceId: Long,
+    targetId: Long
+): String? {
+    firstNonBlank(nativeUri, uri)?.let { return it }
+    if (businessId <= 0 || subjectId <= 0L) return null
+
+    val rootReplyId = listOf(rootId, sourceId, targetId)
+        .firstOrNull { it > 0L }
+        ?: return null
+    val targetReplyId = listOf(sourceId, targetId)
+        .firstOrNull { it > 0L && it != rootReplyId }
+        ?: 0L
+    val targetQuery = if (targetReplyId > 0L) "?comment_id=$targetReplyId" else ""
+    return "bilibili://comment/detail/$businessId/$subjectId/$rootReplyId$targetQuery"
+}
+
 @Composable
 internal fun MessageFeedAvatar(
     avatarUrl: String,

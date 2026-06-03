@@ -63,19 +63,19 @@ internal fun buildSearchRecommendItems(
             (consecutiveFollowed >= MAX_CONSECUTIVE_FOLLOWED_RECOMMENDATIONS || followedPool.isEmpty())
 
         if (shouldPreferGeneral) {
-            result += generalPool.removeFirst()
+            result += generalPool.removeAt(0)
             consecutiveFollowed = 0
             continue
         }
 
         if (followedPool.isNotEmpty()) {
-            result += followedPool.removeFirst()
+            result += followedPool.removeAt(0)
             consecutiveFollowed += 1
             continue
         }
 
         if (generalPool.isNotEmpty()) {
-            result += generalPool.removeFirst()
+            result += generalPool.removeAt(0)
             consecutiveFollowed = 0
         }
     }

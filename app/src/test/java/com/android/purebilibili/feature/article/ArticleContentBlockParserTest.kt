@@ -68,6 +68,115 @@ class ArticleContentBlockParserTest {
         )
     }
 
+    @Test
+    fun `parseArticleContentBlocks extracts line image paragraphs`() {
+        val blocks = parseArticleContentBlocks(
+            structuredParagraphs = listOf(
+                JsonObject(
+                    mapOf(
+                        "line" to JsonObject(
+                            mapOf(
+                                "pic" to JsonObject(
+                                    mapOf(
+                                        "url" to JsonPrimitive("//i0.hdslb.com/bfs/article/line.png"),
+                                        "width" to JsonPrimitive(1440),
+                                        "height" to JsonPrimitive(320)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            ),
+            htmlContent = null
+        )
+
+        assertEquals(
+            listOf(
+                ArticleContentBlock.Image(
+                    url = "https://i0.hdslb.com/bfs/article/line.png",
+                    width = 1440,
+                    height = 320
+                )
+            ),
+            blocks
+        )
+    }
+
+    @Test
+    fun `parseArticleContentBlocks falls back to legacy ops text and image cards`() {
+        val blocks = parseArticleContentBlocks(
+            structuredParagraphs = emptyList(),
+            htmlContent = null,
+            ops = listOf(
+                JsonObject(mapOf("insert" to JsonPrimitive("第一段\n第二段\n"))),
+                JsonObject(
+                    mapOf(
+                        "insert" to JsonObject(
+                            mapOf(
+                                "image-card" to JsonObject(
+                                    mapOf(
+                                        "url" to JsonPrimitive("//i0.hdslb.com/bfs/article/ops.png"),
+                                        "width" to JsonPrimitive(900),
+                                        "height" to JsonPrimitive(1600)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                ArticleContentBlock.Paragraph("第一段"),
+                ArticleContentBlock.Paragraph("第二段"),
+                ArticleContentBlock.Image(
+                    url = "https://i0.hdslb.com/bfs/article/ops.png",
+                    width = 900,
+                    height = 1600
+                )
+            ),
+            blocks
+        )
+    }
+
+    @Test
+    fun `parseArticleContentBlocks reads json content ops and native images from article api`() {
+        val blocks = parseArticleContentBlocks(
+            structuredParagraphs = emptyList(),
+            htmlContent = """
+                {
+                  "ops": [
+                    { "insert": "第一段 JSON 正文\n" },
+                    {
+                      "insert": {
+                        "native-image": {
+                          "url": "//i0.hdslb.com/bfs/article/native.png",
+                          "width": 1080,
+                          "height": 1920
+                        }
+                      }
+                    }
+                  ]
+                }
+            """.trimIndent()
+        )
+
+        assertEquals(
+            listOf(
+                ArticleContentBlock.Paragraph("第一段 JSON 正文"),
+                ArticleContentBlock.Image(
+                    url = "https://i0.hdslb.com/bfs/article/native.png",
+                    width = 1080,
+                    height = 1920
+                )
+            ),
+            blocks
+        )
+    }
+
     private fun paragraph(
         textWords: List<String> = emptyList(),
         headingWords: List<String> = emptyList(),

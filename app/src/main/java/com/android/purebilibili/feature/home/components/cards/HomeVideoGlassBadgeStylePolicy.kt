@@ -14,6 +14,7 @@ internal fun resolveHomeVideoGlassBadgeStylePolicy(
     showCoverGlassBadges: Boolean,
     showInfoGlassBadges: Boolean
 ): HomeVideoGlassBadgeStylePolicy = HomeVideoGlassBadgeStylePolicy(
-    coverStyle = if (showCoverGlassBadges) HomeVideoBadgeStyle.GLASS else HomeVideoBadgeStyle.PLAIN,
-    infoStyle = if (showInfoGlassBadges) HomeVideoBadgeStyle.GLASS else HomeVideoBadgeStyle.PLAIN
+    // 玻璃标签已退役：旧偏好仍可能存在，但不再影响首页、搜索、历史等卡片标签样式。
+    coverStyle = HomeVideoBadgeStyle.PLAIN,
+    infoStyle = HomeVideoBadgeStyle.PLAIN
 )

@@ -72,13 +72,13 @@ class HomeTopTabGesturePolicyTest {
         assertTrue(
             resolveHomeTopTabsAutoCollapsed(
                 currentHeaderOffsetPx = -1f,
-                isHeaderCollapseEnabled = true
+                isTopTabAutoCollapseEnabled = true
             )
         )
         assertFalse(
             resolveHomeTopTabsAutoCollapsed(
                 currentHeaderOffsetPx = 0f,
-                isHeaderCollapseEnabled = true
+                isTopTabAutoCollapseEnabled = true
             )
         )
     }

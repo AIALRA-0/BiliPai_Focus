@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,8 +16,8 @@ class TodayWatchQueuePolicyTest {
             videoQueue = listOf(
                 VideoItem(bvid = "a", title = "A"),
                 VideoItem(bvid = "b", title = "B")
-            ),
-            explanationByBvid = mapOf("a" to "exp-a", "b" to "exp-b")
+            ).toImmutableList(),
+            explanationByBvid = mapOf("a" to "exp-a", "b" to "exp-b").toImmutableMap()
         )
 
         val update = consumeVideoFromTodayWatchPlan(
@@ -33,8 +35,8 @@ class TodayWatchQueuePolicyTest {
     @Test
     fun `consume keeps plan unchanged when item not found`() {
         val plan = TodayWatchPlan(
-            videoQueue = listOf(VideoItem(bvid = "x", title = "X")),
-            explanationByBvid = mapOf("x" to "exp-x")
+            videoQueue = listOf(VideoItem(bvid = "x", title = "X")).toImmutableList(),
+            explanationByBvid = mapOf("x" to "exp-x").toImmutableMap()
         )
 
         val update = consumeVideoFromTodayWatchPlan(

@@ -1,0 +1,52 @@
+package com.android.purebilibili.navigation
+
+import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+
+class BilibiliLinkNavigationPolicyTest {
+
+    @Test
+    fun `bilibili video link resolves to native target`() {
+        val action = resolveBilibiliLinkNavigationAction("https://www.bilibili.com/video/BV1xx411c7mD")
+
+        val native = assertIs<BilibiliLinkNavigationAction.NativeTarget>(action)
+        val target = assertIs<BilibiliNavigationTarget.Video>(native.target)
+        assertEquals("BV1xx411c7mD", target.videoId)
+    }
+
+    @Test
+    fun `unknown bilibili link falls back to in app web`() {
+        val action = resolveBilibiliLinkNavigationAction("https://www.bilibili.com/blackboard/activity-test")
+
+        val web = assertIs<BilibiliLinkNavigationAction.InAppWeb>(action)
+        assertEquals("https://www.bilibili.com/blackboard/activity-test", web.url)
+    }
+
+    @Test
+    fun `article link resolves to native target`() {
+        val action = resolveBilibiliLinkNavigationAction("https://www.bilibili.com/read/cv12345")
+
+        val native = assertIs<BilibiliLinkNavigationAction.NativeTarget>(action)
+        val target = assertIs<BilibiliNavigationTarget.Article>(native.target)
+        assertEquals(12345L, target.articleId)
+    }
+
+    @Test
+    fun `dynamic link resolves to native target`() {
+        val action = resolveBilibiliLinkNavigationAction("https://t.bilibili.com/1199344045210468386")
+
+        val native = assertIs<BilibiliLinkNavigationAction.NativeTarget>(action)
+        val target = assertIs<BilibiliNavigationTarget.Dynamic>(native.target)
+        assertEquals("1199344045210468386", target.dynamicId)
+    }
+
+    @Test
+    fun `external link remains external`() {
+        val action = resolveBilibiliLinkNavigationAction("https://example.com/demo")
+
+        val external = assertIs<BilibiliLinkNavigationAction.External>(action)
+        assertEquals("https://example.com/demo", external.url)
+    }
+}

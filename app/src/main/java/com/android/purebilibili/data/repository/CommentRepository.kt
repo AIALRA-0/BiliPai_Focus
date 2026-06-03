@@ -170,6 +170,53 @@ object CommentRepository {
         return guestApi.getReplyListMain(params)
     }
 
+    private suspend fun fetchCommentEmptySuccessFallback(
+        readPlan: CommentReadPlan,
+        oid: Long,
+        type: Int,
+        page: Int,
+        ps: Int,
+        mode: Int
+    ): ReplyResponse {
+        var compatResponse: ReplyResponse? = null
+        if (mode == 3) {
+            compatResponse = fetchGuestHotCommentsCompat(
+                oid = oid,
+                type = type,
+                page = page,
+                ps = ps
+            )
+            val compatNeedsFallback =
+                shouldFallbackCommentReadOnEmptyRenderableSuccess(
+                    responseCode = compatResponse.code,
+                    data = compatResponse.data
+                ) || (
+                    compatResponse.code != 0 &&
+                        readPlan.fallback != null &&
+                        shouldFallbackCommentRead(compatResponse.code)
+                    )
+            if (!compatNeedsFallback) return compatResponse
+        }
+
+        val fallbackMode = readPlan.fallback
+        return if (fallbackMode != null) {
+            Logger.w(
+                "CommentRepo",
+                "getComments empty-success identity fallback: to=$fallbackMode, oid=$oid, type=$type, page=$page, mode=$mode"
+            )
+            fetchCommentsByApi(
+                apiClient = resolveReadApi(fallbackMode),
+                oid = oid,
+                type = type,
+                page = page,
+                ps = ps,
+                mode = mode
+            )
+        } else {
+            compatResponse ?: ReplyResponse(code = -1, message = "empty comment payload")
+        }
+    }
+
     /**
      * 获取评论列表
      * @param mode 排序模式:
@@ -213,14 +260,20 @@ object CommentRepository {
                 )
                 if (grpcResult.isSuccess) {
                     val grpcData = grpcResult.getOrNull()
-                    if (!shouldFallbackGrpcCommentReadOnMissingLocation(grpcData)) {
+                    if (shouldFallbackCommentReadOnEmptyRenderableSuccess(responseCode = 0, data = grpcData)) {
+                        Logger.w(
+                            "CommentRepo",
+                            "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, reason=empty-renderable-success"
+                        )
+                    } else if (!shouldFallbackGrpcCommentReadOnMissingLocation(grpcData)) {
                         Logger.d("CommentRepo", " getComments (gRPC MainList): oid=$oid, type=$type, page=$page, mode=$mode")
                         return@withContext grpcResult
+                    } else {
+                        Logger.w(
+                            "CommentRepo",
+                            "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, reason=missing-location"
+                        )
                     }
-                    Logger.w(
-                        "CommentRepo",
-                        "getComments gRPC fallback to REST: oid=$oid, type=$type, page=$page, mode=$mode, reason=missing-location"
-                    )
                 } else {
                     Logger.w(
                         "CommentRepo",
@@ -241,45 +294,23 @@ object CommentRepository {
                 mode = mode
             )
             val finalResponse = if (
-                shouldFallbackGuestHotCommentReadOnEmptySuccess(
-                    primaryMode = primaryMode,
-                    page = page,
-                    mode = mode,
+                shouldFallbackCommentReadOnEmptyRenderableSuccess(
                     responseCode = primaryResponse.code,
                     data = primaryResponse.data
                 )
             ) {
                 Logger.w(
                     "CommentRepo",
-                    "getComments empty-success fallback triggered: from=$primaryMode to=compat-main, oid=$oid, type=$type, page=$page, mode=$mode, total=${primaryResponse.data?.getAllCount() ?: 0}"
+                    "getComments empty-success fallback triggered: from=$primaryMode, oid=$oid, type=$type, page=$page, mode=$mode, total=${primaryResponse.data?.getAllCount() ?: 0}"
                 )
-                val compatResponse = fetchGuestHotCommentsCompat(
+                fetchCommentEmptySuccessFallback(
+                    readPlan = readPlan,
                     oid = oid,
                     type = type,
                     page = page,
-                    ps = ps
+                    ps = ps,
+                    mode = mode
                 )
-                if (
-                    compatResponse.code != 0 &&
-                    readPlan.fallback != null &&
-                    shouldFallbackCommentRead(compatResponse.code)
-                ) {
-                    val fallbackMode = readPlan.fallback
-                    Logger.w(
-                        "CommentRepo",
-                        "getComments compat fallback triggered: code=${compatResponse.code}, from=compat-main to=$fallbackMode, oid=$oid, type=$type, page=$page, mode=$mode"
-                    )
-                    fetchCommentsByApi(
-                        apiClient = resolveReadApi(fallbackMode),
-                        oid = oid,
-                        type = type,
-                        page = page,
-                        ps = ps,
-                        mode = mode
-                    )
-                } else {
-                    compatResponse
-                }
             } else if (
                 primaryResponse.code != 0 &&
                 readPlan.fallback != null &&
@@ -362,13 +393,14 @@ object CommentRepository {
         rootId: Long,
         page: Int,
         ps: Int = 20,
-        paginationOffset: String? = null
+        paginationOffset: String? = null,
+        preferRestPaging: Boolean = false
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
             // 确保 buvid3 已初始化
             VideoRepository.ensureBuvid3()
 
-            if (shouldTryGrpcPagedRequest(page = page, paginationOffset = paginationOffset)) {
+            if (!preferRestPaging && shouldTryGrpcPagedRequest(page = page, paginationOffset = paginationOffset)) {
                 val grpcResult = CommentGrpcRepository.getDetailList(
                     oid = oid,
                     type = type,
@@ -507,6 +539,30 @@ object CommentRepository {
                 Result.failure(Exception(response.message))
             }
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchMentionUsers(keyword: String = ""): Result<List<MentionSearchUser>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.searchMentionUsers(keyword.trim().takeIf { it.isNotEmpty() })
+            if (response.code == 0) {
+                val users = response.data
+                    ?.groups
+                    .orEmpty()
+                    .flatMap { it.items }
+                    .filter { it.uid > 0L && it.name.isNotBlank() }
+                    .distinctBy { it.uid }
+                Result.success(users)
+            } else {
+                val errorMsg = when (response.code) {
+                    -101 -> "请先登录后使用@好友"
+                    else -> response.message.ifEmpty { "搜索@好友失败 (${response.code})" }
+                }
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Logger.e("CommentRepo", "searchMentionUsers exception: keyword=$keyword", e)
             Result.failure(e)
         }
     }
@@ -850,6 +906,8 @@ object CommentRepository {
     private const val IMAGE_EXTRA_WAIT_MS = 10000L
     /** 删除判定前的二次确认等待 */
     private const val DELETE_CONFIRM_RETRY_DELAY_MS = 2200L
+    /** 根评论时间线探测最多翻页数，避免检测任务无限拉取评论区 */
+    private const val ROOT_TIMELINE_SCAN_MAX_PAGES = 3
 
     /**
      * [新增] 评论反诈检测 - 检查刚发送的评论是否被 ShadowBan / 秒删 / 审核
@@ -863,6 +921,7 @@ object CommentRepository {
      * @param rpid 评论 rpid
      * @param rootId 根评论 rpid (0 表示自己就是根评论)
      * @param hasPictures 是否包含图片（影响等待时间）
+     * @param sentAtSeconds 评论发送时间，秒级时间戳；用于根评论时间倒序扫描提前停止
      * @param waitMs 自定义等待时间（传0跳过等待）
      * @return CommentFraudStatus 检测结果
      */
@@ -871,6 +930,7 @@ object CommentRepository {
         rpid: Long,
         rootId: Long = 0,
         hasPictures: Boolean = false,
+        sentAtSeconds: Long = 0,
         waitMs: Long = -1
     ): Result<CommentFraudStatus> = withContext(Dispatchers.IO) {
         try {
@@ -891,7 +951,7 @@ object CommentRepository {
             if (isReply) {
                 Result.success(checkReplyComment(aid, rpid, rootId))
             } else {
-                Result.success(checkRootComment(aid, rpid))
+                Result.success(checkRootComment(aid, rpid, sentAtSeconds))
             }
         } catch (e: Exception) {
             Logger.e("CommentFraud", "检测异常: ${e.message}", e)
@@ -951,64 +1011,132 @@ object CommentRepository {
     /**
      * 检查根评论的状态
      * 流程:
-     * 1) guest seek_rpid 精确探测
-     * 2) auth seek_rpid 精确探测
-     * 3) 若 auth 找到而 guest 未找到，再用 guest 取回复页区分审核中/ShadowBan
-     * 4) 仅在双端持续未命中时才判秒删，避免瞬时延迟误判
+     * 1) guest 时间倒序翻主评论列表
+     * 2) auth 获取该评论回复页确认是否仍可见
+     * 3) auth 可见而 guest 回复页不可见时判 ShadowBan，双端可见时判疑似审核
+     * 4) 仅在 auth 回复页明确删除且二次确认后才判秒删
      */
-    private suspend fun checkRootComment(aid: Long, rpid: Long): CommentFraudStatus {
-        Logger.d("CommentFraud", "[根评论] Step1: guest seek_rpid 检测 rpid=$rpid")
-        val guestSeekProbe = probeCommentPresenceBySeekRpid(
-            apiClient = guestApi,
+    private suspend fun checkRootComment(aid: Long, rpid: Long, sentAtSeconds: Long): CommentFraudStatus {
+        Logger.d("CommentFraud", "[根评论] Step1: guest 时间线检测 rpid=$rpid sentAt=$sentAtSeconds")
+        val guestTimelineProbe = probeRootCommentPresenceByGuestTimeline(
             aid = aid,
-            targetRpid = rpid
+            targetRpid = rpid,
+            sentAtSeconds = sentAtSeconds
         )
-        if (guestSeekProbe.requestSucceeded && guestSeekProbe.found) {
-            Logger.d("CommentFraud", "[根评论] ✅ guest 已找到评论")
+        if (guestTimelineProbe.requestSucceeded && guestTimelineProbe.found) {
+            Logger.d("CommentFraud", "[根评论] ✅ guest 时间线已找到评论")
             return CommentFraudStatus.NORMAL
         }
 
-        Logger.d("CommentFraud", "[根评论] Step2: auth seek_rpid 检测 rpid=$rpid")
-        val authSeekProbe = probeCommentPresenceBySeekRpid(
+        Logger.d("CommentFraud", "[根评论] Step2: auth 回复页检测 root=$rpid")
+        val authReplyPageProbe = probeCommentReplyPage(
             apiClient = api,
             aid = aid,
-            targetRpid = rpid
+            rootRpid = rpid
         )
 
-        val guestReplyPageVisible: Boolean? =
-            if (authSeekProbe.requestSucceeded &&
-                authSeekProbe.found &&
-                guestSeekProbe.requestSucceeded &&
-                !guestSeekProbe.found
-            ) {
-                Logger.d("CommentFraud", "[根评论] Step3: guest 回复页可见性检测 root=$rpid")
-                probeGuestReplyPageVisibility(aid = aid, rootRpid = rpid)
-            } else {
-                null
-            }
-
-        var confirmedNotFoundAfterRetry = false
-        if (guestSeekProbe.requestSucceeded &&
-            !guestSeekProbe.found &&
-            authSeekProbe.requestSucceeded &&
-            !authSeekProbe.found &&
-            !authSeekProbe.deletedHint
-        ) {
-            Logger.d("CommentFraud", "[根评论] Step4: 二次确认未命中，避免瞬时误判")
-            confirmedNotFoundAfterRetry = confirmDeletedBySecondProbe(aid = aid, rpid = rpid)
+        val guestReplyPageProbe = if (authReplyPageProbe.requestSucceeded && authReplyPageProbe.visible) {
+            Logger.d("CommentFraud", "[根评论] Step3: guest 回复页检测 root=$rpid")
+            probeCommentReplyPage(
+                apiClient = guestApi,
+                aid = aid,
+                rootRpid = rpid
+            )
+        } else {
+            null
         }
 
-        val status = resolveRootFraudStatus(
-            guestSeekProbe = guestSeekProbe,
-            authSeekProbe = authSeekProbe,
-            guestReplyPageVisible = guestReplyPageVisible,
-            confirmedNotFoundAfterRetry = confirmedNotFoundAfterRetry
+        val confirmedDeletedAfterRetry = if (authReplyPageProbe.requestSucceeded && authReplyPageProbe.deletedHint) {
+            Logger.d("CommentFraud", "[根评论] Step4: auth 删除提示二次确认")
+            confirmRootDeletedByAuthReplyPage(aid = aid, rpid = rpid)
+        } else {
+            false
+        }
+
+        val status = resolveRootFraudStatusFromTimeline(
+            guestTimelineProbe = guestTimelineProbe,
+            authReplyPageProbe = authReplyPageProbe,
+            guestReplyPageProbe = guestReplyPageProbe,
+            confirmedDeletedAfterRetry = confirmedDeletedAfterRetry
         )
         Logger.d(
             "CommentFraud",
-            "[根评论] 判定结果=$status guest=$guestSeekProbe auth=$authSeekProbe guestReply=$guestReplyPageVisible retry=$confirmedNotFoundAfterRetry"
+            "[根评论] 判定结果=$status guestTimeline=$guestTimelineProbe authReply=$authReplyPageProbe guestReply=$guestReplyPageProbe retry=$confirmedDeletedAfterRetry"
         )
         return status
+    }
+
+    private suspend fun probeRootCommentPresenceByGuestTimeline(
+        aid: Long,
+        targetRpid: Long,
+        sentAtSeconds: Long
+    ): CommentPresenceProbe {
+        var sawSuccessfulPage = false
+        for (page in 1..ROOT_TIMELINE_SCAN_MAX_PAGES) {
+            val response = try {
+                guestApi.getReplyListLegacy(
+                    oid = aid,
+                    type = 1,
+                    pn = page,
+                    ps = 20,
+                    sort = 0
+                )
+            } catch (e: Exception) {
+                Logger.e("CommentFraud", "root timeline probe exception: page=$page, ${e.message}")
+                return CommentPresenceProbe(
+                    requestSucceeded = false,
+                    found = false,
+                    deletedHint = false
+                )
+            }
+
+            if (response.code != 0) {
+                Logger.w(
+                    "CommentFraud",
+                    "root timeline probe failed: page=$page, code=${response.code}, message=${response.message}"
+                )
+                return CommentPresenceProbe(
+                    requestSucceeded = false,
+                    found = false,
+                    deletedHint = false
+                )
+            }
+
+            sawSuccessfulPage = true
+            val data = response.data
+            if (containsTargetRpid(data, targetRpid)) {
+                return CommentPresenceProbe(
+                    requestSucceeded = true,
+                    found = true,
+                    deletedHint = false
+                )
+            }
+
+            val replies = data?.replies.orEmpty()
+            if (replies.isEmpty()) {
+                return CommentPresenceProbe(
+                    requestSucceeded = true,
+                    found = false,
+                    deletedHint = false
+                )
+            }
+
+            val hasPassedSentTime = sentAtSeconds > 0 &&
+                replies.any { reply -> reply.ctime > 0 && reply.ctime < sentAtSeconds }
+            if (hasPassedSentTime) {
+                return CommentPresenceProbe(
+                    requestSucceeded = true,
+                    found = false,
+                    deletedHint = false
+                )
+            }
+        }
+
+        return CommentPresenceProbe(
+            requestSucceeded = false,
+            found = false,
+            deletedHint = false
+        )
     }
 
     private suspend fun probeCommentPresenceBySeekRpid(
@@ -1082,26 +1210,56 @@ object CommentRepository {
         }
     }
 
-    private suspend fun probeGuestReplyPageVisibility(aid: Long, rootRpid: Long): Boolean? {
+    private suspend fun probeCommentReplyPage(
+        apiClient: BilibiliApi,
+        aid: Long,
+        rootRpid: Long
+    ): CommentReplyPageProbe {
         try {
-            val guestReplyResponse = guestApi.getReplyReply(
+            val replyResponse = apiClient.getReplyReply(
                 oid = aid,
                 root = rootRpid,
                 pn = 1,
                 ps = 1
             )
-            return when (guestReplyResponse.code) {
-                0 -> true
-                12002, 12009 -> false
+            return when (replyResponse.code) {
+                0 -> CommentReplyPageProbe(
+                    requestSucceeded = true,
+                    visible = true,
+                    deletedHint = false
+                )
+                12002, 12009 -> CommentReplyPageProbe(
+                    requestSucceeded = true,
+                    visible = false,
+                    deletedHint = true
+                )
                 else -> {
-                    Logger.w("CommentFraud", "guest reply page probe failed: code=${guestReplyResponse.code}")
-                    null
+                    Logger.w("CommentFraud", "reply page probe failed: code=${replyResponse.code}")
+                    CommentReplyPageProbe(
+                        requestSucceeded = false,
+                        visible = false,
+                        deletedHint = false
+                    )
                 }
             }
         } catch (e: Exception) {
-            Logger.e("CommentFraud", "guest reply page probe exception: ${e.message}")
-            return null
+            Logger.e("CommentFraud", "reply page probe exception: ${e.message}")
+            return CommentReplyPageProbe(
+                requestSucceeded = false,
+                visible = false,
+                deletedHint = false
+            )
         }
+    }
+
+    private suspend fun confirmRootDeletedByAuthReplyPage(aid: Long, rpid: Long): Boolean {
+        delay(DELETE_CONFIRM_RETRY_DELAY_MS)
+        val authRetryProbe = probeCommentReplyPage(
+            apiClient = api,
+            aid = aid,
+            rootRpid = rpid
+        )
+        return authRetryProbe.requestSucceeded && authRetryProbe.deletedHint
     }
 
     private suspend fun confirmDeletedBySecondProbe(aid: Long, rpid: Long): Boolean {

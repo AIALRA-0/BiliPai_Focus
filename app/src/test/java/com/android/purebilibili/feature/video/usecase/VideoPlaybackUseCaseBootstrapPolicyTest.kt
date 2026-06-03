@@ -37,4 +37,34 @@ class VideoPlaybackUseCaseBootstrapPolicyTest {
             )
         )
     }
+
+    @Test
+    fun avRoute_defersRelatedVideosUntilCanonicalBvidIsAvailable() {
+        assertEquals(
+            true,
+            shouldFetchRelatedVideosAfterVideoDetail("av115391124741470")
+        )
+        assertEquals(
+            "BV1frWHzTERT",
+            resolveRelatedVideosRequestBvid(
+                requestBvid = "av115391124741470",
+                canonicalBvid = "BV1frWHzTERT"
+            )
+        )
+    }
+
+    @Test
+    fun bvidRoute_keepsParallelRelatedVideosRequest() {
+        assertEquals(
+            false,
+            shouldFetchRelatedVideosAfterVideoDetail("BV1frWHzTERT")
+        )
+        assertEquals(
+            "BV1frWHzTERT",
+            resolveRelatedVideosRequestBvid(
+                requestBvid = "BV1frWHzTERT",
+                canonicalBvid = "BV1canonical"
+            )
+        )
+    }
 }

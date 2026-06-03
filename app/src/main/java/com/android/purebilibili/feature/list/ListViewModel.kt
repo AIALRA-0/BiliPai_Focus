@@ -32,10 +32,7 @@ abstract class BaseListViewModel(application: Application, private val pageTitle
     protected val _uiState = MutableStateFlow(ListUiState(title = pageTitle, isLoading = true))
     val uiState = _uiState.asStateFlow()
 
-    init {
-        loadData()
-    }
-
+    // 应当在子类初始化完成后调用
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
@@ -82,6 +79,22 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
 
     private val _deleteSession = MutableStateFlow<HistoryDeleteSession?>(null)
     internal val deleteSession = _deleteSession.asStateFlow()
+
+    private val _isHistoryPausedState = MutableStateFlow(false)
+    val isHistoryPausedState = _isHistoryPausedState.asStateFlow()
+
+    private val _isHistoryManagementBusyState = MutableStateFlow(false)
+    val isHistoryManagementBusyState = _isHistoryManagementBusyState.asStateFlow()
+
+    private data class HistoryClearSnapshot(
+        val items: List<VideoItem>,
+        val renderMap: Map<String, com.android.purebilibili.data.model.response.HistoryItem>,
+        val bvidMap: Map<String, com.android.purebilibili.data.model.response.HistoryItem>,
+        val cursorMax: Long,
+        val cursorViewAt: Long,
+        val cursorBusiness: String,
+        val hasMore: Boolean
+    )
     
     /**
      * 根据 bvid 获取历史记录项的导航信息
@@ -356,76 +369,109 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     }
 
     fun clearAllHistory() {
-        val snapshotItems = _uiState.value.items
-        val snapshotRenderMap = HashMap(_historyItemsByRenderKey)
-        val snapshotBvidMap = HashMap(_historyItemsMap)
-        val snapshotHasMore = hasMore
-        val snapshotCursorMax = cursorMax
-        val snapshotCursorViewAt = cursorViewAt
-        val snapshotCursorBusiness = cursorBusiness
-        val snapshotDeleteSession = _deleteSession.value
-        if (snapshotItems.isEmpty()) return
-
-        _uiState.value = _uiState.value.copy(items = emptyList())
-        _historyItemsByRenderKey.clear()
-        _historyItemsMap.clear()
-        _deleteSession.value = null
-        hasMore = false
-        _hasMoreState.value = false
-        cursorMax = 0L
-        cursorViewAt = 0L
-        cursorBusiness = ""
+        if (_isHistoryManagementBusyState.value) return
+        val snapshot = captureHistoryClearSnapshot()
+        applyHistoryClearOptimisticState()
 
         viewModelScope.launch {
-            try {
-                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
-                if (csrf.isBlank()) {
-                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                    _deleteSession.value = snapshotDeleteSession
-                    hasMore = snapshotHasMore
-                    _hasMoreState.value = snapshotHasMore
-                    cursorMax = snapshotCursorMax
-                    cursorViewAt = snapshotCursorViewAt
-                    cursorBusiness = snapshotCursorBusiness
-                    android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
+            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
+            if (csrf.isBlank()) {
+                restoreHistoryClearSnapshot(snapshot)
+                _isHistoryManagementBusyState.value = false
+                android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                return@launch
+            }
 
-                val result = com.android.purebilibili.data.repository.HistoryRepository.clearHistory(csrf)
-                if (result.isSuccess) {
-                    android.widget.Toast.makeText(
-                        getApplication(),
-                        "已清空全部历史记录",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                    _deleteSession.value = snapshotDeleteSession
-                    hasMore = snapshotHasMore
-                    _hasMoreState.value = snapshotHasMore
-                    cursorMax = snapshotCursorMax
-                    cursorViewAt = snapshotCursorViewAt
-                    cursorBusiness = snapshotCursorBusiness
-                    android.widget.Toast.makeText(
-                        getApplication(),
-                        "清空历史失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
-            } catch (e: Exception) {
-                restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
-                _deleteSession.value = snapshotDeleteSession
-                hasMore = snapshotHasMore
-                _hasMoreState.value = snapshotHasMore
-                cursorMax = snapshotCursorMax
-                cursorViewAt = snapshotCursorViewAt
-                cursorBusiness = snapshotCursorBusiness
+            val result = com.android.purebilibili.data.repository.HistoryRepository.clearHistory(csrf)
+            if (result.isSuccess) {
+                android.widget.Toast.makeText(getApplication(), "已清空历史记录", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                restoreHistoryClearSnapshot(snapshot)
                 android.widget.Toast.makeText(
                     getApplication(),
-                    "清空历史失败: ${e.message ?: "请稍后重试"}",
+                    "清空历史失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
             }
+            _isHistoryManagementBusyState.value = false
+        }
+    }
+
+    private fun captureHistoryClearSnapshot(): HistoryClearSnapshot {
+        return HistoryClearSnapshot(
+            items = _uiState.value.items,
+            renderMap = HashMap(_historyItemsByRenderKey),
+            bvidMap = HashMap(_historyItemsMap),
+            cursorMax = cursorMax,
+            cursorViewAt = cursorViewAt,
+            cursorBusiness = cursorBusiness,
+            hasMore = hasMore
+        )
+    }
+
+    private fun applyHistoryClearOptimisticState() {
+        _isHistoryManagementBusyState.value = true
+        _deleteSession.value = null
+        _uiState.value = _uiState.value.copy(items = emptyList(), error = null)
+        _historyItemsByRenderKey.clear()
+        _historyItemsMap.clear()
+        cursorMax = 0
+        cursorViewAt = 0
+        cursorBusiness = ""
+        hasMore = false
+        _hasMoreState.value = false
+    }
+
+    private fun restoreHistoryClearSnapshot(snapshot: HistoryClearSnapshot) {
+        restoreHistorySnapshot(snapshot.items, snapshot.renderMap, snapshot.bvidMap)
+        cursorMax = snapshot.cursorMax
+        cursorViewAt = snapshot.cursorViewAt
+        cursorBusiness = snapshot.cursorBusiness
+        hasMore = snapshot.hasMore
+        _hasMoreState.value = snapshot.hasMore
+    }
+
+    fun loadHistoryPauseState() {
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.HistoryRepository.getHistoryPaused()
+            result.getOrNull()?.let { paused ->
+                _isHistoryPausedState.value = paused
+            }
+        }
+    }
+
+    fun toggleHistoryPause() {
+        if (_isHistoryManagementBusyState.value) return
+        val currentPaused = _isHistoryPausedState.value
+        val nextPaused = !currentPaused
+        val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
+        if (csrf.isBlank()) {
+            android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        _isHistoryPausedState.value = nextPaused
+        _isHistoryManagementBusyState.value = true
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.HistoryRepository.setHistoryPaused(
+                paused = nextPaused,
+                csrf = csrf
+            )
+            if (result.isSuccess) {
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    resolveHistoryPauseSuccessMessage(nextPaused),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                _isHistoryPausedState.value = currentPaused
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    "设置历史记录失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            _isHistoryManagementBusyState.value = false
         }
     }
 
@@ -506,6 +552,10 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         private const val HISTORY_DELETE_MAX_ATTEMPTS = 3
         private const val HISTORY_DELETE_RETRY_BASE_DELAY_MS = 300L
     }
+
+    init {
+        loadHistoryPauseState()
+    }
 }
 
 // --- 收藏 ViewModel (支持分页加载所有收藏夹) ---
@@ -553,6 +603,12 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     // 📁 [新增] 当前选中的收藏夹索引
     private val _selectedFolderIndex = MutableStateFlow(0)
     val selectedFolderIndex = _selectedFolderIndex.asStateFlow()
+
+    private val _favoriteOrderState = MutableStateFlow(FavoriteResourceOrder.FAVORITE_TIME)
+    internal val favoriteOrderState = _favoriteOrderState.asStateFlow()
+
+    private val _isFavoriteManagingState = MutableStateFlow(false)
+    internal val isFavoriteManagingState = _isFavoriteManagingState.asStateFlow()
     
     /**
      * 📁 [新增] 切换收藏夹
@@ -616,7 +672,8 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                 if (index < allFolderIds.size) {
                     val listResult = com.android.purebilibili.data.repository.FavoriteRepository.getFavoriteList(
                         mediaId = allFolderIds[index], 
-                        pn = 1
+                        pn = 1,
+                        order = _favoriteOrderState.value.apiValue
                     )
                     val resultData = listResult.getOrNull()
                     val items = resultData?.medias?.map { it.toVideoItem() } ?: emptyList()
@@ -747,7 +804,8 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                 pagination.currentPage++
                 val listResult = com.android.purebilibili.data.repository.FavoriteRepository.getFavoriteList(
                      mediaId = allFolderIds[index], 
-                     pn = pagination.currentPage
+                     pn = pagination.currentPage,
+                     order = _favoriteOrderState.value.apiValue
                 )
                 val resultData = listResult.getOrNull()
                 val newItems = resultData?.medias?.map { it.toVideoItem() } ?: emptyList()
@@ -792,6 +850,53 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     fun loadMore() {
         loadMoreForFolder(currentFolderIndex)
     }
+
+    internal fun changeFavoriteOrder(order: FavoriteResourceOrder) {
+        if (_favoriteOrderState.value == order) return
+        _favoriteOrderState.value = order
+        _folderStates.forEach { (_, stateFlow) ->
+            stateFlow.value = stateFlow.value.copy(items = emptyList(), isLoading = false, error = null)
+        }
+        _fetchingIndices.clear()
+        reloadFavoriteFolder(_selectedFolderIndex.value)
+    }
+
+    internal fun cleanInvalidResourcesInSelectedFolder() {
+        if (_isFavoriteManagingState.value) return
+        val folderIndex = _selectedFolderIndex.value
+        val folder = _folders.value.getOrNull(folderIndex)
+        if (!canCleanInvalidFavoriteResources(folder)) return
+        val mediaId = allFolderIds.getOrNull(folderIndex) ?: return
+        _isFavoriteManagingState.value = true
+        viewModelScope.launch {
+            val result = com.android.purebilibili.data.repository.FavoriteRepository.cleanInvalidResources(mediaId)
+            if (result.isSuccess) {
+                android.widget.Toast.makeText(getApplication(), "已清理失效内容", android.widget.Toast.LENGTH_SHORT).show()
+                reloadFavoriteFolder(folderIndex)
+            } else {
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    "清理失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            _isFavoriteManagingState.value = false
+        }
+    }
+
+    private fun reloadFavoriteFolder(index: Int) {
+        if (index < 0) return
+        folderPaginationStates[index] = PaginationState()
+        val stateFlow = _folderStates.getOrPut(index) { MutableStateFlow(ListUiState(isLoading = true)) }
+        stateFlow.value = stateFlow.value.copy(
+            items = emptyList(),
+            isLoading = true,
+            error = null
+        )
+        _fetchingIndices.remove(index)
+        loadFolder(index)
+    }
+
     //  [新增] 移除收藏
     fun removeVideo(video: VideoItem) {
         // aid 作为 resourceId
@@ -831,5 +936,9 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                  _uiState.value = _uiState.value.copy(error = message)
             }
         }
+    }
+
+    init {
+        loadData()
     }
 }

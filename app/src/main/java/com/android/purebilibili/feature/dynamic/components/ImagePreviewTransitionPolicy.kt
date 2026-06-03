@@ -60,7 +60,21 @@ data class ImagePreviewTextContent(
     val headline: String = "",
     val body: String = "",
     val perImageCaptions: List<String> = emptyList(),
-    val placement: ImagePreviewTextPlacement = ImagePreviewTextPlacement.OVERLAY_BOTTOM
+    val placement: ImagePreviewTextPlacement = ImagePreviewTextPlacement.OVERLAY_BOTTOM,
+    val commentContext: ImagePreviewCommentContext? = null
+)
+
+data class ImagePreviewCommentContext(
+    val replyId: Long = 0L,
+    val authorName: String = "",
+    val avatarUrl: String = "",
+    val timeText: String = "",
+    val body: String = "",
+    val originalSizeLabels: List<String> = emptyList(),
+    val likeCount: Int = 0,
+    val liked: Boolean = false,
+    val onLikeClick: (() -> Unit)? = null,
+    val onReplyClick: (() -> Unit)? = null
 )
 
 internal data class ImagePreviewResolvedText(
@@ -73,6 +87,14 @@ internal data class ImagePreviewTextTransform(
     val rotationX: Float,
     val alpha: Float,
     val translateYDp: Float
+)
+
+internal data class CommentImagePreviewPageTransform(
+    val rotationY: Float,
+    val pivotFractionX: Float,
+    val translationXPx: Float,
+    val scale: Float,
+    val alpha: Float
 )
 
 internal data class ImagePreviewOverlayPadding(
@@ -126,7 +148,7 @@ internal fun resolveImagePreviewVisualFrame(
 
 internal fun imagePreviewDismissMotion(): ImagePreviewDismissMotion {
     return ImagePreviewDismissMotion(
-        overshootTarget = -0.06f,
+        overshootTarget = 0f,
         settleTarget = 0f
     )
 }
@@ -282,11 +304,6 @@ internal fun resolveImagePreviewDismissBackdropAlpha(
     return visualProgress.coerceIn(0f, 1f).pow(0.45f)
 }
 
-internal fun resolvePredictiveBackAnimationProgress(backGestureProgress: Float): Float {
-    val clamped = backGestureProgress.coerceIn(0f, 1f)
-    return 1f - clamped
-}
-
 internal fun resolveImagePreviewText(
     textContent: ImagePreviewTextContent?,
     currentPage: Int,
@@ -331,8 +348,51 @@ internal fun shouldShowImagePreviewText(
     textVisible: Boolean
 ): Boolean = hasText && textVisible
 
+internal fun resolveImagePreviewInitialTextVisibility(
+    hasText: Boolean,
+    defaultVisible: Boolean
+): Boolean = hasText && defaultVisible
+
 internal fun resolveImagePreviewTextVisibilityAfterToggle(currentVisible: Boolean): Boolean {
     return !currentVisible
+}
+
+internal fun resolveCommentImagePreviewPageTransform(
+    pageOffsetFraction: Float,
+    containerWidthPx: Float
+): CommentImagePreviewPageTransform {
+    val clampedOffset = pageOffsetFraction.coerceIn(-1f, 1f)
+    val absOffset = kotlin.math.abs(clampedOffset)
+    val safeWidth = containerWidthPx.coerceAtLeast(1f)
+    val pivot = when {
+        clampedOffset > 0.001f -> 1f
+        clampedOffset < -0.001f -> 0f
+        else -> 0.5f
+    }
+    return CommentImagePreviewPageTransform(
+        rotationY = -clampedOffset * 72f,
+        pivotFractionX = pivot,
+        translationXPx = -clampedOffset * safeWidth * 0.23f,
+        scale = lerpFloat(1f, 0.86f, absOffset),
+        alpha = lerpFloat(1f, 0.76f, absOffset)
+    )
+}
+
+internal fun resolveCommentImageOriginalSizeLabel(sizeKb: Float?): String {
+    val safeSize = sizeKb?.takeIf { it > 0f } ?: return "查看原图"
+    return if (safeSize >= 1024f) {
+        "查看原图 (${String.format(java.util.Locale.US, "%.1f", safeSize / 1024f)}M)"
+    } else {
+        "查看原图 (${safeSize.toInt()}K)"
+    }
+}
+
+internal fun shouldHandleImagePreviewLongPressSave(
+    longPressSaveEnabled: Boolean,
+    imageUrl: String,
+    isSaving: Boolean
+): Boolean {
+    return longPressSaveEnabled && imageUrl.isNotBlank() && !isSaving
 }
 
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {

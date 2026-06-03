@@ -18,6 +18,29 @@ class MessageCenterUnreadPolicyTest {
     }
 
     @Test
+    fun totalMessageUnreadCount_sumsPrivateAndFeedBuckets() {
+        val privateUnread = MessageUnreadData(
+            unfollow_unread = 2,
+            follow_unread = 5,
+            dustbin_unread = 3,
+            custom_unread = 4
+        )
+        val feedUnread = MessageFeedUnreadData(
+            reply = 6,
+            at = 7,
+            like = 8,
+            sysMsg = 9
+        )
+
+        assertEquals(44, totalMessageUnreadCount(privateUnread, feedUnread))
+    }
+
+    @Test
+    fun totalMessageUnreadCount_treatsMissingDataAsZero() {
+        assertEquals(0, totalMessageUnreadCount(unreadData = null, feedUnread = null))
+    }
+
+    @Test
     fun buildMessageCenterTopItems_mapsUnreadCountsInExpectedOrder() {
         val items = buildMessageCenterTopItems(
             feedUnread = MessageFeedUnreadData(

@@ -67,7 +67,7 @@ class QualityManager {
         if (availableAudios.isEmpty()) return null
         
         // Prefer higher bandwidth audio
-        return availableAudios.maxByOrNull { it.bandwidth ?: 0 }
+        return availableAudios.maxByOrNull { it.bandwidth }
     }
     
     /**

@@ -24,7 +24,32 @@ class VideoDetailReturnCoverPolicyTest {
             resolveForceCoverOnlyForReturn(
                 forceCoverOnlyOnReturn = false,
                 isReturningFromDetail = true,
-                isExitTransitionInProgress = false
+                isExitTransitionInProgress = false,
+                detailShellSharedBoundsEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun `force cover stays disabled when detail shell owns shared return`() {
+        assertFalse(
+            resolveForceCoverOnlyForReturn(
+                forceCoverOnlyOnReturn = true,
+                isReturningFromDetail = true,
+                isExitTransitionInProgress = true,
+                detailShellSharedBoundsEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun `force cover stays disabled when shared transition is disabled`() {
+        assertFalse(
+            resolveForceCoverOnlyForReturn(
+                forceCoverOnlyOnReturn = true,
+                isReturningFromDetail = true,
+                isExitTransitionInProgress = false,
+                transitionEnabled = false
             )
         )
     }

@@ -21,13 +21,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -52,32 +54,41 @@ import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.BiliGradientButton
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.EmptyState
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperChromeColor
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
+import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowGroupStore
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.feature.dynamic.resolveDynamicFeedMaxWidth
 import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserListHorizontalPadding
 import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserListSpacing
+import com.android.purebilibili.feature.dynamic.resolveDynamicTimelineHorizontalSpacing
+import com.android.purebilibili.feature.dynamic.resolveDynamicTimelineMaxWidth
+import com.android.purebilibili.feature.dynamic.resolveDynamicTimelineMinColumnWidth
+import com.android.purebilibili.feature.dynamic.resolveDynamicTimelineVerticalSpacing
 
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
 import com.android.purebilibili.feature.dynamic.components.DynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
-import com.android.purebilibili.feature.dynamic.components.FocusFollowGroupSheet
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
 import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentSheet
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
 import com.android.purebilibili.feature.dynamic.components.DynamicSubReplyPreviewHost
+import com.android.purebilibili.feature.home.LocalHomeScrollOffset
+import com.android.purebilibili.feature.home.policy.resolveBottomBarChromeScrollOffset
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
@@ -86,6 +97,9 @@ import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 val LocalDynamicScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
 
@@ -99,6 +113,7 @@ val LocalDynamicScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
 @Composable
 fun DynamicScreen(
     viewModel: DynamicViewModel = viewModel(),
+    isCurrentPage: Boolean = true,
     onVideoClick: (String) -> Unit,
     onBangumiClick: (Long, Long) -> Unit = { _, _ -> },
     onDynamicDetailClick: (String) -> Unit = {},
@@ -109,28 +124,55 @@ fun DynamicScreen(
     onHomeClick: () -> Unit = {},
     globalHazeState: dev.chrisbanes.haze.HazeState? = null  // [新增] 全局底栏模糊状态
 ) {
-    val state by viewModel.uiState.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val listState = rememberLazyListState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val listState = rememberLazyStaggeredGridState()
     val sidebarUserListState = rememberLazyListState()
     val horizontalUserListState = rememberLazyListState()
     val dynamicScrollChannel = LocalDynamicScrollChannel.current
 
     // 侧边栏状态
-    val followedUsers by viewModel.followedUsers.collectAsState()
-    val selectedUserId by viewModel.selectedUserId.collectAsState()
-    val isSidebarExpanded by viewModel.isSidebarExpanded.collectAsState()
-    val showHiddenUsers by viewModel.showHiddenUsers.collectAsState()
-    val hiddenUserIds by viewModel.hiddenUserIds.collectAsState()
-    val selectedTab by viewModel.selectedTab.collectAsState()
+    val followedUsers by viewModel.followedUsers.collectAsStateWithLifecycle()
+    val selectedUserId by viewModel.selectedUserId.collectAsStateWithLifecycle()
+    val isSidebarExpanded by viewModel.isSidebarExpanded.collectAsStateWithLifecycle()
+    val showHiddenUsers by viewModel.showHiddenUsers.collectAsStateWithLifecycle()
+    val hiddenUserIds by viewModel.hiddenUserIds.collectAsStateWithLifecycle()
+    val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val focusFollowGroupConfig by FocusFollowGroupStore.getConfig(context)
+        .collectAsStateWithLifecycle(initialValue = FocusFollowGroupConfig())
+    val focusFollowGroupFilteringEnabled by SettingsManager
+        .getFocusFollowGroupFilteringEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = true)
+    val focusFollowedUsers = remember(
+        followedUsers,
+        focusFollowGroupConfig,
+        focusFollowGroupFilteringEnabled
+    ) {
+        filterSidebarUsersByFocusFollowGroups(
+            users = followedUsers,
+            config = focusFollowGroupConfig,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
+    }
+
+    LaunchedEffect(selectedUserId, focusFollowGroupConfig, focusFollowGroupFilteringEnabled) {
+        val resolvedSelectedUserId = resolveSelectedUserIdAfterFocusFollowGroupFilter(
+            selectedUserId = selectedUserId,
+            config = focusFollowGroupConfig,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
+        if (selectedUserId != null && resolvedSelectedUserId == null) {
+            viewModel.selectUser(null)
+        }
+    }
 
     //  [新增] 点赞/转发状态
-    val likedDynamics by viewModel.likedDynamics.collectAsState()
+    val likedDynamics by viewModel.likedDynamics.collectAsStateWithLifecycle()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }  // 存储要转发的动态ID
 
     val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
-        .collectAsState(initial = defaultDynamicTabVisibleIds)
+        .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
     val visibleTabs = remember(dynamicVisibleTabIds) {
         resolveDynamicVisibleTabs(dynamicVisibleTabIds)
     }
@@ -158,16 +200,18 @@ fun DynamicScreen(
     }
 
     //  布局模式状态（侧边栏/横向）
-    val displayMode by viewModel.displayMode.collectAsState()
-    val focusFollowGroupConfig by viewModel.focusFollowGroupConfig.collectAsState()
-    val focusFollowingUsers by viewModel.focusFollowingUsers.collectAsState()
-    val isFocusFollowingUsersLoading by viewModel.isFocusFollowingUsersLoading.collectAsState()
-    val hasResolvedFollowedUsers by viewModel.hasResolvedFollowedUsers.collectAsState()
-    val isFocusFollowGroupFilteringEnabled by viewModel.isFocusFollowGroupFilteringEnabled.collectAsState()
-    var showFocusFollowGroupSheet by remember { mutableStateOf(false) }
+    val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
+
     //  [Haze] 模糊状态
     val hazeState = rememberRecoverableHazeState()
+    val dynamicChromeBackdrop = rememberLayerBackdrop()
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(viewModel, isCurrentPage) {
+        if (isCurrentPage) {
+            viewModel.activateStartupLoads()
+        }
+    }
 
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
@@ -201,6 +245,24 @@ fun DynamicScreen(
             viewModel.setSelectedTab(activeSelectedTab)
         }
     }
+    var previousFeedTab by remember { mutableIntStateOf(activeSelectedTab) }
+    var previousFeedSelectedUserId by remember {
+        mutableStateOf(selectedUserId.takeIf { isSelectedUserTabActive })
+    }
+    LaunchedEffect(activeSelectedTab, selectedUserId, isSelectedUserTabActive) {
+        val activeUserId = selectedUserId.takeIf { isSelectedUserTabActive }
+        if (shouldResetDynamicFeedScrollOnSourceChange(
+                previousTab = previousFeedTab,
+                nextTab = activeSelectedTab,
+                previousSelectedUserId = previousFeedSelectedUserId,
+                nextSelectedUserId = activeUserId
+            )
+        ) {
+            listState.scrollToItem(0)
+        }
+        previousFeedTab = activeSelectedTab
+        previousFeedSelectedUserId = activeUserId
+    }
     val handleUserSelection = remember(selectedUserId, activeSelectedTab, isUserTabVisible, onUserClick) {
         { clickedUserId: Long? ->
             if (!isUserTabVisible) {
@@ -230,28 +292,6 @@ fun DynamicScreen(
             }
         }
     }
-    val visibleTimelineItems = remember(
-        state.items,
-        focusFollowGroupConfig,
-        isFocusFollowGroupFilteringEnabled
-    ) {
-        filterDynamicItemsByFocusFollowGroups(
-            items = state.items,
-            config = focusFollowGroupConfig,
-            filterEnabled = isFocusFollowGroupFilteringEnabled
-        )
-    }
-    val visibleSelectedUserItems = remember(
-        state.userItems,
-        focusFollowGroupConfig,
-        isFocusFollowGroupFilteringEnabled
-    ) {
-        filterDynamicItemsByFocusFollowGroups(
-            items = state.userItems,
-            config = focusFollowGroupConfig,
-            filterEnabled = isFocusFollowGroupFilteringEnabled
-        )
-    }
     val dynamicTabSwipeModifier = Modifier.dynamicTabSwipe(
         selectedTab = selectedVisibleTabIndex,
         tabCount = visibleTabs.size,
@@ -262,20 +302,22 @@ fun DynamicScreen(
 
     //  [修改] 过滤动态 - 选中用户时使用 userItems
     val filteredItems = remember(
-        visibleTimelineItems,
-        visibleSelectedUserItems,
+        state.items,
+        state.userItems,
         activeSelectedTab,
         selectedUserId,
-        isSelectedUserTabActive
+        isSelectedUserTabActive,
+        focusFollowGroupConfig,
+        focusFollowGroupFilteringEnabled
     ) {
         val baseItems = if (isSelectedUserTabActive) {
             resolveSelectedUserVisibleItems(
-                timelineItems = visibleTimelineItems,
-                remoteUserItems = visibleSelectedUserItems,
+                timelineItems = state.items,
+                remoteUserItems = state.userItems,
                 selectedUid = selectedUserId
             )
         } else {
-            visibleTimelineItems
+            state.items
         }
         var items = baseItems
         items = when (activeSelectedTab) {
@@ -285,6 +327,11 @@ fun DynamicScreen(
             4 -> if (isSelectedUserTabActive) items else emptyList()
             else -> items
         }
+        items = filterDynamicItemsByFocusFollowGroups(
+            items = items,
+            config = focusFollowGroupConfig,
+            filterEnabled = focusFollowGroupFilteringEnabled
+        )
         items.distinctBy { it.id_str }
     }
     val oldContentDividerLabel = remember(activeSelectedTab, visibleTabs) {
@@ -313,24 +360,14 @@ fun DynamicScreen(
     }
 
     //  [修改] 判断是否加载更多（区分全部动态和用户动态）
-    val currentSourceHasMore = if (isSelectedUserTabActive) {
+    val currentHasMore = if (isSelectedUserTabActive) {
         state.hasUserMore && (
             state.userItems.isNotEmpty() ||
                 state.userIsLoading ||
                 !state.userError.isNullOrBlank()
         )
     } else {
-        state.sourceHasMore
-    }
-    val currentVisibleHasMore = if (isSelectedUserTabActive) {
-        state.hasUserMore || state.userItems.isNotEmpty()
-    } else {
-        state.visibleHasMore
-    }
-    val currentContinuationAllowed = if (isSelectedUserTabActive) {
-        state.hasUserMore
-    } else {
-        state.continuationAllowed
+        state.hasMore
     }
     val activeLoading = remember(state, selectedUserId, activeSelectedTab, isSelectedUserTabActive) {
         if (activeSelectedTab == 4 && !isSelectedUserTabActive) {
@@ -351,13 +388,6 @@ fun DynamicScreen(
                 selectedUserId = selectedUserId.takeIf { isSelectedUserTabActive }
         )
         }
-    }
-    val emptyFollowUserMessage = remember(followedUsers, hasResolvedFollowedUsers, activeError) {
-        resolveDynamicFollowUserEmptyMessage(
-            visibleUserCount = followedUsers.size,
-            hasResolvedUsers = hasResolvedFollowedUsers,
-            error = activeError
-        )
     }
 
     var handledUserListRefreshBoundary by remember { mutableStateOf<String?>(null) }
@@ -386,26 +416,14 @@ fun DynamicScreen(
     val shouldLoadMore by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            shouldLoadMoreDynamicFeed(
-                totalItems = layoutInfo.totalItemsCount,
-                lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0,
-                visibleItemCount = filteredItems.size,
-                isLoading = activeLoading,
-                sourceHasMore = currentSourceHasMore,
-                visibleHasMore = currentVisibleHasMore,
-                continuationAllowed = currentContinuationAllowed,
-                minimumVisibleItemCountBeforePause = if (isSelectedUserTabActive) {
-                    0
-                } else {
-                    DYNAMIC_DEFAULT_MIN_VISIBLE_ITEMS_BEFORE_PAUSE
-                }
-            )
+            val totalItems = layoutInfo.totalItemsCount
+            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            totalItems > 0 && lastVisibleItemIndex >= totalItems - 3 && !activeLoading && currentHasMore
         }
     }
     //  [埋点] 页面浏览追踪
     LaunchedEffect(Unit) {
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("DynamicScreen")
-        viewModel.requestFollowingsAutoSyncIfStale()
     }
 
     //  [修改] 加载更多 - 区分全部动态和用户动态
@@ -421,6 +439,7 @@ fun DynamicScreen(
 
     // [Feature] BottomBar Scroll Hiding for Dynamic Screen
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
+    val bottomBarChromeScrollOffset = LocalHomeScrollOffset.current
 
     suspend fun scrollDynamicFeedToTop(refreshWhenAlreadyAtTop: Boolean) {
         val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 50
@@ -451,6 +470,19 @@ fun DynamicScreen(
     var lastFirstVisibleItem by remember { mutableIntStateOf(0) }
     var lastScrollOffset by remember { mutableIntStateOf(0) }
 
+    LaunchedEffect(filteredItems.size, activeLoading, activeSelectedTab, isSelectedUserTabActive) {
+        if (shouldRevealDynamicBottomBarForStaticContent(
+                activeItemsCount = filteredItems.size,
+                isLoading = activeLoading
+            )
+        ) {
+            setBottomBarVisible(true)
+            bottomBarChromeScrollOffset.value = 0f
+            lastFirstVisibleItem = 0
+            lastScrollOffset = 0
+        }
+    }
+
     LaunchedEffect(listState) {
         snapshotFlow {
             Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
@@ -477,6 +509,10 @@ fun DynamicScreen(
              }
              lastFirstVisibleItem = firstVisibleItem
              lastScrollOffset = scrollOffset
+             bottomBarChromeScrollOffset.value = resolveBottomBarChromeScrollOffset(
+                 firstVisibleItem = firstVisibleItem,
+                 scrollOffset = scrollOffset
+             )
         }
     }
 
@@ -484,6 +520,7 @@ fun DynamicScreen(
     DisposableEffect(Unit) {
         onDispose {
             setBottomBarVisible(true)
+            bottomBarChromeScrollOffset.value = 0f
         }
     }
 
@@ -493,7 +530,11 @@ fun DynamicScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             // 背景层 - 自适应 MaterialTheme
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .globalWallpaperAwareBackground()
+            ) {
                  // 移除光晕 Canvas，保持纯净背景
             }
 
@@ -526,11 +567,10 @@ fun DynamicScreen(
                         ) {
                         // 左侧边栏
                         DynamicSidebar(
-                            users = followedUsers,
+                            users = focusFollowedUsers,
                             selectedUserId = selectedUserId,
                             isExpanded = isSidebarExpanded,
                             userListState = sidebarUserListState,
-                            emptyMessage = emptyFollowUserMessage,
                             onUserClick = handleUserSelection,
                             showHiddenUsers = showHiddenUsers,
                             hiddenCount = hiddenUserIds.size,
@@ -549,57 +589,62 @@ fun DynamicScreen(
                             state = pullRefreshState,
                             modifier = Modifier.fillMaxSize().weight(1f)
                         ) {
-                            // 使用 Box 包裹，以便 hazeSource 可以应用于列表
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                AnimatedDynamicTabContent(
-                                    selectedTab = activeSelectedTab,
-                                    modifier = Modifier.fillMaxSize()
-                                ) { animatedTab ->
-                                    DynamicList(
-                                        state = state,
-                                        activeLoading = activeLoading,
-                                        activeError = activeError,
-                                        hasMore = currentSourceHasMore,
-                                        selectedTab = animatedTab,
-                                        isSelectedUserTabActive = isSelectedUserTabActive,
-                                        filteredItems = filteredItems,
-                                        emptyMessage = emptyFollowUserMessage ?: "暂无动态",
-                                        emptyActionText = if (emptyFollowUserMessage == null) {
-                                            "登录后查看关注 UP主 的动态"
-                                        } else {
-                                            null
-                                        },
-                                        keepEmptyStateVisibleWhileLoading = !emptyFollowUserMessage.isNullOrBlank(),
-                                        listState = listState,
-                                        statusBarHeight = statusBarHeight,
-                                        topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
-                                            isHorizontalMode = false
-                                        ).dp,
-                                        bottomPadding = dynamicListBottomPadding,
-                                        oldContentDividerIndex = oldContentDividerIndex,
-                                        oldContentDividerLabel = oldContentDividerLabel,
-                                        onVideoClick = onVideoClick,
-                                        onBangumiClick = onBangumiClick,
-                                        onDynamicDetailClick = onDynamicDetailClick,
-                                        onUserClick = onUserClick,
-                                        onLiveClick = onLiveClick,
-                                        onLoginClick = onLoginClick,
-                                        gifImageLoader = gifImageLoader,
-                                        onCommentClick = { viewModel.openCommentSheet(it) },
-                                        onRepostClick = { showRepostDialog = it },
-                                        onLikeClick = { dynamicId ->
-                                            viewModel.likeDynamic(dynamicId) { _, msg ->
-                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        likedDynamics = likedDynamics,
-                                        modifier = Modifier
-                                            .then(dynamicTabSwipeModifier)
-                                            .hazeSource(hazeState)
-                                    )
-                                }
-                                // 顶栏
-                                DynamicTopBarWithTabs(
+                                // 使用 Box 包裹，以便 hazeSource 可以应用于列表
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    AnimatedDynamicTabContent(
+                                        selectedTab = activeSelectedTab,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) { animatedTab ->
+                                        DynamicList(
+                                            state = state,
+                                            activeLoading = activeLoading,
+                                            activeError = activeError,
+                                            hasMore = currentHasMore,
+                                            selectedTab = animatedTab,
+                                            isSelectedUserTabActive = isSelectedUserTabActive,
+                                            filteredItems = filteredItems,
+                                            listState = listState,
+                                            statusBarHeight = statusBarHeight,
+                                            topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
+                                                isHorizontalMode = false
+                                            ).dp,
+                                            bottomPadding = dynamicListBottomPadding,
+                                            oldContentDividerIndex = oldContentDividerIndex,
+                                            oldContentDividerLabel = oldContentDividerLabel,
+                                            onVideoClick = onVideoClick,
+                                            onBangumiClick = onBangumiClick,
+                                            onDynamicDetailClick = onDynamicDetailClick,
+                                            onUserClick = onUserClick,
+                                            onLiveClick = onLiveClick,
+                                            onLoginClick = onLoginClick,
+                                            gifImageLoader = gifImageLoader,
+                                            onCommentClick = { viewModel.openCommentSheet(it) },
+                                            onRepostClick = { showRepostDialog = it },
+                                            onLikeClick = { dynamicId ->
+                                                viewModel.likeDynamic(dynamicId) { _, msg ->
+                                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            onWatchLaterClick = { aid ->
+                                                viewModel.addToWatchLater(aid) { _, msg ->
+                                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            onDeleteClick = { action ->
+                                                viewModel.deleteDynamic(action) { _, msg ->
+                                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            likedDynamics = likedDynamics,
+                                            modifier = Modifier
+                                                .then(dynamicTabSwipeModifier)
+                                                .layerBackdrop(dynamicChromeBackdrop)
+                                                .hazeSourceCompat(hazeState) // 本地 hazeSource - 顶栏使用（全局源由根层提供）
+                                        )
+                                    }
+
+                                    // 顶栏
+                                    DynamicTopBarWithTabs(
                                     selectedTab = selectedVisibleTabIndex,
                                     tabs = tabTitles,
                                     onTabSelected = { visibleIndex ->
@@ -607,12 +652,9 @@ fun DynamicScreen(
                                             ?.let { viewModel.setSelectedTab(it.logicalIndex) }
                                     },
                                     displayMode = displayMode,
-                                    onSettingsClick = {
-                                        showFocusFollowGroupSheet = true
-                                        viewModel.loadFocusFollowingUsersForSettings(force = false)
-                                    },
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     hazeState = hazeState, // 传入 hazeState
+                                    backdrop = dynamicChromeBackdrop,
                                     modifier = Modifier.align(Alignment.TopCenter)
                                 )
                             }
@@ -643,68 +685,79 @@ fun DynamicScreen(
                         state = pullRefreshState,
                         modifier = Modifier.fillMaxSize().padding(padding)
                     ) {
-                         // 使用 Box 包裹
-                        Box {
-                             AnimatedDynamicTabContent(
-                                 selectedTab = activeSelectedTab,
-                                 modifier = Modifier.fillMaxSize()
-                             ) { animatedTab ->
-                                 DynamicList(
-                                     state = state,
-                                     activeLoading = activeLoading,
-                                     activeError = activeError,
-                                     hasMore = currentSourceHasMore,
-                                     selectedTab = animatedTab,
-                                     isSelectedUserTabActive = isSelectedUserTabActive,
-                                     filteredItems = filteredItems,
-                                     emptyMessage = emptyFollowUserMessage ?: "暂无动态",
-                                     emptyActionText = if (emptyFollowUserMessage == null) {
-                                         "登录后查看关注 UP主 的动态"
-                                     } else {
-                                         null
-                                     },
-                                     keepEmptyStateVisibleWhileLoading = !emptyFollowUserMessage.isNullOrBlank(),
-                                     listState = listState,
-                                     statusBarHeight = statusBarHeight,
-                                     topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
-                                         isHorizontalMode = true,
-                                         isHorizontalUserListCollapsed = shouldCollapseHorizontalUserList
-                                     ).dp,
-                                     bottomPadding = dynamicListBottomPadding,
-                                     oldContentDividerIndex = oldContentDividerIndex,
-                                     oldContentDividerLabel = oldContentDividerLabel,
-                                     onVideoClick = onVideoClick,
-                                     onBangumiClick = onBangumiClick,
-                                     onDynamicDetailClick = onDynamicDetailClick,
-                                     onUserClick = onUserClick,
-                                     onLiveClick = onLiveClick,
-                                     onLoginClick = onLoginClick,
-                                     gifImageLoader = gifImageLoader,
-                                     onCommentClick = { viewModel.openCommentSheet(it) },
-                                     onRepostClick = { showRepostDialog = it },
-                                     onLikeClick = { dynamicId ->
-                                         viewModel.likeDynamic(dynamicId) { _, msg ->
-                                             android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                         }
-                                     },
-                                     likedDynamics = likedDynamics,
-                                     modifier = Modifier
-                                         .then(dynamicTabSwipeModifier)
-                                         .hazeSource(hazeState)
-                                 )
-                             }
-                             // 顶部区域：顶栏 + 横向用户列表
+                             // 使用 Box 包裹
+                            Box {
+                                 AnimatedDynamicTabContent(
+                                     selectedTab = activeSelectedTab,
+                                     modifier = Modifier.fillMaxSize()
+                                 ) { animatedTab ->
+                                     DynamicList(
+                                         state = state,
+                                         activeLoading = activeLoading,
+                                         activeError = activeError,
+                                         hasMore = currentHasMore,
+                                         selectedTab = animatedTab,
+                                         isSelectedUserTabActive = isSelectedUserTabActive,
+                                         filteredItems = filteredItems,
+                                         listState = listState,
+                                         statusBarHeight = statusBarHeight,
+                                         topPaddingExtra = resolveDynamicListTopPaddingExtraDp(
+                                             isHorizontalMode = true,
+                                             isHorizontalUserListCollapsed = shouldCollapseHorizontalUserList
+                                         ).dp,
+                                         bottomPadding = dynamicListBottomPadding,
+                                         oldContentDividerIndex = oldContentDividerIndex,
+                                         oldContentDividerLabel = oldContentDividerLabel,
+                                         onVideoClick = onVideoClick,
+                                         onBangumiClick = onBangumiClick,
+                                         onDynamicDetailClick = onDynamicDetailClick,
+                                         onUserClick = onUserClick,
+                                         onLiveClick = onLiveClick,
+                                         onLoginClick = onLoginClick,
+                                         gifImageLoader = gifImageLoader,
+                                         onCommentClick = { viewModel.openCommentSheet(it) },
+                                         onRepostClick = { showRepostDialog = it },
+                                         onLikeClick = { dynamicId ->
+                                             viewModel.likeDynamic(dynamicId) { _, msg ->
+                                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                             }
+                                         },
+                                         onWatchLaterClick = { aid ->
+                                             viewModel.addToWatchLater(aid) { _, msg ->
+                                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                             }
+                                         },
+                                         onDeleteClick = { action ->
+                                             viewModel.deleteDynamic(action) { _, msg ->
+                                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                             }
+                                         },
+                                         likedDynamics = likedDynamics,
+                                         modifier = Modifier
+                                             .then(dynamicTabSwipeModifier)
+                                             .layerBackdrop(dynamicChromeBackdrop)
+                                             .hazeSourceCompat(hazeState) // 本地 hazeSource - 顶栏使用（全局源由根层提供）
+                                     )
+                                 }
+
+                                 // 顶部区域：顶栏 + 横向用户列表
                              Column(modifier = Modifier.align(Alignment.TopCenter)) {
                                  // 获取模糊设置
                                  val blurIntensity = currentUnifiedBlurIntensity()
                                  val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
-                                 val headerColor = MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha)
+                                 val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+                                 val headerColor = resolveGlobalWallpaperChromeColor(
+                                     requestedColor = MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha),
+                                     defaultBackgroundColor = MaterialTheme.colorScheme.background,
+                                     defaultSurfaceColor = MaterialTheme.colorScheme.surface,
+                                     globalWallpaperVisible = globalWallpaperVisible
+                                 )
 
                                  // 应用模糊效果到顶部整体区域
                                  Column(
                                      modifier = Modifier
                                          .fillMaxWidth()
-                                         .unifiedBlur(hazeState)
+                                         .then(if (globalWallpaperVisible) Modifier else Modifier.unifiedBlur(hazeState))
                                          .background(headerColor)
                                  ) {
                                      // 顶栏 - 移除其自带的模糊，使用透明背景
@@ -716,10 +769,6 @@ fun DynamicScreen(
                                                  ?.let { viewModel.setSelectedTab(it.logicalIndex) }
                                          },
                                          displayMode = displayMode,
-                                         onSettingsClick = {
-                                             showFocusFollowGroupSheet = true
-                                             viewModel.loadFocusFollowingUsersForSettings(force = false)
-                                         },
                                          onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                          hazeState = null // 禁用内部模糊，由外层统一处理
                                      )
@@ -731,10 +780,9 @@ fun DynamicScreen(
                                          exit = shrinkVertically(animationSpec = tween(180)) + fadeOut(animationSpec = tween(140))
                                      ) {
                                          HorizontalUserList(
-                                             users = followedUsers,
+                                             users = focusFollowedUsers,
                                              selectedUserId = selectedUserId,
                                              listState = horizontalUserListState,
-                                             emptyMessage = emptyFollowUserMessage,
                                              showHiddenUsers = showHiddenUsers,
                                              hiddenCount = hiddenUserIds.size,
                                              onUserClick = handleUserSelection,
@@ -803,41 +851,12 @@ fun DynamicScreen(
     showRepostDialog?.let { dynamicId ->
         RepostDialog(
             onDismiss = { showRepostDialog = null },
-            onRepost = { content ->
+            onRepost = { content: String, onComplete: (Boolean) -> Unit ->
                 viewModel.repostDynamic(dynamicId, content) { success, msg ->
                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                     if (success) showRepostDialog = null
+                    onComplete(success)
                 }
-            }
-        )
-    }
-
-    if (showFocusFollowGroupSheet) {
-        FocusFollowGroupSheet(
-            config = focusFollowGroupConfig,
-            followings = focusFollowingUsers,
-            isLoading = isFocusFollowingUsersLoading,
-            onDismissRequest = { showFocusFollowGroupSheet = false },
-            onRefreshFollowings = {
-                viewModel.loadFocusFollowingUsersForSettings(force = true)
-            },
-            onCreateGroup = { name ->
-                viewModel.createFocusFollowGroup(name)
-            },
-            onRenameGroup = { groupId, name ->
-                viewModel.renameFocusFollowGroup(groupId, name)
-            },
-            onDeleteGroup = { groupId ->
-                viewModel.deleteFocusFollowGroup(groupId)
-            },
-            onSetGroupVisible = { groupId, visible ->
-                viewModel.setFocusFollowGroupVisible(groupId, visible)
-            },
-            onSetHomeFeedSortMode = { sortMode ->
-                viewModel.setFocusHomeFeedSortMode(sortMode)
-            },
-            onAssignUserToGroup = { mid, groupId ->
-                viewModel.assignFocusFollowingUserToGroup(mid, groupId)
             }
         )
     }
@@ -912,10 +931,7 @@ private fun DynamicList(
     selectedTab: Int,
     isSelectedUserTabActive: Boolean,
     filteredItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
-    emptyMessage: String,
-    emptyActionText: String?,
-    keepEmptyStateVisibleWhileLoading: Boolean,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyStaggeredGridState,
     statusBarHeight: androidx.compose.ui.unit.Dp,
     topPaddingExtra: androidx.compose.ui.unit.Dp,
     bottomPadding: androidx.compose.ui.unit.Dp,
@@ -932,70 +948,100 @@ private fun DynamicList(
     onCommentClick: (String) -> Unit = {},
     onRepostClick: (String) -> Unit = {},
     onLikeClick: (String) -> Unit = {},
+    onWatchLaterClick: (Long) -> Unit = {},
+    onDeleteClick: (DynamicDeleteAction) -> Unit = {},
     likedDynamics: Set<String> = emptySet(),
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
+    val dynamicCard: @Composable (com.android.purebilibili.data.model.response.DynamicItem) -> Unit = { item ->
+        DynamicCardV2(
+            item = item,
+            onVideoClick = onVideoClick,
+            onBangumiClick = onBangumiClick,
+            onDynamicDetailClick = onDynamicDetailClick,
+            onUserClick = onUserClick,
+            onLiveClick = onLiveClick,
+            gifImageLoader = gifImageLoader,
+            onCommentClick = onCommentClick,
+            onRepostClick = onRepostClick,
+            onLikeClick = onLikeClick,
+            onWatchLaterClick = onWatchLaterClick,
+            onDeleteClick = onDeleteClick,
+            isLiked = likedDynamics.contains(item.id_str)
+        )
+    }
+
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Adaptive(resolveDynamicTimelineMinColumnWidth()),
         state = listState,
         contentPadding = PaddingValues(
             top = statusBarHeight + topPaddingExtra,
             bottom = bottomPadding
         ),
-        modifier = modifier.fillMaxSize().responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth())
+        horizontalArrangement = Arrangement.spacedBy(resolveDynamicTimelineHorizontalSpacing()),
+        verticalItemSpacing = resolveDynamicTimelineVerticalSpacing(),
+        modifier = modifier
+            .fillMaxSize()
+            .responsiveContentWidth(maxWidth = resolveDynamicTimelineMaxWidth())
     ) {
         // 空状态
-        if (
-            filteredItems.isEmpty() &&
-            activeError == null &&
-            (!activeLoading || keepEmptyStateVisibleWhileLoading)
-        ) {
-            item {
+        if (filteredItems.isEmpty() && !activeLoading && activeError == null) {
+            item(
+                key = "dynamic_empty_state",
+                contentType = "dynamic_empty_state",
+                span = StaggeredGridItemSpan.FullLine
+            ) {
                 EmptyState(
-                    message = if (selectedTab == 4 && !isSelectedUserTabActive) {
-                        "选择一个UP查看专属动态"
-                    } else {
-                        emptyMessage
-                    },
-                    actionText = if (selectedTab == 4 && !isSelectedUserTabActive) {
-                        "从左侧或顶部 UP 列表中选择一个用户"
-                    } else {
-                        emptyActionText
-                    },
-                    onAction = if (selectedTab == 4 && !isSelectedUserTabActive) {
-                        null
-                    } else if (emptyActionText != null) {
-                        onLoginClick
-                    } else {
-                        null
-                    },
+                    message = if (selectedTab == 4 && !isSelectedUserTabActive) "选择一个UP查看专属动态" else "暂无动态",
+                    actionText = if (selectedTab == 4 && !isSelectedUserTabActive) "从左侧或顶部 UP 列表中选择一个用户" else "登录后查看关注 UP主 的动态",
                     modifier = Modifier.height(300.dp)
                 )
             }
         }
 
         // 动态卡片列表
-        itemsIndexed(filteredItems, key = { _, item -> "dynamic_${dynamicFeedItemKey(item)}" }) { index, item ->
-            if (oldContentDividerIndex == index) {
+        if (oldContentDividerIndex in 0..filteredItems.size) {
+            items(
+                count = oldContentDividerIndex,
+                key = { index -> "dynamic_${dynamicFeedItemKey(filteredItems[index])}" },
+                contentType = { "dynamic_card" }
+            ) { index ->
+                dynamicCard(filteredItems[index])
+            }
+            item(
+                span = StaggeredGridItemSpan.FullLine,
+                key = "old_content_divider",
+                contentType = "dynamic_old_content_divider"
+            ) {
                 OldContentDivider(label = oldContentDividerLabel)
             }
-            DynamicCardV2(
-                item = item,
-                onVideoClick = onVideoClick,
-                onBangumiClick = onBangumiClick,
-                onDynamicDetailClick = onDynamicDetailClick,
-                onUserClick = onUserClick,
-                onLiveClick = onLiveClick,
-                gifImageLoader = gifImageLoader,
-                onCommentClick = onCommentClick,
-                onRepostClick = onRepostClick,
-                onLikeClick = onLikeClick,
-                isLiked = likedDynamics.contains(item.id_str)
-            )
+            items(
+                count = filteredItems.size - oldContentDividerIndex,
+                key = { offset ->
+                    val index = oldContentDividerIndex + offset
+                    "dynamic_${dynamicFeedItemKey(filteredItems[index])}"
+                },
+                contentType = { "dynamic_card" }
+            ) { offset ->
+                dynamicCard(filteredItems[oldContentDividerIndex + offset])
+            }
+        } else {
+            items(
+                count = filteredItems.size,
+                key = { index -> "dynamic_${dynamicFeedItemKey(filteredItems[index])}" },
+                contentType = { "dynamic_card" }
+            ) { index ->
+                dynamicCard(filteredItems[index])
+            }
         }
 
         // 加载中
         if (shouldShowDynamicLoadingFooter(isLoading = activeLoading, activeItemsCount = filteredItems.size)) {
-            item {
+            item(
+                key = "dynamic_loading_footer",
+                contentType = "dynamic_loading_footer",
+                span = StaggeredGridItemSpan.FullLine
+            ) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     contentAlignment = Alignment.Center
@@ -1007,7 +1053,11 @@ private fun DynamicList(
 
         // 没有更多
         if (shouldShowDynamicNoMoreFooter(hasMore = hasMore, activeItemsCount = filteredItems.size)) {
-            item {
+            item(
+                key = "dynamic_no_more_footer",
+                contentType = "dynamic_no_more_footer",
+                span = StaggeredGridItemSpan.FullLine
+            ) {
                 Text(
                     "没有更多了",
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -1053,7 +1103,6 @@ private fun HorizontalUserList(
     users: List<SidebarUser>,
     selectedUserId: Long?,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    emptyMessage: String?,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
     onUserClick: (Long?) -> Unit,
@@ -1111,31 +1160,14 @@ private fun HorizontalUserList(
                 }
             }
 
-            if (users.isEmpty() && !emptyMessage.isNullOrBlank()) {
-                item(key = "empty_state") {
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        tonalElevation = 1.dp
-                    ) {
-                        Text(
-                            text = emptyMessage,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
             // UP 主头像列表
             items(users, key = { it.uid }) { user ->
                 val isSelected = selectedUserId == user.uid
                 var showMenu by remember { mutableStateOf(false) }
                 val displayName = if (user.isHidden) {
-                    "${user.name.take(4)}(隐)"
+                    "${user.name}(隐)"
                 } else {
-                    user.name.take(4)
+                    user.name
                 }
 
                 Box {
@@ -1149,9 +1181,7 @@ private fun HorizontalUserList(
                             .padding(4.dp)
                             .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
-                        Box(
-                            modifier = Modifier.padding(bottom = resolveDynamicUserLiveBadgeReservedSpace())
-                        ) {
+                        Box {
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
@@ -1173,24 +1203,22 @@ private fun HorizontalUserList(
                                     contentScale = ContentScale.Crop
                                 )
                             }
-
-                            if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                                DynamicUserLiveBadge(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .offset(y = resolveDynamicUserLiveBadgeReservedSpace() / 2)
-                                )
-                            }
+                        }
+                        if (shouldShowDynamicUserLiveBadge(user.isLive)) {
+                            DynamicUserLiveBadge(modifier = Modifier.padding(top = 2.dp))
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            displayName,  // 最多显示4个字符
+                            displayName,
                             fontSize = 11.sp,
                             color = if (isSelected)
                                 MaterialTheme.colorScheme.primary
                             else
                                 MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.width(64.dp)
                         )
                     }
 

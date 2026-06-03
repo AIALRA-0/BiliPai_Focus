@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.home
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.store.HomeWallpaperEffectMode
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -95,6 +97,206 @@ class HomeGlassVisualPolicyTest {
 
         assertEquals(HomeRefreshTipSurfaceStyle.GLASS, appearance.surfaceStyle)
         assertEquals(0.8f, appearance.borderWidthDp)
-        assertEquals(6f, appearance.shadowElevationDp)
+        assertEquals(0f, appearance.tonalElevationDp)
+        assertEquals(0f, appearance.shadowElevationDp)
+    }
+
+    @Test
+    fun homeWallpaperBackdropIsDisabledWithoutWallpaper() {
+        val appearance = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = false,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertEquals(false, appearance.visible)
+        assertEquals(1f, appearance.baseBackgroundAlpha)
+        assertEquals(0f, appearance.detailAlpha)
+    }
+
+    @Test
+    fun homeWallpaperBackdropKeepsReadableScrimInLightTheme() {
+        val appearance = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertEquals(true, appearance.visible)
+        assertEquals(0.22f, appearance.baseBackgroundAlpha)
+        assertEquals(0.32f, appearance.detailAlpha)
+        assertTrue(appearance.scrimAlpha <= 0.08f)
+        assertTrue(appearance.blurRadiusDp in 16f..28f)
+    }
+
+    @Test
+    fun homeWallpaperBackdropUsesConservativeTintInDataSaver() {
+        val normal = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+        val dataSaver = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = true
+        )
+
+        assertTrue(dataSaver.detailAlpha < normal.detailAlpha)
+        assertTrue(dataSaver.baseBackgroundAlpha > normal.baseBackgroundAlpha)
+    }
+
+    @Test
+    fun homeWallpaperBackdropCanUseOriginalWallpaperWithoutBlur() {
+        val appearance = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.ORIGINAL,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertEquals(true, appearance.visible)
+        assertEquals(0f, appearance.blurRadiusDp)
+        assertTrue(appearance.baseBackgroundAlpha < 0.2f)
+    }
+
+    @Test
+    fun homeWallpaperBackdropCanUseStrongBlur() {
+        val softBlur = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+        val strongBlur = resolveHomeWallpaperBackdropAppearance(
+            hasWallpaper = true,
+            effectMode = HomeWallpaperEffectMode.STRONG_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertTrue(strongBlur.blurRadiusDp > softBlur.blurRadiusDp)
+        assertTrue(strongBlur.blurRadiusDp >= 56f)
+        assertTrue(strongBlur.detailAlpha < softBlur.detailAlpha)
+        assertTrue(strongBlur.baseBackgroundAlpha > softBlur.baseBackgroundAlpha)
+    }
+
+    @Test
+    fun cardInfoSurfaceLetsWallpaperTintThroughWhenEnabled() {
+        val appearance = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertEquals(true, appearance.useTintedSurface)
+        assertEquals(0.16f, appearance.containerAlpha)
+        assertTrue(appearance.borderAlpha > 0f)
+    }
+
+    @Test
+    fun cardInfoSurfaceGetsDenserInDarkThemeAndDataSaver() {
+        val light = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+        val dark = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = true,
+            isDataSaverActive = false
+        )
+        val dataSaver = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = true
+        )
+
+        assertTrue(dark.containerAlpha > light.containerAlpha)
+        assertTrue(dataSaver.containerAlpha > light.containerAlpha)
+    }
+
+    @Test
+    fun originalWallpaperModeKeepsReadableCardInfoSurfaceWithoutHidingWallpaper() {
+        val softBlur = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+        val original = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.ORIGINAL,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertTrue(original.containerAlpha < softBlur.containerAlpha)
+        assertTrue(original.containerAlpha > 0.10f)
+        assertTrue(original.borderAlpha > softBlur.borderAlpha)
+    }
+
+    @Test
+    fun strongBlurUsesDenserCardInfoSurfaceThanSoftBlur() {
+        val softBlur = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+        val strongBlur = resolveHomeCardInfoSurfaceAppearance(
+            wallpaperTintEnabled = true,
+            wallpaperEffectMode = HomeWallpaperEffectMode.STRONG_BLUR,
+            isDarkTheme = false,
+            isDataSaverActive = false
+        )
+
+        assertTrue(strongBlur.containerAlpha > softBlur.containerAlpha)
+    }
+
+    @Test
+    fun homeWallpaperUriPrefersDedicatedHomeWallpaper() {
+        val resolved = resolveHomeWallpaperUri(
+            homeWallpaperUri = "content://home-wallpaper",
+            splashWallpaperUri = "file://splash-wallpaper"
+        )
+
+        assertEquals("content://home-wallpaper", resolved)
+    }
+
+    @Test
+    fun homeWallpaperUriFallsBackToSplashWallpaperUntilConfigured() {
+        val resolved = resolveHomeWallpaperUri(
+            homeWallpaperUri = "",
+            splashWallpaperUri = "file://splash-wallpaper"
+        )
+
+        assertEquals("file://splash-wallpaper", resolved)
+    }
+
+    @Test
+    fun homeWallpaperUriCanBeEmptyWhenNoWallpaperExists() {
+        val resolved = resolveHomeWallpaperUri(
+            homeWallpaperUri = " ",
+            splashWallpaperUri = ""
+        )
+
+        assertEquals("", resolved)
+    }
+
+    @Test
+    fun homeWallpaperBackdropUsesOneImageLayer() {
+        val source = File("src/main/java/com/android/purebilibili/feature/home/HomeWallpaperBackdrop.kt")
+            .readText()
+
+        assertEquals(1, Regex("""\bAsyncImage\(""").findAll(source).count())
     }
 }

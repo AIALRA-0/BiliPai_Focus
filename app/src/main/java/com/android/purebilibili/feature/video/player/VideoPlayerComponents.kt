@@ -40,6 +40,10 @@ import com.android.purebilibili.core.theme.ActionFavoriteDark
 import com.android.purebilibili.core.theme.ActionShareDark
 import com.android.purebilibili.core.theme.ActionCommentDark
 import com.android.purebilibili.core.ui.components.UserUpBadge
+import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
+import com.android.purebilibili.core.ui.rememberAppCoinIcon
+import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
+import com.android.purebilibili.core.ui.rememberAppLikeIcon
 
 //  [重构] 视频标题区域 (官方B站样式：紧凑布局)
 @Composable
@@ -262,6 +266,11 @@ fun ActionButtonsRow(
     onTripleClick: () -> Unit = {},
     showTripleButton: Boolean = true  // [问题12] 控制三连按钮是否显示
 ) {
+    val likeIcon = rememberAppLikeIcon()
+    val likeFilledIcon = rememberAppLikeFilledIcon()
+    val coinIcon = rememberAppCoinIcon()
+    val favoriteIcon = rememberAppBookmarkIcon()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -272,7 +281,7 @@ fun ActionButtonsRow(
     ) {
         //  点赞
         BiliActionButton(
-            icon = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup,
+            icon = if (isLiked) likeFilledIcon else likeIcon,
             text = FormatUtils.formatStat(info.stat.like.toLong()),
             isActive = isLiked,
             activeColor = BiliPink,
@@ -281,7 +290,7 @@ fun ActionButtonsRow(
 
         // 🪙 投币
         BiliActionButton(
-            icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
+            icon = coinIcon,
             text = FormatUtils.formatStat(info.stat.coin.toLong()),
             isActive = coinCount > 0,
             activeColor = Color(0xFFFFB300),
@@ -290,7 +299,7 @@ fun ActionButtonsRow(
 
         //  收藏
         BiliActionButton(
-            icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
+            icon = favoriteIcon,
             text = FormatUtils.formatStat(info.stat.favorite.toLong()),
             isActive = isFavorited,
             activeColor = Color(0xFFFFC107),
@@ -301,7 +310,7 @@ fun ActionButtonsRow(
         if (showTripleButton) {
             //  三连（👍图标）
             BiliActionButton(
-                icon = CupertinoIcons.Filled.HandThumbsup,
+                icon = likeFilledIcon,
                 text = "三连",
                 isActive = false,
                 activeColor = Color(0xFFE91E63),
@@ -860,7 +869,7 @@ fun PagesSelector(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(pages.size) { index ->
+                items(pages.size, key = { index -> pages[index].cid }) { index ->
                     val page = pages[index]
                     val isSelected = index == currentPageIndex
                     

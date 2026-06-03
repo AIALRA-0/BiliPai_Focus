@@ -57,6 +57,20 @@ class RecoverableVisualEffectsPolicyTest {
     }
 
     @Test
+    fun runtimeShaderBackedHazeEffectRequiresAndroid13AndAbove() {
+        assertFalse(
+            shouldAllowRuntimeShaderBackedHazeEffect(
+                sdkInt = 29
+            )
+        )
+        assertTrue(
+            shouldAllowRuntimeShaderBackedHazeEffect(
+                sdkInt = 33
+            )
+        )
+    }
+
+    @Test
     fun homeChromeLiquidGlassIsEnabledOnAndroid13AndAbove() {
         assertFalse(
             shouldAllowHomeChromeLiquidGlass(

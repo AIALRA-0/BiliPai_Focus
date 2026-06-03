@@ -1,7 +1,6 @@
 package com.android.purebilibili.core.util
 
 import java.net.URI
-import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
 sealed interface BilibiliNavigationTarget {
@@ -13,6 +12,7 @@ sealed interface BilibiliNavigationTarget {
     data class BangumiSeason(val seasonId: Long) : BilibiliNavigationTarget
     data class BangumiEpisode(val epId: Long) : BilibiliNavigationTarget
     data class Music(val musicId: String) : BilibiliNavigationTarget
+    data class Article(val articleId: Long) : BilibiliNavigationTarget
 }
 
 object BilibiliNavigationTargetParser {
@@ -130,6 +130,10 @@ object BilibiliNavigationTargetParser {
                 resolvePgcTarget(pathSegments)?.let { return it }
             }
 
+            host == "read" -> {
+                resolveArticleTarget(pathSegments, queryMap, allowBareReadPath = true)?.let { return it }
+            }
+
             host == "music" -> {
                 queryMap["music_id"]?.takeIf { it.isNotBlank() }?.let {
                     return BilibiliNavigationTarget.Music(it)
@@ -173,6 +177,7 @@ object BilibiliNavigationTargetParser {
             }
 
             host.contains("bilibili.com") -> {
+                resolveArticleTarget(pathSegments, queryMap, allowBareReadPath = false)?.let { return it }
                 resolveBangumiTarget(pathSegments)?.let { return it }
             }
         }
@@ -204,6 +209,49 @@ object BilibiliNavigationTargetParser {
         }
 
         return null
+    }
+
+    private fun resolveArticleTarget(
+        pathSegments: List<String>,
+        queryMap: Map<String, String>,
+        allowBareReadPath: Boolean
+    ): BilibiliNavigationTarget? {
+        val readIndex = pathSegments.indexOfFirst { it.equals("read", ignoreCase = true) }
+        if (readIndex < 0 && !allowBareReadPath) return null
+
+        val firstReadValue = if (readIndex >= 0) {
+            pathSegments.getOrNull(readIndex + 1)
+        } else {
+            pathSegments.firstOrNull()
+        }
+
+        firstReadValue?.let { value ->
+            parseArticleId(value)?.let { return BilibiliNavigationTarget.Article(it) }
+            if (value.equals("mobile", ignoreCase = true)) {
+                resolveArticleIdFromQuery(queryMap)?.let {
+                    return BilibiliNavigationTarget.Article(it)
+                }
+            }
+        }
+
+        if (readIndex >= 0 || allowBareReadPath) {
+            resolveArticleIdFromQuery(queryMap)?.let { return BilibiliNavigationTarget.Article(it) }
+        }
+        return null
+    }
+
+    private fun resolveArticleIdFromQuery(queryMap: Map<String, String>): Long? {
+        return listOf("id", "cvid", "cv_id", "article_id")
+            .firstNotNullOfOrNull { key -> queryMap[key]?.let(::parseArticleId) }
+    }
+
+    private fun parseArticleId(value: String): Long? {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return null
+        val normalized = trimmed
+            .removePrefix("cv")
+            .removePrefix("CV")
+        return normalized.toLongOrNull()?.takeIf { it > 0L }
     }
 
     private fun resolveSearchKeyword(queryMap: Map<String, String>): String? {
@@ -287,8 +335,8 @@ object BilibiliNavigationTargetParser {
             .mapNotNull { part ->
                 if (part.isBlank()) return@mapNotNull null
                 val pair = part.split("=", limit = 2)
-                val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8.name())
-                val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8.name())
+                val key = decodeUrlComponentCompat(pair[0], StandardCharsets.UTF_8)
+                val value = decodeUrlComponentCompat(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8)
                 key to value
             }
             .toMap()

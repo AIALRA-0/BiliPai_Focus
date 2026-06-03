@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,8 +48,11 @@ fun InboxScreen(
     onSessionClick: (talkerId: Long, sessionType: Int, userName: String) -> Unit,
     viewModel: InboxViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var lastAutoLoadEndTs by remember { mutableLongStateOf(0L) }
+    var pendingRemoveSession by remember { mutableStateOf<SessionItem?>(null) }
+    var pendingInterceptSession by remember { mutableStateOf<SessionItem?>(null) }
+    var showClearDustbinConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.sessions.firstOrNull()?.talker_id, uiState.isRefreshing, uiState.isLoading) {
         if (uiState.isRefreshing || uiState.isLoading) {
@@ -116,9 +121,27 @@ fun InboxScreen(
                                 )
                             }
 
+                            item {
+                                MessageSessionCategoryRow(
+                                    items = buildMessageSessionCategoryItems(uiState.unreadData),
+                                    selectedCategory = uiState.selectedCategory,
+                                    onCategoryClick = { viewModel.selectCategory(it) }
+                                )
+                            }
+
+                            if (uiState.selectedCategory == MessageSessionCategory.Dustbin) {
+                                item {
+                                    DustbinActionRow(
+                                        isOperating = uiState.isBatchOperating,
+                                        onMarkRead = { viewModel.markDustbinRead() },
+                                        onClear = { showClearDustbinConfirm = true }
+                                    )
+                                }
+                            }
+
                             items(
                                 items = uiState.sessions,
-                                key = { "${it.talker_id}_${it.session_type}" }
+                                key = InboxSessionPaginationPolicy::resolveSessionKey
                             ) { session ->
                                 if (
                                     uiState.hasMore &&
@@ -143,8 +166,16 @@ fun InboxScreen(
                                         )
                                         onSessionClick(session.talker_id, session.session_type, userName)
                                     },
-                                    onRemove = { viewModel.removeSession(session) },
-                                    onToggleTop = { viewModel.toggleTop(session) }
+                                    onRemove = { pendingRemoveSession = session },
+                                    onToggleTop = { viewModel.toggleTop(session) },
+                                    onToggleDnd = { viewModel.toggleDnd(session) },
+                                    onToggleIntercept = {
+                                        if (session.is_intercept == 1) {
+                                            viewModel.toggleIntercept(session)
+                                        } else {
+                                            pendingInterceptSession = session
+                                        }
+                                    }
                                 )
                             }
 
@@ -170,7 +201,91 @@ fun InboxScreen(
                     }
                 }
             }
+
+            uiState.operationError?.let { error ->
+                Snackbar(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    action = {
+                        TextButton(onClick = { viewModel.clearOperationError() }) {
+                            Text("知道了")
+                        }
+                    }
+                ) {
+                    Text(error)
+                }
+            }
         }
+    }
+
+    pendingRemoveSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoveSession = null },
+            title = { Text("删除会话") },
+            text = { Text("会话会从列表中移除，但不会删除聊天记录。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.removeSession(session)
+                        pendingRemoveSession = null
+                    }
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemoveSession = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    pendingInterceptSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { pendingInterceptSession = null },
+            title = { Text("移入拦截") },
+            text = { Text("后续这类会话会进入拦截分类，仍可在拦截列表中查看和恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.toggleIntercept(session)
+                        pendingInterceptSession = null
+                    }
+                ) {
+                    Text("移入")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingInterceptSession = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (showClearDustbinConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearDustbinConfirm = false },
+            title = { Text("清空拦截会话") },
+            text = { Text("所有拦截会话会从列表中移除，聊天记录仍由服务端保留。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearDustbinSessions()
+                        showClearDustbinConfirm = false
+                    }
+                ) {
+                    Text("清空")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDustbinConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 
@@ -296,6 +411,78 @@ private fun MessageCenterShortcutCard(
 }
 
 @Composable
+private fun MessageSessionCategoryRow(
+    items: List<MessageSessionCategoryItem>,
+    selectedCategory: MessageSessionCategory,
+    onCategoryClick: (MessageSessionCategory) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "私信会话",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 16.dp)
+        ) {
+            items(items, key = { it.category.name }) { item ->
+                FilterChip(
+                    selected = item.category == selectedCategory,
+                    onClick = { onCategoryClick(item.category) },
+                    label = {
+                        Text(
+                            text = if (item.unreadCount > 0) {
+                                "${item.category.title} ${if (item.unreadCount > 99) "99+" else item.unreadCount}"
+                            } else {
+                                item.category.title
+                            }
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DustbinActionRow(
+    isOperating: Boolean,
+    onMarkRead: () -> Unit,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedButton(
+            onClick = onMarkRead,
+            enabled = !isOperating,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("全部已读")
+        }
+
+        OutlinedButton(
+            onClick = onClear,
+            enabled = !isOperating,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("清空拦截")
+        }
+    }
+}
+
+@Composable
 private fun MessageUnreadBadge(
     text: String,
     modifier: Modifier = Modifier
@@ -326,7 +513,9 @@ fun SessionListItem(
     userInfo: UserBasicInfo? = null,
     onClick: () -> Unit,
     onRemove: () -> Unit,
-    onToggleTop: () -> Unit
+    onToggleTop: () -> Unit,
+    onToggleDnd: () -> Unit,
+    onToggleIntercept: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val uiPreset = LocalUiPreset.current
@@ -413,6 +602,16 @@ fun SessionListItem(
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
+
+                if (session.is_dnd == 1) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    MessageSmallFlag(text = "免打扰")
+                }
+
+                if (session.is_intercept == 1) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    MessageSmallFlag(text = "已拦截")
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -463,6 +662,22 @@ fun SessionListItem(
                         }
                     )
                     DropdownMenuItem(
+                        text = { Text(if (session.is_dnd == 1) "关闭免打扰" else "开启免打扰") },
+                        onClick = {
+                            showMenu = false
+                            onToggleDnd()
+                        }
+                    )
+                    if (session.session_type == 1) {
+                        DropdownMenuItem(
+                            text = { Text(if (session.is_intercept == 1) "移出拦截" else "移入拦截") },
+                            onClick = {
+                                showMenu = false
+                                onToggleIntercept()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
                         text = { Text("删除会话") },
                         onClick = {
                             showMenu = false
@@ -474,6 +689,21 @@ fun SessionListItem(
         }
     }
     }
+}
+
+@Composable
+private fun MessageSmallFlag(text: String) {
+    Text(
+        text = text,
+        fontSize = 10.sp,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .background(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                RoundedCornerShape(2.dp)
+            )
+            .padding(horizontal = 4.dp, vertical = 1.dp)
+    )
 }
 
 private fun formatTime(timestamp: Long): String {

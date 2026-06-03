@@ -62,6 +62,51 @@ class LivePlaybackPolicyTest {
     }
 
     @Test
+    fun `resolve playback should prefer stable hls fmp4 avc before hevc and flv`() {
+        val resolved = resolveLivePlayback(
+            data = playbackData(
+                streams = listOf(
+                    stream(
+                        protocol = "http_hls",
+                        format = "fmp4",
+                        codec = codec(
+                            codecName = "hevc",
+                            baseUrl = "/hevc.m4s",
+                            urls = listOf("https://hls.example.com/hevc.m4s?token=1")
+                        )
+                    ),
+                    stream(
+                        protocol = "http_hls",
+                        format = "fmp4",
+                        codec = codec(
+                            codecName = "avc",
+                            baseUrl = "/avc.m4s",
+                            urls = listOf("https://hls.example.com/avc.m4s?token=1")
+                        )
+                    ),
+                    stream(
+                        protocol = "http_stream",
+                        format = "flv",
+                        codec = codec(
+                            codecName = "avc",
+                            baseUrl = "/live.flv",
+                            urls = listOf("https://flv.example.com/live.flv?token=1")
+                        )
+                    )
+                )
+            ),
+            requestedQn = 10000
+        )
+
+        assertNotNull(resolved)
+        val first = resolved.candidates.first()
+        assertEquals("http_hls", first.protocolName)
+        assertEquals("fmp4", first.formatName)
+        assertEquals("avc", first.codecName)
+        assertEquals("https://hls.example.com/avc.m4s?token=1", resolved.primaryUrl)
+    }
+
+    @Test
     fun `resolve playback should use server current and accept qn before legacy descriptions`() {
         val resolved = resolveLivePlayback(
             data = playbackData(

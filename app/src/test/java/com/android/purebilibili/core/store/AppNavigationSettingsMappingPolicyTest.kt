@@ -43,4 +43,16 @@ class AppNavigationSettingsMappingPolicyTest {
         assertEquals(mapOf("HOME" to 2, "PROFILE" to 4, "INVALID" to 0), result.bottomBarItemColors)
         assertTrue(result.tabletUseSidebar)
     }
+
+    @Test
+    fun visibleBottomTabs_surviveWhenSavedOrderIsMissing() {
+        val prefs = mutablePreferencesOf(
+            stringPreferencesKey("bottom_bar_order") to "",
+            stringPreferencesKey("bottom_bar_visible_tabs") to "HOME,DYNAMIC,HISTORY,PROFILE"
+        )
+
+        val result = mapAppNavigationSettingsFromPreferences(prefs)
+
+        assertEquals(listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"), result.orderedVisibleTabIds)
+    }
 }

@@ -12,10 +12,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.StarBorder
@@ -34,11 +30,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.data.model.response.ViewInfo
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.filled.*
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -49,6 +48,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import com.android.purebilibili.feature.video.ui.feedback.resolveVideoDetailActionActiveColors
 import com.android.purebilibili.feature.video.ui.feedback.resolveVideoActionCountTint
 import com.android.purebilibili.feature.video.ui.feedback.resolveVideoActionTint
 
@@ -93,9 +93,21 @@ fun ActionButtonsRow(
     onDownloadClick: () -> Unit = {},  //  下载点击
     onWatchLaterClick: () -> Unit = {},  //  稍后再看点击
     onFavoriteLongClick: () -> Unit = {}, // [New] 长按收藏
-    onShareClick: () -> Unit = {}
+    onShareClick: () -> Unit = {},
+    modifier: Modifier = Modifier.fillMaxWidth()
 ) {
-    val primaryActionColor = MaterialTheme.colorScheme.primary
+    val colorScheme = MaterialTheme.colorScheme
+    val activeColors = remember(
+        colorScheme.primary,
+        colorScheme.secondary,
+        colorScheme.tertiary
+    ) {
+        resolveVideoDetailActionActiveColors(
+            primary = colorScheme.primary,
+            secondary = colorScheme.secondary,
+            tertiary = colorScheme.tertiary
+        )
+    }
     val haptic = rememberHapticFeedback()
     var isTriplePressing by remember { mutableStateOf(false) }
     var tripleCompleted by remember { mutableStateOf(false) }
@@ -130,9 +142,7 @@ fun ActionButtonsRow(
     }
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+        modifier = modifier
             .animateContentSize() // 🚀 [优化] 使布局变化更平滑
             .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -149,7 +159,7 @@ fun ActionButtonsRow(
                 icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
                 text = FormatUtils.formatStat(info.stat.like.toLong()),
                 isActive = isLiked,
-                activeColor = primaryActionColor,
+                activeColor = activeColors.primaryAction,
                 progress = tripleProgress,
                 onClick = onLikeClick,
                 modifier = Modifier.pointerInput(
@@ -195,7 +205,7 @@ fun ActionButtonsRow(
                 icon = AppIcons.BiliCoin,
                 text = FormatUtils.formatStat(info.stat.coin.toLong()),
                 isActive = coinCount > 0,
-                activeColor = primaryActionColor,
+                activeColor = activeColors.primaryAction,
                 progress = tripleProgress,
                 onClick = onCoinClick
             )
@@ -212,7 +222,7 @@ fun ActionButtonsRow(
                 icon = if (isFavorited) Icons.Rounded.Star else Icons.Outlined.StarBorder,
                 text = FormatUtils.formatStat(info.stat.favorite.toLong()),
                 isActive = isFavorited,
-                activeColor = primaryActionColor,
+                activeColor = activeColors.primaryAction,
                 progress = tripleProgress,
                 onClick = onFavoriteClick,
                 onLongClick = onFavoriteLongClick
@@ -230,7 +240,7 @@ fun ActionButtonsRow(
                 icon = if (isInWatchLater) CupertinoIcons.Filled.Clock else CupertinoIcons.Default.Clock,
                 text = if (isInWatchLater) "已添加" else "稍后看",
                 isActive = isInWatchLater,
-                activeColor = Color(0xFF9C27B0),  // 紫色
+                activeColor = activeColors.watchLater,
                 onClick = onWatchLaterClick
             )
         }
@@ -253,7 +263,11 @@ fun ActionButtonsRow(
                 icon = if (isDownloaded) CupertinoIcons.Default.Checkmark else CupertinoIcons.Default.ArrowDown,
                 text = downloadText,
                 isActive = isDownloaded || isDownloading,
-                activeColor = if (isDownloaded) Color(0xFF4CAF50) else Color(0xFF2196F3),
+                activeColor = if (isDownloaded) {
+                    activeColors.downloaded
+                } else {
+                    activeColors.downloadInProgress
+                },
                 onClick = onDownloadClick
             )
         }
@@ -455,7 +469,7 @@ private fun TripleLikeActionButton(
             exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut()
         ) {
             TripleProgressIcon(
-                icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
+                icon = AppIcons.BiliCoin,
                 text = coinCount,
                 progress = longPressProgress,
                 progressColor = MaterialTheme.colorScheme.primary,

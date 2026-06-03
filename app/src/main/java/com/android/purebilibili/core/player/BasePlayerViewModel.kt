@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ConcatenatingMediaSource
@@ -267,8 +268,11 @@ abstract class BasePlayerViewModel : ViewModel() {
             "Referer" to referer,
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
+        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
             .setDefaultRequestProperties(headers)
+        val dataSourceFactory: DataSource.Factory = NetworkModule.appContext?.let { context ->
+            PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
+        } ?: upstreamFactory
 
         // B站分段与 DASH 常用 fMP4/m4s，需要显式 extractor 配置保证可播
         val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
@@ -288,8 +292,9 @@ abstract class BasePlayerViewModel : ViewModel() {
         
         player.volume = 1.0f
         
-        val mediaItem = MediaItem.fromUri(url)
-        player.setMediaItem(mediaItem)
+        val mediaSource = buildProgressiveMediaSourceFactory("https://www.bilibili.com")
+            .createMediaSource(MediaItem.fromUri(url))
+        player.setMediaSource(mediaSource)
         player.prepare()
         if (seekToMs > 0) {
             player.seekTo(seekToMs)

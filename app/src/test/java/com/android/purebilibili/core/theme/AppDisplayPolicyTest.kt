@@ -1,9 +1,11 @@
 package com.android.purebilibili.core.theme
 
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.isUnspecified
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import top.yukonga.miuix.kmp.theme.defaultTextStyles
 
@@ -71,5 +73,25 @@ class AppDisplayPolicyTest {
         assertEquals(17f * AppFontSizePreset.LARGER.multiplier, scaled.main.fontSize.value, 0.0001f)
         assertTrue(scaled.main.lineHeight.isUnspecified)
         assertTrue(scaled.main.letterSpacing.isUnspecified)
+    }
+
+    @Test
+    fun `typography applies imported font family to all text levels`() {
+        val fontFamily = FontFamily.Serif
+        val typography = BiliTypography.withFontFamily(fontFamily)
+
+        assertSame(fontFamily, typography.bodyLarge.fontFamily)
+        assertSame(fontFamily, typography.titleMedium.fontFamily)
+        assertSame(fontFamily, typography.labelSmall.fontFamily)
+    }
+
+    @Test
+    fun `miuix text styles apply imported font family`() {
+        val fontFamily = FontFamily.Serif
+        val textStyles = defaultTextStyles().withFontFamily(fontFamily)
+
+        assertSame(fontFamily, textStyles.main.fontFamily)
+        assertSame(fontFamily, textStyles.body1.fontFamily)
+        assertSame(fontFamily, textStyles.title4.fontFamily)
     }
 }

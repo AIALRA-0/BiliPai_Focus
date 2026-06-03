@@ -81,7 +81,7 @@ internal fun resolveVideoPlaybackAuthState(
     hasSessionCookie: Boolean,
     hasAccessToken: Boolean
 ): Boolean {
-    return hasSessionCookie || hasAccessToken
+    return hasSessionCookie
 }
 
 internal fun shouldSkipPlayUrlCache(
@@ -271,10 +271,32 @@ internal fun buildGuestFallbackQualities(): List<Int> {
 
 internal fun shouldCachePlayUrlResult(
     source: PlayUrlSource,
-    audioLang: String?
+    audioLang: String?,
+    requestedQuality: Int = 0,
+    returnedQuality: Int = 0,
+    dashVideoIds: List<Int> = emptyList()
 ): Boolean {
     if (audioLang != null) return false
-    return source != PlayUrlSource.GUEST
+    if (source == PlayUrlSource.GUEST) return false
+    if (requestedQuality >= 80 && !isRequestedQualitySatisfied(
+            requestedQuality = requestedQuality,
+            returnedQuality = returnedQuality,
+            dashVideoIds = dashVideoIds
+        )
+    ) {
+        return false
+    }
+    return true
+}
+
+internal fun isRequestedQualitySatisfied(
+    requestedQuality: Int,
+    returnedQuality: Int,
+    dashVideoIds: List<Int>
+): Boolean {
+    if (requestedQuality < 80) return true
+    if (requestedQuality in dashVideoIds) return true
+    return returnedQuality >= requestedQuality && returnedQuality > 0
 }
 
 internal fun shouldFetchCommentEmoteMapOnVideoLoad(): Boolean {

@@ -6,7 +6,6 @@ import com.android.purebilibili.feature.video.usecase.shouldResumePlaybackAfterU
 
 private const val DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS = 500L
 internal const val SEEK_PLAYBACK_RECOVERY_DELAY_MS = 450L
-internal const val SEEK_SESSION_STALE_TIMEOUT_MS = 2_500L
 
 internal data class PlaybackSeekSessionState(
     val playbackPositionMs: Long = 0L,
@@ -14,7 +13,6 @@ internal data class PlaybackSeekSessionState(
     val isSliderMoving: Boolean = false,
     val pendingSeekPositionMs: Long? = null,
     val pendingSeekOriginPositionMs: Long? = null,
-    val pendingSeekCreatedAtMs: Long? = null,
     val shouldResumePlayback: Boolean? = null
 )
 
@@ -28,8 +26,7 @@ internal fun syncPlaybackSeekSession(
     state: PlaybackSeekSessionState,
     playbackPositionMs: Long,
     toleranceMs: Long = DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS,
-    currentTimeMs: Long = System.currentTimeMillis(),
-    staleTimeoutMs: Long = SEEK_SESSION_STALE_TIMEOUT_MS
+    hasPlaybackResumedAfterPendingSeek: Boolean = true
 ): PlaybackSeekSessionState {
     val safePlaybackPositionMs = playbackPositionMs.coerceAtLeast(0L)
     val syncedState = state.copy(playbackPositionMs = safePlaybackPositionMs)
@@ -41,10 +38,15 @@ internal fun syncPlaybackSeekSession(
             playerPositionMs = safePlaybackPositionMs,
             pendingSeekPositionMs = syncedState.pendingSeekPositionMs,
             pendingSeekOriginPositionMs = syncedState.pendingSeekOriginPositionMs,
-            pendingSeekCreatedAtMs = syncedState.pendingSeekCreatedAtMs,
-            currentTimeMs = currentTimeMs,
-            toleranceMs = toleranceMs,
-            staleTimeoutMs = staleTimeoutMs
+            toleranceMs = toleranceMs
+        )
+    ) {
+        return syncedState
+    }
+    if (
+        shouldKeepPendingSeekUntilPlaybackResumes(
+            state = syncedState,
+            hasPlaybackResumedAfterPendingSeek = hasPlaybackResumedAfterPendingSeek
         )
     ) {
         return syncedState
@@ -53,7 +55,6 @@ internal fun syncPlaybackSeekSession(
         sliderPositionMs = safePlaybackPositionMs,
         pendingSeekPositionMs = null,
         pendingSeekOriginPositionMs = null,
-        pendingSeekCreatedAtMs = null,
         shouldResumePlayback = null
     )
 }
@@ -69,7 +70,6 @@ internal fun startPlaybackSeekInteraction(
         isSliderMoving = true,
         pendingSeekPositionMs = null,
         pendingSeekOriginPositionMs = null,
-        pendingSeekCreatedAtMs = null,
         shouldResumePlayback = shouldResumePlayback
     )
 }
@@ -101,8 +101,7 @@ internal fun updatePlaybackSeekInteraction(
 }
 
 internal fun finishPlaybackSeekInteraction(
-    state: PlaybackSeekSessionState,
-    currentTimeMs: Long = System.currentTimeMillis()
+    state: PlaybackSeekSessionState
 ): PlaybackSeekSessionCommitResult {
     val committedPositionMs = state.sliderPositionMs.coerceAtLeast(0L)
     return PlaybackSeekSessionCommitResult(
@@ -110,8 +109,7 @@ internal fun finishPlaybackSeekInteraction(
             sliderPositionMs = committedPositionMs,
             isSliderMoving = false,
             pendingSeekPositionMs = committedPositionMs,
-            pendingSeekOriginPositionMs = state.playbackPositionMs.coerceAtLeast(0L),
-            pendingSeekCreatedAtMs = currentTimeMs
+            pendingSeekOriginPositionMs = state.playbackPositionMs.coerceAtLeast(0L)
         ),
         committedPositionMs = committedPositionMs,
         shouldResumePlayback = state.shouldResumePlayback
@@ -121,16 +119,14 @@ internal fun finishPlaybackSeekInteraction(
 internal fun commitPlaybackSeekInteraction(
     state: PlaybackSeekSessionState,
     player: Player,
-    positionMs: Long,
-    currentTimeMs: Long = System.currentTimeMillis()
+    positionMs: Long
 ): PlaybackSeekSessionCommitResult {
     return finishPlaybackSeekInteraction(
         startPlaybackSeekInteraction(
             state = state,
             player = player,
             positionMs = positionMs
-        ),
-        currentTimeMs = currentTimeMs
+        )
     )
 }
 
@@ -143,26 +139,20 @@ internal fun cancelPlaybackSeekInteraction(
         isSliderMoving = false,
         pendingSeekPositionMs = null,
         pendingSeekOriginPositionMs = null,
-        pendingSeekCreatedAtMs = null,
         shouldResumePlayback = null
     )
 }
 
 internal fun shouldUsePlaybackSeekSessionPosition(
     state: PlaybackSeekSessionState,
-    toleranceMs: Long = DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS,
-    currentTimeMs: Long = System.currentTimeMillis(),
-    staleTimeoutMs: Long = SEEK_SESSION_STALE_TIMEOUT_MS
+    toleranceMs: Long = DEFAULT_PLAYBACK_SEEK_PENDING_TOLERANCE_MS
 ): Boolean {
     return state.isSliderMoving ||
         shouldHoldPendingSeekPosition(
             playerPositionMs = state.playbackPositionMs,
             pendingSeekPositionMs = state.pendingSeekPositionMs,
             pendingSeekOriginPositionMs = state.pendingSeekOriginPositionMs,
-            pendingSeekCreatedAtMs = state.pendingSeekCreatedAtMs,
-            currentTimeMs = currentTimeMs,
-            toleranceMs = toleranceMs,
-            staleTimeoutMs = staleTimeoutMs
+            toleranceMs = toleranceMs
         )
 }
 
@@ -187,16 +177,9 @@ private fun shouldHoldPendingSeekPosition(
     playerPositionMs: Long,
     pendingSeekPositionMs: Long?,
     pendingSeekOriginPositionMs: Long?,
-    pendingSeekCreatedAtMs: Long?,
-    currentTimeMs: Long,
-    toleranceMs: Long,
-    staleTimeoutMs: Long
+    toleranceMs: Long
 ): Boolean {
     val targetPositionMs = pendingSeekPositionMs ?: return false
-    val pendingAgeMs = pendingSeekCreatedAtMs?.let { currentTimeMs - it } ?: 0L
-    if (pendingAgeMs >= staleTimeoutMs) {
-        return false
-    }
     if (
         !shouldHoldPlaybackTransitionPosition(
             playerPositionMs = playerPositionMs,
@@ -215,6 +198,15 @@ private fun shouldHoldPendingSeekPosition(
             playerPositionMs > targetPositionMs + toleranceMs
         else -> true
     }
+}
+
+private fun shouldKeepPendingSeekUntilPlaybackResumes(
+    state: PlaybackSeekSessionState,
+    hasPlaybackResumedAfterPendingSeek: Boolean
+): Boolean {
+    return state.pendingSeekPositionMs != null &&
+        state.shouldResumePlayback == true &&
+        !hasPlaybackResumedAfterPendingSeek
 }
 
 internal fun shouldShowPlaybackRecoveryUiAfterSeek(

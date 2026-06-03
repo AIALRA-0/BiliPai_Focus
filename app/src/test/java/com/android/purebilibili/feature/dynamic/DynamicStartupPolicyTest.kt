@@ -8,19 +8,19 @@ import kotlin.test.assertTrue
 class DynamicStartupPolicyTest {
 
     @Test
-    fun startupPlan_prefetchesFollowingsAlongsidePrimaryFeed() {
+    fun startupPlan_defersFollowingsHydrationUntilAfterPrimaryFeed() {
         val plan = resolveDynamicStartupLoadPlan()
 
         assertTrue(plan.refreshFeedImmediately)
         assertTrue(plan.loadLiveStatusImmediately)
-        assertTrue(plan.loadFollowingsImmediately)
-        assertEquals(0L, plan.followingsHydrationDelayMs)
-        assertEquals(20, plan.initialFollowingsPageLimit)
+        assertFalse(plan.loadFollowingsImmediately)
+        assertEquals(1_200L, plan.followingsHydrationDelayMs)
+        assertEquals(1, plan.initialFollowingsPageLimit)
     }
 
     @Test
-    fun followingsPageBudget_defaultsToSyncingUpToOneThousandCreators() {
-        assertEquals(20, resolveDynamicFollowingsPageLimit(isStartupHydration = true))
-        assertEquals(20, resolveDynamicFollowingsPageLimit(isStartupHydration = false))
+    fun followingsPageBudget_isConservativeDuringStartupHydration() {
+        assertEquals(1, resolveDynamicFollowingsPageLimit(isStartupHydration = true))
+        assertEquals(3, resolveDynamicFollowingsPageLimit(isStartupHydration = false))
     }
 }

@@ -36,6 +36,19 @@ internal fun filterFallbackLiveAreaRooms(
     return emptyList()
 }
 
+internal fun hasMoreLiveAreaRooms(
+    loadedCount: Int,
+    page: Int,
+    pageSize: Int,
+    hasMoreFlag: Int,
+    totalCount: Int
+): Boolean {
+    if (loadedCount <= 0) return false
+    if (hasMoreFlag > 0) return true
+    if (totalCount > 0) return page * pageSize < totalCount
+    return loadedCount >= pageSize
+}
+
 internal fun resolveLiveAreaRoomsErrorMessage(
     code: Int,
     message: String

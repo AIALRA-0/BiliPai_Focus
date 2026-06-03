@@ -20,11 +20,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.core.ui.blur.unifiedBlur  //  统一模糊API
+
+/**
+ * Renderer kind used by [iOSLargeTitleBar]. iOS keeps its custom large-title
+ * Cupertino chrome; MD3 and Miuix both delegate to [AdaptiveTopAppBar] with
+ * [AdaptiveTopAppBarStyle.LARGE], which already knows how to translate to
+ * Material `LargeTopAppBar` or Miuix `TopAppBar` internally.
+ */
+enum class IOSLargeTitleBarRenderer {
+    IOS_LARGE_TITLE,
+    ADAPTIVE_TOP_APP_BAR
+}
+
+fun resolveLargeTitleBarRenderer(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant
+): IOSLargeTitleBarRenderer = when (
+    resolvePresetPrimitiveRenderer(uiPreset, androidNativeVariant)
+) {
+    PresetPrimitiveRenderer.IOS -> IOSLargeTitleBarRenderer.IOS_LARGE_TITLE
+    PresetPrimitiveRenderer.MATERIAL3,
+    PresetPrimitiveRenderer.MIUIX_BRIDGED -> IOSLargeTitleBarRenderer.ADAPTIVE_TOP_APP_BAR
+}
 
 /**
  *  iOS 风格大标题导航栏
@@ -51,9 +77,24 @@ fun iOSLargeTitleBar(
     trailingContent: @Composable (() -> Unit)? = null,
     hazeState: HazeState? = null
 ) {
+    val renderer = resolveLargeTitleBarRenderer(
+        uiPreset = LocalUiPreset.current,
+        androidNativeVariant = LocalAndroidNativeVariant.current
+    )
+    if (renderer == IOSLargeTitleBarRenderer.ADAPTIVE_TOP_APP_BAR) {
+        AdaptiveTopAppBar(
+            title = title,
+            largeTitle = title,
+            navigationIcon = { leadingContent?.invoke() },
+            actions = { trailingContent?.invoke() },
+            style = AdaptiveTopAppBarStyle.LARGE
+        )
+        return
+    }
+
     // 计算收缩进度 (0.0 = 展开, 1.0 = 完全收缩)
-    val thresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 
-        collapseThreshold.toPx() 
+    val thresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+        collapseThreshold.toPx()
     }
     val collapseProgress = (scrollOffset / thresholdPx).coerceIn(0f, 1f)
     
@@ -84,6 +125,19 @@ fun iOSLargeTitleBar(
         animationSpec = spring(stiffness = 300f),
         label = "blur_alpha"
     )
+    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val collapsedHazeBackgroundColor = resolveGlobalWallpaperChromeColor(
+        requestedColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f * blurAlpha),
+        defaultBackgroundColor = MaterialTheme.colorScheme.background,
+        defaultSurfaceColor = MaterialTheme.colorScheme.surface,
+        globalWallpaperVisible = globalWallpaperVisible
+    )
+    val collapsedFallbackBackgroundColor = resolveGlobalWallpaperChromeColor(
+        requestedColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        defaultBackgroundColor = MaterialTheme.colorScheme.background,
+        defaultSurfaceColor = MaterialTheme.colorScheme.surface,
+        globalWallpaperVisible = globalWallpaperVisible
+    )
 
     Box(
         modifier = Modifier
@@ -98,9 +152,7 @@ fun iOSLargeTitleBar(
                     .height(56.dp)
                     .alpha(blurAlpha)
                     .unifiedBlur(hazeState)  //  版本自适应模糊
-                    .background(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f * blurAlpha)
-                    )
+                    .background(collapsedHazeBackgroundColor)
             )
         } else if (blurAlpha > 0.01f) {
             // 无 Haze 时使用半透明背景
@@ -109,7 +161,7 @@ fun iOSLargeTitleBar(
                     .fillMaxWidth()
                     .height(56.dp)
                     .alpha(blurAlpha)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                    .background(collapsedFallbackBackgroundColor)
             )
         }
         

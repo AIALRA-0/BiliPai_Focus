@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -42,5 +43,12 @@ class VideoCardHistoryProgressPolicyTest {
     @Test
     fun `invalid duration should fallback to zero fraction`() {
         assertEquals(0f, resolveVideoCardHistoryProgressFraction(progressSec = 30, durationSec = 0), 0.0001f)
+    }
+
+    @Test
+    fun `history progress bar uses current theme primary color`() {
+        val themePrimary = Color(0xFF34C759)
+
+        assertEquals(themePrimary, resolveVideoCardHistoryProgressBarColor(themePrimary))
     }
 }

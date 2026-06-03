@@ -1,6 +1,7 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.data.model.response.ReplyPicture
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -57,5 +58,13 @@ class CommentRepositoryImagePayloadTest {
         assertTrue(CommentRepository.shouldTryGrpcPagedRequest(page = 1, paginationOffset = null))
         assertTrue(CommentRepository.shouldTryGrpcPagedRequest(page = 2, paginationOffset = "offset"))
         assertTrue(!CommentRepository.shouldTryGrpcPagedRequest(page = 2, paginationOffset = null))
+    }
+
+    @Test
+    fun `sub reply detail list keeps rest page size pagination available`() {
+        val source = File("src/main/java/com/android/purebilibili/data/repository/CommentRepository.kt").readText()
+
+        assertTrue(source.contains("preferRestPaging: Boolean = false"))
+        assertTrue(source.contains("if (!preferRestPaging && shouldTryGrpcPagedRequest"))
     }
 }

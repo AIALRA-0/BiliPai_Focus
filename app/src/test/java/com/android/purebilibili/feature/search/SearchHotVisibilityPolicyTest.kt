@@ -8,8 +8,8 @@ import kotlin.test.assertTrue
 class SearchHotVisibilityPolicyTest {
 
     @Test
-    fun hotHeaderHiddenWhenUserDisabledIt() {
-        assertFalse(
+    fun hotHeaderVisibleWhenDisabledSoUserCanRestoreIt() {
+        assertTrue(
             shouldShowSearchHotHeader(
                 hotItemCount = 10,
                 hotSearchEnabled = false
@@ -48,11 +48,11 @@ class SearchHotVisibilityPolicyTest {
     }
 
     @Test
-    fun hotHeaderHiddenWhenNoDataExists() {
+    fun hotHeaderHiddenWhenDisabledAndNoDataExists() {
         assertFalse(
             shouldShowSearchHotHeader(
                 hotItemCount = 0,
-                hotSearchEnabled = true
+                hotSearchEnabled = false
             )
         )
     }

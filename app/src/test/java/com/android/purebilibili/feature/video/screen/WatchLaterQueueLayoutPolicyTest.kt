@@ -7,17 +7,17 @@ class WatchLaterQueueLayoutPolicyTest {
 
     @Test
     fun listMaxHeightUsesScreenRatioOnCommonPhones() {
-        assertEquals(562, resolveWatchLaterQueueListMaxHeightDp(screenHeightDp = 780))
+        assertEquals(562, resolveExternalPlaylistQueueListMaxHeightDp(screenHeightDp = 780))
     }
 
     @Test
     fun listMaxHeightHasMinimumBoundOnShortScreens() {
-        assertEquals(420, resolveWatchLaterQueueListMaxHeightDp(screenHeightDp = 520))
+        assertEquals(420, resolveExternalPlaylistQueueListMaxHeightDp(screenHeightDp = 520))
     }
 
     @Test
     fun bottomSpacerAddsSafeInsetAndBaselineGap() {
-        assertEquals(8, resolveWatchLaterQueueBottomSpacerDp(navigationBarBottomDp = 0))
-        assertEquals(30, resolveWatchLaterQueueBottomSpacerDp(navigationBarBottomDp = 22))
+        assertEquals(8, resolveExternalPlaylistQueueBottomSpacerDp(navigationBarBottomDp = 0))
+        assertEquals(30, resolveExternalPlaylistQueueBottomSpacerDp(navigationBarBottomDp = 22))
     }
 }

@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.article
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -20,11 +22,28 @@ sealed interface ArticleContentBlock {
 
 internal fun parseArticleContentBlocks(
     structuredParagraphs: List<JsonObject>,
-    htmlContent: String?
+    htmlContent: String?,
+    ops: List<JsonObject> = emptyList()
 ): List<ArticleContentBlock> {
     val structuredBlocks = structuredParagraphs.flatMap(::parseStructuredParagraph)
     if (structuredBlocks.isNotEmpty()) return structuredBlocks
+    val contentOps = ops.ifEmpty { parseOpsFromContentJson(htmlContent) }
+    val opsBlocks = parseOpsBlocks(contentOps)
+    if (opsBlocks.isNotEmpty()) return opsBlocks
     return parseHtmlBlocks(htmlContent)
+}
+
+private val articleContentJson = Json { ignoreUnknownKeys = true }
+
+private fun parseOpsFromContentJson(content: String?): List<JsonObject> {
+    val rawContent = content?.trim().orEmpty()
+    if (!rawContent.startsWith("{")) return emptyList()
+    return runCatching {
+        val root = articleContentJson.parseToJsonElement(rawContent).jsonObject
+        root["ops"]?.jsonArray
+            ?.mapNotNull { runCatching { it.jsonObject }.getOrNull() }
+            .orEmpty()
+    }.getOrDefault(emptyList())
 }
 
 private fun parseStructuredParagraph(paragraph: JsonObject): List<ArticleContentBlock> {
@@ -37,6 +56,12 @@ private fun parseStructuredParagraph(paragraph: JsonObject): List<ArticleContent
         blocks += ArticleContentBlock.Paragraph(it)
     }
     blocks += extractImages(paragraph)
+    parseImageObject(
+        paragraph["line"]
+            ?.let { runCatching { it.jsonObject }.getOrNull() }
+            ?.get("pic")
+            ?.let { runCatching { it.jsonObject }.getOrNull() }
+    )?.let(blocks::add)
 
     return blocks
 }
@@ -113,6 +138,55 @@ private fun parseHtmlBlocks(htmlContent: String?): List<ArticleContentBlock> {
         }
     }
     return blocks
+}
+
+private fun parseOpsBlocks(ops: List<JsonObject>): List<ArticleContentBlock> {
+    if (ops.isEmpty()) return emptyList()
+
+    return buildList {
+        ops.forEach { op ->
+            when (val insert = op["insert"]) {
+                is JsonPrimitive -> {
+                    insert.contentOrNull
+                        .orEmpty()
+                        .split('\n')
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                        .forEach { add(ArticleContentBlock.Paragraph(it)) }
+                }
+
+                is JsonObject -> {
+                    parseOpsImage(insert)?.let(::add)
+                }
+
+                else -> Unit
+            }
+        }
+    }
+}
+
+private fun parseOpsImage(insert: JsonObject): ArticleContentBlock.Image? {
+    val directImage = insert["image"]
+    if (directImage is JsonPrimitive) {
+        val url = directImage.contentOrNull.orEmpty().trim()
+        if (url.isNotBlank()) {
+            return ArticleContentBlock.Image(url = normalizeImageUrl(url))
+        }
+    }
+
+    val cardKeys = listOf(
+        "native-image",
+        "image-card",
+        "article-card",
+        "live-card",
+        "goods-card",
+        "video-card",
+        "mall-card",
+        "vote-card"
+    )
+    return cardKeys.firstNotNullOfOrNull { key ->
+        parseImageObject(insert[key]?.let { runCatching { it.jsonObject }.getOrNull() })
+    }
 }
 
 private fun parseHtmlImage(rawBlock: String): ArticleContentBlock.Image? {

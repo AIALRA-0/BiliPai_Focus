@@ -59,4 +59,56 @@ class ThemePreferencePolicyTest {
         assertFalse(state.useDarkTheme)
         assertFalse(state.useAmoledDarkTheme)
     }
+
+    @Test
+    fun md3ColorSource_defaultsToWallpaperAndUsesLegacyDynamicColorWhenMissing() {
+        assertEquals(
+            Md3ColorSource.FOLLOW_WALLPAPER,
+            resolveMd3ColorSourcePreference(
+                sourceValue = null,
+                legacyDynamicColorEnabled = null
+            )
+        )
+        assertEquals(
+            Md3ColorSource.FOLLOW_WALLPAPER,
+            resolveMd3ColorSourcePreference(
+                sourceValue = null,
+                legacyDynamicColorEnabled = true
+            )
+        )
+        assertEquals(
+            Md3ColorSource.CUSTOM,
+            resolveMd3ColorSourcePreference(
+                sourceValue = null,
+                legacyDynamicColorEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun explicitMd3ColorSourceWinsOverLegacyDynamicColor() {
+        assertEquals(
+            Md3ColorSource.CUSTOM,
+            resolveMd3ColorSourcePreference(
+                sourceValue = Md3ColorSource.CUSTOM.name,
+                legacyDynamicColorEnabled = true
+            )
+        )
+        assertEquals(
+            Md3ColorSource.FOLLOW_WALLPAPER,
+            resolveMd3ColorSourcePreference(
+                sourceValue = Md3ColorSource.FOLLOW_WALLPAPER.name,
+                legacyDynamicColorEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun md3CustomColorHex_normalizesRgbHexAndRejectsInvalidValues() {
+        assertEquals("#FA7298", normalizeMd3CustomColorHex("fa7298"))
+        assertEquals("#007AFF", normalizeMd3CustomColorHex("#007aff"))
+        assertEquals("#007AFF", normalizeMd3CustomColorHex("not-a-color"))
+        assertEquals("#007AFF", normalizeMd3CustomColorHex("#12345"))
+        assertEquals("#007AFF", normalizeMd3CustomColorHex("#FF007AFF"))
+    }
 }

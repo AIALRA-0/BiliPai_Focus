@@ -7,8 +7,8 @@ import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
-import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
+import java.time.LocalDate
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -65,10 +65,12 @@ internal fun shouldSkipAnalyticsEvent(
 object AnalyticsHelper {
     
     private const val TAG = "AnalyticsHelper"
+    private const val ANALYTICS_PREFS_NAME = "analytics_tracking"
+    private const val KEY_LAST_DAILY_ACTIVE_DATE = "last_daily_active_date"
     
     private var analytics: FirebaseAnalytics? = null
-    private var isEnabled: Boolean = false
-    private var isRuntimeAvailable: Boolean = false
+    private var appContext: Context? = null
+    private var isEnabled: Boolean = true
     private var isInForeground: Boolean = false
     private var sessionStartMs: Long = 0L
     private val eventRateLimiter = ConcurrentHashMap<String, Long>()
@@ -99,12 +101,6 @@ object AnalyticsHelper {
             durationMs < 600L -> "420_600ms"
             else -> "over_600ms"
         }
-    }
-
-    private fun resolveFirebaseRuntimeAvailable(context: Context): Boolean {
-        return runCatching {
-            FirebaseApp.getApps(context).isNotEmpty() || FirebaseApp.initializeApp(context) != null
-        }.getOrDefault(false)
     }
 
     private fun resolvePluginPressureLevel(totalPluginCount: Int): String {
@@ -145,18 +141,17 @@ object AnalyticsHelper {
      * 初始化 Analytics (在 Application 中调用)
      */
     fun init(context: Context) {
-        isRuntimeAvailable = resolveFirebaseRuntimeAvailable(context)
-        if (!isRuntimeAvailable) {
-            analytics = null
-            isEnabled = false
-            Logger.w(TAG, "Firebase Analytics unavailable for package ${context.packageName}, analytics disabled")
-            return
-        }
         try {
+            appContext = context.applicationContext
             analytics = FirebaseAnalytics.getInstance(context)
             analytics?.setUserProperty("app_version", BuildConfig.VERSION_NAME)
             analytics?.setUserProperty("build_type", BuildConfig.BUILD_TYPE)
             analytics?.setUserProperty("locale", Locale.getDefault().toLanguageTag())
+            syncUserContext(
+                mid = TokenManager.midCache,
+                isVip = TokenManager.isVipCache,
+                privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(context)
+            )
             Logger.d(TAG, " Firebase Analytics initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to init Firebase Analytics", e)
@@ -167,14 +162,11 @@ object AnalyticsHelper {
      * 启用/禁用 Analytics 收集
      */
     fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled && isRuntimeAvailable
-        if (!isRuntimeAvailable) {
-            return
-        }
+        isEnabled = enabled
         try {
-            analytics?.setAnalyticsCollectionEnabled(isEnabled)
-            CrashReporter.setLastEvent("analytics_collection_${if (isEnabled) "enabled" else "disabled"}")
-            Logger.d(TAG, " Analytics collection ${if (isEnabled) "enabled" else "disabled"}")
+            analytics?.setAnalyticsCollectionEnabled(enabled)
+            CrashReporter.setLastEvent("analytics_collection_${if (enabled) "enabled" else "disabled"}")
+            Logger.d(TAG, " Analytics collection ${if (enabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Analytics enabled state", e)
         }
@@ -188,8 +180,6 @@ object AnalyticsHelper {
         val mid = userId?.toLongOrNull()
         try {
             CrashReporter.syncUserContext(mid = mid, isVip = null, privacyModeEnabled = null)
-            if (!isEnabled) return
-            analytics?.setUserId(resolveAnalyticsUserId(mid))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set user ID", e)
         }
@@ -214,7 +204,6 @@ object AnalyticsHelper {
         try {
             CrashReporter.syncUserContext(mid, isVip, privacyModeEnabled)
             if (!isEnabled) return
-            analytics?.setUserId(resolveAnalyticsUserId(mid))
             analytics?.setUserProperty(
                 "login_state",
                 if (mid != null && mid > 0) "logged_in" else "guest"
@@ -240,6 +229,7 @@ object AnalyticsHelper {
             logAnalyticsEvent("app_foreground") {
                 param("source", "process_lifecycle")
             }
+            logDailyActive(source = "foreground")
             CrashReporter.setAppForegroundState(true)
             CrashReporter.setLastEvent("app_foreground")
         } catch (e: Exception) {
@@ -266,6 +256,31 @@ object AnalyticsHelper {
             CrashReporter.setCustomKey("last_session_duration_sec", sessionDurationSec)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log app background", e)
+        }
+    }
+
+    /**
+     * 记录每日活跃心跳。只上报匿名版本与日期信息，同一自然日最多一次。
+     */
+    fun logDailyActive(source: String) {
+        if (!isEnabled) return
+        val context = appContext ?: return
+        try {
+            val todayLocalDate = LocalDate.now().toString()
+            val prefs = context.getSharedPreferences(ANALYTICS_PREFS_NAME, Context.MODE_PRIVATE)
+            val lastLoggedDate = prefs.getString(KEY_LAST_DAILY_ACTIVE_DATE, null)
+            if (lastLoggedDate == todayLocalDate) return
+
+            logAnalyticsEvent("daily_active") {
+                param("app_version", BuildConfig.VERSION_NAME)
+                param("build_type", BuildConfig.BUILD_TYPE)
+                param("local_date", todayLocalDate)
+                param("source", source)
+            }
+            prefs.edit().putString(KEY_LAST_DAILY_ACTIVE_DATE, todayLocalDate).apply()
+            CrashReporter.setLastEvent("daily_active")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log daily active", e)
         }
     }
     

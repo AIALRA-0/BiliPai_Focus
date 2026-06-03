@@ -32,3 +32,38 @@ internal fun resolveOfflinePersistedPlaybackPosition(
     }
     return safeCurrent
 }
+
+internal fun shouldShowOfflineDanmakuControl(
+    localSegmentCount: Int,
+    isAudioOnly: Boolean
+): Boolean = localSegmentCount > 0 && !isAudioOnly
+
+internal fun shouldShowOfflineDanmakuLayer(
+    localSegmentCount: Int,
+    isAudioOnly: Boolean,
+    danmakuEnabled: Boolean
+): Boolean {
+    return danmakuEnabled && shouldShowOfflineDanmakuControl(
+        localSegmentCount = localSegmentCount,
+        isAudioOnly = isAudioOnly
+    )
+}
+
+internal fun resolveOfflineSeekProgressFromTouch(
+    touchX: Float,
+    containerWidthPx: Float
+): Float {
+    if (!touchX.isFinite() || !containerWidthPx.isFinite() || containerWidthPx <= 0f) {
+        return 0f
+    }
+    return (touchX / containerWidthPx).coerceIn(0f, 1f)
+}
+
+internal fun resolveOfflineSeekPositionFromTouch(
+    touchX: Float,
+    containerWidthPx: Float,
+    durationMs: Long
+): Long {
+    val safeDuration = durationMs.coerceAtLeast(0L)
+    return (resolveOfflineSeekProgressFromTouch(touchX, containerWidthPx) * safeDuration).toLong()
+}

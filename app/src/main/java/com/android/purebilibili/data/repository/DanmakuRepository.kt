@@ -123,7 +123,73 @@ internal fun mapSendDanmakuErrorMessage(code: Int, fallbackMessage: String): Str
 }
 
 internal const val DANMAKU_VIP_GRADUAL_COLOR_CODE = 60001
-internal const val DANMAKU_ENCOURAGE_CHECKBOX_TYPE = 1
+internal const val DANMAKU_UP_IDENTITY_CHECKBOX_TYPE = 4
+
+internal data class DanmakuPostPayload(
+    val aid: Long,
+    val cid: Long,
+    val message: String,
+    val progress: Long,
+    val color: Int,
+    val fontSize: Int,
+    val mode: Int,
+    val colorful: Int?,
+    val checkboxType: Int?
+)
+
+internal data class AttentionCommandDanmakuPayload(
+    val aid: Long,
+    val cid: Long,
+    val progress: Long,
+    val type: Int,
+    val plat: Int,
+    val data: String
+)
+
+internal fun buildDanmakuPostPayload(
+    aid: Long,
+    cid: Long,
+    message: String,
+    progress: Long,
+    color: Int,
+    fontSize: Int,
+    mode: Int,
+    colorful: Boolean,
+    upIdentity: Boolean
+): DanmakuPostPayload {
+    return DanmakuPostPayload(
+        aid = aid,
+        cid = cid,
+        message = message,
+        progress = progress,
+        color = if (colorful) 16777215 else color,
+        fontSize = fontSize,
+        mode = mode,
+        colorful = DANMAKU_VIP_GRADUAL_COLOR_CODE.takeIf { colorful },
+        checkboxType = DANMAKU_UP_IDENTITY_CHECKBOX_TYPE.takeIf { upIdentity }
+    )
+}
+
+internal fun buildAttentionCommandDanmakuPayload(
+    aid: Long,
+    cid: Long,
+    progress: Long,
+    durationMs: Long,
+    posX: Int,
+    posY: Int
+): AttentionCommandDanmakuPayload {
+    val duration = durationMs.coerceAtLeast(1000L)
+    val safeX = posX.coerceIn(118, 549)
+    val safeY = posY.coerceIn(82, 293)
+    return AttentionCommandDanmakuPayload(
+        aid = aid,
+        cid = cid,
+        progress = progress.coerceAtLeast(0L),
+        type = 5,
+        plat = 1,
+        data = """{"duration":$duration,"posX":$safeX,"posY":$safeY}"""
+    )
+}
 
 internal fun resolveDanmakuSegmentCount(
     durationMs: Long,
@@ -403,6 +469,21 @@ object DanmakuRepository {
         
         results.toList()
     }
+
+    suspend fun getSpecialDanmakuSegments(urls: List<String>): List<ByteArray> = withContext(Dispatchers.IO) {
+        urls.mapNotNull { rawUrl ->
+            val url = when {
+                rawUrl.startsWith("//") -> "https:$rawUrl"
+                else -> rawUrl
+            }
+            try {
+                api.getDanmakuSpecialDm(url).bytes().takeIf { it.isNotEmpty() }
+            } catch (e: Exception) {
+                android.util.Log.w("DanmakuRepo", " Special danmaku fetch failed: ${e.message}")
+                null
+            }
+        }
+    }
     
     /**
      * 发送弹幕
@@ -425,7 +506,7 @@ object DanmakuRepository {
         fontSize: Int = 25,
         mode: Int = 1,
         colorful: Boolean = false,
-        encourage: Boolean = false
+        upIdentity: Boolean = false
     ): Result<com.android.purebilibili.data.model.response.SendDanmakuData> = withContext(Dispatchers.IO) {
         try {
             // 验证登录状态
@@ -444,19 +525,29 @@ object DanmakuRepository {
             
             com.android.purebilibili.core.util.Logger.d(
                 "DanmakuRepo",
-                "📤 sendDanmaku: aid=$aid, cid=$cid, msg=$message, progress=${progress}ms, color=$color, mode=$mode, colorful=$colorful, encourage=$encourage"
+                "📤 sendDanmaku: aid=$aid, cid=$cid, msg=$message, progress=${progress}ms, color=$color, mode=$mode, colorful=$colorful, upIdentity=$upIdentity"
             )
-            
-            val response = api.sendDanmaku(
-                oid = cid,
+            val payload = buildDanmakuPostPayload(
                 aid = aid,
-                msg = message,
+                cid = cid,
+                message = message,
                 progress = progress,
-                color = if (colorful) 16777215 else color,
-                fontsize = fontSize,
+                color = color,
+                fontSize = fontSize,
                 mode = mode,
-                colorful = DANMAKU_VIP_GRADUAL_COLOR_CODE.takeIf { colorful },
-                checkboxType = DANMAKU_ENCOURAGE_CHECKBOX_TYPE.takeIf { encourage },
+                colorful = colorful,
+                upIdentity = upIdentity
+            )
+            val response = api.sendDanmaku(
+                oid = payload.cid,
+                aid = payload.aid,
+                msg = payload.message,
+                progress = payload.progress,
+                color = payload.color,
+                fontsize = payload.fontSize,
+                mode = payload.mode,
+                colorful = payload.colorful,
+                checkboxType = payload.checkboxType,
                 csrf = csrf
             )
             
@@ -470,6 +561,47 @@ object DanmakuRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("DanmakuRepo", "❌ sendDanmaku exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendAttentionCommandDanmaku(
+        aid: Long,
+        cid: Long,
+        progress: Long,
+        durationMs: Long = 6000L,
+        posX: Int = 240,
+        posY: Int = 160
+    ): Result<com.android.purebilibili.data.model.response.CommandDanmakuData> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache
+            if (csrf.isNullOrEmpty()) {
+                return@withContext Result.failure(Exception("请先登录"))
+            }
+            val payload = buildAttentionCommandDanmakuPayload(
+                aid = aid,
+                cid = cid,
+                progress = progress,
+                durationMs = durationMs,
+                posX = posX,
+                posY = posY
+            )
+            val response = api.sendCommandDanmaku(
+                type = payload.type,
+                aid = payload.aid,
+                cid = payload.cid,
+                progress = payload.progress,
+                plat = payload.plat,
+                data = payload.data,
+                csrf = csrf
+            )
+            if (response.code == 0 && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(mapSendDanmakuErrorMessage(response.code, response.message)))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DanmakuRepo", "❌ sendAttentionCommandDanmaku exception: ${e.message}", e)
             Result.failure(e)
         }
     }

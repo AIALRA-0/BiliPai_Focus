@@ -64,6 +64,63 @@ class FollowingGroupPolicyTest {
     }
 
     @Test
+    fun `mergeFollowingUsersDistinct should append new users and ignore removed duplicates`() {
+        val current = listOf(
+            FollowingUser(mid = 1L, uname = "A"),
+            FollowingUser(mid = 2L, uname = "B")
+        )
+        val incoming = listOf(
+            FollowingUser(mid = 2L, uname = "B-new"),
+            FollowingUser(mid = 3L, uname = "C"),
+            FollowingUser(mid = 4L, uname = "D")
+        )
+
+        val merged = mergeFollowingUsersDistinct(
+            currentUsers = current,
+            incomingUsers = incoming,
+            removedUserMids = setOf(4L)
+        )
+
+        assertEquals(listOf(1L, 2L, 3L), merged.map { it.mid })
+        assertEquals("B", merged[1].uname)
+    }
+
+    @Test
+    fun `isFollowingListIncomplete should compare loaded users with server total`() {
+        assertTrue(isFollowingListIncomplete(1000, 1100))
+        assertFalse(isFollowingListIncomplete(1100, 1100))
+        assertFalse(isFollowingListIncomplete(1110, 1100))
+    }
+
+    @Test
+    fun `shouldPublishFollowingLoadBatch should batch intermediate page updates`() {
+        assertFalse(
+            shouldPublishFollowingLoadBatch(
+                loadedCount = 150,
+                total = 1100,
+                pagesSinceLastPublish = 1,
+                publishIntervalPages = 3
+            )
+        )
+        assertTrue(
+            shouldPublishFollowingLoadBatch(
+                loadedCount = 200,
+                total = 1100,
+                pagesSinceLastPublish = 3,
+                publishIntervalPages = 3
+            )
+        )
+        assertTrue(
+            shouldPublishFollowingLoadBatch(
+                loadedCount = 1100,
+                total = 1100,
+                pagesSinceLastPublish = 1,
+                publishIntervalPages = 3
+            )
+        )
+    }
+
+    @Test
     fun `addFollowGroupMappingIfSuccess should skip failed lookups`() {
         val target = linkedMapOf<Long, Set<Long>>()
         val failed = Result.failure<Set<Long>>(IllegalStateException("rate limited"))

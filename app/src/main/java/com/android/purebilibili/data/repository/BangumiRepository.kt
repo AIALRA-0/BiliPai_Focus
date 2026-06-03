@@ -12,7 +12,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -21,6 +21,11 @@ internal data class BangumiPlayUrlPayload(
     val message: String,
     val videoInfo: BangumiVideoInfo?
 )
+
+internal fun shouldFallbackToLegacyBangumiPlayUrl(payload: BangumiPlayUrlPayload): Boolean {
+    if (payload.code == 0) return payload.videoInfo == null
+    return payload.code == -400 || payload.code == -404
+}
 
 internal fun buildBangumiPlayUrlParams(
     epId: Long,
@@ -73,8 +78,8 @@ internal fun decodeBangumiPlayUrlPayload(
     val root = json.parseToJsonElement(rawJson).jsonObject
     val code = root["code"]?.jsonPrimitive?.intOrNull ?: -1
     val message = root["message"]?.jsonPrimitive?.contentOrNull.orEmpty()
-    val resultObject = root["result"]?.jsonObject
-    val videoInfoElement = resultObject?.get("video_info") ?: root["result"]
+    val resultObject = root["result"] as? JsonObject
+    val videoInfoElement = resultObject?.get("video_info") ?: resultObject
     val videoInfo = videoInfoElement?.let {
         json.decodeFromString<BangumiVideoInfo>(it.toString())
     }
@@ -120,11 +125,28 @@ object BangumiRepository {
         pageSize: Int = 20
     ): Result<BangumiIndexData> = withContext(Dispatchers.IO) {
         try {
+            val requestFilter = buildBangumiIndexRequestFilter(
+                filter = BangumiFilter(),
+                seasonType = seasonType
+            )
             val response = api.getBangumiIndex(
                 seasonType = seasonType,
                 st = seasonType,  //  [修复] st 必须与 seasonType 相同
                 page = page,
-                pageSize = pageSize
+                pageSize = pageSize,
+                order = requestFilter.order,
+                sort = requestFilter.sortDirection,
+                area = requestFilter.area,
+                isFinish = requestFilter.isFinish,
+                year = requestFilter.year,
+                releaseDate = requestFilter.releaseDate,
+                styleId = requestFilter.styleId,
+                producerId = requestFilter.producerId,
+                seasonStatus = requestFilter.seasonStatus,
+                seasonVersion = requestFilter.seasonVersion,
+                spokenLanguageType = requestFilter.spokenLanguageType,
+                copyright = requestFilter.copyright,
+                seasonMonth = requestFilter.seasonMonth
             )
             if (response.code == 0 && response.data != null) {
                 Result.success(response.data)
@@ -221,11 +243,24 @@ object BangumiRepository {
                 "BangumiRepo",
                 "📡 getBangumiPlayUrl request params: wbiSigned=${signedParams.containsKey("w_rid")}, keys=${signedParams.keys.sorted()}"
             )
-            val response = decodeBangumiPlayUrlPayload(
+            val primaryResponse = decodeBangumiPlayUrlPayload(
                 rawJson = api.getBangumiPlayUrl(
                     signedParams
                 ).string()
             )
+            val response = if (shouldFallbackToLegacyBangumiPlayUrl(primaryResponse)) {
+                android.util.Log.w(
+                    "BangumiRepo",
+                    "📡 getBangumiPlayUrl fallback legacy: code=${primaryResponse.code}, msg=${primaryResponse.message}"
+                )
+                decodeBangumiPlayUrlPayload(
+                    rawJson = api.getBangumiPlayUrlLegacy(
+                        signedParams
+                    ).string()
+                )
+            } else {
+                primaryResponse
+            }
             android.util.Log.d(
                 "BangumiRepo",
                 "📡 getBangumiPlayUrl response: code=${response.code}, msg=${response.message}, hasResult=${response.videoInfo != null}"
@@ -325,20 +360,28 @@ object BangumiRepository {
         filter: BangumiFilter = BangumiFilter()
     ): Result<BangumiIndexData> = withContext(Dispatchers.IO) {
         try {
-            val year = filter.toApiYear(seasonType)
-            val releaseDate = filter.toApiReleaseDate(seasonType)
+            val requestFilter = buildBangumiIndexRequestFilter(
+                filter = filter,
+                seasonType = seasonType
+            )
             val response = api.getBangumiIndex(
                 seasonType = seasonType,
                 st = seasonType,
                 page = page,
                 pageSize = pageSize,
-                order = filter.order,
-                area = filter.area,
-                isFinish = filter.isFinish,
-                year = year,
-                releaseDate = releaseDate,
-                styleId = filter.styleId,
-                seasonStatus = filter.seasonStatus
+                order = requestFilter.order,
+                sort = requestFilter.sortDirection,
+                area = requestFilter.area,
+                isFinish = requestFilter.isFinish,
+                year = requestFilter.year,
+                releaseDate = requestFilter.releaseDate,
+                styleId = requestFilter.styleId,
+                producerId = requestFilter.producerId,
+                seasonStatus = requestFilter.seasonStatus,
+                seasonVersion = requestFilter.seasonVersion,
+                spokenLanguageType = requestFilter.spokenLanguageType,
+                copyright = requestFilter.copyright,
+                seasonMonth = requestFilter.seasonMonth
             )
             if (response.code == 0 && response.data != null) {
                 Result.success(response.data)
@@ -356,12 +399,14 @@ object BangumiRepository {
      */
     suspend fun searchBangumi(
         keyword: String,
+        seasonType: Int = BangumiType.ANIME.value,
         page: Int = 1,
         pageSize: Int = 20
     ): Result<BangumiSearchData> = withContext(Dispatchers.IO) {
         try {
             val navApi = NetworkModule.api
             val searchApi = NetworkModule.searchApi
+            val searchType = resolveBangumiSearchTypeForSeasonType(seasonType)
             
             // 获取 WBI 密钥
             val navResp = navApi.getNavInfo()
@@ -371,14 +416,18 @@ object BangumiRepository {
             
             val params = mutableMapOf(
                 "keyword" to keyword,
-                "search_type" to "media_bangumi",
+                "search_type" to searchType.value,
                 "page" to page.toString(),
                 "pagesize" to pageSize.toString()
             )
             
             // WBI 签名
             val signedParams = if (imgKey.isNotEmpty()) WbiUtils.sign(params, imgKey, subKey) else params
-            val response = searchApi.searchBangumi(signedParams)
+            val response = if (searchType == SearchType.MEDIA_FT) {
+                searchApi.searchMediaFt(signedParams)
+            } else {
+                searchApi.searchBangumi(signedParams)
+            }
             
             if (response.code == 0 && response.data != null) {
                 Result.success(response.data)

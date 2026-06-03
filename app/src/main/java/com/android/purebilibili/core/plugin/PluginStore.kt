@@ -72,4 +72,24 @@ object PluginStore {
             prefs[key] = configJson
         }
     }
+
+    /**
+     * 获取插件私有数据 (JSON 字符串)
+     */
+    suspend fun getDataJson(context: Context, pluginId: String, name: String): String? {
+        val key = stringPreferencesKey("plugin_data_${pluginId}_$name")
+        return context.pluginDataStore.data.map { prefs ->
+            prefs[key]
+        }.first()
+    }
+
+    /**
+     * 设置插件私有数据 (JSON 字符串)
+     */
+    suspend fun setDataJson(context: Context, pluginId: String, name: String, dataJson: String) {
+        val key = stringPreferencesKey("plugin_data_${pluginId}_$name")
+        context.pluginDataStore.edit { prefs ->
+            prefs[key] = dataJson
+        }
+    }
 }

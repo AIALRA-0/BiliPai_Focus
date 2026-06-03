@@ -24,9 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 // Imports for moved classes
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
@@ -109,14 +106,6 @@ class VideoActivity : ComponentActivity() {
                     bvid = bvid,
                     coverUrl = "", // Will be updated when video info loads
                     onBack = { onBackPressedDispatcher.onBackPressed() },
-                    onHomeClick = {
-                        startActivity(
-                            Intent(this, com.android.purebilibili.MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            }
-                        )
-                        finish()
-                    },
                     onNavigateToAudioMode = {
                         viewModel.setAudioMode(true)
                     },
@@ -153,13 +142,6 @@ class VideoActivity : ComponentActivity() {
     private fun updateStateFromConfig(config: Configuration) {
         val isLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
         isFullscreen = isLandscape
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        if (isLandscape) {
-            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
-        } else {
-            windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
-        }
     }
 
     private fun toggleFullscreen() {
@@ -222,7 +204,7 @@ class VideoActivity : ComponentActivity() {
         super.onUserLeaveHint()
         //  [修复] 使用 SettingsManager 读取正确的小窗模式设置
         val mode = com.android.purebilibili.core.store.SettingsManager.getMiniPlayerModeSync(this)
-        val shouldEnterPip = mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
+        val shouldEnterPip = mode.supportsSystemPip
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && shouldEnterPip) {
             val state = viewModel.uiState.value

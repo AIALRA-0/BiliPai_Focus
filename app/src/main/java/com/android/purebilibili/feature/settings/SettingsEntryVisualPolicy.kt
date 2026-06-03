@@ -3,28 +3,7 @@ package com.android.purebilibili.feature.settings
 import androidx.annotation.DrawableRes
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Article
-import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.CardGiftcard
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.Feed
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.Replay
-import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.Update
-import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -41,28 +20,6 @@ import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSRed
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.ui.AppIcons
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowCounterclockwise
-import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowTriangle2Circlepath
-import io.github.alexzhirkevich.cupertino.icons.outlined.DocOnDoc
-import io.github.alexzhirkevich.cupertino.icons.outlined.DocText
-import io.github.alexzhirkevich.cupertino.icons.outlined.ExclamationmarkTriangle
-import io.github.alexzhirkevich.cupertino.icons.outlined.Folder
-import io.github.alexzhirkevich.cupertino.icons.outlined.Gift
-import io.github.alexzhirkevich.cupertino.icons.outlined.Lightbulb
-import io.github.alexzhirkevich.cupertino.icons.outlined.Link
-import io.github.alexzhirkevich.cupertino.icons.outlined.ListBullet
-import io.github.alexzhirkevich.cupertino.icons.outlined.Lock
-import io.github.alexzhirkevich.cupertino.icons.outlined.Newspaper
-import io.github.alexzhirkevich.cupertino.icons.outlined.PaintbrushPointed
-import io.github.alexzhirkevich.cupertino.icons.outlined.Person
-import io.github.alexzhirkevich.cupertino.icons.outlined.PlayCircle
-import io.github.alexzhirkevich.cupertino.icons.outlined.PuzzlepieceExtension
-import io.github.alexzhirkevich.cupertino.icons.outlined.SquareAndArrowUp
-import io.github.alexzhirkevich.cupertino.icons.outlined.SquareStack3dUp
-import io.github.alexzhirkevich.cupertino.icons.outlined.Terminal
-import io.github.alexzhirkevich.cupertino.icons.outlined.Trash
-import io.github.alexzhirkevich.cupertino.icons.outlined.XmarkCircle
 
 internal data class SettingsEntryVisual(
     val icon: ImageVector? = null,
@@ -85,10 +42,10 @@ internal enum class SettingsEntryTintRole {
 }
 
 private val PreviewMd3SettingsEntryThemePalette = SettingsEntryThemePalette(
-    primary = Color(0xFF6750A4),
-    secondary = Color(0xFF625B71),
-    tertiary = Color(0xFF7D5260),
-    error = Color(0xFFB3261E)
+    primary = lightColorScheme().primary,
+    secondary = lightColorScheme().secondary,
+    tertiary = lightColorScheme().tertiary,
+    error = lightColorScheme().error
 )
 
 internal fun resolveMd3SettingsEntryThemePalette(
@@ -133,24 +90,35 @@ internal fun rememberSettingsEntryTint(
 private fun resolveMd3SettingsEntryTintRole(
     target: SettingsSearchTarget
 ): SettingsEntryTintRole = when (target) {
+    SettingsSearchTarget.INTERFACE_THEME,
+    SettingsSearchTarget.HOME_FEED,
+    SettingsSearchTarget.NAVIGATION,
     SettingsSearchTarget.APPEARANCE,
-    SettingsSearchTarget.FOCUS,
+    SettingsSearchTarget.ANIMATION,
     SettingsSearchTarget.PLUGINS,
     SettingsSearchTarget.OPEN_SOURCE_HOME,
     SettingsSearchTarget.REPLAY_ONBOARDING,
     SettingsSearchTarget.TIPS -> SettingsEntryTintRole.TERTIARY
 
+    SettingsSearchTarget.PLAYBACK_QUALITY,
+    SettingsSearchTarget.FULLSCREEN_GESTURE,
+    SettingsSearchTarget.INTERACTION_COMMENT,
+    SettingsSearchTarget.DATA_BACKUP,
     SettingsSearchTarget.PLAYBACK,
     SettingsSearchTarget.BOTTOM_BAR,
     SettingsSearchTarget.SETTINGS_SHARE,
     SettingsSearchTarget.WEBDAV_BACKUP,
     SettingsSearchTarget.DOWNLOAD_PATH,
+    SettingsSearchTarget.IMAGE_SAVE_PATH,
     SettingsSearchTarget.EXPORT_LOGS,
     SettingsSearchTarget.OPEN_SOURCE_LICENSES,
     SettingsSearchTarget.VIEW_RELEASE_NOTES,
     SettingsSearchTarget.OPEN_LINKS,
     SettingsSearchTarget.PERMISSION -> SettingsEntryTintRole.SECONDARY
 
+    SettingsSearchTarget.PRIVACY_PERMISSION,
+    SettingsSearchTarget.DIAGNOSTICS,
+    SettingsSearchTarget.ABOUT_SUPPORT,
     SettingsSearchTarget.CHECK_UPDATE,
     SettingsSearchTarget.DONATE,
     SettingsSearchTarget.TELEGRAM,
@@ -158,6 +126,45 @@ private fun resolveMd3SettingsEntryTintRole(
     SettingsSearchTarget.DISCLAIMER,
     SettingsSearchTarget.BLOCKED_LIST,
     SettingsSearchTarget.CLEAR_CACHE -> SettingsEntryTintRole.PRIMARY
+}
+
+private fun resolveIosSettingsEntryTint(
+    target: SettingsSearchTarget
+): Color = when (target) {
+    SettingsSearchTarget.INTERFACE_THEME -> iOSPink
+    SettingsSearchTarget.HOME_FEED -> iOSOrange
+    SettingsSearchTarget.NAVIGATION -> iOSBlue
+    SettingsSearchTarget.PLAYBACK_QUALITY -> iOSGreen
+    SettingsSearchTarget.FULLSCREEN_GESTURE -> iOSPurple
+    SettingsSearchTarget.INTERACTION_COMMENT -> iOSTeal
+    SettingsSearchTarget.DATA_BACKUP -> iOSBlue
+    SettingsSearchTarget.PRIVACY_PERMISSION -> iOSPurple
+    SettingsSearchTarget.DIAGNOSTICS -> iOSTeal
+    SettingsSearchTarget.ABOUT_SUPPORT -> iOSOrange
+    SettingsSearchTarget.APPEARANCE -> iOSPink
+    SettingsSearchTarget.ANIMATION -> iOSPink
+    SettingsSearchTarget.PLAYBACK -> iOSGreen
+    SettingsSearchTarget.BOTTOM_BAR -> iOSBlue
+    SettingsSearchTarget.PERMISSION -> iOSTeal
+    SettingsSearchTarget.BLOCKED_LIST -> iOSBlue
+    SettingsSearchTarget.SETTINGS_SHARE -> iOSGreen
+    SettingsSearchTarget.WEBDAV_BACKUP -> iOSBlue
+    SettingsSearchTarget.DOWNLOAD_PATH -> iOSBlue
+    SettingsSearchTarget.IMAGE_SAVE_PATH -> iOSTeal
+    SettingsSearchTarget.CLEAR_CACHE -> iOSBlue
+    SettingsSearchTarget.PLUGINS -> iOSPurple
+    SettingsSearchTarget.EXPORT_LOGS -> iOSTeal
+    SettingsSearchTarget.OPEN_SOURCE_LICENSES -> iOSOrange
+    SettingsSearchTarget.OPEN_SOURCE_HOME -> iOSPurple
+    SettingsSearchTarget.CHECK_UPDATE -> iOSBlue
+    SettingsSearchTarget.VIEW_RELEASE_NOTES -> iOSTeal
+    SettingsSearchTarget.REPLAY_ONBOARDING -> iOSPink
+    SettingsSearchTarget.TIPS -> iOSOrange
+    SettingsSearchTarget.OPEN_LINKS -> iOSTeal
+    SettingsSearchTarget.DONATE -> iOSRed
+    SettingsSearchTarget.TELEGRAM -> iOSBlue
+    SettingsSearchTarget.TWITTER -> iOSBlue
+    SettingsSearchTarget.DISCLAIMER -> iOSBlue
 }
 
 @Composable
@@ -180,197 +187,26 @@ internal fun resolveSettingsEntryVisual(
     uiPreset: UiPreset = UiPreset.IOS,
     md3Palette: SettingsEntryThemePalette = PreviewMd3SettingsEntryThemePalette
 ): SettingsEntryVisual {
-    if (uiPreset == UiPreset.MD3) {
-        val iconTint = md3Palette.resolve(resolveMd3SettingsEntryTintRole(target))
-        return when (target) {
-            SettingsSearchTarget.APPEARANCE -> SettingsEntryVisual(
-                icon = Icons.Outlined.Palette,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.PLAYBACK -> SettingsEntryVisual(
-                icon = Icons.Outlined.PlayCircle,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.BOTTOM_BAR -> SettingsEntryVisual(
-                icon = Icons.Outlined.Widgets,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.FOCUS -> SettingsEntryVisual(
-                icon = Icons.Outlined.Tune,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.PERMISSION -> SettingsEntryVisual(
-                icon = Icons.Outlined.Security,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.BLOCKED_LIST -> SettingsEntryVisual(
-                icon = Icons.Outlined.Block,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.SETTINGS_SHARE -> SettingsEntryVisual(
-                icon = Icons.Outlined.Share,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.WEBDAV_BACKUP -> SettingsEntryVisual(
-                icon = Icons.Outlined.Backup,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.DOWNLOAD_PATH -> SettingsEntryVisual(
-                icon = Icons.Outlined.Folder,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.CLEAR_CACHE -> SettingsEntryVisual(
-                icon = Icons.Outlined.DeleteOutline,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.PLUGINS -> SettingsEntryVisual(
-                icon = Icons.Outlined.Extension,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.EXPORT_LOGS -> SettingsEntryVisual(
-                icon = Icons.Outlined.Article,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.OPEN_SOURCE_LICENSES -> SettingsEntryVisual(
-                icon = Icons.Outlined.Description,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.OPEN_SOURCE_HOME -> SettingsEntryVisual(
-                icon = Icons.Outlined.OpenInNew,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.CHECK_UPDATE -> SettingsEntryVisual(
-                icon = Icons.Outlined.Update,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.VIEW_RELEASE_NOTES -> SettingsEntryVisual(
-                icon = Icons.Outlined.Feed,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.REPLAY_ONBOARDING -> SettingsEntryVisual(
-                icon = Icons.Outlined.Replay,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.TIPS -> SettingsEntryVisual(
-                icon = Icons.Outlined.Lightbulb,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.OPEN_LINKS -> SettingsEntryVisual(
-                icon = Icons.Outlined.Link,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.DONATE -> SettingsEntryVisual(
-                icon = Icons.Outlined.CardGiftcard,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.TELEGRAM -> SettingsEntryVisual(
-                iconResId = R.drawable.ic_telegram_mono,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.TWITTER -> SettingsEntryVisual(
-                icon = AppIcons.Twitter,
-                iconTint = iconTint
-            )
-            SettingsSearchTarget.DISCLAIMER -> SettingsEntryVisual(
-                icon = Icons.Outlined.WarningAmber,
-                iconTint = iconTint
-            )
-        }
+    val iconTint = if (uiPreset == UiPreset.MD3) {
+        md3Palette.resolve(resolveMd3SettingsEntryTintRole(target))
+    } else {
+        resolveIosSettingsEntryTint(target)
     }
-
     return when (target) {
-        SettingsSearchTarget.APPEARANCE -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.PaintbrushPointed,
-            iconTint = iOSPink
-        )
-        SettingsSearchTarget.PLAYBACK -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.PlayCircle,
-            iconTint = iOSGreen
-        )
-        SettingsSearchTarget.BOTTOM_BAR -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.SquareStack3dUp,
-            iconTint = iOSBlue
-        )
-        SettingsSearchTarget.FOCUS -> SettingsEntryVisual(
-            icon = Icons.Outlined.Tune,
-            iconTint = iOSTeal
-        )
-        SettingsSearchTarget.PERMISSION -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Lock,
-            iconTint = iOSTeal
-        )
-        SettingsSearchTarget.BLOCKED_LIST -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.XmarkCircle,
-            iconTint = iOSBlue
-        )
-        SettingsSearchTarget.SETTINGS_SHARE -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.ListBullet,
-            iconTint = iOSGreen
-        )
-        SettingsSearchTarget.WEBDAV_BACKUP -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.DocOnDoc,
-            iconTint = iOSBlue
-        )
-        SettingsSearchTarget.DOWNLOAD_PATH -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Folder,
-            iconTint = iOSBlue
-        )
-        SettingsSearchTarget.CLEAR_CACHE -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Trash,
-            iconTint = iOSBlue
-        )
-        SettingsSearchTarget.PLUGINS -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.PuzzlepieceExtension,
-            iconTint = iOSPurple
-        )
-        SettingsSearchTarget.EXPORT_LOGS -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Terminal,
-            iconTint = iOSTeal
-        )
-        SettingsSearchTarget.OPEN_SOURCE_LICENSES -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.DocText,
-            iconTint = iOSOrange
-        )
-        SettingsSearchTarget.OPEN_SOURCE_HOME -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.SquareAndArrowUp,
-            iconTint = iOSPurple
-        )
-        SettingsSearchTarget.CHECK_UPDATE -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.ArrowTriangle2Circlepath,
-            iconTint = iOSBlue
-        )
-        SettingsSearchTarget.VIEW_RELEASE_NOTES -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Newspaper,
-            iconTint = iOSTeal
-        )
-        SettingsSearchTarget.REPLAY_ONBOARDING -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.ArrowCounterclockwise,
-            iconTint = iOSPink
-        )
-        SettingsSearchTarget.TIPS -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Lightbulb,
-            iconTint = iOSOrange
-        )
-        SettingsSearchTarget.OPEN_LINKS -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Link,
-            iconTint = iOSTeal
-        )
-        SettingsSearchTarget.DONATE -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.Gift,
-            iconTint = Color(0xFFFF3B30)
-        )
         SettingsSearchTarget.TELEGRAM -> SettingsEntryVisual(
             iconResId = R.drawable.ic_telegram_mono,
-            iconTint = Color(0xFF0088CC)
+            iconTint = iconTint
         )
         SettingsSearchTarget.TWITTER -> SettingsEntryVisual(
             icon = AppIcons.Twitter,
-            iconTint = Color(0xFF1DA1F2)
+            iconTint = iconTint
         )
-        SettingsSearchTarget.DISCLAIMER -> SettingsEntryVisual(
-            icon = CupertinoIcons.Default.ExclamationmarkTriangle,
-            iconTint = iOSBlue
+        else -> SettingsEntryVisual(
+            icon = resolveSettingsSemanticIcon(
+                role = resolveSettingsSearchTargetIconRole(target),
+                uiPreset = uiPreset
+            ),
+            iconTint = iconTint
         )
     }
 }
-

@@ -5,7 +5,11 @@ plugins {
 
 android {
     namespace = "com.android.purebilibili.network.core"
-    compileSdk = 36
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 0
+        }
+    }
 
     defaultConfig {
         minSdk = 26

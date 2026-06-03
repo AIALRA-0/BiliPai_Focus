@@ -154,6 +154,28 @@ class StartupSplashPolicyTest {
     }
 
     @Test
+    fun systemSplashPreloadHold_followsSplashIconVisibilitySwitch() {
+        assertTrue(
+            shouldKeepSystemSplashForPreload(
+                runColdStartSplash = true,
+                splashIconVisible = true
+            )
+        )
+        assertFalse(
+            shouldKeepSystemSplashForPreload(
+                runColdStartSplash = true,
+                splashIconVisible = false
+            )
+        )
+        assertFalse(
+            shouldKeepSystemSplashForPreload(
+                runColdStartSplash = false,
+                splashIconVisible = true
+            )
+        )
+    }
+
+    @Test
     fun coldStartSplash_runsOnlyWithoutSavedInstanceState() {
         assertTrue(shouldRunColdStartSplash(savedInstanceStatePresent = false))
         assertFalse(shouldRunColdStartSplash(savedInstanceStatePresent = true))

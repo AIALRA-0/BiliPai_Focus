@@ -27,14 +27,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.ui.components.CoinDialog
+import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
+import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 //  使用提取后的组件
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerView
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerContent
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiErrorContent
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 番剧播放页面
@@ -46,26 +50,47 @@ import com.android.purebilibili.feature.bangumi.ui.player.BangumiErrorContent
 fun BangumiPlayerScreen(
     seasonId: Long,
     epId: Long,
+    resumePositionMs: Long = 0L,
     onBack: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
-    viewModel: BangumiPlayerViewModel = viewModel()
+    viewModel: BangumiPlayerViewModel = viewModel(),
+    commentViewModel: VideoCommentViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val configuration = LocalConfiguration.current
-    val uiState by viewModel.uiState.collectAsState()
-    val coinDialogVisible by viewModel.coinDialogVisible.collectAsState()
-    val userCoinBalance by viewModel.userCoinBalance.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val coinDialogVisible by viewModel.coinDialogVisible.collectAsStateWithLifecycle()
+    val userCoinBalance by viewModel.userCoinBalance.collectAsStateWithLifecycle()
     val successState = uiState as? BangumiPlayerState.Success
+    val currentEpisodeIdForDebug = successState?.currentEpisode?.id ?: epId
+    val currentCidForDebug = successState?.currentEpisode?.cid ?: 0L
+    var playbackDebugSnapshot by remember {
+        mutableStateOf(
+            BangumiPlaybackDebugSnapshot(
+                episodeId = currentEpisodeIdForDebug,
+                cid = currentCidForDebug
+            )
+        )
+    }
+    val latestDebugEpisodeId by rememberUpdatedState(currentEpisodeIdForDebug)
+    val latestDebugCid by rememberUpdatedState(currentCidForDebug)
+    val latestPlaybackDebugSnapshot by rememberUpdatedState(playbackDebugSnapshot)
     
     //  空降助手状态
-    val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
-    val showSponsorSkipButton by viewModel.showSkipButton.collectAsState()
+    val sponsorSegment by viewModel.currentSponsorSegment.collectAsStateWithLifecycle()
+    val showSponsorSkipButton by viewModel.showSkipButton.collectAsStateWithLifecycle()
     val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
         .getSponsorBlockEnabled(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false)
     
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val statusBarsInsetTop = WindowInsets.statusBars
+        .asPaddingValues()
+        .calculateTopPadding()
+    val portraitPlayerTopPadding = resolveBangumiPortraitPlayerContainerTopPaddingDp(
+        statusBarsInsetDp = statusBarsInsetTop.value
+    ).dp
     
     // 创建 ExoPlayer
     val exoPlayer = remember {
@@ -103,37 +128,36 @@ fun BangumiPlayerScreen(
             }
         }
     }
-    
-    // 附加播放器到 ViewModel 并加载番剧
-    // 使用同一个 LaunchedEffect 确保顺序执行，避免竞态条件
-    LaunchedEffect(exoPlayer, seasonId, epId) {
-        // 先附加播放器
-        viewModel.attachPlayer(exoPlayer)
-        // 然后加载番剧
-        viewModel.loadBangumiPlay(seasonId, epId)
-    }
 
-    LaunchedEffect(viewModel, context) {
-        viewModel.toastEvent.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-    
-    //  [优化] 播放错误监听 - 记录日志并触发重试
+    //  [优化] 播放诊断监听先于加载注册，避免错过首帧事件后误报黑屏
     DisposableEffect(exoPlayer) {
+        fun updatePlaybackDebug(
+            event: String,
+            firstFrameRendered: Boolean = latestPlaybackDebugSnapshot.firstFrameRendered
+        ) {
+            playbackDebugSnapshot = playbackDebugSnapshot.copy(
+                episodeId = latestDebugEpisodeId,
+                cid = latestDebugCid,
+                playbackState = exoPlayer.playbackState,
+                playWhenReady = exoPlayer.playWhenReady,
+                isPlaying = exoPlayer.isPlaying,
+                firstFrameRendered = firstFrameRendered,
+                lastVideoEvent = event
+            )
+        }
         val errorListener = object : androidx.media3.common.Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                updatePlaybackDebug("player error ${error.errorCodeName}")
                 android.util.Log.e("BangumiPlayer", "❌ 播放错误: ${error.errorCodeName} - ${error.message}", error)
-                // 可以在这里触发 Toast 或重试逻辑
             }
-            
+
             override fun onPlayerErrorChanged(error: androidx.media3.common.PlaybackException?) {
                 if (error != null) {
+                    updatePlaybackDebug("player error changed ${error.errorCodeName}")
                     android.util.Log.w("BangumiPlayer", "⚠️ 播放器错误变化: ${error.errorCodeName}")
                 }
             }
-            
-            //  [调试] 新增：监听播放状态变化
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val stateName = when (playbackState) {
                     androidx.media3.common.Player.STATE_IDLE -> "IDLE"
@@ -142,17 +166,48 @@ fun BangumiPlayerScreen(
                     androidx.media3.common.Player.STATE_ENDED -> "ENDED"
                     else -> "UNKNOWN"
                 }
+                updatePlaybackDebug("playback state $stateName")
                 android.util.Log.d("BangumiPlayer", "🎬 播放状态变化: $stateName, isPlaying=${exoPlayer.isPlaying}")
             }
-            
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePlaybackDebug("isPlaying=$isPlaying")
                 android.util.Log.d("BangumiPlayer", "▶️ 播放状态: isPlaying=$isPlaying")
+            }
+
+            override fun onRenderedFirstFrame() {
+                updatePlaybackDebug(
+                    event = "first frame rendered",
+                    firstFrameRendered = true
+                )
+                android.util.Log.d("BangumiPlayer", "🎬 首帧已渲染")
             }
         }
         exoPlayer.addListener(errorListener)
         onDispose { exoPlayer.removeListener(errorListener) }
     }
     
+    // 附加播放器到 ViewModel 并加载番剧
+    // 使用同一个 LaunchedEffect 确保顺序执行，避免竞态条件
+    LaunchedEffect(exoPlayer, seasonId, epId, resumePositionMs) {
+        // 先附加播放器
+        viewModel.attachPlayer(exoPlayer)
+        // 然后加载番剧
+        viewModel.loadBangumiPlay(seasonId, epId, resumePositionMs)
+    }
+
+    LaunchedEffect(viewModel, context) {
+        viewModel.toastEvent.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(currentEpisodeIdForDebug, currentCidForDebug) {
+        playbackDebugSnapshot = playbackDebugSnapshot.resetForEpisode(
+            episodeId = currentEpisodeIdForDebug,
+            cid = currentCidForDebug
+        )
+    }
     //  空降助手：定期检查播放位置
     LaunchedEffect(sponsorBlockEnabled, uiState) {
         if (sponsorBlockEnabled && uiState is BangumiPlayerState.Success) {
@@ -173,7 +228,7 @@ fun BangumiPlayerScreen(
     val scope = rememberCoroutineScope()  //  用于弹幕开关和设置保存
     val danmakuSettings by com.android.purebilibili.core.store.SettingsManager
         .getDanmakuSettings(context, activeDanmakuScope)
-        .collectAsState(initial = com.android.purebilibili.core.store.DanmakuSettings())
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.DanmakuSettings())
     val danmakuEnabled = danmakuSettings.enabled
     
     //  倍速状态
@@ -185,6 +240,8 @@ fun BangumiPlayerScreen(
     val danmakuSpeed = danmakuSettings.speed
     val danmakuDisplayArea = danmakuSettings.displayArea
     val danmakuMergeDuplicates = danmakuSettings.mergeDuplicates
+    val danmakuDuplicateMergeWindowMs = danmakuSettings.duplicateMergeWindowMs
+    val danmakuDuplicateMergeCountThreshold = danmakuSettings.duplicateMergeCountThreshold
     val danmakuAllowScroll = danmakuSettings.allowScroll
     val danmakuAllowTop = danmakuSettings.allowTop
     val danmakuAllowBottom = danmakuSettings.allowBottom
@@ -199,6 +256,8 @@ fun BangumiPlayerScreen(
         danmakuSpeed,
         danmakuDisplayArea,
         danmakuMergeDuplicates,
+        danmakuDuplicateMergeWindowMs,
+        danmakuDuplicateMergeCountThreshold,
         danmakuAllowScroll,
         danmakuAllowTop,
         danmakuAllowBottom,
@@ -212,6 +271,8 @@ fun BangumiPlayerScreen(
             speed = danmakuSpeed,
             displayArea = danmakuDisplayArea,
             mergeDuplicates = danmakuMergeDuplicates,
+            duplicateMergeWindowMs = danmakuDuplicateMergeWindowMs,
+            duplicateMergeCountThreshold = danmakuDuplicateMergeCountThreshold,
             allowScroll = danmakuAllowScroll,
             allowTop = danmakuAllowTop,
             allowBottom = danmakuAllowBottom,
@@ -226,6 +287,24 @@ fun BangumiPlayerScreen(
     // 获取当前剧集 cid
     val currentCid = (uiState as? BangumiPlayerState.Success)?.currentEpisode?.cid ?: 0L
     val currentAid = (uiState as? BangumiPlayerState.Success)?.currentEpisode?.aid ?: 0L
+    val defaultCommentSortMode by com.android.purebilibili.core.store.SettingsManager
+        .getCommentDefaultSortMode(context)
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
+            context = kotlin.coroutines.EmptyCoroutineContext
+        )
+    val preferredCommentSortMode = remember(defaultCommentSortMode) {
+        CommentSortMode.fromApiMode(defaultCommentSortMode)
+    }
+
+    LaunchedEffect(currentAid, preferredCommentSortMode, successState?.seasonDetail?.stat?.reply) {
+        if (currentAid > 0L) {
+            commentViewModel.init(
+                aid = currentAid,
+                preferredSortMode = preferredCommentSortMode,
+                expectedReplyCount = successState?.seasonDetail?.stat?.reply?.toInt() ?: 0
+            )
+        }
+    }
     
     // 加载弹幕 - 在父级组件管理
     //  [修复] 等待播放器 duration 可用后再加载弹幕，启用 Protobuf API
@@ -370,7 +449,7 @@ fun BangumiPlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (isLandscape) Color.Black else MaterialTheme.colorScheme.background)
+            .background(if (isLandscape) Color.Black else AppSurfaceTokens.groupedListContainer())
     ) {
         //  获取清晰度数据
         val bangumiPages = remember(successState) {
@@ -414,6 +493,7 @@ fun BangumiPlayerScreen(
                     coverUrl = successState?.currentEpisode?.cover ?: successState?.seasonDetail?.cover.orEmpty(),
                     currentVideoUrl = successState?.playUrl.orEmpty(),
                     currentAudioUrl = successState?.audioUrl.orEmpty(),
+                    debugInfo = resolveBangumiPlaybackDebugInfo(playbackDebugSnapshot),
                     pages = bangumiPages,
                     currentPageIndex = currentPageIndex,
                     onPageSelect = { selectedPageIndex ->
@@ -448,6 +528,8 @@ fun BangumiPlayerScreen(
                     danmakuSpeed = danmakuSpeed,
                     danmakuDisplayArea = danmakuDisplayArea,
                     danmakuMergeDuplicates = danmakuMergeDuplicates,
+                    danmakuDuplicateMergeWindowMs = danmakuDuplicateMergeWindowMs,
+                    danmakuDuplicateMergeCountThreshold = danmakuDuplicateMergeCountThreshold,
                     onDanmakuOpacityChange = {
                         scope.launch {
                             com.android.purebilibili.core.store.SettingsManager.setDanmakuOpacity(context, it, activeDanmakuScope)
@@ -473,6 +555,16 @@ fun BangumiPlayerScreen(
                             com.android.purebilibili.core.store.SettingsManager.setDanmakuMergeDuplicates(context, it, activeDanmakuScope)
                         }
                     },
+                    onDanmakuDuplicateMergeWindowMsChange = {
+                        scope.launch {
+                            com.android.purebilibili.core.store.SettingsManager.setDanmakuDuplicateMergeWindowMs(context, it, activeDanmakuScope)
+                        }
+                    },
+                    onDanmakuDuplicateMergeCountThresholdChange = {
+                        scope.launch {
+                            com.android.purebilibili.core.store.SettingsManager.setDanmakuDuplicateMergeCountThreshold(context, it, activeDanmakuScope)
+                        }
+                    },
                     isLiked = successState?.isLiked ?: false,
                     coinCount = successState?.coinCount ?: 0,
                     onToggleLike = { viewModel.toggleLike() },
@@ -494,6 +586,13 @@ fun BangumiPlayerScreen(
                 //  播放器区域 - 放大为 2:3 比例
                 val screenWidthDp = configuration.screenWidthDp.dp
                 val playerHeight = screenWidthDp * 2f / 3f
+
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(portraitPlayerTopPadding)
+                        .background(Color.Black)
+                )
                 
                 Box(
                     modifier = Modifier
@@ -510,7 +609,7 @@ fun BangumiPlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(AppSurfaceTokens.groupedListContainer())
                 ) {
                     when (val state = uiState) {
                         is BangumiPlayerState.Loading -> {
@@ -537,6 +636,7 @@ fun BangumiPlayerScreen(
                             BangumiPlayerContent(
                                 detail = state.seasonDetail,
                                 currentEpisode = state.currentEpisode,
+                                commentViewModel = commentViewModel,
                                 onEpisodeClick = { viewModel.switchEpisode(it) },
                                 onFollowStatusSelect = { viewModel.updateFollowStatus(it) }
                             )

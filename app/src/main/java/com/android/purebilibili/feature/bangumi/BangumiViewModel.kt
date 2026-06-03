@@ -17,7 +17,8 @@ sealed class BangumiListState {
     object Loading : BangumiListState()
     data class Success(
         val items: List<BangumiItem>,
-        val hasMore: Boolean = true
+        val hasMore: Boolean = true,
+        val isRefreshing: Boolean = false
     ) : BangumiListState()
     data class Error(val message: String) : BangumiListState()
 }
@@ -231,6 +232,7 @@ class BangumiViewModel : ViewModel() {
     fun selectType(type: Int) {
         if (_selectedType.value != type) {
             _selectedType.value = type
+            _filter.value = BangumiFilter()
             _myFollowType.value = defaultMyFollowTypeForSeasonType(type)
             currentPage = 1
             loadBangumiList()
@@ -274,12 +276,18 @@ class BangumiViewModel : ViewModel() {
      */
     fun loadBangumiList() {
         viewModelScope.launch {
-            _listState.value = BangumiListState.Loading
+            val previousState = _listState.value
+            _listState.value = if (previousState is BangumiListState.Success) {
+                previousState.copy(isRefreshing = true)
+            } else {
+                BangumiListState.Loading
+            }
             currentPage = 1
             
-            BangumiRepository.getBangumiIndex(
+            BangumiRepository.getBangumiIndexWithFilter(
                 seasonType = _selectedType.value,
-                page = currentPage
+                page = currentPage,
+                filter = _filter.value
             ).fold(
                 onSuccess = { data ->
                     _listState.value = BangumiListState.Success(
@@ -299,7 +307,12 @@ class BangumiViewModel : ViewModel() {
      */
     private fun loadBangumiListWithFilter() {
         viewModelScope.launch {
-            _listState.value = BangumiListState.Loading
+            val previousState = _listState.value
+            _listState.value = if (previousState is BangumiListState.Success) {
+                previousState.copy(isRefreshing = true)
+            } else {
+                BangumiListState.Loading
+            }
             
             BangumiRepository.getBangumiIndexWithFilter(
                 seasonType = _selectedType.value,
@@ -390,39 +403,21 @@ class BangumiViewModel : ViewModel() {
                         }
                     }
                     
-                    //  [修复] 确定追番状态的优先级：
-                    // 1. 本地缓存（用户在本次会话中点击追番/取消追番）
-                    // 2. 预加载的追番列表（从"我的追番"API 获取）
-                    // 3. API 返回的 userStatus.follow
-                    val isFollowed = when {
-                        followStatusValueCache.containsKey(realSeasonId) -> {
-                            followStatusValueCache[realSeasonId]!! > 0
-                        }
-                        followStatusCache.containsKey(realSeasonId) -> {
-                            android.util.Log.d("BangumiVM", "📌 使用本地缓存状态: ${followStatusCache[realSeasonId]}")
-                            followStatusCache[realSeasonId]!!
-                        }
-                        followedSeasonIds.contains(realSeasonId) -> {
-                            android.util.Log.d("BangumiVM", "📌 从追番列表确认已追番: seasonId=$realSeasonId")
-                            true
-                        }
-                        else -> {
-                            isBangumiFollowed(detail.userStatus)
-                        }
-                    }
+                    val mergedFollowStatus = resolveBangumiMergedFollowStatus(
+                        seasonId = realSeasonId,
+                        apiUserStatus = detail.userStatus,
+                        cachedFollow = followStatusCache,
+                        cachedStatus = followStatusValueCache,
+                        followedSeasonIds = followedSeasonIds
+                    )
                     
                     val correctedDetail = detail.copy(
                         userStatus = detail.userStatus?.copy(
-                            follow = if (isFollowed) 1 else 0,
-                            followStatus = if (isFollowed) {
-                                followStatusValueCache[realSeasonId]
-                                    ?: maxOf(detail.userStatus?.followStatus ?: 0, BANGUMI_FOLLOW_STATUS_WANT)
-                            } else {
-                                0
-                            }
+                            follow = if (mergedFollowStatus.isFollowing) 1 else 0,
+                            followStatus = mergedFollowStatus.followStatus
                         ) ?: com.android.purebilibili.data.model.response.UserStatus(
-                            follow = if (isFollowed) 1 else 0,
-                            followStatus = if (isFollowed) 1 else 0
+                            follow = if (mergedFollowStatus.isFollowing) 1 else 0,
+                            followStatus = mergedFollowStatus.followStatus
                         )
                     )
                     _detailState.value = BangumiDetailState.Success(correctedDetail)
@@ -531,6 +526,7 @@ class BangumiViewModel : ViewModel() {
             
             BangumiRepository.searchBangumi(
                 keyword = keyword,
+                seasonType = _selectedType.value,
                 page = searchPage
             ).fold(
                 onSuccess = { data ->
@@ -560,6 +556,7 @@ class BangumiViewModel : ViewModel() {
         viewModelScope.launch {
             BangumiRepository.searchBangumi(
                 keyword = currentState.keyword,
+                seasonType = _selectedType.value,
                 page = searchPage
             ).fold(
                 onSuccess = { data ->

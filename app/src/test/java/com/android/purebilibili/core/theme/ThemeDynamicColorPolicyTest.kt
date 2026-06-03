@@ -1,8 +1,12 @@
 package com.android.purebilibili.core.theme
 
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamiccolor.ColorSpec
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.Md3ColorSource
 import kotlin.test.Test
 import kotlin.test.assertNotEquals
 import kotlin.test.assertEquals
@@ -12,26 +16,84 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 class ThemeDynamicColorPolicyTest {
 
     @Test
-    fun `dynamic color follows miuix monet modes for each app theme mode`() {
+    fun `dynamic color keeps miuix bridge on explicit resolved colors`() {
         assertEquals(
-            ColorSchemeMode.MonetSystem,
+            ColorSchemeMode.System,
             resolveMiuixColorSchemeMode(
                 themeMode = AppThemeMode.FOLLOW_SYSTEM,
                 dynamicColorEnabled = true
             )
         )
         assertEquals(
-            ColorSchemeMode.MonetLight,
+            ColorSchemeMode.Light,
             resolveMiuixColorSchemeMode(
                 themeMode = AppThemeMode.LIGHT,
                 dynamicColorEnabled = true
             )
         )
         assertEquals(
-            ColorSchemeMode.MonetDark,
+            ColorSchemeMode.Dark,
             resolveMiuixColorSchemeMode(
                 themeMode = AppThemeMode.DARK,
                 dynamicColorEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun `system wallpaper observer only runs when monet dynamic color is active`() {
+        assertEquals(
+            true,
+            shouldObserveSystemWallpaperForDynamicColor(
+                dynamicColorActive = true,
+                sdkInt = android.os.Build.VERSION_CODES.S
+            )
+        )
+        assertEquals(
+            false,
+            shouldObserveSystemWallpaperForDynamicColor(
+                dynamicColorActive = false,
+                sdkInt = android.os.Build.VERSION_CODES.S
+            )
+        )
+        assertEquals(
+            false,
+            shouldObserveSystemWallpaperForDynamicColor(
+                dynamicColorActive = true,
+                sdkInt = android.os.Build.VERSION_CODES.R
+            )
+        )
+    }
+
+    @Test
+    fun `md3 color source maps wallpaper to monet and custom to static seed`() {
+        assertTrue(
+            resolveMd3DynamicColorEnabled(
+                source = Md3ColorSource.FOLLOW_WALLPAPER,
+                sdkInt = android.os.Build.VERSION_CODES.S
+            )
+        )
+        assertEquals(
+            false,
+            resolveMd3DynamicColorEnabled(
+                source = Md3ColorSource.CUSTOM,
+                sdkInt = android.os.Build.VERSION_CODES.S
+            )
+        )
+        assertEquals(
+            Color(0xFFFF5722),
+            resolveMd3ThemeSeedColor(
+                source = Md3ColorSource.CUSTOM,
+                customColorHex = "#FF5722",
+                themeColorIndex = 0
+            )
+        )
+        assertEquals(
+            Color(0xFF007AFF),
+            resolveMd3ThemeSeedColor(
+                source = Md3ColorSource.FOLLOW_WALLPAPER,
+                customColorHex = "#FF5722",
+                themeColorIndex = 0
             )
         )
     }
@@ -58,6 +120,23 @@ class ThemeDynamicColorPolicyTest {
                 themeMode = AppThemeMode.DARK,
                 dynamicColorEnabled = false
             )
+        )
+    }
+
+    @Test
+    fun `color style preference defaults to tonal spot and rejects invalid values`() {
+        assertEquals(PaletteStyle.TonalSpot, resolvePaletteStylePreference(null))
+        assertEquals(PaletteStyle.TonalSpot, resolvePaletteStylePreference("not-a-style"))
+        assertEquals(PaletteStyle.Vibrant, resolvePaletteStylePreference(PaletteStyle.Vibrant.name))
+    }
+
+    @Test
+    fun `color spec preference defaults to spec 2021 and rejects invalid values`() {
+        assertEquals(ColorSpec.SpecVersion.SPEC_2021, resolveColorSpecPreference(null))
+        assertEquals(ColorSpec.SpecVersion.SPEC_2021, resolveColorSpecPreference("not-a-spec"))
+        assertEquals(
+            ColorSpec.SpecVersion.SPEC_2025,
+            resolveColorSpecPreference(ColorSpec.SpecVersion.SPEC_2025.name)
         )
     }
 
@@ -104,6 +183,28 @@ class ThemeDynamicColorPolicyTest {
     }
 
     @Test
+    fun `static palette keeps selected theme color as light primary even when generated palette drifts`() {
+        val selectedThemeColor = Color(0xFF007AFF)
+        val generatedScheme = lightColorScheme(
+            primary = Color(0xFF2E7D32),
+            primaryContainer = Color(0xFFC8E6C9),
+            background = Color(0xFFF8FBFF)
+        )
+
+        val scheme = alignStaticColorSchemeWithThemePrimary(
+            scheme = generatedScheme,
+            themePrimaryColor = selectedThemeColor,
+            darkTheme = false
+        )
+
+        assertEquals(selectedThemeColor, scheme.primary)
+        assertNotEquals(generatedScheme.primary, scheme.primary)
+        assertNotEquals(generatedScheme.primaryContainer, scheme.primaryContainer)
+        assertTrue(calculateContrastRatio(scheme.onPrimary, scheme.primary) >= 4.5f)
+        assertTrue(calculateContrastRatio(scheme.onPrimaryContainer, scheme.primaryContainer) >= 4.5f)
+    }
+
+    @Test
     fun `static md3 surfaces should respond to different source colors instead of staying fixed`() {
         val blueScheme = createStaticMd3ColorScheme(
             primaryColor = Color(0xFF007AFF),
@@ -136,5 +237,19 @@ class ThemeDynamicColorPolicyTest {
         assertTrue(calculateContrastRatio(scheme.onTertiary, scheme.tertiary) >= 4.5f)
         assertNotEquals(Color(0xFF121212), scheme.background)
         assertNotEquals(Color(0xFF1E1E1E), scheme.surface)
+    }
+
+    @Test
+    fun `static md3 dark scheme preserves selected theme color as primary`() {
+        val selectedThemeColor = Color(0xFF007AFF)
+
+        val scheme = createStaticMd3ColorScheme(
+            primaryColor = selectedThemeColor,
+            darkTheme = true,
+            amoledDarkTheme = false
+        )
+
+        assertEquals(selectedThemeColor, scheme.primary)
+        assertTrue(calculateContrastRatio(scheme.onPrimary, scheme.primary) >= 4.5f)
     }
 }

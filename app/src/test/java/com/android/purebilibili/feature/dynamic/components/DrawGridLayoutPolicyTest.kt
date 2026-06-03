@@ -40,4 +40,20 @@ class DrawGridLayoutPolicyTest {
         assertEquals(5, resolveDrawGridSpacingDp())
         assertEquals(10, resolveDrawGridCornerRadiusDp())
     }
+
+    @Test
+    fun resolveDrawGridDisplayCount_capsFeedPreviewAtNineImages() {
+        assertEquals(9, resolveDrawGridDisplayCount(totalImages = 14, maxDisplayImages = 9))
+    }
+
+    @Test
+    fun resolveDrawGridDisplayCount_keepsAllImagesInDetail() {
+        assertEquals(14, resolveDrawGridDisplayCount(totalImages = 14, maxDisplayImages = null))
+    }
+
+    @Test
+    fun shouldDrawGridShowMoreBadge_onlyWhenPreviewIsCapped() {
+        assertEquals(true, shouldDrawGridShowMoreBadge(index = 8, displayCount = 9, totalCount = 14))
+        assertEquals(false, shouldDrawGridShowMoreBadge(index = 13, displayCount = 14, totalCount = 14))
+    }
 }

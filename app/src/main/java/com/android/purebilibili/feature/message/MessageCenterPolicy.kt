@@ -9,6 +9,11 @@ data class MessageCenterTopItem(
     val destination: MessageCenterDestination
 )
 
+data class MessageSessionCategoryItem(
+    val category: MessageSessionCategory,
+    val unreadCount: Int
+)
+
 enum class MessageCenterDestination {
     ReplyMe,
     AtMe,
@@ -16,9 +21,37 @@ enum class MessageCenterDestination {
     SystemNotice
 }
 
+enum class MessageSessionCategory(
+    val title: String,
+    val apiSessionType: Int
+) {
+    All("全部", 4),
+    Follow("关注", 9),
+    Unfollow("未关注", 2),
+    Stranger("陌生人", 8),
+    Group("粉丝团", 3),
+    Dustbin("拦截", 5),
+    System("系统", 7)
+}
+
 fun totalPrivateUnreadCount(unreadData: MessageUnreadData?): Int {
     if (unreadData == null) return 0
-    return unreadData.follow_unread + unreadData.unfollow_unread
+    return unreadData.follow_unread +
+        unreadData.unfollow_unread +
+        unreadData.dustbin_unread +
+        unreadData.custom_unread
+}
+
+fun totalMessageUnreadCount(
+    unreadData: MessageUnreadData?,
+    feedUnread: MessageFeedUnreadData?
+): Int {
+    val feedUnreadCount = if (feedUnread == null) {
+        0
+    } else {
+        feedUnread.reply + feedUnread.at + feedUnread.like + feedUnread.sysMsg
+    }
+    return totalPrivateUnreadCount(unreadData) + feedUnreadCount
 }
 
 fun buildMessageCenterTopItems(feedUnread: MessageFeedUnreadData?): List<MessageCenterTopItem> {
@@ -44,4 +77,29 @@ fun buildMessageCenterTopItems(feedUnread: MessageFeedUnreadData?): List<Message
             destination = MessageCenterDestination.SystemNotice
         )
     )
+}
+
+fun buildMessageSessionCategoryItems(unreadData: MessageUnreadData?): List<MessageSessionCategoryItem> {
+    return MessageSessionCategory.values().map { category ->
+        MessageSessionCategoryItem(
+            category = category,
+            unreadCount = unreadCountForCategory(category, unreadData)
+        )
+    }
+}
+
+fun unreadCountForCategory(
+    category: MessageSessionCategory,
+    unreadData: MessageUnreadData?
+): Int {
+    if (unreadData == null) return 0
+    return when (category) {
+        MessageSessionCategory.All -> totalPrivateUnreadCount(unreadData)
+        MessageSessionCategory.Follow -> unreadData.follow_unread
+        MessageSessionCategory.Unfollow,
+        MessageSessionCategory.Stranger -> unreadData.unfollow_unread
+        MessageSessionCategory.Group -> 0
+        MessageSessionCategory.Dustbin -> unreadData.dustbin_unread
+        MessageSessionCategory.System -> unreadData.custom_unread
+    }
 }

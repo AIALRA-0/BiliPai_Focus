@@ -96,7 +96,7 @@ fun ChapterListPanel(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    items(viewPoints.size) { index ->
+                    items(viewPoints.size, key = { it }) { index ->
                         val point = viewPoints[index]
                         val isCurrentChapter = index == currentChapterIndex
                         

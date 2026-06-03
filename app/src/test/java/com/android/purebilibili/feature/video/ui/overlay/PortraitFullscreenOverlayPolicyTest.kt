@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -47,5 +48,27 @@ class PortraitFullscreenOverlayPolicyTest {
     @Test
     fun hideTopMoreActionToAvoidDuplicateWithBottomBar() {
         assertFalse(shouldShowPortraitTopMoreAction())
+    }
+
+    @Test
+    fun progressTimeLabel_formatsCurrentAndDuration() {
+        assertEquals(
+            "01:05 / 02:05",
+            resolvePortraitProgressTimeLabel(
+                positionMs = 65_000L,
+                durationMs = 125_000L
+            )
+        )
+    }
+
+    @Test
+    fun progressTimeLabel_clampsPositionToDuration() {
+        assertEquals(
+            "02:05 / 02:05",
+            resolvePortraitProgressTimeLabel(
+                positionMs = 130_000L,
+                durationMs = 125_000L
+            )
+        )
     }
 }

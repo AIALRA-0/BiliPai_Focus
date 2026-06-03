@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.section
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -52,5 +53,18 @@ class VideoTriplePressPolicyTest {
                 tripleCompleted = false
             )
         )
+    }
+
+    @Test
+    fun portraitLikeButton_exposesLongPressTripleCallback() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/PortraitInteractionBar.kt")
+            .takeIf { it.exists() }
+            ?: File("app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/PortraitInteractionBar.kt")
+        val text = source.readText()
+
+        assertTrue(text.contains("onLikeLongClick"))
+        assertTrue(text.contains("portraitTripleProgress"))
+        assertTrue(text.contains("shouldCancelPortraitTriplePressOnRelease"))
+        assertFalse(text.contains("onLongClick = onLikeLongClick"))
     }
 }

@@ -109,9 +109,29 @@ class HomeInteractionMotionBudgetPolicyTest {
     }
 
     @Test
-    fun topTabTapPolicy_usesImmediatePageSwitchWhenTargetChanges() {
-        assertTrue(shouldSnapHomeTopTabSelection(currentPage = 0, targetPage = 1))
-        assertFalse(shouldSnapHomeTopTabSelection(currentPage = 2, targetPage = 2))
+    fun pagerSwipe_skipsTopTabViewportSyncWhenTargetRemainsVisible() {
+        assertFalse(
+            shouldSyncHomeTopTabViewport(
+                pagerIsScrolling = true,
+                targetIsOutsideViewport = false
+            )
+        )
+        assertTrue(
+            shouldSyncHomeTopTabViewport(
+                pagerIsScrolling = true,
+                targetIsOutsideViewport = true
+            )
+        )
+    }
+
+    @Test
+    fun idlePager_allowsTopTabViewportSettleCorrection() {
+        assertTrue(
+            shouldSyncHomeTopTabViewport(
+                pagerIsScrolling = false,
+                targetIsOutsideViewport = false
+            )
+        )
     }
 
     @Test
@@ -148,7 +168,7 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 0,
                 pagerCurrentPage = 0,
                 pagerTargetPage = 1,
-                pagerCurrentPageOffsetFraction = -0.35f,
+                pagerCurrentPageOffsetFraction = 0.35f,
                 pagerIsScrolling = true
             )
         )
@@ -158,7 +178,55 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 1,
                 pagerCurrentPage = 1,
                 pagerTargetPage = 0,
+                pagerCurrentPageOffsetFraction = -0.35f,
+                pagerIsScrolling = true
+            )
+        )
+    }
+
+    @Test
+    fun pagerSwipePosition_usesLiveOffsetWhenTargetDirectionIsStale() {
+        assertEquals(
+            2.65f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 3,
+                pagerCurrentPage = 3,
+                pagerTargetPage = 4,
+                pagerCurrentPageOffsetFraction = -0.35f,
+                pagerIsScrolling = true
+            )
+        )
+        assertEquals(
+            4.35f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 4,
+                pagerCurrentPage = 4,
+                pagerTargetPage = 3,
                 pagerCurrentPageOffsetFraction = 0.35f,
+                pagerIsScrolling = true
+            )
+        )
+    }
+
+    @Test
+    fun pagerSwipePosition_tracksOffsetBeforeTargetPageChanges() {
+        assertEquals(
+            0.35f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 0,
+                pagerCurrentPage = 0,
+                pagerTargetPage = 0,
+                pagerCurrentPageOffsetFraction = 0.35f,
+                pagerIsScrolling = true
+            )
+        )
+        assertEquals(
+            0.65f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 1,
+                pagerCurrentPage = 1,
+                pagerTargetPage = 1,
+                pagerCurrentPageOffsetFraction = -0.35f,
                 pagerIsScrolling = true
             )
         )
@@ -171,6 +239,48 @@ class HomeInteractionMotionBudgetPolicyTest {
             resolveTopTabPagerPosition(
                 selectedIndex = 2,
                 pagerCurrentPage = 1,
+                pagerTargetPage = 3,
+                pagerCurrentPageOffsetFraction = 0.4f,
+                pagerIsScrolling = false
+            )
+        )
+    }
+
+    @Test
+    fun topTabIndicatorRenderPosition_tracksPagerOffsetWhileUserSwipesContent() {
+        assertEquals(
+            0.35f,
+            resolveTopTabIndicatorRenderPosition(
+                selectedIndex = 0,
+                pagerCurrentPage = 0,
+                pagerTargetPage = 1,
+                pagerCurrentPageOffsetFraction = 0.35f,
+                pagerIsScrolling = true
+            )
+        )
+    }
+
+    @Test
+    fun topTabSelectedContentPosition_tracksPagerOffsetWhileUserSwipesContent() {
+        assertEquals(
+            0.35f,
+            resolveTopTabSelectedContentPosition(
+                selectedIndex = 0,
+                pagerCurrentPage = 0,
+                pagerTargetPage = 1,
+                pagerCurrentPageOffsetFraction = 0.35f,
+                pagerIsScrolling = true
+            )
+        )
+    }
+
+    @Test
+    fun topTabIndicatorRenderPosition_prefersSettledPagerPageWhenIdle() {
+        assertEquals(
+            2f,
+            resolveTopTabIndicatorRenderPosition(
+                selectedIndex = 0,
+                pagerCurrentPage = 2,
                 pagerTargetPage = 3,
                 pagerCurrentPageOffsetFraction = 0.4f,
                 pagerIsScrolling = false
@@ -200,5 +310,88 @@ class HomeInteractionMotionBudgetPolicyTest {
             ),
             0.001f
         )
+    }
+
+    @Test
+    fun md3TopTabIndicatorTranslation_tracksFractionalPagerPosition() {
+        assertEquals(
+            121f,
+            resolveMd3TopTabIndicatorTranslationPx(
+                absolutePagerPosition = 1.35f,
+                itemWidthPx = 100f,
+                rowScrollOffsetPx = 50f,
+                indicatorWidthPx = 28f,
+                contentPaddingPx = 0f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun md3TopTabIndicatorTranslation_appliesContentPaddingAndViewportScroll() {
+        assertEquals(
+            125f,
+            resolveMd3TopTabIndicatorTranslationPx(
+                absolutePagerPosition = 1.35f,
+                itemWidthPx = 100f,
+                rowScrollOffsetPx = 50f,
+                indicatorWidthPx = 28f,
+                contentPaddingPx = 4f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun md3TopTabIndicatorTranslation_keepsPaddingWhenSizeInvalid() {
+        assertEquals(
+            6f,
+            resolveMd3TopTabIndicatorTranslationPx(
+                absolutePagerPosition = 1.35f,
+                itemWidthPx = 0f,
+                rowScrollOffsetPx = 50f,
+                indicatorWidthPx = 28f,
+                contentPaddingPx = 6f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun iosTopTabCapsuleTranslation_prefersMeasuredSelectedItemLeft() {
+        assertEquals(
+            184f,
+            resolveIosTopTabCapsuleTargetTranslationPx(
+                measuredSelectedItemLeftPx = 184f,
+                absolutePagerPosition = 0f,
+                itemWidthPx = 160f,
+                rowScrollOffsetPx = 0f,
+                contentPaddingPx = 2f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun iosTopTabCapsuleTranslation_ignoresMeasuredSelectedItemLeftDuringPagerSwipe() {
+        assertEquals(
+            66f,
+            resolveIosTopTabCapsuleTargetTranslationPx(
+                measuredSelectedItemLeftPx = 184f,
+                absolutePagerPosition = 0.4f,
+                itemWidthPx = 160f,
+                rowScrollOffsetPx = 0f,
+                contentPaddingPx = 2f,
+                followPagerPosition = true
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun iosTopTabCapsule_disablesSpringAnimationDuringPagerDrag() {
+        assertFalse(shouldAnimateIosTopTabCapsule(pagerIsDragging = true, pagerIsScrolling = false))
+        assertFalse(shouldAnimateIosTopTabCapsule(pagerIsDragging = false, pagerIsScrolling = true))
+        assertTrue(shouldAnimateIosTopTabCapsule(pagerIsDragging = false, pagerIsScrolling = false))
     }
 }

@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.video.viewmodel
 
 import com.android.purebilibili.core.plugin.SkipAction
+import com.android.purebilibili.data.model.response.Owner
+import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.feature.plugin.SponsorBlockVideoSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -39,5 +42,52 @@ class PlayerViewModelSponsorBlockPolicyTest {
 
         assertFalse(state.visible)
         assertNull(state.segmentId)
+    }
+
+    @Test
+    fun sponsorBlockSkip_forcesPlaybackResumeEvenWhenPlayerWasPaused() {
+        assertTrue(
+            shouldResumePlaybackAfterSponsorBlockSkip(
+                playWhenReadyBeforeSkip = false
+            )
+        )
+        assertTrue(
+            shouldResumePlaybackAfterSponsorBlockSkip(
+                playWhenReadyBeforeSkip = true
+            )
+        )
+    }
+
+    @Test
+    fun sponsorBlockVideoSnapshot_capturesCoverAndUpFaceBeforeSeek() {
+        val snapshot = buildSponsorBlockVideoSnapshot(
+            currentState = PlayerUiState.Success(
+                info = ViewInfo(
+                    bvid = "BV1",
+                    cid = 123L,
+                    title = "测试视频",
+                    pic = "https://cover.example/1.jpg",
+                    owner = Owner(
+                        mid = 456L,
+                        name = "测试UP",
+                        face = "https://face.example/up.jpg"
+                    )
+                ),
+                playUrl = "https://video.example/play"
+            )
+        )
+
+        assertEquals(
+            SponsorBlockVideoSnapshot(
+                videoTitle = "测试视频",
+                bvid = "BV1",
+                cid = 123L,
+                videoCoverUrl = "https://cover.example/1.jpg",
+                upName = "测试UP",
+                upFaceUrl = "https://face.example/up.jpg",
+                upMid = 456L
+            ),
+            snapshot
+        )
     }
 }

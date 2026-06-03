@@ -23,5 +23,9 @@ internal fun shouldPersistDownloadTaskUpdate(
         previous.localCoverPath != updated.localCoverPath ||
         previous.customSaveDir != updated.customSaveDir ||
         previous.exportedFileUri != updated.exportedFileUri ||
-        previous.lastPlaybackPositionMs != updated.lastPlaybackPositionMs
+        previous.lastPlaybackPositionMs != updated.lastPlaybackPositionMs ||
+        previous.options != updated.options ||
+        previous.assets != updated.assets ||
+        previous.localDanmakuSegmentPaths != updated.localDanmakuSegmentPaths ||
+        previous.localDanmakuMetadataPath != updated.localDanmakuMetadataPath
 }

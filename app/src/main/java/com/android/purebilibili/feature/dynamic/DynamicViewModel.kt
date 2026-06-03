@@ -7,22 +7,26 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.network.DynamicDeleteRequest
 import com.android.purebilibili.core.network.NetworkModule
-import com.android.purebilibili.core.store.FocusFollowGroupConfig
-import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
-import com.android.purebilibili.core.store.FocusFollowGroupStore
-import com.android.purebilibili.core.store.FollowingCacheStore
+import com.android.purebilibili.core.network.buildDynamicRepostRequest
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.LiveRoom
+import com.android.purebilibili.data.model.response.ReplyData
+import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.DynamicFeedScope
 import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.data.repository.LiveRepository
+import com.android.purebilibili.feature.video.viewmodel.resolveRoutedCommentRootReply
+import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyLoadedTotalCount
+import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyPageEnd
+import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyRemoteTotalCount
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -33,20 +37,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.math.max
-
-private const val DYNAMIC_FOLLOWINGS_API_PAGE_SIZE = 50
-private const val DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT = 1_000
-private const val DYNAMIC_DEFAULT_FOLLOWINGS_PAGE_LIMIT =
-    (DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT + DYNAMIC_FOLLOWINGS_API_PAGE_SIZE - 1) /
-        DYNAMIC_FOLLOWINGS_API_PAGE_SIZE
 
 internal data class DynamicStartupLoadPlan(
     val refreshFeedImmediately: Boolean,
@@ -60,14 +62,14 @@ internal fun resolveDynamicStartupLoadPlan(): DynamicStartupLoadPlan {
     return DynamicStartupLoadPlan(
         refreshFeedImmediately = true,
         loadLiveStatusImmediately = true,
-        loadFollowingsImmediately = true,
-        followingsHydrationDelayMs = 0L,
-        initialFollowingsPageLimit = DYNAMIC_DEFAULT_FOLLOWINGS_PAGE_LIMIT
+        loadFollowingsImmediately = false,
+        followingsHydrationDelayMs = 1_200L,
+        initialFollowingsPageLimit = 1
     )
 }
 
 internal fun resolveDynamicFollowingsPageLimit(isStartupHydration: Boolean): Int {
-    return DYNAMIC_DEFAULT_FOLLOWINGS_PAGE_LIMIT
+    return if (isStartupHydration) 1 else 3
 }
 
 /**
@@ -80,21 +82,17 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val cachePrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_CACHE, Context.MODE_PRIVATE)
     private val userPrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_USERS, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
-    private var focusGroups: FocusFollowGroupConfig = FocusFollowGroupConfig()
 
     private var cachedLiveRooms: List<LiveRoom> = emptyList()
     
     //  [新增] 缓存关注列表
     private var cachedFollowings: List<FollowingUser> = emptyList()
-    private var hasCompleteFocusFollowingUsers: Boolean = false
-    private var focusFollowGroupFilteringEnabled: Boolean = true
     private var incrementalTimelineRefreshEnabled: Boolean = false
     private var lastFollowingsLoadMs: Long = 0L
     private var isFollowingsLoading: Boolean = false
     private var cacheSaveJob: Job? = null
     private var startupFollowingsHydrationScheduled: Boolean = false
-    private var followingCacheObserverJob: Job? = null
-    private var observedFollowingMid: Long = 0L
+    private var startupLoadsActivated: Boolean = false
 
     private val _uiState = MutableStateFlow(DynamicUiState())
     val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
@@ -133,55 +131,37 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _displayMode = MutableStateFlow(DynamicDisplayMode.SIDEBAR)
     val displayMode: StateFlow<DynamicDisplayMode> = _displayMode.asStateFlow()
 
-    private val _focusFollowGroupConfig = MutableStateFlow(FocusFollowGroupConfig())
-    val focusFollowGroupConfig: StateFlow<FocusFollowGroupConfig> = _focusFollowGroupConfig.asStateFlow()
-
-    private val _focusFollowingUsers = MutableStateFlow<List<FollowingUser>>(emptyList())
-    val focusFollowingUsers: StateFlow<List<FollowingUser>> = _focusFollowingUsers.asStateFlow()
-
-    private val _isFocusFollowingUsersLoading = MutableStateFlow(false)
-    val isFocusFollowingUsersLoading: StateFlow<Boolean> = _isFocusFollowingUsersLoading.asStateFlow()
-
-    private val _hasResolvedFollowedUsers = MutableStateFlow(false)
-    val hasResolvedFollowedUsers: StateFlow<Boolean> = _hasResolvedFollowedUsers.asStateFlow()
-
-    private val _isFocusFollowGroupFilteringEnabled = MutableStateFlow(true)
-    val isFocusFollowGroupFilteringEnabled: StateFlow<Boolean> =
-        _isFocusFollowGroupFilteringEnabled.asStateFlow()
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
     init {
-        val startupPlan = resolveDynamicStartupLoadPlan()
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(appContext).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
             }
         }
-        viewModelScope.launch {
-            FocusFollowGroupStore.getConfig(appContext).collect { config ->
-                focusGroups = config
-                _focusFollowGroupConfig.value = config
-                syncSelectedUserWithFocusFollowGroups(config)
-                rebuildFollowedUsers()
-            }
-        }
-        viewModelScope.launch {
-            SettingsManager.getFocusSettings(appContext).collect { settings ->
-                focusFollowGroupFilteringEnabled = settings.enableFollowGroupFiltering
-                _isFocusFollowGroupFilteringEnabled.value = settings.enableFollowGroupFiltering
-                syncSelectedUserWithFocusFollowGroups(focusGroups)
-                rebuildFollowedUsers()
-            }
-        }
         loadUserPreferences()
         loadCachedDynamics()
-        hydrateFollowingsFromLocalCache()
         rebuildFollowedUsers()
+        observeFollowStateChanges()
+    }
+
+    fun activateStartupLoads() {
+        if (startupLoadsActivated) return
+        startupLoadsActivated = true
+        refreshInBackground(resolveDynamicStartupLoadPlan())
+    }
+
+    private fun observeFollowStateChanges() {
         viewModelScope.launch {
-            ensureFollowingCacheObservation()
+            ActionRepository.followStateChanges.collect { change ->
+                if (change.isFollowing) {
+                    requestFollowingsRefreshIfStale()
+                } else {
+                    applyAuthorUnfollow(change.mid)
+                }
+            }
         }
-        refreshInBackground(startupPlan)
     }
     
     private fun loadUserPreferences() {
@@ -224,9 +204,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         runCatching { json.decodeFromString<List<DynamicItem>>(cachedJson) }
             .onSuccess { items ->
                 if (items.isNotEmpty()) {
-                    _hasResolvedFollowedUsers.value = true
                     _uiState.value = _uiState.value.copy(
-                        items = items,
+                        items = items.toImmutableList(),
                         isLoading = false,
                         error = null
                     )
@@ -235,7 +214,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun saveDynamicCache(items: List<DynamicItem>) {
-        if (items.isEmpty()) return
+        if (items.isEmpty()) {
+            cacheSaveJob?.cancel()
+            cachePrefs.edit()
+                .remove(KEY_DYNAMIC_CACHE)
+                .remove(KEY_DYNAMIC_CACHE_TIME)
+                .apply()
+            return
+        }
         val snapshot = items.take(MAX_CACHE_ITEMS)
         cacheSaveJob?.cancel()
         cacheSaveJob = viewModelScope.launch(Dispatchers.Default) {
@@ -253,14 +239,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         startupPlan: DynamicStartupLoadPlan = resolveDynamicStartupLoadPlan()
     ) {
         viewModelScope.launch {
-            if (startupPlan.loadFollowingsImmediately) {
-                launch {
-                    loadAllFollowings(
-                        force = false,
-                        pageLimit = startupPlan.initialFollowingsPageLimit
-                    )
-                }
-            }
             refreshData(showRefreshIndicator = false)
             scheduleStartupFollowingsHydration(startupPlan)
         }
@@ -280,7 +258,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 liveJob.await()
             }
         } finally {
-            _hasResolvedFollowedUsers.value = true
             if (showRefreshIndicator) {
                 _isRefreshing.value = false
             }
@@ -295,13 +272,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFollowedUsersInternal() {
-        try {
-            LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
-                cachedLiveRooms = liveRooms
-                rebuildFollowedUsers()
-            }
-        } finally {
-            _hasResolvedFollowedUsers.value = true
+        LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
+            cachedLiveRooms = liveRooms
+            rebuildFollowedUsers()
         }
     }
     
@@ -313,82 +286,42 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         pageLimit: Int = resolveDynamicFollowingsPageLimit(isStartupHydration = false)
     ) {
         if (isFollowingsLoading) return
+        val now = System.currentTimeMillis()
+        if (!force && !shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) {
+            return
+        }
         isFollowingsLoading = true
         try {
-            val myMid = resolveCurrentUserMid() ?: return
-            startFollowingCacheObservation(myMid)
-            hydrateFollowingsFromLocalCache(mid = myMid)
-
-            val now = System.currentTimeMillis()
-            if (
-                !force && !shouldReloadFollowings(
-                    nowMs = now,
-                    lastLoadMs = lastFollowingsLoadMs,
-                    cachedUsersCount = cachedFollowings.size,
-                    preferredUserCount = DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT,
-                    hasCompleteSnapshot = hasCompleteFocusFollowingUsers
-                )
-            ) {
-                return
-            }
+            // 先获取当前用户 mid
+            val navResponse = NetworkModule.api.getNavInfo()
+            val myMid = navResponse.data?.mid ?: return
             
-            val loadAllPages = pageLimit == FULL_FOLLOWINGS_PAGE_LIMIT
             val maxPages = pageLimit.coerceAtLeast(1)
-            // 默认优先同步到 1000 位关注对象，不足时继续拉到实际总数；进入设置页时再允许全量补齐
+            // 加载关注列表（首轮保守拉取，后续按需补齐）
             val allFollowings = mutableListOf<FollowingUser>()
-            var page = 1
-            var reportedTotal = 0
-            while (loadAllPages || page <= maxPages) {
-                val response = NetworkModule.api.getFollowings(
-                    vmid = myMid,
-                    pn = page,
-                    ps = DYNAMIC_FOLLOWINGS_API_PAGE_SIZE
-                )
-                reportedTotal = response.data?.total ?: reportedTotal
+            for (page in 1..maxPages) {
+                val response = NetworkModule.api.getFollowings(vmid = myMid, pn = page, ps = 50)
                 val users = response.data?.list ?: break
                 allFollowings.addAll(users)
-                if (users.size < DYNAMIC_FOLLOWINGS_API_PAGE_SIZE) break // 没有更多了
-                page += 1
+                if (users.size < 50) break // 没有更多了
             }
             
-            cachedFollowings = allFollowings.distinctBy { it.mid }
-            _focusFollowingUsers.value = cachedFollowings
-            hasCompleteFocusFollowingUsers = loadAllPages || reportedTotal <= cachedFollowings.size
+            cachedFollowings = allFollowings
             lastFollowingsLoadMs = now
-            FollowingCacheStore.saveSnapshot(
-                context = appContext,
-                mid = myMid,
-                total = reportedTotal.coerceAtLeast(cachedFollowings.size),
-                users = cachedFollowings,
-                cachedAtMs = now
-            )
             rebuildFollowedUsers()
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
             isFollowingsLoading = false
-            _hasResolvedFollowedUsers.value = true
         }
     }
 
     private fun requestFollowingsRefreshIfStale() {
         val now = System.currentTimeMillis()
-        if (
-            !shouldReloadFollowings(
-                nowMs = now,
-                lastLoadMs = lastFollowingsLoadMs,
-                cachedUsersCount = cachedFollowings.size,
-                preferredUserCount = DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT,
-                hasCompleteSnapshot = hasCompleteFocusFollowingUsers
-            )
-        ) return
+        if (!shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) return
         viewModelScope.launch {
             loadAllFollowings(force = true)
         }
-    }
-
-    fun requestFollowingsAutoSyncIfStale() {
-        requestFollowingsRefreshIfStale()
     }
 
     private fun scheduleStartupFollowingsHydration(startupPlan: DynamicStartupLoadPlan) {
@@ -447,15 +380,26 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             extractUsersFromLive(cachedLiveRooms),
             extractUsersFromFollowings(cachedFollowings)  //  [新增]
         )
-        val visibleUsers = filterSidebarUsersByFocusFollowGroups(
-            users = mergedUsers,
-            config = focusGroups,
-            filterEnabled = focusFollowGroupFilteringEnabled
+        _followedUsers.value = applyUserPreferences(mergedUsers)
+    }
+
+    private fun applyAuthorUnfollow(authorMid: Long) {
+        if (authorMid <= 0L) return
+        cachedFollowings = cachedFollowings.filterNot { it.mid == authorMid }
+        cachedLiveRooms = cachedLiveRooms.filterNot { it.uid == authorMid }
+        _uiState.value = resolveDynamicStateAfterAuthorUnfollow(
+            currentState = _uiState.value,
+            authorMid = authorMid
         )
-        if (visibleUsers.isNotEmpty()) {
-            _hasResolvedFollowedUsers.value = true
+        if (_selectedUserId.value == authorMid) {
+            selectUser(null)
         }
-        _followedUsers.value = applyUserPreferences(visibleUsers)
+        _followedUsers.value = resolveFollowedUsersAfterAuthorUnfollow(
+            users = _followedUsers.value,
+            authorMid = authorMid
+        )
+        rebuildFollowedUsers()
+        saveDynamicCache(_uiState.value.items)
     }
     
     /**
@@ -494,24 +438,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         return merged.values.toList()
-    }
-
-    private fun hydrateFollowingsFromLocalCache(mid: Long? = TokenManager.midCache) {
-        val cachedMid = mid ?: return
-        val snapshot = FollowingCacheStore.getSnapshot(appContext, cachedMid) ?: return
-        cachedFollowings = snapshot.users
-        _focusFollowingUsers.value = snapshot.users
-        _hasResolvedFollowedUsers.value = true
-        hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
-        lastFollowingsLoadMs = snapshot.cachedAtMs
-    }
-
-    private suspend fun resolveCurrentUserMid(): Long? {
-        TokenManager.midCache?.takeIf { it > 0L }?.let { return it }
-        val navResponse = NetworkModule.api.getNavInfo()
-        val mid = navResponse.data?.mid?.takeIf { it > 0L } ?: return null
-        TokenManager.saveMid(appContext, mid)
-        return mid
     }
 
     private fun applyUserPreferences(users: List<SidebarUser>): List<SidebarUser> {
@@ -553,7 +479,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 localMatchCount = localMatchCount
             )
             _uiState.value = _uiState.value.copy(
-                userItems = emptyList(),
+                userItems = emptyList<DynamicItem>().toImmutableList(),
                 hasUserMore = true,
                 userIsLoading = false,
                 userError = null
@@ -575,7 +501,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             userDynamicsJob?.cancel()
             activeUserDynamicsRequestToken += 1L
             _uiState.value = _uiState.value.copy(
-                userItems = emptyList(),
+                userItems = emptyList<DynamicItem>().toImmutableList(),
                 hasUserMore = true,
                 userIsLoading = false,
                 userError = null
@@ -614,7 +540,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     val currentItems = if (refresh) emptyList() else currentState.userItems
                     val mergedItems = currentItems + items
                     _uiState.value = _uiState.value.copy(
-                        userItems = mergedItems,
+                        userItems = mergedItems.toImmutableList(),
                         userIsLoading = false,
                         userError = null,
                         hasUserMore = DynamicRepository.userHasMoreData(uid)
@@ -719,117 +645,25 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             .apply()
     }
 
-    fun loadFocusFollowingUsersForSettings(force: Boolean = true) {
-        val now = System.currentTimeMillis()
-        val shouldReload = force || shouldReloadFollowings(
-            nowMs = now,
-            lastLoadMs = lastFollowingsLoadMs,
-            cachedUsersCount = cachedFollowings.size,
-            preferredUserCount = DYNAMIC_DEFAULT_FOLLOWINGS_TARGET_COUNT,
-            hasCompleteSnapshot = hasCompleteFocusFollowingUsers
-        ) || (!hasCompleteFocusFollowingUsers && cachedFollowings.isNotEmpty())
-        if (!shouldReload) {
-            return
-        }
-        viewModelScope.launch {
-            _isFocusFollowingUsersLoading.value = true
-            try {
-                loadAllFollowings(
-                    force = force,
-                    pageLimit = FULL_FOLLOWINGS_PAGE_LIMIT
-                )
-            } finally {
-                _isFocusFollowingUsersLoading.value = false
-            }
-        }
-    }
-
-    fun createFocusFollowGroup(name: String) {
-        viewModelScope.launch {
-            FocusFollowGroupStore.createGroup(appContext, name)
-        }
-    }
-
-    fun renameFocusFollowGroup(groupId: String, name: String) {
-        viewModelScope.launch {
-            FocusFollowGroupStore.renameGroup(appContext, groupId, name)
-        }
-    }
-
-    fun deleteFocusFollowGroup(groupId: String) {
-        viewModelScope.launch {
-            FocusFollowGroupStore.deleteGroup(appContext, groupId)
-        }
-    }
-
-    fun setFocusFollowGroupVisible(groupId: String, visible: Boolean) {
-        viewModelScope.launch {
-            FocusFollowGroupStore.setGroupVisible(appContext, groupId, visible)
-        }
-    }
-
-    fun assignFocusFollowingUserToGroup(mid: Long, groupId: String) {
-        viewModelScope.launch {
-            FocusFollowGroupStore.assignUserToGroup(appContext, mid, groupId)
-        }
-    }
-
-    private suspend fun ensureFollowingCacheObservation() {
-        val currentMid = resolveCurrentUserMid() ?: return
-        startFollowingCacheObservation(currentMid)
-    }
-
-    private fun startFollowingCacheObservation(mid: Long) {
-        if (mid <= 0L) return
-        if (observedFollowingMid == mid && followingCacheObserverJob?.isActive == true) return
-        observedFollowingMid = mid
-        followingCacheObserverJob?.cancel()
-        followingCacheObserverJob = viewModelScope.launch {
-            FollowingCacheStore.observeSnapshot(appContext, mid).collect { snapshot ->
-                applyObservedFollowingSnapshot(mid = mid, snapshot = snapshot)
-            }
-        }
-    }
-
-    private fun applyObservedFollowingSnapshot(
-        mid: Long,
-        snapshot: com.android.purebilibili.core.store.FollowingCacheSnapshot?
-    ) {
-        if (mid != observedFollowingMid) return
-        if (snapshot == null) {
-            cachedFollowings = emptyList()
-            _focusFollowingUsers.value = emptyList()
-            hasCompleteFocusFollowingUsers = false
-            lastFollowingsLoadMs = 0L
-            _hasResolvedFollowedUsers.value = true
-            rebuildFollowedUsers()
-            return
-        }
-        cachedFollowings = snapshot.users
-        _focusFollowingUsers.value = snapshot.users
-        hasCompleteFocusFollowingUsers = snapshot.total <= snapshot.users.size
-        lastFollowingsLoadMs = snapshot.cachedAtMs
-        _hasResolvedFollowedUsers.value = true
-        rebuildFollowedUsers()
-    }
-
-    fun setFocusHomeFeedSortMode(sortMode: FocusFollowHomeFeedSortMode) {
-        viewModelScope.launch {
-            FocusFollowGroupStore.setHomeFeedSortMode(appContext, sortMode)
-        }
-    }
-
     fun setSelectedTab(tab: Int) {
         val resolvedTab = resolveDynamicSelectedTab(
             savedTab = tab,
             tabCount = DYNAMIC_TOP_TAB_COUNT
         )
-        if (_selectedTab.value == resolvedTab) return
+        val previousSelectedUserId = _selectedUserId.value
+        val nextSelectedUserId = resolveDynamicSelectedUserForTab(
+            selectedTab = resolvedTab,
+            selectedUserId = previousSelectedUserId
+        )
+        if (_selectedTab.value == resolvedTab && previousSelectedUserId == nextSelectedUserId) return
+        if (previousSelectedUserId != nextSelectedUserId) {
+            selectUser(nextSelectedUserId)
+        }
         _selectedTab.value = resolvedTab
         userPrefs.edit()
             .putInt(KEY_SELECTED_TAB, resolvedTab)
             .apply()
-        if (_selectedUserId.value == null) {
+        if (nextSelectedUserId == null) {
             DynamicRepository.resetPagination(
                 scope = DynamicFeedScope.DYNAMIC_SCREEN,
                 type = resolveDynamicFeedRequestType(resolvedTab)
@@ -878,7 +712,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     } else {
                         DynamicFeedErrorSource.INITIAL_LOAD
                     },
-                    items = emptyList()
+                    items = emptyList<DynamicItem>().toImmutableList()
                 )
                 return
             }
@@ -911,14 +745,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                             type = requestType
                         )
                     )
-                    val nextState = if (shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
-                        successState
-                    } else {
-                        hydrateFocusedTimelineIfNeeded(successState)
-                    }
-                    _uiState.value = enrichTimelineContinuationState(nextState)
+                    _uiState.value = successState
                     if (!shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
-                        saveDynamicCache(_uiState.value.items)
+                        saveDynamicCache(successState.items)
                     }
                     rebuildFollowedUsers()
                 },
@@ -943,78 +772,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             finishTimelineRequest()
         }
     }
-
-    private suspend fun hydrateFocusedTimelineIfNeeded(
-        currentState: DynamicUiState
-    ): DynamicUiState {
-        if (!focusFollowGroupFilteringEnabled) return currentState
-        if (_selectedUserId.value != null) return currentState
-
-        var hydratedState = currentState
-        var extraPagesFetched = 0
-        while (shouldPrefetchMoreFocusDynamicItems(
-                visibleItemCount = filterDynamicItemsByFocusFollowGroups(
-                    items = hydratedState.items,
-                    config = focusGroups,
-                    filterEnabled = true
-                ).size,
-                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
-                filterEnabled = true,
-                extraPagesFetched = extraPagesFetched
-            )
-        ) {
-            val extraItems = DynamicRepository.getDynamicFeed(
-                refresh = false,
-                scope = DynamicFeedScope.DYNAMIC_SCREEN
-            ).getOrElse {
-                return hydratedState.copy(
-                    hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
-                    sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
-                )
-            }
-            if (extraItems.isEmpty()) break
-
-            hydratedState = hydratedState.copy(
-                items = appendDistinctByKey(
-                    existing = hydratedState.items,
-                    incoming = extraItems,
-                    keySelector = ::dynamicFeedItemKey
-                ),
-                hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
-                sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
-            )
-            extraPagesFetched += 1
-        }
-
-        return hydratedState.copy(
-            hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
-            sourceHasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN)
-        )
-    }
-
-    private fun enrichTimelineContinuationState(
-        currentState: DynamicUiState
-    ): DynamicUiState {
-        if (shouldUseServerFilteredDynamicFeed(_selectedTab.value)) {
-            return currentState.copy(
-                visibleHasMore = currentState.sourceHasMore || currentState.items.isNotEmpty(),
-                continuationAllowed = currentState.sourceHasMore
-            )
-        }
-        val visibleItemCount = filterDynamicItemsByFocusFollowGroups(
-            items = currentState.items,
-            config = focusGroups,
-            filterEnabled = focusFollowGroupFilteringEnabled
-        ).size
-        val paginationState = resolveDynamicVisiblePaginationState(
-            visibleItemCount = visibleItemCount,
-            sourceHasMore = currentState.sourceHasMore
-        )
-        return currentState.copy(
-            visibleHasMore = paginationState.visibleHasMore,
-            continuationAllowed = paginationState.continuationAllowed
-        )
-    }
     
     fun refresh() {
         if (!shouldStartDynamicRefresh(_isRefreshing.value, isTimelineLoadingLocked)) return
@@ -1022,7 +779,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
     
     fun loadMore() {
-        if (!_uiState.value.sourceHasMore || _uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked) return
+        if (!_uiState.value.hasMore || _uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked) return
         loadDynamicFeed(refresh = false)
     }
 
@@ -1046,26 +803,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         cacheSaveJob?.cancel()
         userDynamicsJob?.cancel()
-        followingCacheObserverJob?.cancel()
         super.onCleared()
-    }
-
-    private fun syncSelectedUserWithFocusFollowGroups(config: FocusFollowGroupConfig) {
-        val resolvedSelection = resolveSelectedUserIdAfterFocusFollowGroupFilter(
-            selectedUserId = _selectedUserId.value,
-            config = config,
-            filterEnabled = focusFollowGroupFilteringEnabled
-        )
-        if (resolvedSelection == _selectedUserId.value) return
-        userDynamicsJob?.cancel()
-        activeUserDynamicsRequestToken += 1L
-        _selectedUserId.value = resolvedSelection
-        _uiState.value = _uiState.value.copy(
-            userItems = emptyList(),
-            hasUserMore = true,
-            userIsLoading = false,
-            userError = null
-        )
     }
     
     // ====================  动态评论/点赞/转发功能 ====================
@@ -1121,9 +859,17 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openCommentSheet(item: DynamicItem) {
+    fun openCommentSheet(
+        item: DynamicItem,
+        rootReplyId: Long = 0L,
+        targetReplyId: Long = 0L
+    ) {
         _selectedDynamic.value = item
-        loadCommentsForDynamic(item)
+        loadCommentsForDynamic(
+            item = item,
+            routedRootReplyId = rootReplyId,
+            routedTargetReplyId = targetReplyId
+        )
     }
     
     /**
@@ -1141,7 +887,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     /**
      *  加载动态评论 (使用正确的 oid 和 type)
      */
-    private fun loadCommentsForDynamic(item: DynamicItem) {
+    private fun loadCommentsForDynamic(
+        item: DynamicItem,
+        routedRootReplyId: Long = 0L,
+        routedTargetReplyId: Long = 0L
+    ) {
         viewModelScope.launch {
             _commentsLoading.value = true
             _selectedCommentTarget.value = null
@@ -1199,11 +949,20 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                val selected = selectPreferredDynamicCommentAttempt(attempts = attempts)
+                val selected = selectPreferredDynamicCommentAttempt(
+                    attempts = attempts,
+                    expectedCount = fallbackCount
+                )
                 if (selected != null) {
                     _selectedCommentTarget.value = selected.target
                     _comments.value = selected.replies
                     _commentTotalCount.value = selected.totalCount
+                    if (routedRootReplyId > 0L) {
+                        openSubReplyFromRoute(
+                            rootReplyId = routedRootReplyId,
+                            targetReplyId = routedTargetReplyId
+                        )
+                    }
                 } else {
                     _comments.value = emptyList()
                     _commentTotalCount.value = fallbackCount
@@ -1227,11 +986,17 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openSubReply(rootReply: com.android.purebilibili.data.model.response.ReplyItem) {
+    fun openSubReply(rootReply: ReplyItem, targetReplyId: Long = 0L) {
         val target = _selectedCommentTarget.value ?: return
         _subReplyState.value = SubReplyUiState(
             visible = true,
             rootReply = rootReply,
+            targetReplyId = targetReplyId.takeIf { it != rootReply.rpid } ?: 0L,
+            totalCount = resolveSubReplyLoadedTotalCount(
+                rootReply = rootReply,
+                loadedReplyCount = rootReply.replies.orEmpty().size,
+                remoteReplyCount = 0
+            ),
             isLoading = true,
             page = 1
         )
@@ -1240,6 +1005,99 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             type = target.type,
             rootId = rootReply.rpid,
             page = 1
+        )
+    }
+
+    fun openSubReplyFromRoute(rootReplyId: Long, targetReplyId: Long = 0L): Boolean {
+        val target = _selectedCommentTarget.value ?: return false
+        if (rootReplyId <= 0L) return false
+
+        if (openLoadedRoutedSubReply(rootReplyId, targetReplyId)) return true
+
+        markRoutedSubReplyLoading(rootReplyId, targetReplyId)
+        loadRoutedSubReplyFromRemote(target, rootReplyId, targetReplyId)
+        return true
+    }
+
+    private fun openLoadedRoutedSubReply(rootReplyId: Long, targetReplyId: Long): Boolean {
+        resolveRoutedCommentRootReply(
+            loadedReplies = _comments.value,
+            remoteData = null,
+            rootReplyId = rootReplyId
+        )?.let { rootReply ->
+            openSubReply(rootReply, targetReplyId)
+            return true
+        }
+        return false
+    }
+
+    private fun markRoutedSubReplyLoading(rootReplyId: Long, targetReplyId: Long) {
+        _subReplyState.value = _subReplyState.value.copy(
+            visible = false,
+            isLoading = true,
+            error = null,
+            targetReplyId = targetReplyId.takeIf { it != rootReplyId } ?: 0L
+        )
+    }
+
+    private fun loadRoutedSubReplyFromRemote(
+        target: DynamicCommentTarget,
+        rootReplyId: Long,
+        targetReplyId: Long
+    ) {
+        viewModelScope.launch {
+            CommentRepository.getSubCommentsForSubject(
+                oid = target.oid,
+                type = target.type,
+                rootId = rootReplyId,
+                page = 1,
+                ps = 20,
+                preferRestPaging = true
+            ).onSuccess { data ->
+                showRoutedSubReply(data, rootReplyId, targetReplyId)
+            }.onFailure { error ->
+                _subReplyState.value = _subReplyState.value.copy(
+                    isLoading = false,
+                    error = error.message ?: "回复加载失败"
+                )
+            }
+        }
+    }
+
+    private fun showRoutedSubReply(data: ReplyData, rootReplyId: Long, targetReplyId: Long) {
+        val rootReply = resolveRoutedCommentRootReply(
+            loadedReplies = emptyList(),
+            remoteData = data,
+            rootReplyId = rootReplyId
+        )
+        if (rootReply == null) {
+            _subReplyState.value = _subReplyState.value.copy(
+                isLoading = false,
+                error = "回复可能已被删除或不可见"
+            )
+            return
+        }
+
+        val items = data.replies.orEmpty()
+        val remoteTotalCount = resolveSubReplyRemoteTotalCount(data)
+        val isEnd = resolveSubReplyPageEnd(
+            cursorIsEnd = data.cursor.isEnd,
+            fetchedReplyCount = items.size,
+            loadedReplyCount = items.size,
+            remoteReplyCount = remoteTotalCount
+        )
+        _subReplyState.value = SubReplyUiState(
+            visible = true,
+            rootReply = rootReply,
+            items = items.toImmutableList(),
+            baseItems = items.toImmutableList(),
+            totalCount = resolveSubReplyLoadedTotalCount(rootReply, items.size, remoteTotalCount),
+            isLoading = false,
+            page = 1,
+            basePage = 1,
+            isEnd = isEnd,
+            baseIsEnd = isEnd,
+            targetReplyId = targetReplyId.takeIf { it != rootReplyId } ?: 0L
         )
     }
 
@@ -1366,12 +1224,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                             items = currentState.items,
                             dynamicId = dynamicId,
                             toLiked = toLiked
-                        ),
+                        ).toImmutableList(),
                         userItems = applyDynamicLikeCountChange(
                             items = currentState.userItems,
                             dynamicId = dynamicId,
                             toLiked = toLiked
-                        )
+                        ).toImmutableList()
                     )
 
                     onResult(true, if (toLiked) "已点赞" else "已取消")
@@ -1383,6 +1241,20 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         }
     }
+
+    fun addToWatchLater(aid: Long, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            if (aid <= 0L) {
+                onResult(false, "无法添加到稍后再看")
+                return@launch
+            }
+
+            val result = ActionRepository.toggleWatchLater(aid = aid, add = true)
+            result
+                .onSuccess { onResult(true, "已添加到稍后再看") }
+                .onFailure { onResult(false, it.message ?: "添加失败") }
+        }
+    }
     
     /**
      *  转发动态
@@ -1390,13 +1262,23 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     fun repostDynamic(dynamicId: String, content: String = "", onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             try {
+                if (dynamicId.isBlank()) {
+                    onResult(false, "无法转发该动态")
+                    return@launch
+                }
                 val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache
                 if (csrf.isNullOrEmpty()) {
                     onResult(false, "请先登录")
                     return@launch
                 }
                 val response = com.android.purebilibili.core.network.NetworkModule.dynamicApi
-                    .repostDynamic(dynIdStr = dynamicId, content = content, csrf = csrf)
+                    .repostDynamic(
+                        csrf = csrf,
+                        body = buildDynamicRepostRequest(
+                            dynamicId = dynamicId,
+                            content = content
+                        )
+                    )
                 if (response.code == 0) {
                     onResult(true, "转发成功")
                 } else {
@@ -1406,6 +1288,47 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 onResult(false, e.message ?: "网络错误")
             }
         }
+    }
+
+    fun deleteDynamic(action: DynamicDeleteAction, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                if (action.dynamicId.isBlank()) {
+                    onResult(false, "无法删除该动态")
+                    return@launch
+                }
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache
+                if (csrf.isNullOrEmpty()) {
+                    onResult(false, "请先登录")
+                    return@launch
+                }
+
+                val response = NetworkModule.dynamicApi.deleteDynamic(
+                    csrf = csrf,
+                    body = DynamicDeleteRequest(
+                        dyn_id_str = action.dynamicId,
+                        dyn_type = action.dynType,
+                        rid_str = action.rid
+                    )
+                )
+                if (response.code == 0) {
+                    removeDynamicFromUiState(action.dynamicId)
+                    onResult(true, "已删除动态")
+                } else {
+                    onResult(false, response.message.ifBlank { "删除失败" })
+                }
+            } catch (e: Exception) {
+                onResult(false, e.message ?: "网络错误")
+            }
+        }
+    }
+
+    private fun removeDynamicFromUiState(dynamicId: String) {
+        val currentState = _uiState.value
+        _uiState.value = currentState.copy(
+            items = currentState.items.filterNot { it.id_str == dynamicId }.toImmutableList(),
+            userItems = currentState.userItems.filterNot { it.id_str == dynamicId }.toImmutableList()
+        )
     }
 
     companion object {
@@ -1420,7 +1343,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_SELECTED_TAB = "dynamic_selected_tab"
         private const val DYNAMIC_TOP_TAB_COUNT = 5
         private const val MAX_CACHE_ITEMS = 100
-        private const val FULL_FOLLOWINGS_PAGE_LIMIT = Int.MAX_VALUE
     }
 }
 
@@ -1441,17 +1363,14 @@ data class SidebarUser(
  * 动态页面 UI 状态
  */
 data class DynamicUiState(
-    val items: List<DynamicItem> = emptyList(),
-    val userItems: List<DynamicItem> = emptyList(), //  [新增] 选中 UP主的动态
+    val items: ImmutableList<DynamicItem> = persistentListOf(),
+    val userItems: ImmutableList<DynamicItem> = persistentListOf(), //  [新增] 选中 UP主的动态
     val timelineRequestType: String = "all",
     val isLoading: Boolean = false,
     val error: String? = null,
     val userIsLoading: Boolean = false,
     val userError: String? = null,
     val hasMore: Boolean = true,
-    val sourceHasMore: Boolean = true,
-    val visibleHasMore: Boolean = true,
-    val continuationAllowed: Boolean = true,
     val hasUserMore: Boolean = true, //  [新增] UP主动态是否有更多
     val incrementalRefreshBoundaryKey: String? = null,
     val incrementalPrependedCount: Int = 0,

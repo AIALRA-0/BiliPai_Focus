@@ -1,7 +1,10 @@
 package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.store.SettingsManager
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FeedSettingsSelectionPolicyTest {
@@ -30,5 +33,20 @@ class FeedSettingsSelectionPolicyTest {
         assertEquals(10f, resolveHomeRefreshSliderRange().start, 0.001f)
         assertEquals(30f, resolveHomeRefreshSliderRange().endInclusive, 0.001f)
         assertEquals(19, resolveHomeRefreshSliderSteps())
+    }
+
+    @Test
+    fun `settings cards stay opaque over wallpaper text`() {
+        val source = locate("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
+            .readText()
+
+        assertTrue(source.contains("darkTintBase.compositeOver(baseCardContainer)"))
+        assertFalse(source.contains("copy(alpha = 0.96f)"))
+    }
+
+    private fun locate(path: String): File {
+        return listOf(File(path), File("app/$path"))
+            .firstOrNull { it.exists() }
+            ?: error("Cannot locate $path from cwd")
     }
 }

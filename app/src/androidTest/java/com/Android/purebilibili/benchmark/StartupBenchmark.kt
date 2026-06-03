@@ -5,17 +5,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.FileInputStream
 
-@Ignore("Use the :baselineprofile managed-device tasks for benchmark verification.")
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
 
-    private val packageName = "com.android.purebilibili.focus"
-    private val mainActivityComponent = "$packageName/com.android.purebilibili.MainActivity"
+    private val packageName = "com.android.purebilibili"
 
     private fun runShell(command: String): String {
         val pfd = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
@@ -36,7 +33,7 @@ class StartupBenchmark {
         prepareHomeEntry()
         runShell("input keyevent 3")
 
-        val output = runShell("am start -W -n $mainActivityComponent")
+        val output = runShell("am start -W -n $packageName/.MainActivity")
         val totalTime = Regex("TotalTime:\\s*(\\d+)").find(output)?.groupValues?.get(1)?.toLongOrNull() ?: -1L
         val waitTime = Regex("WaitTime:\\s*(\\d+)").find(output)?.groupValues?.get(1)?.toLongOrNull() ?: -1L
 

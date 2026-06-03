@@ -44,7 +44,6 @@ object TokenRefreshHelper {
             if (response.code == 0 && response.data != null) {
                 val data = response.data
                 Logger.d(TAG, "Token refresh success!")
-                Logger.d(TAG, "New access_token: ${data.accessToken.take(10)}...")
                 
                 // 更新 Token
                 TokenManager.saveAccessToken(

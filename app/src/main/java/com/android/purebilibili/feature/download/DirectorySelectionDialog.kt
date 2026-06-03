@@ -144,7 +144,7 @@ fun DirectorySelectionDialog(
                             }
                         }
                     } else {
-                        items(fileList) { file ->
+                        items(fileList, key = { it.absolutePath }) { file ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,6 +46,7 @@ import com.android.purebilibili.core.util.CacheClearTarget
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
+import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.AnalyticsHelper
@@ -55,21 +57,26 @@ import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.plugin.PluginManager
 
-import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.launch
 
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
-import com.android.purebilibili.core.ui.animation.staggeredEntrance
+import com.android.purebilibili.core.ui.animation.EntranceGroup
+import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.feature.dynamic.defaultDynamicTabVisibleIds
 import com.android.purebilibili.feature.dynamic.resolveDynamicVisibleTabIdsAfterToggle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 const val GITHUB_URL = OFFICIAL_GITHUB_URL
 
@@ -80,8 +87,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenSourceLicensesClick: () -> Unit,
     onAppearanceClick: () -> Unit = {},
+    onAnimationClick: () -> Unit = {},
     onPlaybackClick: () -> Unit = {},
-    onFocusClick: () -> Unit = {},
+    onFocusSettingsClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onPluginsClick: () -> Unit = {},
     onSettingsShareClick: () -> Unit = {},
@@ -99,26 +107,31 @@ fun SettingsScreen(
     val versionClickThreshold = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
     
     // State Collection
-    val state by viewModel.state.collectAsState()
-    val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context).collectAsState(initial = false)
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val privacyContentAuthenticationEnabled by SettingsManager
+        .getPrivacyContentAuthenticationEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val crashTrackingEnabled by SettingsManager.getCrashTrackingEnabled(context)
-        .collectAsState(initial = DEFAULT_CRASH_TRACKING_ENABLED)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_CRASH_TRACKING_ENABLED)
     val analyticsEnabled by SettingsManager.getAnalyticsEnabled(context)
-        .collectAsState(initial = DEFAULT_ANALYTICS_ENABLED)
-    val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsState(initial = true)
-    val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsState(initial = null)
-    val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsState(initial = null)
-    val feedApiType by SettingsManager.getFeedApiType(context).collectAsState(
-        initial = SettingsManager.FeedApiType.WEB
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_ANALYTICS_ENABLED)
+    val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsStateWithLifecycle(initialValue = null)
+    val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsStateWithLifecycle(initialValue = null)
+    val imageSaveTreeUri by SettingsManager.getImageSaveTreeUri(context).collectAsStateWithLifecycle(initialValue = null)
+    val feedApiType by SettingsManager.getFeedApiType(context).collectAsStateWithLifecycle(initialValue = SettingsManager.FeedApiType.WEB
     )
     val autoCheckUpdateEnabled by SettingsManager.getAutoCheckAppUpdate(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = true)
     val incrementalTimelineRefreshEnabled by SettingsManager.getIncrementalTimelineRefresh(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false)
     val homeRefreshCount by SettingsManager.getHomeRefreshCount(context)
-        .collectAsState(initial = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
     val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
-        .collectAsState(initial = defaultDynamicTabVisibleIds)
+        .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
+    val dynamicImagePreviewTextVisible by SettingsManager.getDynamicImagePreviewTextVisible(context)
+        .collectAsStateWithLifecycle(initialValue = true)
     
     // Local UI State
     var showCacheDialog by remember { mutableStateOf(false) }
@@ -140,6 +153,7 @@ fun SettingsScreen(
     var versionClickCount by remember { mutableIntStateOf(0) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var showPathDialog by remember { mutableStateOf(false) }
+    var showImageSavePathDialog by remember { mutableStateOf(false) }
     // [新增] 打赏对话框
     var showDonateDialog by remember { mutableStateOf(false) }
     var showReleaseDisclaimerDialog by remember { mutableStateOf(false) }
@@ -236,6 +250,21 @@ fun SettingsScreen(
         }
         Toast.makeText(context, "已设置导出目录", Toast.LENGTH_SHORT).show()
     }
+    val imageSaveFolderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+        }
+
+        scope.launch {
+            SettingsManager.setImageSaveTreeUri(context, uri.toString())
+        }
+        Toast.makeText(context, "已设置图片保存目录", Toast.LENGTH_SHORT).show()
+    }
 
     // Callbacks
     val onClearCacheAction = {
@@ -243,10 +272,14 @@ fun SettingsScreen(
         showCacheDialog = true
     }
     val onDownloadPathAction = { showPathDialog = true }
+    val onImageSavePathAction = { showImageSavePathDialog = true }
     
     // Logic Callbacks
     val onPrivacyModeChange: (Boolean) -> Unit = { enabled ->
         scope.launch { SettingsManager.setPrivacyModeEnabled(context, enabled) }
+    }
+    val onPrivacyContentAuthenticationChange: (Boolean) -> Unit = { enabled ->
+        scope.launch { SettingsManager.setPrivacyContentAuthenticationEnabled(context, enabled) }
     }
     val onCrashTrackingChange: (Boolean) -> Unit = { enabled ->
         scope.launch {
@@ -290,11 +323,9 @@ fun SettingsScreen(
     }
     
     val onExportLogsAction: () -> Unit = { LogCollector.exportAndShare(context) }
-    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_CHANNEL_URL) }
-    val onTelegramGroupClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_GROUP_URL) }
+    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
     val onTwitterClick: () -> Unit = { uriHandler.openUri("https://x.com/YangY_0x00") }
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
-    val onFocusGithubClick: () -> Unit = { uriHandler.openUri(FOCUS_GITHUB_URL) }
     val onVerificationClick: () -> Unit = {
         uriHandler.openUri(
             currentReleaseEvidence?.verificationMetadata?.attestationUrl
@@ -506,12 +537,56 @@ fun SettingsScreen(
             }
         )
     }
+    if (showImageSavePathDialog) {
+        com.android.purebilibili.core.ui.IOSAlertDialog(
+            onDismissRequest = { showImageSavePathDialog = false },
+            title = { Text("图片保存位置", color = MaterialTheme.colorScheme.onSurface) },
+            text = {
+                Column {
+                    Text(
+                        "默认保存到系统相册的 BiliPai 文件夹。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "可通过系统文件夹授权选择动态图片、头像和评论图片的保存目录。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = com.android.purebilibili.core.theme.iOSOrange
+                    )
+                    if (!imageSaveTreeUri.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "当前图片目录：已选择",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                    showImageSavePathDialog = false
+                    imageSaveFolderPicker.launch(null)
+                }) { Text("选择图片目录") }
+            },
+            dismissButton = {
+                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                    scope.launch {
+                        SettingsManager.setImageSaveTreeUri(context, null)
+                    }
+                    showImageSavePathDialog = false
+                    Toast.makeText(context, "已恢复默认图片保存位置", Toast.LENGTH_SHORT).show()
+                }) { Text("恢复默认") }
+            }
+        )
+    }
     
     if (showEasterEggDialog) {
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { showEasterEggDialog = false; versionClickCount = 0 },
             title = { Text(" 你发现了彩蛋！", fontWeight = FontWeight.Bold) },
-            text = { Text("感谢你使用 BiliPai！这是一个用爱发电的开源项目") },
+            text = { Text("感谢你使用 BiliPai！这是一个用爱发电的开源项目。") },
             confirmButton = { com.android.purebilibili.core.ui.IOSDialogAction(onClick = { showEasterEggDialog = false; versionClickCount = 0 }) { Text("我知道了！") } }
         )
     }
@@ -524,9 +599,7 @@ fun SettingsScreen(
         ReleaseChannelDisclaimerDialog(
             onDismiss = { showReleaseDisclaimerDialog = false },
             onOpenGithub = onGithubClick,
-            onOpenFocusGithub = onFocusGithubClick,
-            onOpenTelegramGroup = onTelegramGroupClick,
-            onOpenTelegramChannel = onTelegramClick
+            onOpenTelegram = onTelegramClick
         )
     }
 
@@ -553,7 +626,7 @@ fun SettingsScreen(
                 "未提供"
             }
         }
-        val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val isDialogDarkTheme = AppSurfaceTokens.cardContainer().luminance() < 0.5f
         val dialogTextColors = remember(isDialogDarkTheme) {
             resolveAppUpdateDialogTextColors(
                 isDarkTheme = isDialogDarkTheme
@@ -715,7 +788,7 @@ fun SettingsScreen(
                 "未提供"
             }
         }
-        val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val isDialogDarkTheme = AppSurfaceTokens.cardContainer().luminance() < 0.5f
         val dialogTextColors = remember(isDialogDarkTheme) {
             resolveAppUpdateDialogTextColors(
                 isDarkTheme = isDialogDarkTheme
@@ -809,19 +882,45 @@ fun SettingsScreen(
     BackHandler(enabled = shouldConsumeSettingsBack(showBlockedList)) {
         showBlockedList = false
     }
-    val onSettingsSearchResultClick: (SettingsSearchResult) -> Unit = { result ->
+    val onSettingsSearchResultClick: (SettingsSearchResult) -> Unit = handler@{ result ->
         settingsSearchQuery = ""
+        resolveSettingsSceneDetailFocus(result.target)?.let { detailFocus ->
+            SettingsSearchFocusController.submit(detailFocus.target, detailFocus.focusId)
+            when (detailFocus.target) {
+                SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
+                SettingsSearchTarget.ANIMATION -> onAnimationClick()
+                SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
+                SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
+                else -> Unit
+            }
+            return@handler
+        }
+        if (isSceneSettingsSearchTarget(result.target)) {
+            SettingsSearchFocusController.submit(result.target, result.focusId ?: result.target.name)
+            return@handler
+        }
         SettingsSearchFocusController.submit(result.target, result.focusId)
         when (result.target) {
+            SettingsSearchTarget.INTERFACE_THEME,
+            SettingsSearchTarget.HOME_FEED,
+            SettingsSearchTarget.NAVIGATION,
+            SettingsSearchTarget.PLAYBACK_QUALITY,
+            SettingsSearchTarget.FULLSCREEN_GESTURE,
+            SettingsSearchTarget.INTERACTION_COMMENT,
+            SettingsSearchTarget.DATA_BACKUP,
+            SettingsSearchTarget.PRIVACY_PERMISSION,
+            SettingsSearchTarget.DIAGNOSTICS,
+            SettingsSearchTarget.ABOUT_SUPPORT -> Unit
             SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
+            SettingsSearchTarget.ANIMATION -> onAnimationClick()
             SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
             SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
-            SettingsSearchTarget.FOCUS -> onFocusClick()
             SettingsSearchTarget.PERMISSION -> onPermissionClick()
             SettingsSearchTarget.BLOCKED_LIST -> onBlockedListClickAction()
             SettingsSearchTarget.SETTINGS_SHARE -> onSettingsShareClick()
             SettingsSearchTarget.WEBDAV_BACKUP -> onWebDavBackupClick()
             SettingsSearchTarget.DOWNLOAD_PATH -> onDownloadPathAction()
+            SettingsSearchTarget.IMAGE_SAVE_PATH -> onImageSavePathAction()
             SettingsSearchTarget.CLEAR_CACHE -> onClearCacheAction()
             SettingsSearchTarget.PLUGINS -> onPluginsClick()
             SettingsSearchTarget.EXPORT_LOGS -> onExportLogsAction()
@@ -840,21 +939,23 @@ fun SettingsScreen(
     }
 
     // 页面跳转逻辑
-    if (showBlockedList) {
-        BlockedListScreen(onBack = { showBlockedList = false })
-    } else {
+    CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
+        if (showBlockedList) {
+            BlockedListScreen(onBack = { showBlockedList = false })
+        } else {
         // Layout Switching
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = activeHazeState)
+                .hazeSourceCompat(state = activeHazeState)
         ) {
             if (shouldUseSettingsSplitLayout(widthDp = configuration.screenWidthDp)) {
                 TabletSettingsLayout(
                     onBack = onBack,
                     onAppearanceClick = onAppearanceClick,
+                    onAnimationClick = onAnimationClick,
                     onPlaybackClick = onPlaybackClick,
-                    onFocusClick = onFocusClick,
+                    onFocusSettingsClick = onFocusSettingsClick,
                     onPermissionClick = onPermissionClick,
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
@@ -874,14 +975,17 @@ fun SettingsScreen(
                     onSettingsShareClick = onSettingsShareClick,
                     onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
+                    onImageSavePathClick = onImageSavePathAction,
                     onClearCacheClick = onClearCacheAction,
                     onPrivacyModeChange = onPrivacyModeChange,
+                    onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
                     onCrashTrackingChange = onCrashTrackingChange,
                     onAnalyticsChange = onAnalyticsChange,
                     onEasterEggChange = onEasterEggChange,
                     onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                     privacyModeEnabled = privacyModeEnabled,
                     customDownloadPath = downloadExportTreeUri ?: customDownloadPath,
+                    customImageSavePath = imageSaveTreeUri,
                     cacheSize = state.cacheSize,
                     crashTrackingEnabled = crashTrackingEnabled,
                     analyticsEnabled = analyticsEnabled,
@@ -893,6 +997,7 @@ fun SettingsScreen(
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
                     autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                    privacyContentAuthenticationEnabled = privacyContentAuthenticationEnabled,
                     verificationLabel = buildVerificationLabel,
                     verificationSubtitle = buildVerificationState.summary,
                     buildSourceValue = buildSourceValue,
@@ -924,6 +1029,12 @@ fun SettingsScreen(
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
                         }
                     },
+                    dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
+                    onDynamicImagePreviewTextVisibleChange = { visible ->
+                        scope.launch {
+                            SettingsManager.setDynamicImagePreviewTextVisible(context, visible)
+                        }
+                    },
                     dynamicVisibleTabIds = dynamicVisibleTabIds,
                     onDynamicTabVisibilityChange = { tabId ->
                         scope.launch {
@@ -944,8 +1055,9 @@ fun SettingsScreen(
                 MobileSettingsLayout(
                     onBack = onBack,
                     onAppearanceClick = onAppearanceClick,
+                    onAnimationClick = onAnimationClick,
                     onPlaybackClick = onPlaybackClick,
-                    onFocusClick = onFocusClick,
+                    onFocusSettingsClick = onFocusSettingsClick,
                     onPermissionClick = onPermissionClick,
                     onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
                     onPluginsClick = onPluginsClick,
@@ -966,14 +1078,17 @@ fun SettingsScreen(
                     onSettingsShareClick = onSettingsShareClick,
                     onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
+                    onImageSavePathClick = onImageSavePathAction,
                     onClearCacheClick = onClearCacheAction,
                     onPrivacyModeChange = onPrivacyModeChange,
+                    onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
                     onCrashTrackingChange = onCrashTrackingChange,
                     onAnalyticsChange = onAnalyticsChange,
                     onEasterEggChange = onEasterEggChange,
                     onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                     privacyModeEnabled = privacyModeEnabled,
                     customDownloadPath = downloadExportTreeUri ?: customDownloadPath,
+                    customImageSavePath = imageSaveTreeUri,
                     cacheSize = state.cacheSize,
                     crashTrackingEnabled = crashTrackingEnabled,
                     analyticsEnabled = analyticsEnabled,
@@ -985,6 +1100,7 @@ fun SettingsScreen(
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
                     autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                    privacyContentAuthenticationEnabled = privacyContentAuthenticationEnabled,
                     verificationLabel = buildVerificationLabel,
                     verificationSubtitle = buildVerificationState.summary,
                     buildSourceValue = buildSourceValue,
@@ -1010,6 +1126,12 @@ fun SettingsScreen(
                     onIncrementalTimelineRefreshChange = { enabled ->
                         scope.launch {
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
+                        }
+                    },
+                    dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
+                    onDynamicImagePreviewTextVisibleChange = { visible ->
+                        scope.launch {
+                            SettingsManager.setDynamicImagePreviewTextVisible(context, visible)
                         }
                     },
                     dynamicVisibleTabIds = dynamicVisibleTabIds,
@@ -1040,40 +1162,8 @@ fun SettingsScreen(
             // Onboarding Bottom Sheet (Shared)
     
         }
+        }
     }
-}
-
-internal enum class MobileSettingsRootSection {
-    FOLLOW_AUTHOR,
-    GENERAL,
-    PRIVACY,
-    STORAGE,
-    DEVELOPER,
-    FEED,
-    ABOUT,
-    SUPPORT
-}
-
-internal fun resolveMobileSettingsRootSectionOrder(): List<MobileSettingsRootSection> = listOf(
-    MobileSettingsRootSection.FOLLOW_AUTHOR,
-    MobileSettingsRootSection.GENERAL,
-    MobileSettingsRootSection.PRIVACY,
-    MobileSettingsRootSection.STORAGE,
-    MobileSettingsRootSection.DEVELOPER,
-    MobileSettingsRootSection.FEED,
-    MobileSettingsRootSection.ABOUT,
-    MobileSettingsRootSection.SUPPORT
-)
-
-internal fun resolveMobileSettingsRootSectionTitleRes(section: MobileSettingsRootSection): Int = when (section) {
-    MobileSettingsRootSection.FOLLOW_AUTHOR -> R.string.settings_section_follow_author
-    MobileSettingsRootSection.GENERAL -> R.string.settings_section_general
-    MobileSettingsRootSection.PRIVACY -> R.string.settings_section_privacy
-    MobileSettingsRootSection.STORAGE -> R.string.settings_section_storage
-    MobileSettingsRootSection.DEVELOPER -> R.string.settings_section_developer
-    MobileSettingsRootSection.FEED -> R.string.settings_section_feed
-    MobileSettingsRootSection.ABOUT -> R.string.settings_section_about
-    MobileSettingsRootSection.SUPPORT -> R.string.settings_section_support
 }
 
 internal fun shouldMarkCacheClearAnimationComplete(clearSucceeded: Boolean): Boolean = clearSucceeded
@@ -1099,8 +1189,9 @@ private fun MobileSettingsLayout(
     onBack: () -> Unit,
     // Callbacks
     onAppearanceClick: () -> Unit,
+    onAnimationClick: () -> Unit,
     onPlaybackClick: () -> Unit,
-    onFocusClick: () -> Unit,
+    onFocusSettingsClick: () -> Unit,
     onPermissionClick: () -> Unit,
     onNavigateToBottomBarSettings: () -> Unit,
     onTipsClick: () -> Unit, // [Feature]
@@ -1121,6 +1212,7 @@ private fun MobileSettingsLayout(
     onSettingsShareClick: () -> Unit,
     onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
+    onImageSavePathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
     onDonateClick: () -> Unit,
     onOpenLinksClick: () -> Unit, // [New]
@@ -1132,6 +1224,7 @@ private fun MobileSettingsLayout(
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
+    onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onCrashTrackingChange: (Boolean) -> Unit,
     onAnalyticsChange: (Boolean) -> Unit,
     onEasterEggChange: (Boolean) -> Unit,
@@ -1139,7 +1232,9 @@ private fun MobileSettingsLayout(
     
     // State
     privacyModeEnabled: Boolean,
+    privacyContentAuthenticationEnabled: Boolean,
     customDownloadPath: String?,
+    customImageSavePath: String?,
     cacheSize: String,
     crashTrackingEnabled: Boolean,
     analyticsEnabled: Boolean,
@@ -1165,22 +1260,22 @@ private fun MobileSettingsLayout(
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    dynamicImagePreviewTextVisible: Boolean,
+    onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
     dynamicVisibleTabIds: Set<String>,
     onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
     onHomeRefreshCountChange: (Int) -> Unit
 ) {
-    var isVisible by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
             widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
-    val effectiveMotionTier = remember(deviceUiProfile.motionTier) {
-        resolveSettingsEntranceMotionTier(deviceUiProfile.motionTier)
-    }
-    val sectionOrder = remember { resolveMobileSettingsRootSectionOrder() }
+    val sectionOrder = remember { resolveSettingsRootCategoryOrder() }
+    val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
     val bottomBarVisible = LocalBottomBarVisible.current
     val bottomInset = resolveSettingsContentBottomPadding(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
@@ -1191,8 +1286,87 @@ private fun MobileSettingsLayout(
     )
     val screenTitle = stringResource(R.string.settings_title)
     val backLabel = stringResource(R.string.common_back)
+    val rootCategoryActions = SettingsRootCategoryActions(
+        onAppearanceClick = onAppearanceClick,
+        onAnimationClick = onAnimationClick,
+        onPlaybackClick = onPlaybackClick,
+        onFocusSettingsClick = onFocusSettingsClick,
+        onBottomBarClick = onNavigateToBottomBarSettings,
+        onPermissionClick = onPermissionClick,
+        onBlockedListClick = onBlockedListClick,
+        onPluginsClick = onPluginsClick,
+        onExportLogsClick = onExportLogsClick,
+        onSettingsShareClick = onSettingsShareClick,
+        onWebDavBackupClick = onWebDavBackupClick,
+        onDownloadPathClick = onDownloadPathClick,
+        onImageSavePathClick = onImageSavePathClick,
+        onClearCacheClick = onClearCacheClick,
+        onGithubClick = onGithubClick,
+        onTelegramClick = onTelegramClick,
+        onTwitterClick = onTwitterClick,
+        onDonateClick = onDonateClick,
+        onDisclaimerClick = onDisclaimerClick,
+        onLicenseClick = onLicenseClick,
+        onVerificationClick = onVerificationClick,
+        onBuildSourceClick = onBuildSourceClick,
+        onBuildFingerprintClick = onBuildFingerprintClick,
+        onCheckUpdateClick = onCheckUpdateClick,
+        onViewReleaseNotesClick = onViewReleaseNotesClick,
+        onVersionClick = onVersionClick,
+        onReplayOnboardingClick = onReplayOnboardingClick,
+        onTipsClick = onTipsClick,
+        onOpenLinksClick = onOpenLinksClick,
+        onPrivacyModeChange = onPrivacyModeChange,
+        onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
+        onCrashTrackingChange = onCrashTrackingChange,
+        onAnalyticsChange = onAnalyticsChange,
+        onEasterEggChange = onEasterEggChange,
+        onAutoCheckUpdateChange = onAutoCheckUpdateChange,
+        onFeedApiTypeChange = onFeedApiTypeChange,
+        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
+        onDynamicImagePreviewTextVisibleChange = onDynamicImagePreviewTextVisibleChange,
+        onDynamicTabVisibilityChange = onDynamicTabVisibilityChange,
+        onHomeRefreshCountChange = onHomeRefreshCountChange
+    )
+    val rootCategoryState = SettingsRootCategoryState(
+        privacyModeEnabled = privacyModeEnabled,
+        privacyContentAuthenticationEnabled = privacyContentAuthenticationEnabled,
+        crashTrackingEnabled = crashTrackingEnabled,
+        analyticsEnabled = analyticsEnabled,
+        pluginCount = pluginCount,
+        customDownloadPath = customDownloadPath,
+        customImageSavePath = customImageSavePath,
+        cacheSize = cacheSize,
+        versionName = versionName,
+        easterEggEnabled = easterEggEnabled,
+        updateStatusText = updateStatusText,
+        isCheckingUpdate = isCheckingUpdate,
+        autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+        verificationLabel = verificationLabel,
+        verificationSubtitle = verificationSubtitle,
+        buildSourceValue = buildSourceValue,
+        buildSourceSubtitle = buildSourceSubtitle,
+        buildFingerprintValue = buildFingerprintValue,
+        buildFingerprintCopyValue = buildFingerprintCopyValue,
+        buildFingerprintSubtitle = buildFingerprintSubtitle,
+        versionClickCount = versionClickCount,
+        versionClickThreshold = versionClickThreshold,
+        feedApiType = feedApiType,
+        incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+        dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
+        dynamicVisibleTabIds = dynamicVisibleTabIds,
+        homeRefreshCount = homeRefreshCount
+    )
 
-    LaunchedEffect(Unit) { isVisible = true }
+    LaunchedEffect(focusRequest, searchQuery) {
+        val request = focusRequest ?: return@LaunchedEffect
+        if (!isSceneSettingsSearchTarget(request.target) || searchQuery.isNotBlank()) {
+            return@LaunchedEffect
+        }
+        val category = resolveSettingsRootCategoryForSearchTarget(request.target) ?: return@LaunchedEffect
+        listState.animateScrollToItem(resolveSettingsRootCategoryListIndex(category))
+        SettingsSearchFocusController.clear(request.token)
+    }
 
     AdaptiveScaffold(
         topBar = {
@@ -1209,17 +1383,19 @@ private fun MobileSettingsLayout(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = AppSurfaceTokens.groupedListContainer(),
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = AppSurfaceTokens.groupedListContainer(),
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
+        EntranceGroup {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
@@ -1243,114 +1419,23 @@ private fun MobileSettingsLayout(
             } else {
                 sectionOrder.forEachIndexed { index, section ->
                     item {
-                        Box(modifier = Modifier.staggeredEntrance(index * 2, isVisible, motionTier = effectiveMotionTier)) {
-                            SettingsCategoryHeader(
-                                title = stringResource(resolveMobileSettingsRootSectionTitleRes(section))
+                        Box(
+                            modifier = Modifier
+                                .padding(top = if (index == 0) 8.dp else 16.dp)
+                                .entrance()
+                        ) {
+                            SettingsRootCategoryContent(
+                                category = section,
+                                actions = rootCategoryActions,
+                                state = rootCategoryState
                             )
-                        }
-                    }
-                    item {
-                        Box(modifier = Modifier.staggeredEntrance(index * 2 + 1, isVisible, motionTier = effectiveMotionTier)) {
-                            when (section) {
-                                MobileSettingsRootSection.FOLLOW_AUTHOR -> {
-                                    FollowAuthorSection(
-                                        onTelegramClick = onTelegramClick,
-                                        onTwitterClick = onTwitterClick,
-                                        onDonateClick = onDonateClick
-                                    )
-                                }
-                                MobileSettingsRootSection.GENERAL -> {
-                                    GeneralSection(
-                                        onAppearanceClick = onAppearanceClick,
-                                        onPlaybackClick = onPlaybackClick,
-                                        onBottomBarClick = onNavigateToBottomBarSettings,
-                                        onFocusClick = onFocusClick
-                                    )
-                                }
-                                MobileSettingsRootSection.PRIVACY -> {
-                                    PrivacySection(
-                                        privacyModeEnabled = privacyModeEnabled,
-                                        onPrivacyModeChange = onPrivacyModeChange,
-                                        onPermissionClick = onPermissionClick,
-                                        onBlockedListClick = onBlockedListClick
-                                    )
-                                }
-                                MobileSettingsRootSection.STORAGE -> {
-                                    DataStorageSection(
-                                        customDownloadPath = customDownloadPath,
-                                        cacheSize = cacheSize,
-                                        onSettingsShareClick = onSettingsShareClick,
-                                        onWebDavBackupClick = onWebDavBackupClick,
-                                        onDownloadPathClick = onDownloadPathClick,
-                                        onClearCacheClick = onClearCacheClick
-                                    )
-                                }
-                                MobileSettingsRootSection.DEVELOPER -> {
-                                    DeveloperSection(
-                                        crashTrackingEnabled = crashTrackingEnabled,
-                                        analyticsEnabled = analyticsEnabled,
-                                        pluginCount = pluginCount,
-                                        onCrashTrackingChange = onCrashTrackingChange,
-                                        onAnalyticsChange = onAnalyticsChange,
-                                        onPluginsClick = onPluginsClick,
-                                        onExportLogsClick = onExportLogsClick
-                                    )
-                                }
-                                MobileSettingsRootSection.FEED -> {
-                                    FeedApiSection(
-                                        feedApiType = feedApiType,
-                                        onFeedApiTypeChange = onFeedApiTypeChange,
-                                        incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
-                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
-                                        dynamicVisibleTabIds = dynamicVisibleTabIds,
-                                        onDynamicTabVisibilityChange = onDynamicTabVisibilityChange,
-                                        homeRefreshCount = homeRefreshCount,
-                                        onHomeRefreshCountChange = onHomeRefreshCountChange
-                                    )
-                                }
-                                MobileSettingsRootSection.ABOUT -> {
-                                    AboutSection(
-                                        versionName = versionName,
-                                        easterEggEnabled = easterEggEnabled,
-                                        onDisclaimerClick = onDisclaimerClick,
-                                        onLicenseClick = onLicenseClick,
-                                        onGithubClick = onGithubClick,
-                                        onVerificationClick = onVerificationClick,
-                                        onBuildSourceClick = onBuildSourceClick,
-                                        onBuildFingerprintClick = onBuildFingerprintClick,
-                                        onCheckUpdateClick = onCheckUpdateClick,
-                                        onViewReleaseNotesClick = onViewReleaseNotesClick,
-                                        autoCheckUpdateEnabled = autoCheckUpdateEnabled,
-                                        onAutoCheckUpdateChange = onAutoCheckUpdateChange,
-                                        onVersionClick = onVersionClick,
-                                        onReplayOnboardingClick = onReplayOnboardingClick,
-                                        onEasterEggChange = onEasterEggChange,
-                                        updateStatusText = updateStatusText,
-                                        isCheckingUpdate = isCheckingUpdate,
-                                        verificationLabel = verificationLabel,
-                                        verificationSubtitle = verificationSubtitle,
-                                        buildSourceValue = buildSourceValue,
-                                        buildSourceSubtitle = buildSourceSubtitle,
-                                        buildFingerprintValue = buildFingerprintValue,
-                                        buildFingerprintCopyValue = buildFingerprintCopyValue,
-                                        buildFingerprintSubtitle = buildFingerprintSubtitle,
-                                        versionClickCount = versionClickCount,
-                                        versionClickThreshold = versionClickThreshold
-                                    )
-                                }
-                                MobileSettingsRootSection.SUPPORT -> {
-                                    SupportToolsSection(
-                                        onTipsClick = onTipsClick,
-                                        onOpenLinksClick = onOpenLinksClick
-                                    )
-                                }
-                            }
                         }
                     }
                 }
 
                 item { Spacer(modifier = Modifier.height(16.dp)) }
             }
+        }
         }
     }
 }
@@ -1382,7 +1467,8 @@ fun DonateDialog(onDismiss: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth(0.85f)
                             .aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp))
+                            // QR code preview: ~16dp → Dialog level (14dp scaled per preset).
+                            .clip(AppShapes.container(ContainerLevel.Dialog))
                             .clickable { onDismiss() }, // [New] Click to dismiss
                         contentScale = ContentScale.Fit
                     )
@@ -1423,4 +1509,3 @@ fun DonateDialog(onDismiss: () -> Unit) {
         }
     }
 }
-

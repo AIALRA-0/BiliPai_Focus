@@ -13,8 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -24,7 +23,7 @@ fun CopySelectionDialog(
     onDismiss: () -> Unit
 ) {
     if (text.isBlank()) return
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -52,7 +51,7 @@ fun CopySelectionDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    clipboardManager.setText(AnnotatedString(text))
+                    copyPlainTextToClipboard(context, text, title)
                     onDismiss()
                 }
             ) {

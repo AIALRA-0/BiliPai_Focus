@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.message
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -10,6 +11,26 @@ data class MessageVideoCardPreview(
     val bvid: String,
     val cover: String,
     val duration: Long
+)
+
+enum class MessageCardKind(val label: String) {
+    Video("视频"),
+    Article("专栏"),
+    Bangumi("番剧"),
+    Live("直播"),
+    Dynamic("动态"),
+    Image("图片"),
+    Share("分享")
+}
+
+data class MessageCardPreview(
+    val kind: MessageCardKind,
+    val title: String,
+    val subtitle: String = "",
+    val cover: String = "",
+    val targetUrl: String = "",
+    val bvid: String = "",
+    val duration: Long = 0
 )
 
 object MessagePreviewParser {
@@ -22,11 +43,45 @@ object MessagePreviewParser {
             2 -> "[图片]"
             5 -> "[消息已撤回]"
             6 -> "[表情]"
-            7 -> parseSharePreview(content)
+            7,
+            12,
+            13,
+            14 -> parseMessageCard(content, msgType)?.let { "${it.kind.label}：${it.title}" }
+                ?: parseSharePreview(content)
             10 -> "[通知]"
             11 -> parseVideoCard(content)?.let { "视频：${it.title}" } ?: "[视频]"
-            12 -> "[专栏推送]"
             else -> "[消息]"
+        }
+    }
+
+    fun parseMessageCard(content: String, msgType: Int): MessageCardPreview? {
+        val json = parseJsonObject(content) ?: return null
+        return when (msgType) {
+            7 -> parseShareCard(json)
+            11 -> parseVideoCard(content)?.let {
+                MessageCardPreview(
+                    kind = MessageCardKind.Video,
+                    title = it.title,
+                    cover = it.cover,
+                    bvid = it.bvid,
+                    duration = it.duration
+                )
+            }
+            12 -> parseArticleCard(json)
+            13 -> MessageCardPreview(
+                kind = MessageCardKind.Image,
+                title = json.firstString("title", "text").ifBlank { "图片卡片" },
+                cover = json.firstString("pic_url", "cover", "image"),
+                targetUrl = json.firstString("jump_url", "jump_uri", "url")
+            )
+            14 -> MessageCardPreview(
+                kind = resolveShareKind(json.int("source")),
+                title = json.firstString("title", "headline").ifBlank { "分享内容" },
+                subtitle = json.firstString("desc", "author"),
+                cover = json.firstString("cover", "thumb"),
+                targetUrl = json.firstString("url", "jump_url", "jump_uri", "all_uri")
+            )
+            else -> null
         }
     }
 
@@ -53,10 +108,47 @@ object MessagePreviewParser {
 
     private fun parseSharePreview(content: String): String {
         val json = parseJsonObject(content) ?: return "[分享]"
-        return when (json.int("source")) {
-            5 -> json.string("title").takeIf { it.isNotBlank() }?.let { "分享视频：$it" } ?: "[分享视频]"
-            6 -> "[分享专栏]"
-            else -> "[分享]"
+        return parseShareCard(json)?.let { "${it.kind.label}：${it.title}" } ?: "[分享]"
+    }
+
+    private fun parseShareCard(json: JsonObject): MessageCardPreview? {
+        val kind = resolveShareKind(json.int("source"))
+        val title = json.firstString("title", "headline").ifBlank { kind.label }
+        return MessageCardPreview(
+            kind = kind,
+            title = title,
+            subtitle = json.firstString("desc", "author"),
+            cover = json.firstString("thumb", "cover", "pic"),
+            targetUrl = json.firstString("url", "jump_url", "jump_uri", "all_uri"),
+            bvid = json.firstString("bvid")
+        )
+    }
+
+    private fun parseArticleCard(json: JsonObject): MessageCardPreview {
+        val cover = json.firstString("cover").ifBlank {
+            (json["image_urls"] as? JsonArray)
+                ?.firstOrNull()
+                ?.let { it as? JsonPrimitive }
+                ?.contentOrNull
+                .orEmpty()
+        }
+        return MessageCardPreview(
+            kind = MessageCardKind.Article,
+            title = json.string("title").ifBlank { "专栏" },
+            subtitle = json.firstString("summary", "author"),
+            cover = cover,
+            targetUrl = json.firstString("url", "jump_url", "jump_uri")
+        )
+    }
+
+    private fun resolveShareKind(source: Int): MessageCardKind {
+        return when (source) {
+            4 -> MessageCardKind.Live
+            5 -> MessageCardKind.Video
+            6 -> MessageCardKind.Article
+            7, 16, 17 -> MessageCardKind.Bangumi
+            11 -> MessageCardKind.Dynamic
+            else -> MessageCardKind.Share
         }
     }
 
@@ -76,6 +168,12 @@ object MessagePreviewParser {
 
     private fun JsonObject.string(key: String): String {
         return (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
+    }
+
+    private fun JsonObject.firstString(vararg keys: String): String {
+        return keys.firstNotNullOfOrNull { key ->
+            string(key).takeIf { it.isNotBlank() }
+        }.orEmpty()
     }
 
     private fun JsonObject.long(key: String): Long {

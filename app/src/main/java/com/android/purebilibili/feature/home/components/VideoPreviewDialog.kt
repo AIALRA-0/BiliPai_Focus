@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.home.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,13 +22,18 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.ui.rememberAppClearIcon
+import com.android.purebilibili.core.ui.rememberAppPhotoIcon
+import com.android.purebilibili.core.ui.rememberAppPlayIcon
+import com.android.purebilibili.core.ui.rememberAppShareIcon
+import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
+import com.android.purebilibili.core.ui.rememberAppWatchLaterIcon
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoItem
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -51,6 +55,8 @@ import androidx.compose.ui.zIndex
 
 internal fun shouldEnableSaveCoverAction(coverUrl: String): Boolean = coverUrl.isNotBlank()
 
+internal fun shouldShowBlockCreatorAction(creatorMid: Long): Boolean = creatorMid > 0L
+
 /**
  * iOS 3D Touch style Preview Dialog
  */
@@ -63,11 +69,18 @@ fun VideoPreviewDialog(
     onSaveCover: (() -> Unit)? = null,
     onPlay: () -> Unit, // Navigate to Full Screen
     onNotInterested: (() -> Unit)? = null,
+    onBlockCreator: (() -> Unit)? = null,
     onGetPreviewUrl: suspend (String, Long) -> String? = { _, _ -> null }, // [New] Fetch Url
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val haptic = rememberHapticFeedback()
     val context = LocalContext.current
+    val clearIcon = rememberAppClearIcon()
+    val photoIcon = rememberAppPhotoIcon()
+    val playIcon = rememberAppPlayIcon()
+    val shareIcon = rememberAppShareIcon()
+    val blockCreatorIcon = rememberAppVisibilityOffIcon()
+    val watchLaterIcon = rememberAppWatchLaterIcon()
     
     // Dissolve Animation State
     var isDissolving by remember { mutableStateOf(false) }
@@ -129,13 +142,13 @@ fun VideoPreviewDialog(
                 modifier = Modifier
                     .width(300.dp) // Slightly wider than standard alert
                     // Remove padding between items by putting them in one Surface
-                    .clip(RoundedCornerShape(16.dp)) // Clip the whole card
+                    .clip(AppShapes.container(ContainerLevel.Card)) // Clip the whole card
                     .clickable(enabled = false) {}, // Prevent clicks from passing through to background
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
                 Surface(
-                    color = MaterialTheme.colorScheme.surface,
+                    color = AppSurfaceTokens.cardContainer(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column {
@@ -179,7 +192,7 @@ fun VideoPreviewDialog(
                             } else {
                                 // Play Icon Overlay (Hint that it's clickable)
                                 Icon(
-                                    imageVector = CupertinoIcons.Filled.Play,
+                                    imageVector = playIcon,
                                     contentDescription = null,
                                     tint = Color.White.copy(alpha = 0.8f),
                                     modifier = Modifier
@@ -213,7 +226,7 @@ fun VideoPreviewDialog(
                         // Play Immediately / Fullscreen
                         PreviewMenuItem(
                             text = if (isPlaying) "全屏播放" else "立即播放", 
-                            icon = if (isPlaying) Icons.Rounded.Fullscreen else CupertinoIcons.Default.Play, 
+                            icon = if (isPlaying) Icons.Rounded.Fullscreen else playIcon,
                             onClick = {
                                 haptic(HapticType.MEDIUM)
                                 onPlay() // Go to Full Screen
@@ -226,19 +239,33 @@ fun VideoPreviewDialog(
                         // Watch Later
                         PreviewMenuItem(
                             text = "稍后再看",
-                            icon = CupertinoIcons.Default.Clock, // Clock or Time
+                            icon = watchLaterIcon,
                             onClick = {
                                 haptic(HapticType.MEDIUM)
                                 onWatchLater()
                                 onDismiss()
                             }
                         )
+
+                        if (onBlockCreator != null && shouldShowBlockCreatorAction(video.owner.mid)) {
+                            MenuDivider()
+                            PreviewMenuItem(
+                                text = "屏蔽 UP 主",
+                                icon = blockCreatorIcon,
+                                isDestructive = true,
+                                onClick = {
+                                    haptic(HapticType.HEAVY)
+                                    onBlockCreator()
+                                    onDismiss()
+                                }
+                            )
+                        }
                         
                         if (onSaveCover != null && shouldEnableSaveCoverAction(video.pic)) {
                             MenuDivider()
                             PreviewMenuItem(
                                 text = "保存封面",
-                                icon = CupertinoIcons.Default.Photo,
+                                icon = photoIcon,
                                 onClick = {
                                     haptic(HapticType.MEDIUM)
                                     onSaveCover()
@@ -252,7 +279,7 @@ fun VideoPreviewDialog(
                         // Share
                         PreviewMenuItem(
                             text = "分享",
-                            icon = Icons.Rounded.Share, // Fallback to Material Share
+                            icon = shareIcon,
                             onClick = {
                                 haptic(HapticType.LIGHT)
                                 onShare() // Use passed callback if needed, but logic is likely external? 
@@ -267,7 +294,7 @@ fun VideoPreviewDialog(
                             MenuDivider()
                             PreviewMenuItem(
                                 text = "不感兴趣",
-                                icon = CupertinoIcons.Outlined.Xmark, 
+                                icon = clearIcon,
                                 isDestructive = true,
                                 onClick = {
                                     haptic(HapticType.HEAVY)

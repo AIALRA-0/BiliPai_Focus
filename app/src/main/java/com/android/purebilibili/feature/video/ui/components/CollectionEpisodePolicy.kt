@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.UgcEpisode
 import com.android.purebilibili.data.model.response.UgcSeason
 
@@ -91,4 +92,19 @@ internal fun resolveCurrentUgcEpisodeAid(
         if (exactEpisode != null) return exactEpisode.aid
     }
     return episodes.firstOrNull { episode -> episode.bvid == currentBvid }?.aid ?: 0L
+}
+
+internal fun resolveCollectionEpisodePublishTimeText(
+    episode: UgcEpisode,
+    nowMs: Long = System.currentTimeMillis()
+): String {
+    val timestamp = episode.arc?.pubdate
+        ?.takeIf { it > 0L }
+        ?: episode.arc?.ctime?.takeIf { it > 0L }
+        ?: return ""
+    val formattedTime = FormatUtils.formatPublishTime(
+        timestampSeconds = timestamp,
+        nowMs = nowMs
+    )
+    return formattedTime.takeIf { it.isNotBlank() }?.let { "发布于 $it" }.orEmpty()
 }

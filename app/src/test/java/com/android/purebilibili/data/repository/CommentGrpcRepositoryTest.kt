@@ -215,4 +215,27 @@ class CommentGrpcRepositoryTest {
         assertEquals("dialog-next", data.grpcNextOffset)
         assertEquals(901L, data.replies.orEmpty().first().rpid)
     }
+
+    @Test
+    fun `parseMainListReply keeps cesu8 surrogate text from grpc comments`() {
+        val content = ProtoWire.message(
+            ProtoWire.bytes(
+                1,
+                byteArrayOf(
+                    0xED.toByte(), 0xA0.toByte(), 0xBD.toByte(),
+                    0xED.toByte(), 0xB4.toByte(), 0xB9.toByte()
+                ) + "倒数第四集".toByteArray(Charsets.UTF_8)
+            )
+        )
+        val reply = ProtoWire.message(
+            ProtoWire.int64(2, 777L),
+            ProtoWire.bytes(12, content),
+            ProtoWire.bytes(13, ProtoWire.message(ProtoWire.int64(1, 42L), ProtoWire.string(2, "测试用户")))
+        )
+        val response = ProtoWire.message(ProtoWire.bytes(2, reply))
+
+        val data = CommentGrpcRepository.parseMainListReply(response)
+
+        assertEquals("🔹倒数第四集", data.replies.orEmpty().first().content.message)
+    }
 }

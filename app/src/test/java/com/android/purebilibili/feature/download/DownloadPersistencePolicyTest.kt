@@ -69,6 +69,22 @@ class DownloadPersistencePolicyTest {
         )
     }
 
+    @Test
+    fun shouldPersistDownloadTaskUpdate_persistsOptionsAndDanmakuAssets() {
+        assertTrue(
+            shouldPersistDownloadTaskUpdate(
+                baseTask,
+                baseTask.copy(options = DownloadOptions(includeDanmaku = false))
+            )
+        )
+        assertTrue(
+            shouldPersistDownloadTaskUpdate(
+                baseTask,
+                baseTask.copy(localDanmakuSegmentPaths = listOf("/tmp/seg.pb"))
+            )
+        )
+    }
+
     private val baseTask = DownloadTask(
         bvid = "BV1persist",
         cid = 9L,

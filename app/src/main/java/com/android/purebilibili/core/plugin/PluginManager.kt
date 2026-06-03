@@ -162,6 +162,11 @@ object PluginManager {
      * 获取所有 FeedPlugin
      */
     fun getEnabledFeedPlugins(): List<FeedPlugin> = getEnabledPlugins(FeedPlugin::class)
+
+    /**
+     * 获取所有已启用的 CastPluginApi 插件
+     */
+    fun getEnabledCastPlugins(): List<CastPluginApi> = getEnabledPlugins(CastPluginApi::class)
     
     /**
      *  使用所有启用的 FeedPlugin 过滤视频列表

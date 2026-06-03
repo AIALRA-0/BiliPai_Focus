@@ -28,13 +28,20 @@ class SettingsSearchUiPolicyTest {
     fun playbackSearchResult_usesPlaybackIcon() {
         val visual = resolveSettingsEntryVisual(SettingsSearchTarget.PLAYBACK)
 
-        assertSame(CupertinoIcons.Default.PlayCircle, visual.icon)
+        assertSame(CupertinoIcons.Outlined.PlayCircle, visual.icon)
     }
 
     @Test
     fun webDavSearchResult_reusesDataStorageSectionIcon() {
         val visual = resolveSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP)
 
-        assertSame(CupertinoIcons.Default.DocOnDoc, visual.icon)
+        assertSame(CupertinoIcons.Outlined.IcloudAndArrowUp, visual.icon)
+    }
+
+    @Test
+    fun homeFeedSearchResult_usesHomeSemanticIcon() {
+        val visual = resolveSettingsEntryVisual(SettingsSearchTarget.HOME_FEED)
+
+        assertSame(CupertinoIcons.Outlined.House, visual.icon)
     }
 }

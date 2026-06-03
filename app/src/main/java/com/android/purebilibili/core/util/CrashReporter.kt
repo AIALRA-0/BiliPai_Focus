@@ -7,7 +7,6 @@ import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.lifecycle.BackgroundManager
-import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -43,6 +42,10 @@ internal fun shouldWriteCrashCustomKey(previousValue: Any?, nextValue: Any): Boo
     return previousValue != nextValue
 }
 
+internal fun shouldPersistLocalCrashSnapshot(crashTrackingEnabled: Boolean): Boolean {
+    return true
+}
+
 internal fun isSensitiveCrashCustomKey(key: String): Boolean {
     return key in SENSITIVE_CRASH_CUSTOM_KEYS
 }
@@ -65,10 +68,7 @@ object CrashReporter {
     private const val CUSTOM_KEY_CACHE_MAX_KEYS = 256
 
     @Volatile
-    private var isEnabled: Boolean = false
-
-    @Volatile
-    private var isRuntimeAvailable: Boolean = false
+    private var isEnabled: Boolean = true
 
     @Volatile
     private var globalHandlerInstalled = false
@@ -94,22 +94,10 @@ object CrashReporter {
     @Volatile
     private var liveLastStage: String = ""
 
-    private fun resolveFirebaseRuntimeAvailable(context: Context): Boolean {
-        return runCatching {
-            FirebaseApp.getApps(context).isNotEmpty() || FirebaseApp.initializeApp(context) != null
-        }.getOrDefault(false)
-    }
-
     /**
      * 基础初始化：写入稳定环境信息
      */
     fun init(context: Context) {
-        isRuntimeAvailable = resolveFirebaseRuntimeAvailable(context)
-        if (!isRuntimeAvailable) {
-            isEnabled = false
-            Logger.w(TAG, "Firebase Crashlytics unavailable for package ${context.packageName}, crash telemetry disabled")
-            return
-        }
         try {
             setCustomKey("app_version", BuildConfig.VERSION_NAME)
             setCustomKey("version_code", BuildConfig.VERSION_CODE)
@@ -136,13 +124,10 @@ object CrashReporter {
      * 启用/禁用 Crashlytics 收集
      */
     fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled && isRuntimeAvailable
-        if (!isRuntimeAvailable) {
-            return
-        }
+        isEnabled = enabled
         try {
-            crashlytics.setCrashlyticsCollectionEnabled(isEnabled)
-            Logger.d(TAG, " Crashlytics collection ${if (isEnabled) "enabled" else "disabled"}")
+            crashlytics.setCrashlyticsCollectionEnabled(enabled)
+            Logger.d(TAG, " Crashlytics collection ${if (enabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Crashlytics enabled state", e)
         }
@@ -159,6 +144,10 @@ object CrashReporter {
         previousUncaughtHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
+                if (shouldPersistLocalCrashSnapshot(crashTrackingEnabled = isEnabled)) {
+                    // 本地崩溃快照只写入设备，不依赖 Crashlytics 同意状态。
+                    Logger.persistCrashSnapshot(throwable)
+                }
                 if (isEnabled) {
                     setCustomKey("fatal_thread_name", thread.name)
                     setCustomKey("fatal_thread_id", thread.threadId())
@@ -176,7 +165,6 @@ object CrashReporter {
                         )
                     }
                     log("FATAL: ${throwable.javaClass.simpleName}: ${throwable.message.orEmpty().take(200)}")
-                    Logger.persistCrashSnapshot(throwable)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to enrich fatal crash context", e)

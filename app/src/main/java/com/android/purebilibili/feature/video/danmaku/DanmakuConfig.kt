@@ -55,6 +55,8 @@ class DanmakuConfig {
     
     // [新增] 合并重复弹幕
     var mergeDuplicates = true
+    var duplicateMergeWindowMs = 500
+    var duplicateMergeCountThreshold = 2
 
     // [新增] 类型屏蔽（与 B 站 blockxxx 语义对齐，true=显示/不屏蔽）
     var allowScroll = true

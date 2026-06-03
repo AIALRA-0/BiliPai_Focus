@@ -1,8 +1,8 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TabletCinemaLayoutPolicyTest {
@@ -42,13 +42,58 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun mediumTabletUsesBalancedCinemaPolicy() {
         val policy = resolveTabletCinemaLayoutPolicy(
-            widthDp = 1280
+            widthDp = 1280,
+            commentWidthPreset = TabletCommentPanelWidthPreset.STANDARD
         )
 
         assertTrue(policy.curtainPeekWidthDp in 61..64)
         assertTrue(policy.curtainOpenWidthDp in 379..382)
         assertTrue(policy.horizontalPaddingDp in 16..17)
         assertTrue(policy.playerMaxWidthDp in 1090..1100)
+    }
+
+    @Test
+    fun commentWidthPresetsScaleCurtainWidthAroundCurrentStandard() {
+        val compact = resolveTabletCinemaLayoutPolicy(
+            widthDp = 1280,
+            commentWidthPreset = TabletCommentPanelWidthPreset.COMPACT
+        )
+        val standard = resolveTabletCinemaLayoutPolicy(
+            widthDp = 1280,
+            commentWidthPreset = TabletCommentPanelWidthPreset.STANDARD
+        )
+        val wide = resolveTabletCinemaLayoutPolicy(
+            widthDp = 1280,
+            commentWidthPreset = TabletCommentPanelWidthPreset.WIDE
+        )
+        val ultraWide = resolveTabletCinemaLayoutPolicy(
+            widthDp = 1280,
+            commentWidthPreset = TabletCommentPanelWidthPreset.ULTRA_WIDE
+        )
+
+        assertTrue(compact.curtainOpenWidthDp < standard.curtainOpenWidthDp)
+        assertTrue(wide.curtainOpenWidthDp > standard.curtainOpenWidthDp)
+        assertTrue(ultraWide.curtainOpenWidthDp >= wide.curtainOpenWidthDp)
+    }
+
+    @Test
+    fun compactTabletClampsWideCurtainToProtectPlayerSpace() {
+        val ultraWide = resolveTabletCinemaLayoutPolicy(
+            widthDp = 960,
+            commentWidthPreset = TabletCommentPanelWidthPreset.ULTRA_WIDE
+        )
+
+        assertEquals(332, ultraWide.curtainOpenWidthDp)
+    }
+
+    @Test
+    fun ultraWideScreenCapsCommentCurtainWidth() {
+        val ultraWide = resolveTabletCinemaLayoutPolicy(
+            widthDp = 1920,
+            commentWidthPreset = TabletCommentPanelWidthPreset.ULTRA_WIDE
+        )
+
+        assertEquals(560, ultraWide.curtainOpenWidthDp)
     }
 
     @Test
@@ -122,8 +167,7 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 0,
                 replyCount = 0,
                 isRepliesLoading = true,
-                hasRelatedVideos = true,
-                showRelatedVideosSection = true
+                hasRelatedVideos = true
             )
         )
     }
@@ -136,8 +180,7 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 0,
                 replyCount = 0,
                 isRepliesLoading = false,
-                hasRelatedVideos = true,
-                showRelatedVideosSection = true
+                hasRelatedVideos = true
             )
         )
     }
@@ -150,8 +193,7 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 0,
                 replyCount = 12,
                 isRepliesLoading = false,
-                hasRelatedVideos = true,
-                showRelatedVideosSection = true
+                hasRelatedVideos = true
             )
         )
     }
@@ -164,30 +206,14 @@ class TabletCinemaLayoutPolicyTest {
                 currentSelectedTab = 1,
                 replyCount = 0,
                 isRepliesLoading = false,
-                hasRelatedVideos = true,
-                showRelatedVideosSection = true
+                hasRelatedVideos = true
             )
         )
     }
 
     @Test
-    fun relatedTab_isForcedBackToCommentsWhenSectionHidden() {
-        assertEquals(
-            0,
-            resolveCinemaSideCurtainSelectedTab(
-                currentSelectedTab = 1,
-                replyCount = 0,
-                isRepliesLoading = false,
-                hasRelatedVideos = true,
-                showRelatedVideosSection = false
-            )
-        )
-    }
-
-    @Test
-    fun cinemaMetaBlocksIncludeUpInfoWhenOwnerIsAvailable() {
+    fun cinemaMetaBlocksFoldUpInfoIntoActionsBlock() {
         val blocks = resolveCinemaMetaPanelBlocks(
-            hasOwner = true,
             hasCollection = false,
             hasMultiplePages = false
         )
@@ -195,7 +221,6 @@ class TabletCinemaLayoutPolicyTest {
         assertEquals(
             listOf(
                 CinemaMetaPanelBlock.ACTIONS,
-                CinemaMetaPanelBlock.UP_INFO,
                 CinemaMetaPanelBlock.INTRO
             ),
             blocks
@@ -203,14 +228,12 @@ class TabletCinemaLayoutPolicyTest {
     }
 
     @Test
-    fun cinemaMetaBlocksSkipUpInfoWhenOwnerIsMissing() {
+    fun cinemaMetaBlocksKeepStableBaseOrderWithoutOwnerParameter() {
         val blocks = resolveCinemaMetaPanelBlocks(
-            hasOwner = false,
             hasCollection = false,
             hasMultiplePages = false
         )
 
-        assertFalse(blocks.contains(CinemaMetaPanelBlock.UP_INFO))
         assertEquals(
             listOf(
                 CinemaMetaPanelBlock.ACTIONS,
@@ -223,7 +246,6 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun cinemaMetaBlocksAppendCollectionAndPagesWhenAvailable() {
         val blocks = resolveCinemaMetaPanelBlocks(
-            hasOwner = true,
             hasCollection = true,
             hasMultiplePages = true
         )
@@ -231,7 +253,6 @@ class TabletCinemaLayoutPolicyTest {
         assertEquals(
             listOf(
                 CinemaMetaPanelBlock.ACTIONS,
-                CinemaMetaPanelBlock.UP_INFO,
                 CinemaMetaPanelBlock.INTRO,
                 CinemaMetaPanelBlock.COLLECTION,
                 CinemaMetaPanelBlock.PAGES
@@ -243,7 +264,6 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun cinemaMetaBlocksOnlyAppendAvailableSupplementalSections() {
         val blocks = resolveCinemaMetaPanelBlocks(
-            hasOwner = false,
             hasCollection = true,
             hasMultiplePages = false
         )

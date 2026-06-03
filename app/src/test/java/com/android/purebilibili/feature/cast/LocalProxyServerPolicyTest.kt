@@ -29,4 +29,26 @@ class LocalProxyServerPolicyTest {
         assertFalse(LocalProxyServer.isSupportedTargetUrl("file:///sdcard/video.mp4"))
         assertFalse(LocalProxyServer.isSupportedTargetUrl("javascript:alert(1)"))
     }
+
+    // --- DASH manifest routing ---
+
+    @Test
+    fun `dash manifest URL uses dash key mpd path`() {
+        assertEquals("/dash/video123.mpd", LocalProxyServer.dashManifestPath("video123"))
+        assertEquals("/dash/abc-def.mpd", LocalProxyServer.dashManifestPath("abc-def"))
+    }
+
+    @Test
+    fun `dash content type constant is application dash xml`() {
+        assertEquals("application/dash+xml", LocalProxyServer.DASH_CONTENT_TYPE)
+    }
+
+    // --- CORS ---
+
+    @Test
+    fun `cors headers include Access-Control-Allow-Origin star`() {
+        val headers = LocalProxyServer.corsHeaders()
+
+        assertEquals("*", headers["Access-Control-Allow-Origin"])
+    }
 }

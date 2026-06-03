@@ -67,17 +67,22 @@ object SsdpCastClient {
     }
 
     private fun fetchDeviceProfile(descriptionLocation: String): SsdpDeviceProfile? {
-        val request = Request.Builder()
-            .url(descriptionLocation)
-            .get()
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Logger.w(TAG, "📺 [SSDP] Fetch device description failed: ${response.code}")
-                return null
+        return runCatching {
+            val request = Request.Builder()
+                .url(descriptionLocation)
+                .get()
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Logger.w(TAG, "📺 [SSDP] Fetch device description failed: ${response.code}")
+                    return null
+                }
+                val descriptionXml = response.body.string()
+                return parseDeviceProfile(descriptionXml, descriptionLocation)
             }
-            val descriptionXml = response.body?.string().orEmpty()
-            return parseDeviceProfile(descriptionXml, descriptionLocation)
+        }.getOrElse { error ->
+            Logger.w(TAG, "📺 [SSDP] Fetch device profile exception: ${error.message}")
+            null
         }
     }
 
@@ -97,9 +102,12 @@ object SsdpCastClient {
         return runCatching {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 isNamespaceAware = true
-                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                 setFeature("http://xml.org/sax/features/external-general-entities", false)
                 setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+                runCatching { setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true) }
+                isXIncludeAware = false
+                isExpandEntityReferences = false
             }
             val builder = factory.newDocumentBuilder()
             val document = builder.parse(descriptionXml.byteInputStream())
@@ -129,7 +137,7 @@ object SsdpCastClient {
                 avTransportEndpoint = endpoint
             )
         }.getOrElse { error ->
-            Logger.e(TAG, "📺 [SSDP] Parse description failed: ${error.message}")
+            Logger.w(TAG, "📺 [SSDP] Parse description failed: ${error.message}")
             null
         }
     }
@@ -197,7 +205,7 @@ object SsdpCastClient {
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                val payload = response.body?.string().orEmpty().take(180)
+                val payload = response.body.string().take(180)
                 error("SOAP $action failed (${response.code}): $payload")
             }
         }

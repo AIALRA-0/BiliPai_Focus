@@ -18,6 +18,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
 import com.android.purebilibili.feature.live.LiveDanmakuItem
+import com.android.purebilibili.feature.live.shouldRenderLiveDanmakuImageEmoticon
 import kotlinx.coroutines.flow.SharedFlow
 import coil.compose.AsyncImage
 
@@ -39,7 +40,7 @@ fun LandscapeChatOverlay(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                 try {
                     messages.add(item)
-                    if (messages.size > 50) messages.removeFirst() // 横屏模式只保留最近50条
+                    if (messages.size > 50) messages.removeAt(0) // 横屏模式只保留最近50条
                     if (!listState.isScrollInProgress && messages.isNotEmpty()) {
                         listState.animateScrollToItem((messages.size - 1).coerceAtLeast(0))
                     }
@@ -131,7 +132,7 @@ private fun LandscapeChatItem(item: LiveDanmakuItem) {
             fontWeight = FontWeight.Medium
         )
 
-        if (item.emoticonUrl != null) {
+        if (shouldRenderLiveDanmakuImageEmoticon(item.emoticonUrl)) {
             Text(
                 text = "${item.uname}: ",
                 style = textStyle

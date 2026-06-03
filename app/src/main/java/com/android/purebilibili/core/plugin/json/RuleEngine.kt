@@ -103,13 +103,16 @@ object RuleEngine {
             "title" -> video.title
             "duration" -> video.duration
             "bvid" -> video.bvid
-            "owner.mid" -> video.owner?.mid
-            "owner.name" -> video.owner?.name
-            "stat.view" -> video.stat?.view
-            "stat.like" -> video.stat?.like
-            "stat.danmaku" -> video.stat?.danmaku
-            "stat.coin" -> video.stat?.coin
-            "stat.favorite" -> video.stat?.favorite
+            "tid" -> video.tid
+            "tname" -> video.tname
+            "owner.mid" -> video.owner.mid
+            "owner.name" -> video.owner.name
+            "stat.view" -> video.stat.view
+            "stat.like" -> video.stat.like
+            "stat.reply" -> video.stat.reply
+            "stat.danmaku" -> video.stat.danmaku
+            "stat.coin" -> video.stat.coin
+            "stat.favorite" -> video.stat.favorite
             else -> null
         }
     }
@@ -201,4 +204,3 @@ object RuleEngine {
         )
     }
 }
-

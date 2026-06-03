@@ -1,23 +1,18 @@
 // 文件路径: feature/video/FullscreenPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionDanmakuContainer
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionMaskStabilizer
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionVisualMask
-import com.android.purebilibili.feature.video.danmaku.checkFaceOcclusionModuleState
-import com.android.purebilibili.feature.video.danmaku.createFaceOcclusionDetector
-import com.android.purebilibili.feature.video.danmaku.detectFaceOcclusionRegions
-import com.android.purebilibili.feature.video.danmaku.installFaceOcclusionModule
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
+import com.android.purebilibili.feature.video.usecase.applyPlaybackButtonUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
+import com.bytedance.danmaku.render.engine.DanmakuView
 
 import android.app.Activity
 import android.content.Context
@@ -81,7 +76,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.feature.video.ui.components.AnimatedGesturePercentText
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
@@ -92,9 +88,8 @@ import androidx.lifecycle.compose.currentStateAsState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.withTimeoutOrNull
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 
 private const val AUTO_HIDE_DELAY = 4000L
 private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
@@ -131,6 +126,12 @@ internal fun shouldRebindFullscreenSurfaceOnResume(
     return hasPlayerView && hasPlayer
 }
 
+internal fun resolveFullscreenOverlayExitRequestedOrientation(
+    originalRequestedOrientation: Int
+): Int {
+    return originalRequestedOrientation
+}
+
 internal fun shouldStartFullscreenDragGesture(
     gesturesEnabled: Boolean,
     showControls: Boolean,
@@ -165,7 +166,7 @@ fun FullscreenPlayerOverlay(
     val context = LocalContext.current
     val density = LocalDensity.current
     val player = miniPlayerManager.player
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     
@@ -185,7 +186,8 @@ fun FullscreenPlayerOverlay(
     //  视频比例状态
     val fixedFullscreenAspectRatio by SettingsManager
         .getFullscreenAspectRatio(context)
-        .collectAsState(initial = FullscreenAspectRatio.FIT)
+        .collectAsStateWithLifecycle(initialValue = FullscreenAspectRatio.FIT
+        )
     var aspectRatio by remember { mutableStateOf(fixedFullscreenAspectRatio.toVideoAspectRatio()) }
     var showRatioMenu by remember { mutableStateOf(false) }
     
@@ -204,10 +206,6 @@ fun FullscreenPlayerOverlay(
             } ?: false
         )
     }
-    var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
-    val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
-    var smartOcclusionModuleState by remember { mutableStateOf(FaceOcclusionModuleState.Checking) }
-    var smartOcclusionDownloadProgress by remember { mutableStateOf<Int?>(null) }
     //  共享弹幕管理器（横竖屏切换保持状态，同时可用于手势 seek 同步）
     val danmakuManager = rememberDanmakuManager()
 
@@ -244,7 +242,7 @@ fun FullscreenPlayerOverlay(
             }
         }
     }
-    
+
     // 手势状态
     var gestureMode by remember { mutableStateOf(FullscreenGestureMode.None) }
     var gestureValue by remember { mutableFloatStateOf(0f) }
@@ -257,13 +255,16 @@ fun FullscreenPlayerOverlay(
     }
     val doubleTapSeekEnabled by SettingsManager
         .getDoubleTapSeekEnabled(context)
-        .collectAsState(initial = true)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     val seekForwardSeconds by SettingsManager
         .getSeekForwardSeconds(context)
-        .collectAsState(initial = 10)
+        .collectAsStateWithLifecycle(initialValue = 10
+        )
     val seekBackwardSeconds by SettingsManager
         .getSeekBackwardSeconds(context)
-        .collectAsState(initial = 10)
+        .collectAsStateWithLifecycle(initialValue = 10
+        )
     
     // 亮度状态
     var currentBrightness by remember { 
@@ -273,7 +274,7 @@ fun FullscreenPlayerOverlay(
             } catch (e: Exception) { 0.5f }
         )
     }
-    
+
     // 播放器状态
     var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
     var currentProgress by remember { mutableFloatStateOf(0f) }
@@ -320,7 +321,7 @@ fun FullscreenPlayerOverlay(
         val activity = (context as? Activity) ?: return@DisposableEffect onDispose {}
         val window = activity.window
         val originalOrientation = activity.requestedOrientation
-        
+
         //  [重构] 定义设置沉浸式模式的函数（可复用）
         val applyImmersiveMode = {
             @Suppress("DEPRECATION")
@@ -333,7 +334,7 @@ fun FullscreenPlayerOverlay(
                 or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
             )
         }
-        
+
         // 设置横屏
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         
@@ -365,8 +366,9 @@ fun FullscreenPlayerOverlay(
             //  移除生命周期观察器
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
             
-            // 恢复竖屏
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            activity.requestedOrientation = resolveFullscreenOverlayExitRequestedOrientation(
+                originalRequestedOrientation = originalOrientation
+            )
             
             // 恢复系统栏
             @Suppress("DEPRECATION")
@@ -480,7 +482,7 @@ fun FullscreenPlayerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .hazeSource(overlayHazeState)
+            .hazeSourceCompat(overlayHazeState)
             .pointerInput(
                 gesturesEnabled,
                 doubleTapSeekEnabled,
@@ -497,10 +499,18 @@ fun FullscreenPlayerOverlay(
                         if (showControls) lastInteractionTime = System.currentTimeMillis()
                     },
                     onDoubleTap = { offset ->
-                        // 分区双击策略可由设置控制：关闭跳转时全屏双击仅暂停/播放
-                        val relativeX = offset.x / screenWidth
+                        // 分区双击策略可由设置和当前播放意图控制。
+                        val relativeX = if (screenWidth > 0f) offset.x / screenWidth else 0.5f
                         player?.let { p ->
-                            when (resolveFullscreenDoubleTapAction(relativeX, doubleTapSeekEnabled)) {
+                            when (
+                                resolveFullscreenDoubleTapAction(
+                                    relativeX = relativeX,
+                                    doubleTapSeekEnabled = doubleTapSeekEnabled,
+                                    playWhenReady = p.playWhenReady,
+                                    isPlaying = p.isPlaying,
+                                    playbackState = p.playbackState
+                                )
+                            ) {
                                 FullscreenDoubleTapAction.SeekBackward -> {
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (p.currentPosition - seekMs).coerceAtLeast(0L)
@@ -626,6 +636,7 @@ fun FullscreenPlayerOverlay(
                                     totalDragDistanceX = dragDelta,
                                     containerWidthPx = screenWidth,
                                     fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
+                                    inlineSwipeSeekSeconds = 30,
                                     gestureSensitivity = 1f
                                 )
                                 if (seekDelta != null) {
@@ -642,13 +653,17 @@ fun FullscreenPlayerOverlay(
         val danmakuScope = com.android.purebilibili.core.store.DanmakuSettingsScope.LANDSCAPE
         val danmakuSettings by SettingsManager
             .getDanmakuSettings(context, danmakuScope)
-            .collectAsState(initial = DanmakuSettings())
+            .collectAsStateWithLifecycle(initialValue = DanmakuSettings(),
+                context = kotlin.coroutines.EmptyCoroutineContext
+            )
         val danmakuEnabled = danmakuSettings.enabled
         val danmakuOpacity = danmakuSettings.opacity
         val danmakuFontScale = danmakuSettings.fontScale
         val danmakuSpeed = danmakuSettings.speed
         val danmakuDisplayArea = danmakuSettings.displayArea
         val danmakuMergeDuplicates = danmakuSettings.mergeDuplicates
+        val danmakuDuplicateMergeWindowMs = danmakuSettings.duplicateMergeWindowMs
+        val danmakuDuplicateMergeCountThreshold = danmakuSettings.duplicateMergeCountThreshold
         val danmakuAllowScroll = danmakuSettings.allowScroll
         val danmakuAllowTop = danmakuSettings.allowTop
         val danmakuAllowBottom = danmakuSettings.allowBottom
@@ -657,19 +672,6 @@ fun FullscreenPlayerOverlay(
         val danmakuSmartOcclusion = danmakuSettings.smartOcclusion
         val danmakuBlockRulesRaw = danmakuSettings.blockRulesRaw
         val danmakuBlockRules = danmakuSettings.blockRules
-        val faceDetector = remember { createFaceOcclusionDetector() }
-        DisposableEffect(faceDetector) {
-            onDispose {
-                faceDetector.close()
-            }
-        }
-
-        LaunchedEffect(faceDetector) {
-            smartOcclusionModuleState = FaceOcclusionModuleState.Checking
-            smartOcclusionDownloadProgress = null
-            smartOcclusionModuleState = checkFaceOcclusionModuleState(context, faceDetector)
-        }
-        
         //  获取当前 cid 并加载弹幕
         val currentCid = miniPlayerManager.currentCid
         LaunchedEffect(currentCid, danmakuEnabled, player) {
@@ -690,7 +692,7 @@ fun FullscreenPlayerOverlay(
                 danmakuManager.isEnabled = false
             }
         }
-        
+
         //  弹幕设置变化时实时应用
         LaunchedEffect(
             danmakuOpacity,
@@ -698,6 +700,8 @@ fun FullscreenPlayerOverlay(
             danmakuSpeed,
             danmakuDisplayArea,
             danmakuMergeDuplicates,
+            danmakuDuplicateMergeWindowMs,
+            danmakuDuplicateMergeCountThreshold,
             danmakuAllowScroll,
             danmakuAllowTop,
             danmakuAllowBottom,
@@ -712,6 +716,8 @@ fun FullscreenPlayerOverlay(
                 speed = danmakuSpeed,
                 displayArea = danmakuDisplayArea,
                 mergeDuplicates = danmakuMergeDuplicates,
+                duplicateMergeWindowMs = danmakuDuplicateMergeWindowMs,
+                duplicateMergeCountThreshold = danmakuDuplicateMergeCountThreshold,
                 allowScroll = danmakuAllowScroll,
                 allowTop = danmakuAllowTop,
                 allowBottom = danmakuAllowBottom,
@@ -723,57 +729,6 @@ fun FullscreenPlayerOverlay(
             )
         }
 
-        LaunchedEffect(
-            playerViewRef,
-            player,
-            faceDetector,
-            danmakuEnabled,
-            danmakuSmartOcclusion,
-            smartOcclusionModuleState
-        ) {
-            if (
-                !danmakuEnabled ||
-                !danmakuSmartOcclusion ||
-                smartOcclusionModuleState != FaceOcclusionModuleState.Ready
-            ) {
-                faceMaskStabilizer.reset()
-                faceVisualMasks = emptyList()
-                return@LaunchedEffect
-            }
-            faceMaskStabilizer.reset()
-            while (isActive) {
-                val view = playerViewRef
-                val exoPlayer = player
-                if (view == null || exoPlayer == null || !exoPlayer.isPlaying || view.width <= 0 || view.height <= 0) {
-                    delay(1200L)
-                    continue
-                }
-
-                val videoWidth = exoPlayer.videoSize.width
-                val videoHeight = exoPlayer.videoSize.height
-                val sampleWidth = 480
-                val sampleHeight = when {
-                    videoWidth > 0 && videoHeight > 0 -> (sampleWidth * videoHeight / videoWidth).coerceIn(270, 960)
-                    else -> 270
-                }
-
-                val detection = withTimeoutOrNull(1_500L) {
-                    detectFaceOcclusionRegions(
-                        playerView = view,
-                        sampleWidth = sampleWidth,
-                        sampleHeight = sampleHeight,
-                        detector = faceDetector
-                    )
-                } ?: com.android.purebilibili.feature.video.danmaku.FaceOcclusionDetectionResult(
-                    verticalRegions = emptyList(),
-                    maskRects = emptyList(),
-                    visualMasks = emptyList()
-                )
-                faceVisualMasks = faceMaskStabilizer.step(detection.visualMasks)
-                delay(if (detection.visualMasks.isEmpty()) 1300L else 900L)
-            }
-        }
-        
         //  绑定 Player（不在 onDispose 中释放，单例会保持状态）
         //  [修复] 移除 detachView 调用，避免横竖屏切换时弹幕消失
         // attachView 会自动暂停旧视图，不需要手动 detach
@@ -787,7 +742,7 @@ fun FullscreenPlayerOverlay(
         
         //  [修复] 使用 LifecycleOwner 监听真正的 Activity 生命周期
         // DisposableEffect(Unit) 会在重组时触发，导致 player 引用被清除
-        val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
         DisposableEffect(lifecycleOwner) {
             val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_DESTROY) {
@@ -847,25 +802,14 @@ fun FullscreenPlayerOverlay(
                 if (danmakuEnabled) {
                     AndroidView(
                         factory = { ctx ->
-                            FaceOcclusionDanmakuContainer(ctx).apply {
-                                setMasks(faceVisualMasks)
-                                setVideoViewport(
-                                    videoWidth = exoPlayer.videoSize.width,
-                                    videoHeight = exoPlayer.videoSize.height,
-                                    resizeMode = aspectRatio.playerResizeMode
-                                )
-                                danmakuManager.attachView(danmakuView())
+                            DanmakuView(ctx).apply {
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                configureAsPassiveDanmakuOverlay()
+                                danmakuManager.attachView(this)
                                 com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView (RenderEngine) created for fullscreen")
                             }
                         },
-                        update = { container ->
-                            container.setMasks(faceVisualMasks)
-                            container.setVideoViewport(
-                                videoWidth = exoPlayer.videoSize.width,
-                                videoHeight = exoPlayer.videoSize.height,
-                                resizeMode = aspectRatio.playerResizeMode
-                            )
-                            val view = container.danmakuView()
+                        update = { view ->
                             if (view.width > 0 && view.height > 0) {
                                 val sizeTag = "${view.width}x${view.height}"
                                 if (view.tag != sizeTag) {
@@ -880,7 +824,7 @@ fun FullscreenPlayerOverlay(
                 }
             }
         }
-        
+
         // 手势指示器
         if (gestureMode != FullscreenGestureMode.None) {
             GestureIndicator(
@@ -1011,7 +955,12 @@ fun FullscreenPlayerOverlay(
                             IconButton(
                                 onClick = {
                                     lastInteractionTime = System.currentTimeMillis()
-                                    player?.let { togglePlayerPlaybackFromUserAction(it) }
+                                    player?.let {
+                                        applyPlaybackButtonUserAction(
+                                            player = it,
+                                            isShowingPauseIcon = isPlaying
+                                        )
+                                    }
                                 },
                             ) {
                                 Icon(
@@ -1109,11 +1058,20 @@ fun FullscreenPlayerOverlay(
             var localSpeed by remember(danmakuSpeed) { mutableFloatStateOf(danmakuSpeed) }
             var localDisplayArea by remember(danmakuDisplayArea) { mutableFloatStateOf(danmakuDisplayArea) }
             var localMergeDuplicates by remember(danmakuMergeDuplicates) { mutableStateOf(danmakuMergeDuplicates) }
+            var localDuplicateMergeWindowMs by remember(danmakuDuplicateMergeWindowMs) {
+                mutableStateOf(danmakuDuplicateMergeWindowMs)
+            }
+            var localDuplicateMergeCountThreshold by remember(danmakuDuplicateMergeCountThreshold) {
+                mutableStateOf(danmakuDuplicateMergeCountThreshold)
+            }
             var localAllowScroll by remember(danmakuAllowScroll) { mutableStateOf(danmakuAllowScroll) }
             var localAllowTop by remember(danmakuAllowTop) { mutableStateOf(danmakuAllowTop) }
             var localAllowBottom by remember(danmakuAllowBottom) { mutableStateOf(danmakuAllowBottom) }
             var localAllowColorful by remember(danmakuAllowColorful) { mutableStateOf(danmakuAllowColorful) }
             var localAllowSpecial by remember(danmakuAllowSpecial) { mutableStateOf(danmakuAllowSpecial) }
+            var localHideInteractiveCommands by remember(danmakuSettings.hideInteractiveCommands) {
+                mutableStateOf(danmakuSettings.hideInteractiveCommands)
+            }
             var localSmartOcclusion by remember(danmakuSmartOcclusion) { mutableStateOf(danmakuSmartOcclusion) }
             var localBlockRulesRaw by remember(danmakuBlockRulesRaw) { mutableStateOf(danmakuBlockRulesRaw) }
             var localFullscreenPanelWidthMode by remember(danmakuSettings.fullscreenPanelWidthMode) {
@@ -1128,17 +1086,18 @@ fun FullscreenPlayerOverlay(
                 speed = localSpeed,
                 displayArea = localDisplayArea,
                 mergeDuplicates = localMergeDuplicates,
+                duplicateMergeWindowMs = localDuplicateMergeWindowMs,
+                duplicateMergeCountThreshold = localDuplicateMergeCountThreshold,
                 allowScroll = localAllowScroll,
                 allowTop = localAllowTop,
                 allowBottom = localAllowBottom,
                 allowColorful = localAllowColorful,
                 allowSpecial = localAllowSpecial,
+                hideInteractiveCommands = localHideInteractiveCommands,
                 showBlockRuleEditor = true,
                 blockRulesRaw = localBlockRulesRaw,
                 smartOcclusion = localSmartOcclusion,
                 fullscreenWidthMode = localFullscreenPanelWidthMode,
-                smartOcclusionModuleState = smartOcclusionModuleState,
-                smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = { 
                     localOpacity = it
                     danmakuManager.opacity = it
@@ -1165,6 +1124,14 @@ fun FullscreenPlayerOverlay(
                     // 对于 Switch 这种立即生效的 Prefernce，直接存就行
                     scope.launch { SettingsManager.setDanmakuMergeDuplicates(context, it, danmakuScope) }
                 },
+                onDuplicateMergeWindowMsChange = {
+                    localDuplicateMergeWindowMs = it
+                    scope.launch { SettingsManager.setDanmakuDuplicateMergeWindowMs(context, it, danmakuScope) }
+                },
+                onDuplicateMergeCountThresholdChange = {
+                    localDuplicateMergeCountThreshold = it
+                    scope.launch { SettingsManager.setDanmakuDuplicateMergeCountThreshold(context, it, danmakuScope) }
+                },
                 onAllowScrollChange = {
                     localAllowScroll = it
                     scope.launch { SettingsManager.setDanmakuAllowScroll(context, it, danmakuScope) }
@@ -1185,6 +1152,10 @@ fun FullscreenPlayerOverlay(
                     localAllowSpecial = it
                     scope.launch { SettingsManager.setDanmakuAllowSpecial(context, it, danmakuScope) }
                 },
+                onHideInteractiveCommandsChange = {
+                    localHideInteractiveCommands = it
+                    scope.launch { SettingsManager.setDanmakuHideInteractiveCommands(context, it) }
+                },
                 onSmartOcclusionChange = {
                     localSmartOcclusion = it
                     scope.launch { SettingsManager.setDanmakuSmartOcclusion(context, it, danmakuScope) }
@@ -1196,24 +1167,6 @@ fun FullscreenPlayerOverlay(
                 onFullscreenWidthModeChange = {
                     localFullscreenPanelWidthMode = it
                     scope.launch { SettingsManager.setDanmakuFullscreenPanelWidthMode(context, it) }
-                },
-                onSmartOcclusionDownloadClick = {
-                    if (smartOcclusionModuleState != FaceOcclusionModuleState.Downloading) {
-                        scope.launch {
-                            smartOcclusionModuleState = FaceOcclusionModuleState.Downloading
-                            smartOcclusionDownloadProgress = 0
-                            smartOcclusionModuleState = installFaceOcclusionModule(
-                                context = context,
-                                detector = faceDetector,
-                                onProgress = { progress ->
-                                    smartOcclusionDownloadProgress = progress
-                                }
-                            )
-                            if (smartOcclusionModuleState != FaceOcclusionModuleState.Downloading) {
-                                smartOcclusionDownloadProgress = null
-                            }
-                        }
-                    }
                 },
                 onDismiss = { showDanmakuSettings = false }
             )
@@ -1341,7 +1294,13 @@ private fun GestureIndicator(
                     Spacer(Modifier.height(8.dp))
                     Text("亮度", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
                     Spacer(Modifier.height(4.dp))
-                    Text("${(value * 100).toInt()}%", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    AnimatedGesturePercentText(
+                        percent = (value * 100).toInt(),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        label = "fullscreen-brightness-percent"
+                    )
                     Spacer(Modifier.height(8.dp))
                     Box(
                         modifier = Modifier
@@ -1372,7 +1331,13 @@ private fun GestureIndicator(
                     Spacer(Modifier.height(8.dp))
                     Text("音量", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
                     Spacer(Modifier.height(4.dp))
-                    Text("${(value * 100).toInt()}%", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    AnimatedGesturePercentText(
+                        percent = (value * 100).toInt(),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        label = "fullscreen-volume-percent"
+                    )
                     Spacer(Modifier.height(8.dp))
                     Box(
                         modifier = Modifier

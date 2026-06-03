@@ -6,6 +6,7 @@ import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPrimaryAction
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicCardPrimaryAction
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
+import kotlinx.collections.immutable.toImmutableList
 
 internal data class DynamicCommentPayload(
     val replies: List<ReplyItem>,
@@ -45,7 +46,8 @@ internal fun resolveDynamicCommentPayload(
 }
 
 internal fun selectPreferredDynamicCommentAttempt(
-    attempts: List<DynamicCommentLoadAttempt>
+    attempts: List<DynamicCommentLoadAttempt>,
+    expectedCount: Int = 0
 ): DynamicCommentLoadAttempt? {
     return attempts.minWithOrNull(
         compareBy<DynamicCommentLoadAttempt> {
@@ -53,6 +55,12 @@ internal fun selectPreferredDynamicCommentAttempt(
                 it.replies.isNotEmpty() -> 0
                 it.totalCount > 0 -> 1
                 else -> 2
+            }
+        }.thenBy {
+            if (expectedCount > 0 && it.totalCount > 0) {
+                kotlin.math.abs(it.totalCount - expectedCount)
+            } else {
+                0
             }
         }.thenBy { it.candidateIndex }
             .thenByDescending { it.totalCount }
@@ -81,7 +89,7 @@ internal fun resolveDynamicSubReplyStateAfterSuccess(
         (currentState.items + newItems).distinctBy { it.rpid }
     }
     return currentState.copy(
-        items = mergedItems,
+        items = mergedItems.toImmutableList(),
         isLoading = false,
         page = page,
         isEnd = isEnd,

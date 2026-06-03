@@ -22,6 +22,11 @@ internal data class BangumiFollowStatusOption(
     val label: String
 )
 
+internal data class BangumiResolvedFollowStatus(
+    val isFollowing: Boolean,
+    val followStatus: Int
+)
+
 internal val BANGUMI_FOLLOW_STATUS_OPTIONS = listOf(
     BangumiFollowStatusOption(BANGUMI_FOLLOW_STATUS_WANT, "想看"),
     BangumiFollowStatusOption(BANGUMI_FOLLOW_STATUS_WATCHING, "在看"),
@@ -44,6 +49,46 @@ internal fun resolveBangumiFollowStatusLabel(
         BANGUMI_FOLLOW_STATUS_WATCHED -> "看过"
         else -> "已追"
     }
+}
+
+internal fun resolveBangumiMergedFollowStatus(
+    seasonId: Long,
+    apiUserStatus: UserStatus?,
+    cachedFollow: Map<Long, Boolean>,
+    cachedStatus: Map<Long, Int>,
+    followedSeasonIds: Set<Long>
+): BangumiResolvedFollowStatus {
+    cachedStatus[seasonId]?.let { status ->
+        return BangumiResolvedFollowStatus(
+            isFollowing = status > 0,
+            followStatus = status.coerceAtLeast(0)
+        )
+    }
+    cachedFollow[seasonId]?.let { isFollowing ->
+        return BangumiResolvedFollowStatus(
+            isFollowing = isFollowing,
+            followStatus = if (isFollowing) {
+                maxOf(apiUserStatus?.followStatus ?: 0, BANGUMI_FOLLOW_STATUS_WANT)
+            } else {
+                0
+            }
+        )
+    }
+    if (followedSeasonIds.contains(seasonId)) {
+        return BangumiResolvedFollowStatus(
+            isFollowing = true,
+            followStatus = maxOf(apiUserStatus?.followStatus ?: 0, BANGUMI_FOLLOW_STATUS_WANT)
+        )
+    }
+    val apiFollowing = isBangumiFollowed(apiUserStatus)
+    return BangumiResolvedFollowStatus(
+        isFollowing = apiFollowing,
+        followStatus = if (apiFollowing) {
+            maxOf(apiUserStatus?.followStatus ?: 0, BANGUMI_FOLLOW_STATUS_WANT)
+        } else {
+            0
+        }
+    )
 }
 
 internal fun resolveFollowPreloadPageCount(

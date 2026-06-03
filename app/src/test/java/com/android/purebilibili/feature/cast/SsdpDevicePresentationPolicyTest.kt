@@ -1,10 +1,67 @@
 package com.android.purebilibili.feature.cast
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SsdpDevicePresentationPolicyTest {
+
+    // --- associateNotNullBy (per-device exception isolation) ---
+
+    @Test
+    fun `associateNotNullBy maps successful devices while ignoring failed ones`() {
+        val data = listOf("a", "b", "c", "d")
+        val result = data.associateNotNullBy(
+            keySelector = { it },
+            valueSelector = { key ->
+                when (key) {
+                    "a" -> "success-a"
+                    "b" -> null // device without AVTransport
+                    "c" -> throw RuntimeException("socket timeout") // crashing device
+                    "d" -> "success-d"
+                    else -> null
+                }
+            }
+        )
+        assertEquals(2, result.size)
+        assertEquals("success-a", result["a"])
+        assertEquals("success-d", result["d"])
+        assertNull(result["b"])
+        assertNull(result["c"])
+    }
+
+    @Test
+    fun `associateNotNullBy returns empty map when all valueSelectors return null`() {
+        val data = listOf("a", "b")
+        val result = data.associateNotNullBy(
+            keySelector = { it },
+            valueSelector = { null }
+        )
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `associateNotNullBy returns empty map for empty input`() {
+        val result = emptyList<String>().associateNotNullBy(
+            keySelector = { it },
+            valueSelector = { it }
+        )
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `associateNotNullBy preserves insertion order`() {
+        val data = listOf("first", "second", "third")
+        val result = data.associateNotNullBy(
+            keySelector = { it },
+            valueSelector = { it.uppercase() }
+        )
+        val keys = result.keys.toList()
+        assertEquals(listOf("first", "second", "third"), keys)
+    }
+
+    // --- cling / ssdp device presentation ---
 
     @Test
     fun `cling devices require avtransport to be considered castable`() {

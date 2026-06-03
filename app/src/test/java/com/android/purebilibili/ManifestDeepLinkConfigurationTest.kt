@@ -24,6 +24,24 @@ class ManifestDeepLinkConfigurationTest {
         )
     }
 
+    @Test
+    fun manifest_declares_share_package_visibility_queries() {
+        val manifest = loadManifestText()
+
+        assertTrue(
+            manifest.contains("<queries>"),
+            "AndroidManifest should declare Android 11+ package visibility queries"
+        )
+        assertTrue(
+            manifest.contains("""android:name="com.tencent.mm""""),
+            "AndroidManifest should query WeChat for targeted sharing"
+        )
+        assertTrue(
+            manifest.contains("""android:name="com.tencent.mobileqq""""),
+            "AndroidManifest should query QQ for targeted sharing"
+        )
+    }
+
     private fun loadManifestText(): String {
         val candidates = listOf(
             File("src/main/AndroidManifest.xml"),

@@ -24,6 +24,24 @@ class DanmakuKeywordFilterPolicyTest {
     }
 
     @Test
+    fun parseDanmakuBlockRules_supportsJsonImportPayload() {
+        val rules = parseDanmakuBlockRules(
+            """
+            {
+              "keywords": ["剧透", "前方高能"],
+              "regex": ["第\\d+集"],
+              "userHashes": ["abc123"]
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(
+            listOf("剧透", "前方高能", "regex:第\\d+集", "uid:abc123"),
+            rules
+        )
+    }
+
+    @Test
     fun matchesDanmakuBlockRule_supportsPlainKeywordIgnoreCase() {
         assertTrue(matchesDanmakuBlockRule(content = "这段有剧透注意", rule = "剧透"))
         assertTrue(matchesDanmakuBlockRule(content = "Spoiler alert", rule = "spoiler"))

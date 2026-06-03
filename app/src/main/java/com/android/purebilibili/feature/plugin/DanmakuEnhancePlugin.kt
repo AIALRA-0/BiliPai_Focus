@@ -17,8 +17,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.plugin.DanmakuItem
-import com.android.purebilibili.core.plugin.DanmakuPlugin
+import com.android.purebilibili.core.plugin.DanmakuPluginApi
 import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.core.plugin.PluginCapability
+import com.android.purebilibili.core.plugin.PluginCapabilityManifest
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.util.Logger
@@ -39,14 +41,26 @@ private const val TAG = "DanmakuEnhancePlugin"
  * - 关键词屏蔽
  * - 同传弹幕高亮
  */
-class DanmakuEnhancePlugin : DanmakuPlugin {
+class DanmakuEnhancePlugin : DanmakuPluginApi {
     
     override val id = "danmaku_enhance"
     override val name = "弹幕增强"
     override val description = "关键词屏蔽、按用户ID屏蔽、同传弹幕高亮"
     override val version = "1.1.0"
-    override val author = "YangY"
+    override val author = "BiliPai项目组"
     override val icon: ImageVector = CupertinoIcons.Default.TextBubble
+    override val capabilityManifest: PluginCapabilityManifest = PluginCapabilityManifest(
+        pluginId = id,
+        displayName = name,
+        version = version,
+        apiVersion = 1,
+        entryClassName = "com.android.purebilibili.feature.plugin.DanmakuEnhancePlugin",
+        capabilities = setOf(
+            PluginCapability.DANMAKU_STREAM,
+            PluginCapability.DANMAKU_MUTATION,
+            PluginCapability.PLUGIN_STORAGE
+        )
+    )
     
     private var config: DanmakuEnhanceConfig = DanmakuEnhanceConfig()
     private var filteredCount = 0

@@ -37,6 +37,7 @@ class AppStartupPolicyTest {
         assertEquals(StartupPhase.BEFORE_FIRST_INTERACTIVE, tasks.getValue("video_repository_init").phase)
         assertEquals(StartupPhase.BEFORE_FIRST_INTERACTIVE, tasks.getValue("background_manager_init").phase)
         assertEquals(StartupPhase.BEFORE_FIRST_INTERACTIVE, tasks.getValue("player_settings_cache_init").phase)
+        assertEquals(StartupPhase.AFTER_FIRST_INTERACTIVE, tasks.getValue("notification_channel_init").phase)
     }
 
     @Test
@@ -57,6 +58,9 @@ class AppStartupPolicyTest {
 
         assertEquals(StartupPhase.AFTER_FIRST_INTERACTIVE, tasks.getValue("plugin_init").phase)
         assertEquals(StartupThread.MAIN_IDLE, tasks.getValue("plugin_init").thread)
+
+        assertEquals(StartupCriticality.DEFERRED, tasks.getValue("notification_channel_init").criticality)
+        assertEquals(StartupThread.MAIN_IDLE, tasks.getValue("notification_channel_init").thread)
 
         assertEquals(StartupPhase.AFTER_FIRST_INTERACTIVE, tasks.getValue("dex2oat_profile_install").phase)
         assertEquals(StartupThread.MAIN_DELAYED, tasks.getValue("dex2oat_profile_install").thread)

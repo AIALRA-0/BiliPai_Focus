@@ -1,10 +1,8 @@
 package com.android.purebilibili.feature.dynamic
 
-import com.android.purebilibili.core.store.FOLLOWING_CACHE_REFRESH_TTL_MS
-import com.android.purebilibili.core.store.shouldReloadFollowingCacheSnapshot
 import com.android.purebilibili.data.model.response.DynamicItem
 
-internal const val FOLLOWINGS_REFRESH_TTL_MS: Long = FOLLOWING_CACHE_REFRESH_TTL_MS
+internal const val FOLLOWINGS_REFRESH_TTL_MS: Long = 5 * 60 * 1000L
 
 internal data class IncrementalRefreshBoundary(
     val boundaryKey: String?,
@@ -49,19 +47,10 @@ internal fun resolveOldContentDividerIndex(
 internal fun shouldReloadFollowings(
     nowMs: Long,
     lastLoadMs: Long,
-    cachedUsersCount: Int = 0,
-    preferredUserCount: Int = 0,
-    hasCompleteSnapshot: Boolean = false,
     ttlMs: Long = FOLLOWINGS_REFRESH_TTL_MS
 ): Boolean {
-    return shouldReloadFollowingCacheSnapshot(
-        nowMs = nowMs,
-        lastLoadMs = lastLoadMs,
-        cachedUsersCount = cachedUsersCount,
-        preferredUserCount = preferredUserCount,
-        hasCompleteSnapshot = hasCompleteSnapshot,
-        ttlMs = ttlMs
-    )
+    if (lastLoadMs <= 0L) return true
+    return nowMs - lastLoadMs >= ttlMs
 }
 
 internal fun shouldStartDynamicRefresh(

@@ -28,4 +28,42 @@ class MessagePreviewParserTest {
         assertEquals("https://i0.hdslb.com/test.jpg", card.cover)
         assertEquals(96L, card.duration)
     }
+
+    @Test
+    fun parseMessageCard_returnsArticleShareCard() {
+        val card = MessagePreviewParser.parseMessageCard(
+            content = """{"source":6,"title":"专栏标题","author":"作者","thumb":"https://i0.hdslb.com/article.jpg","url":"https://www.bilibili.com/read/cv123"}""",
+            msgType = 7
+        )
+
+        assertNotNull(card)
+        assertEquals(MessageCardKind.Article, card.kind)
+        assertEquals("专栏标题", card.title)
+        assertEquals("作者", card.subtitle)
+        assertEquals("https://www.bilibili.com/read/cv123", card.targetUrl)
+    }
+
+    @Test
+    fun parseMessageCard_returnsLiveShareCardFromOtherContent() {
+        val card = MessagePreviewParser.parseMessageCard(
+            content = """{"source":4,"title":"直播间","desc":"主播：测试","cover":"https://i0.hdslb.com/live.jpg","url":"https://live.bilibili.com/123"}""",
+            msgType = 14
+        )
+
+        assertNotNull(card)
+        assertEquals(MessageCardKind.Live, card.kind)
+        assertEquals("直播间", card.title)
+        assertEquals("主播：测试", card.subtitle)
+        assertEquals("https://live.bilibili.com/123", card.targetUrl)
+    }
+
+    @Test
+    fun parseSessionPreview_usesCardTitleForArticlePush() {
+        val preview = MessagePreviewParser.parseSessionPreview(
+            content = """{"title":"文章推送","summary":"摘要","image_urls":["https://i0.hdslb.com/a.jpg"]}""",
+            msgType = 12
+        )
+
+        assertEquals("专栏：文章推送", preview)
+    }
 }

@@ -30,6 +30,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 fun AiSummaryCard(
     aiSummary: AiSummaryData?,
     onTimestampClick: ((Long) -> Unit)? = null,
+    onCreateNoteDraftClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (!hasAiSummaryContent(aiSummary)) return
@@ -129,6 +130,22 @@ fun AiSummaryCard(
                                     onClick = { onTimestampClick?.invoke(part.timestamp * 1000L) }
                                 )
                             }
+                        }
+                    }
+
+                    if (onCreateNoteDraftClick != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onCreateNoteDraftClick,
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Default.Sparkles,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("生成笔记草稿")
                         }
                     }
                 }
@@ -249,38 +266,44 @@ private fun OutlineItemRow(
              Spacer(modifier = Modifier.width(4.dp)) // Indent for sub items aligned with bullet?
         }
         
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp)
+        ) {
              Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
-        
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        // Time Button
-        Surface(
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier.clickable(onClick = onClick) // extra click area
+
+        Box(
+            modifier = Modifier.widthIn(min = 72.dp),
+            contentAlignment = Alignment.CenterEnd
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.clickable(onClick = onClick)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Outlined.Clock,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(12.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = formatTimestamp(timestamp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Outlined.Clock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = formatTimestamp(timestamp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }

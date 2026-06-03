@@ -8,16 +8,16 @@ class WatchLaterQueueSheetPresentationPolicyTest {
     @Test
     fun useInlineSheetWhenRealtimeHazeRequired() {
         assertEquals(
-            WatchLaterQueueSheetPresentation.INLINE_HAZE,
-            resolveWatchLaterQueueSheetPresentation(requireRealtimeHaze = true)
+            ExternalPlaylistQueueSheetPresentation.INLINE_HAZE,
+            resolveExternalPlaylistQueueSheetPresentation(requireRealtimeHaze = true)
         )
     }
 
     @Test
     fun canFallbackToModalWhenRealtimeHazeNotRequired() {
         assertEquals(
-            WatchLaterQueueSheetPresentation.MODAL,
-            resolveWatchLaterQueueSheetPresentation(requireRealtimeHaze = false)
+            ExternalPlaylistQueueSheetPresentation.MODAL,
+            resolveExternalPlaylistQueueSheetPresentation(requireRealtimeHaze = false)
         )
     }
 }

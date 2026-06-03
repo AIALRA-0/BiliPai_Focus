@@ -35,6 +35,44 @@ class TodayWatchPolicyTest {
     }
 
     @Test
+    fun `partial watch history does not outweigh completed watch history`() {
+        val history = listOf(
+            VideoItem(bvid = "half_watch", owner = Owner(mid = 1, name = "UP-Half"), duration = 1_200, progress = 600, view_at = 1_700_002_000),
+            VideoItem(bvid = "complete_watch", owner = Owner(mid = 2, name = "UP-Done"), duration = 1_200, progress = 1_140, view_at = 1_699_400_000)
+        )
+        val candidates = listOf(
+            VideoItem(bvid = "half_candidate", owner = Owner(mid = 1, name = "UP-Half"), duration = 600, stat = Stat(view = 5_000, danmaku = 40), title = "半播来源候选"),
+            VideoItem(bvid = "complete_candidate", owner = Owner(mid = 2, name = "UP-Done"), duration = 600, stat = Stat(view = 5_000, danmaku = 40), title = "完播来源候选")
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = history,
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            nowEpochSec = 1_700_010_000,
+            queueLimit = 1
+        )
+
+        assertEquals("complete_candidate", plan.videoQueue.firstOrNull()?.bvid)
+        assertEquals(2L, plan.upRanks.firstOrNull()?.mid)
+    }
+
+    @Test
+    fun `up rank click only enables valid creator mid`() {
+        assertTrue(
+            shouldEnableTodayWatchUpRankClick(
+                TodayUpRank(mid = 42L, name = "UP-A", score = 3.0, watchCount = 2)
+            )
+        )
+        assertFalse(
+            shouldEnableTodayWatchUpRankClick(
+                TodayUpRank(mid = 0L, name = "UP-B", score = 3.0, watchCount = 2)
+            )
+        )
+    }
+
+    @Test
     fun `night signal pushes short and calm videos`() {
         val history = listOf(
             VideoItem(bvid = "h1", owner = Owner(mid = 1, name = "UP-A"), duration = 600, progress = 500, view_at = 1_700_000_000)
@@ -101,6 +139,68 @@ class TodayWatchPolicyTest {
     }
 
     @Test
+    fun `relax mode resists hot study content when calm entertainment is available`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "study_hot",
+                owner = Owner(mid = 1, name = "UP-S"),
+                duration = 2_400,
+                stat = Stat(view = 450_000, danmaku = 1_200),
+                title = "Kotlin 协程原理深度教程"
+            ),
+            VideoItem(
+                bvid = "relax_fit",
+                owner = Owner(mid = 2, name = "UP-R"),
+                duration = 520,
+                stat = Stat(view = 16_000, danmaku = 30),
+                title = "治愈旅行音乐日常"
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            nowEpochSec = 1_700_010_000,
+            queueLimit = 1
+        )
+
+        assertEquals("relax_fit", plan.videoQueue.firstOrNull()?.bvid)
+    }
+
+    @Test
+    fun `learn mode resists hot casual content when focused study content is available`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "casual_hot",
+                owner = Owner(mid = 1, name = "UP-C"),
+                duration = 360,
+                stat = Stat(view = 600_000, danmaku = 400),
+                title = "今日搞笑游戏日常合集"
+            ),
+            VideoItem(
+                bvid = "learn_fit",
+                owner = Owner(mid = 2, name = "UP-L"),
+                duration = 1_500,
+                stat = Stat(view = 18_000, danmaku = 80),
+                title = "Android 架构原理实战课程"
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.LEARN,
+            eyeCareNightActive = false,
+            nowEpochSec = 1_700_010_000,
+            queueLimit = 1
+        )
+
+        assertEquals("learn_fit", plan.videoQueue.firstOrNull()?.bvid)
+    }
+
+    @Test
     fun `plan respects queue and up-rank limits`() {
         val history = listOf(
             VideoItem(bvid = "h1", owner = Owner(mid = 1, name = "UP-A"), duration = 600, progress = 500, view_at = 1_700_000_000),
@@ -158,6 +258,45 @@ class TodayWatchPolicyTest {
     }
 
     @Test
+    fun `plan diversifies topics in top queue`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "music_hot",
+                owner = Owner(mid = 1, name = "UP-M1"),
+                duration = 480,
+                stat = Stat(view = 35_000, danmaku = 60),
+                title = "治愈音乐现场"
+            ),
+            VideoItem(
+                bvid = "music_next",
+                owner = Owner(mid = 2, name = "UP-M2"),
+                duration = 480,
+                stat = Stat(view = 30_000, danmaku = 50),
+                title = "音乐合集精选"
+            ),
+            VideoItem(
+                bvid = "travel",
+                owner = Owner(mid = 3, name = "UP-T"),
+                duration = 480,
+                stat = Stat(view = 10_000, danmaku = 20),
+                title = "旅行记录"
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            nowEpochSec = 1_700_010_000,
+            queueLimit = 3
+        )
+
+        assertEquals("music_hot", plan.videoQueue.firstOrNull()?.bvid)
+        assertTrue(plan.videoQueue.take(2).any { it.bvid == "travel" })
+    }
+
+    @Test
     fun `negative feedback penalizes disliked creator and title`() {
         val history = listOf(
             VideoItem(bvid = "h1", owner = Owner(mid = 1, name = "UP-A"), duration = 600, progress = 550, view_at = 1_700_000_000)
@@ -197,6 +336,41 @@ class TodayWatchPolicyTest {
     }
 
     @Test
+    fun `plan excludes explicitly disliked bvid even when candidate is very hot`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "disliked_hot",
+                owner = Owner(mid = 1, name = "UP-Hot"),
+                duration = 480,
+                stat = Stat(view = 1_000_000_000, danmaku = 50),
+                title = "超热门但不感兴趣"
+            ),
+            VideoItem(
+                bvid = "normal",
+                owner = Owner(mid = 2, name = "UP-Normal"),
+                duration = 480,
+                stat = Stat(view = 1_000, danmaku = 20),
+                title = "普通推荐"
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            nowEpochSec = 1_700_010_000,
+            queueLimit = 1,
+            penaltySignals = TodayWatchPenaltySignals(
+                dislikedBvids = setOf("disliked_hot")
+            )
+        )
+
+        assertEquals("normal", plan.videoQueue.firstOrNull()?.bvid)
+        assertFalse(plan.videoQueue.any { it.bvid == "disliked_hot" })
+    }
+
+    @Test
     fun `plan includes readable explanation per queued video`() {
         val history = listOf(
             VideoItem(bvid = "h1", owner = Owner(mid = 1, name = "UP-A"), duration = 600, progress = 520, view_at = 1_700_000_000)
@@ -223,6 +397,7 @@ class TodayWatchPolicyTest {
         val explanation = plan.explanationByBvid["explain1"].orEmpty()
         assertTrue(explanation.isNotBlank())
         assertTrue(explanation.contains("学习"))
+        assertTrue(explanation.contains("近期更新"))
     }
 
     @Test

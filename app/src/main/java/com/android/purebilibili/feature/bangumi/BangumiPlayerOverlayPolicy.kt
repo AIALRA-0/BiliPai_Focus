@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.bangumi
 
+import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.BangumiEpisode
 import com.android.purebilibili.data.model.response.Page
+import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 
 internal enum class BangumiOverlayUnsupportedAction {
     LIKE,
@@ -79,6 +81,58 @@ internal fun resolveBangumiOverlayShareTitle(
 }
 
 internal fun shouldShowBangumiOverlayDislikeAction(): Boolean = false
+
+internal data class BangumiPlaybackDebugSnapshot(
+    val episodeId: Long = 0L,
+    val cid: Long = 0L,
+    val playbackState: Int = Player.STATE_IDLE,
+    val playWhenReady: Boolean = false,
+    val isPlaying: Boolean = false,
+    val firstFrameRendered: Boolean = false,
+    val lastVideoEvent: String = ""
+) {
+    fun resetForEpisode(
+        episodeId: Long,
+        cid: Long
+    ): BangumiPlaybackDebugSnapshot {
+        return BangumiPlaybackDebugSnapshot(
+            episodeId = episodeId,
+            cid = cid,
+            lastVideoEvent = "waiting first frame"
+        )
+    }
+}
+
+internal fun resolveBangumiPlaybackDebugInfo(
+    snapshot: BangumiPlaybackDebugSnapshot
+): PlaybackDebugInfo {
+    return PlaybackDebugInfo(
+        playbackState = resolveBangumiPlaybackStateName(snapshot.playbackState),
+        playWhenReady = snapshot.playWhenReady.toString(),
+        isPlaying = snapshot.isPlaying.toString(),
+        firstFrame = if (snapshot.firstFrameRendered) "rendered" else "",
+        lastVideoEvent = buildBangumiPlaybackDebugEvent(snapshot)
+    )
+}
+
+private fun resolveBangumiPlaybackStateName(playbackState: Int): String {
+    return when (playbackState) {
+        Player.STATE_IDLE -> "IDLE"
+        Player.STATE_BUFFERING -> "BUFFERING"
+        Player.STATE_READY -> "READY"
+        Player.STATE_ENDED -> "ENDED"
+        else -> "UNKNOWN"
+    }
+}
+
+private fun buildBangumiPlaybackDebugEvent(
+    snapshot: BangumiPlaybackDebugSnapshot
+): String {
+    val event = snapshot.lastVideoEvent.ifBlank {
+        if (snapshot.firstFrameRendered) "first frame rendered" else "waiting first frame"
+    }
+    return "episode=${snapshot.episodeId} cid=${snapshot.cid} $event"
+}
 
 internal fun updateBangumiSuccessInteractionState(
     state: BangumiPlayerState.Success,

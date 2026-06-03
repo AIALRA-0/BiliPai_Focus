@@ -1,37 +1,35 @@
 package com.android.purebilibili.feature.settings
 
-import com.android.purebilibili.R
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class MobileSettingsRootSectionOrderTest {
 
     @Test
-    fun shouldUseFlatGroupedOrderForSettingsHome() {
+    fun shouldUseSceneBasedOrderForSettingsHome() {
         assertEquals(
-            listOf(
-                MobileSettingsRootSection.FOLLOW_AUTHOR,
-                MobileSettingsRootSection.GENERAL,
-                MobileSettingsRootSection.PRIVACY,
-                MobileSettingsRootSection.STORAGE,
-                MobileSettingsRootSection.DEVELOPER,
-                MobileSettingsRootSection.FEED,
-                MobileSettingsRootSection.ABOUT,
-                MobileSettingsRootSection.SUPPORT
-            ),
-            resolveMobileSettingsRootSectionOrder()
+            resolveSettingsRootCategoryOrder(),
+            resolveTabletSettingsRootCategoryOrder()
         )
     }
 
     @Test
-    fun rootSections_shouldMapToLocalizedStringResources() {
-        assertEquals(R.string.settings_section_follow_author, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.FOLLOW_AUTHOR))
-        assertEquals(R.string.settings_section_general, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.GENERAL))
-        assertEquals(R.string.settings_section_privacy, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.PRIVACY))
-        assertEquals(R.string.settings_section_storage, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.STORAGE))
-        assertEquals(R.string.settings_section_developer, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.DEVELOPER))
-        assertEquals(R.string.settings_section_feed, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.FEED))
-        assertEquals(R.string.settings_section_about, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.ABOUT))
-        assertEquals(R.string.settings_section_support, resolveMobileSettingsRootSectionTitleRes(MobileSettingsRootSection.SUPPORT))
+    fun rootSections_shouldUseSceneTitles() {
+        assertEquals(
+            listOf(
+                "关注与支持",
+                "播放与画质",
+                "界面与主题",
+                "首页与推荐",
+                "导航与标签",
+                "全屏与手势",
+                "互动与评论",
+                "数据与备份",
+                "隐私与权限",
+                "诊断与开发",
+                "关于与支持"
+            ),
+            resolveSettingsRootCategoryOrder().map { it.title }
+        )
     }
 }

@@ -4,8 +4,12 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.feature.video.ui.components.GesturePercentTransitionDirection
+import com.android.purebilibili.feature.video.ui.components.resolveGesturePercentTransitionDirection
+import com.android.purebilibili.feature.video.ui.components.shouldTriggerGesturePercentHaptic
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoGestureFeedbackPolicyTest {
@@ -248,6 +252,31 @@ class VideoGestureFeedbackPolicyTest {
     }
 
     @Test
+    fun `resolveGesturePercentTransitionDirection follows value delta`() {
+        assertEquals(
+            GesturePercentTransitionDirection.Increase,
+            resolveGesturePercentTransitionDirection(previousPercent = 40, currentPercent = 41)
+        )
+        assertEquals(
+            GesturePercentTransitionDirection.Decrease,
+            resolveGesturePercentTransitionDirection(previousPercent = 41, currentPercent = 40)
+        )
+        assertEquals(
+            GesturePercentTransitionDirection.None,
+            resolveGesturePercentTransitionDirection(previousPercent = 40, currentPercent = 40)
+        )
+    }
+
+    @Test
+    fun `shouldTriggerGesturePercentHaptic only ticks crossed steps and endpoints`() {
+        assertFalse(shouldTriggerGesturePercentHaptic(previousPercent = 41, currentPercent = 42))
+        assertTrue(shouldTriggerGesturePercentHaptic(previousPercent = 44, currentPercent = 45))
+        assertTrue(shouldTriggerGesturePercentHaptic(previousPercent = 46, currentPercent = 45))
+        assertTrue(shouldTriggerGesturePercentHaptic(previousPercent = 98, currentPercent = 100))
+        assertTrue(shouldTriggerGesturePercentHaptic(previousPercent = 2, currentPercent = 0))
+    }
+
+    @Test
     fun `resolveGestureLevelOverlayVisualPolicy returns warm accent for brightness`() {
         val policy = resolveGestureLevelOverlayVisualPolicy(
             mode = VideoGestureMode.Brightness,
@@ -293,11 +322,16 @@ class VideoGestureFeedbackPolicyTest {
     fun `resolveVideoGestureMotionSpec keeps tuned durations for hints and digit transitions`() {
         val spec = resolveVideoGestureMotionSpec()
 
-        assertEquals(220, spec.digitBlurResetDurationMillis)
+        assertEquals(10f, spec.digitInitialBlurRadiusDp)
+        assertEquals(0.42f, spec.digitInitialAlpha)
+        assertEquals(40, spec.digitBlurHoldDurationMillis)
+        assertEquals(260, spec.digitBlurResetDurationMillis)
         assertEquals(220, spec.digitAlphaResetDurationMillis)
-        assertEquals(130, spec.digitEnterFadeDurationMillis)
-        assertEquals(120, spec.digitExitFadeDurationMillis)
-        assertEquals(200, spec.digitScaleDurationMillis)
+        assertEquals(220, spec.digitEnterFadeDurationMillis)
+        assertEquals(140, spec.digitExitFadeDurationMillis)
+        assertEquals(0, spec.digitScaleDurationMillis)
+        assertEquals(0.82f, spec.digitSlideSpringDampingRatio)
+        assertEquals(520f, spec.digitSlideSpringStiffness)
         assertEquals(150, spec.orientationHintEnterFadeDurationMillis)
         assertEquals(230, spec.orientationHintEnterTransformDurationMillis)
         assertEquals(200, spec.orientationHintExitDurationMillis)

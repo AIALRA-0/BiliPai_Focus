@@ -9,6 +9,7 @@ internal data class HomeVideoNavigationIntent(
     val bvid: String,
     val cid: Long,
     val coverUrl: String,
+    val isVerticalVideo: Boolean,
     val source: HomeVideoClickSource
 )
 
@@ -27,6 +28,7 @@ internal fun resolveHomeVideoNavigationIntent(
         bvid = normalizedBvid,
         cid = request.cid.takeIf { it > 0L } ?: 0L,
         coverUrl = request.coverUrl,
+        isVerticalVideo = request.isVerticalVideo,
         source = request.source
     )
 }
@@ -40,7 +42,8 @@ internal fun resolveHomeVideoRoute(request: HomeVideoClickRequest): String? {
         encodedCover = encodedCover,
         startAudio = false,
         autoPortrait = true,
-        fullscreen = false
+        fullscreen = false,
+        initialVertical = intent.isVerticalVideo
     )
 }
 

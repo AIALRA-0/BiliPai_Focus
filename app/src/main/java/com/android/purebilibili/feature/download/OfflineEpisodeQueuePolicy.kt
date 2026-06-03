@@ -13,8 +13,7 @@ internal fun resolveOfflineEpisodeQueue(
         .filter { candidate ->
             candidate.isComplete &&
                 candidate.isAudioOnly == currentTask.isAudioOnly &&
-                !candidate.filePath.isNullOrBlank() &&
-                File(candidate.filePath!!).exists() &&
+                candidate.filePath?.let { File(it).exists() } == true &&
                 when {
                     currentGroupKey.isNotBlank() -> candidate.groupKey == currentGroupKey
                     else -> candidate.bvid == currentTask.bvid

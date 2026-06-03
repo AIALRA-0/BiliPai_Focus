@@ -31,7 +31,7 @@ fun LiveSuperChatSection(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(items, key = { "${it.uid}_${it.text}_${it.superChatPrice}" }) { item ->
+        items(items, key = { "${it.superChatId}_${it.uid}_${it.text}_${it.superChatPrice}" }) { item ->
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = palette.surfaceElevated,

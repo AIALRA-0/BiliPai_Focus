@@ -1,7 +1,9 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.data.model.response.SearchType
+import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -90,5 +92,57 @@ class SearchLoadPolicyTest {
         )
 
         assertEquals(listOf("BV1", "BV2", "BV3", "BV4"), merged)
+    }
+
+    @Test
+    fun `search duration selection treats empty and all as all only`() {
+        assertContentEquals(
+            listOf(SearchDuration.ALL),
+            resolveSearchDurationRequests(emptySet())
+        )
+        assertContentEquals(
+            listOf(SearchDuration.ALL),
+            resolveSearchDurationRequests(setOf(SearchDuration.ALL, SearchDuration.UNDER_10MIN))
+        )
+    }
+
+    @Test
+    fun `search duration toggle supports multi selection and all reset`() {
+        val first = toggleSearchDurationSelection(emptySet(), SearchDuration.UNDER_10MIN)
+        val second = toggleSearchDurationSelection(first, SearchDuration.TEN_TO_30MIN)
+        val reset = toggleSearchDurationSelection(second, SearchDuration.ALL)
+
+        assertEquals(setOf(SearchDuration.UNDER_10MIN), first)
+        assertEquals(setOf(SearchDuration.UNDER_10MIN, SearchDuration.TEN_TO_30MIN), second)
+        assertEquals(emptySet(), reset)
+    }
+
+    @Test
+    fun `mergeSearchDurationResultPages dedupes by bvid and combines page state`() {
+        val firstPageInfo = SearchRepository.SearchPageInfo(
+            currentPage = 2,
+            totalPages = 5,
+            totalResults = 20,
+            hasMore = true
+        )
+        val secondPageInfo = SearchRepository.SearchPageInfo(
+            currentPage = 2,
+            totalPages = 3,
+            totalResults = 8,
+            hasMore = false
+        )
+
+        val (videos, pageInfo) = mergeSearchDurationResultPages(
+            listOf(
+                listOf(VideoItem(bvid = "BV1"), VideoItem(bvid = "BV2")) to firstPageInfo,
+                listOf(VideoItem(bvid = "BV2"), VideoItem(bvid = "BV3")) to secondPageInfo
+            )
+        )
+
+        assertEquals(listOf("BV1", "BV2", "BV3"), videos.map { it.bvid })
+        assertEquals(2, pageInfo.currentPage)
+        assertEquals(5, pageInfo.totalPages)
+        assertEquals(28, pageInfo.totalResults)
+        assertTrue(pageInfo.hasMore)
     }
 }

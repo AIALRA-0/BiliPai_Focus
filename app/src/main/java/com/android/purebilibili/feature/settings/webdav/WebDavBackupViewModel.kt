@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.settings.webdav
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -153,5 +155,17 @@ class WebDavBackupViewModel(application: Application) : AndroidViewModel(applica
                 _uiState.value = _uiState.value.copy(isBusy = false)
             }
         }
+    }
+}
+
+internal class WebDavBackupViewModelFactory(
+    private val application: Application
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(WebDavBackupViewModel::class.java)) {
+            return WebDavBackupViewModel(application) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

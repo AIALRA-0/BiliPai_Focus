@@ -16,7 +16,7 @@
     <string name="playback_settings_title">Playback Settings</string>
     <string name="animation_effects_title">Animation &amp; Effects</string>
     <string name="icon_settings_title">App Icon</string>
-    <string name="bottom_bar_management_title">Bottom Bar</string>
+    <string name="bottom_bar_management_title">Navigation</string>
     <string name="permission_management_title">Permissions</string>
     <string name="plugins_center_title">Plugins</string>
     <string name="open_source_licenses_title">Open Source Licenses</string>

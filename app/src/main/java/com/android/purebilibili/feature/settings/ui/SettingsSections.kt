@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
@@ -32,6 +33,9 @@ import com.android.purebilibili.core.ui.rememberAppSparklesIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppWarningIcon
 import com.android.purebilibili.core.ui.rememberAppAnalyticsIcon
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.util.EasterEggs
@@ -75,12 +79,13 @@ import com.android.purebilibili.core.ui.components.IOSDivider as SettingsDivider
 private fun SettingsCardGroup(
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.45f
+    val isDark = AppSurfaceTokens.groupedListContainer().luminance() < 0.45f
     val darkTintBase = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val baseCardContainer = AppSurfaceTokens.cardContainer()
     val containerColor = if (isDark) {
-        darkTintBase.compositeOver(MaterialTheme.colorScheme.surface).copy(alpha = 0.96f)
+        darkTintBase.compositeOver(baseCardContainer)
     } else {
-        MaterialTheme.colorScheme.surface
+        baseCardContainer
     }
     val borderColor = if (isDark) {
         Color.White.copy(alpha = 0.06f)
@@ -90,7 +95,7 @@ private fun SettingsCardGroup(
 
     SettingsGroup(
         containerColor = containerColor,
-        shape = RoundedCornerShape(14.dp),
+        shape = AppShapes.container(ContainerLevel.Dialog),
         border = BorderStroke(0.6.dp, borderColor)
     ) {
         content()
@@ -145,14 +150,12 @@ fun FollowAuthorSection(
 fun GeneralSection(
     onAppearanceClick: () -> Unit,
     onPlaybackClick: () -> Unit,
-    onBottomBarClick: () -> Unit,
-    onFocusClick: () -> Unit
+    onBottomBarClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
     val appearanceVisual = rememberSettingsEntryVisual(SettingsSearchTarget.APPEARANCE, uiPreset)
     val playbackVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLAYBACK, uiPreset)
     val bottomBarVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BOTTOM_BAR, uiPreset)
-    val focusVisual = rememberSettingsEntryVisual(SettingsSearchTarget.FOCUS, uiPreset)
 
     SettingsCardGroup {
         SettingClickableItem(
@@ -176,20 +179,303 @@ fun GeneralSection(
         SettingClickableItem(
             icon = bottomBarVisual.icon,
             iconPainter = bottomBarVisual.iconResId?.let { painterResource(id = it) },
-            title = "底栏设置",
-            value = "自定义底栏和顶部标签",
+            title = "导航设置",
+            value = "底栏、顶部标签、平板侧边栏",
             onClick = onBottomBarClick,
             iconTint = bottomBarVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
-        SettingClickableItem(
-            icon = focusVisual.icon,
-            iconPainter = focusVisual.iconResId?.let { painterResource(id = it) },
-            title = "Focus",
-            value = "专注模式设置",
-            onClick = onFocusClick,
-            iconTint = focusVisual.iconTint
-        )
+    }
+}
+
+internal data class SettingsSceneShortcut(
+    val target: SettingsSearchTarget,
+    val title: String,
+    val value: String,
+    val onClick: () -> Unit
+)
+
+internal data class SettingsRootCategoryActions(
+    val onAppearanceClick: () -> Unit,
+    val onAnimationClick: () -> Unit,
+    val onPlaybackClick: () -> Unit,
+    val onFocusSettingsClick: () -> Unit,
+    val onBottomBarClick: () -> Unit,
+    val onPermissionClick: () -> Unit,
+    val onBlockedListClick: () -> Unit,
+    val onPluginsClick: () -> Unit,
+    val onExportLogsClick: () -> Unit,
+    val onSettingsShareClick: () -> Unit,
+    val onWebDavBackupClick: () -> Unit,
+    val onDownloadPathClick: () -> Unit,
+    val onImageSavePathClick: () -> Unit,
+    val onClearCacheClick: () -> Unit,
+    val onGithubClick: () -> Unit,
+    val onTelegramClick: () -> Unit,
+    val onTwitterClick: () -> Unit,
+    val onDonateClick: () -> Unit,
+    val onDisclaimerClick: () -> Unit,
+    val onLicenseClick: () -> Unit,
+    val onVerificationClick: () -> Unit,
+    val onBuildSourceClick: () -> Unit,
+    val onBuildFingerprintClick: () -> Unit,
+    val onCheckUpdateClick: () -> Unit,
+    val onViewReleaseNotesClick: () -> Unit,
+    val onVersionClick: () -> Unit,
+    val onReplayOnboardingClick: () -> Unit,
+    val onTipsClick: () -> Unit,
+    val onOpenLinksClick: () -> Unit,
+    val onPrivacyModeChange: (Boolean) -> Unit,
+    val onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
+    val onCrashTrackingChange: (Boolean) -> Unit,
+    val onAnalyticsChange: (Boolean) -> Unit,
+    val onEasterEggChange: (Boolean) -> Unit,
+    val onAutoCheckUpdateChange: (Boolean) -> Unit,
+    val onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
+    val onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    val onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
+    val onDynamicTabVisibilityChange: (String) -> Unit,
+    val onHomeRefreshCountChange: (Int) -> Unit
+)
+
+internal data class SettingsRootCategoryState(
+    val privacyModeEnabled: Boolean,
+    val privacyContentAuthenticationEnabled: Boolean,
+    val crashTrackingEnabled: Boolean,
+    val analyticsEnabled: Boolean,
+    val pluginCount: Int,
+    val customDownloadPath: String?,
+    val customImageSavePath: String?,
+    val cacheSize: String,
+    val versionName: String,
+    val easterEggEnabled: Boolean,
+    val updateStatusText: String,
+    val isCheckingUpdate: Boolean,
+    val autoCheckUpdateEnabled: Boolean,
+    val verificationLabel: String,
+    val verificationSubtitle: String,
+    val buildSourceValue: String,
+    val buildSourceSubtitle: String,
+    val buildFingerprintValue: String,
+    val buildFingerprintCopyValue: String,
+    val buildFingerprintSubtitle: String,
+    val versionClickCount: Int,
+    val versionClickThreshold: Int,
+    val feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
+    val incrementalTimelineRefreshEnabled: Boolean,
+    val dynamicImagePreviewTextVisible: Boolean,
+    val dynamicVisibleTabIds: Set<String>,
+    val homeRefreshCount: Int
+)
+
+@Composable
+internal fun SettingsSceneShortcutSection(
+    shortcuts: List<SettingsSceneShortcut>
+) {
+    val uiPreset = LocalUiPreset.current
+    SettingsCardGroup {
+        shortcuts.forEachIndexed { index, shortcut ->
+            val visual = rememberSettingsEntryVisual(shortcut.target, uiPreset)
+            SettingClickableItem(
+                icon = visual.icon,
+                iconPainter = visual.iconResId?.let { painterResource(id = it) },
+                title = shortcut.title,
+                subtitle = shortcut.value,
+                onClick = {
+                    resolveSettingsSceneDetailFocus(shortcut.target)?.let { detailFocus ->
+                        SettingsSearchFocusController.submit(detailFocus.target, detailFocus.focusId)
+                    }
+                    shortcut.onClick()
+                },
+                iconTint = visual.iconTint
+            )
+            if (index != shortcuts.lastIndex) {
+                SettingsDivider(startIndent = 66.dp)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SettingsRootCategoryContent(
+    category: SettingsRootCategory,
+    actions: SettingsRootCategoryActions,
+    state: SettingsRootCategoryState
+) {
+    Column {
+        when (category) {
+            SettingsRootCategory.SOCIAL_SUPPORT -> FollowAuthorSection(
+                onTelegramClick = actions.onTelegramClick,
+                onTwitterClick = actions.onTwitterClick,
+                onDonateClick = actions.onDonateClick
+            )
+            SettingsRootCategory.INTERFACE_THEME -> SettingsSceneShortcutSection(
+                shortcuts = listOf(
+                    SettingsSceneShortcut(
+                        target = SettingsSearchTarget.INTERFACE_THEME,
+                        title = "界面与主题",
+                        value = "UI 预设、主题、字体、DPI、动态图标与开屏",
+                        onClick = actions.onAppearanceClick
+                    ),
+                    SettingsSceneShortcut(
+                        target = SettingsSearchTarget.ANIMATION,
+                        title = "动效与图标",
+                        value = "过渡动画、触感反馈、动态图标与底栏搜索入口",
+                        onClick = actions.onAnimationClick
+                    )
+                )
+            )
+            SettingsRootCategory.HOME_FEED -> {
+                SettingsSceneShortcutSection(
+                    shortcuts = listOf(
+                        SettingsSceneShortcut(
+                            target = SettingsSearchTarget.HOME_FEED,
+                            title = "首页展示与壁纸",
+                            value = "展示样式、首页壁纸效果、推荐流卡片宽度",
+                            onClick = actions.onAppearanceClick
+                        ),
+                        SettingsSceneShortcut(
+                            target = SettingsSearchTarget.HOME_FEED,
+                            title = "Focus 设置",
+                            value = "首页入口、关注过滤、搜索精简、相关推荐与历史清空",
+                            onClick = actions.onFocusSettingsClick
+                        )
+                    )
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                FeedApiSection(
+                    feedApiType = state.feedApiType,
+                    onFeedApiTypeChange = actions.onFeedApiTypeChange,
+                    incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
+                    onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
+                    dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
+                    onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
+                    dynamicVisibleTabIds = state.dynamicVisibleTabIds,
+                    onDynamicTabVisibilityChange = actions.onDynamicTabVisibilityChange,
+                    homeRefreshCount = state.homeRefreshCount,
+                    onHomeRefreshCountChange = actions.onHomeRefreshCountChange
+                )
+            }
+            SettingsRootCategory.NAVIGATION_LABELS -> SettingsSceneShortcutSection(
+                shortcuts = listOf(
+                    SettingsSceneShortcut(
+                        target = SettingsSearchTarget.NAVIGATION,
+                        title = "导航与标签",
+                        value = "底栏、顶部标签、平板侧边栏与底栏项目顺序",
+                        onClick = actions.onBottomBarClick
+                    )
+                )
+            )
+            SettingsRootCategory.PLAYBACK_QUALITY -> SettingsSceneShortcutSection(
+                shortcuts = listOf(
+                    SettingsSceneShortcut(
+                        target = SettingsSearchTarget.PLAYBACK_QUALITY,
+                        title = "播放与画质",
+                        value = "解码、默认画质、自动最高画质、网络、省流量、字幕、倍速与连播",
+                        onClick = actions.onPlaybackClick
+                    )
+                )
+            )
+            SettingsRootCategory.FULLSCREEN_GESTURE -> SettingsSceneShortcutSection(
+                shortcuts = listOf(
+                    SettingsSceneShortcut(
+                        target = SettingsSearchTarget.FULLSCREEN_GESTURE,
+                        title = "全屏与手势",
+                        value = "全屏方向、截图按钮、应用内截图、亮度/音量/进度手势",
+                        onClick = actions.onPlaybackClick
+                    )
+                )
+            )
+            SettingsRootCategory.INTERACTION_COMMENT -> SettingsSceneShortcutSection(
+                shortcuts = listOf(
+                    SettingsSceneShortcut(
+                        target = SettingsSearchTarget.INTERACTION_COMMENT,
+                        title = "互动与评论",
+                        value = "评论发送检测、评论装扮、AI 总结、双击点赞与视频简介",
+                        onClick = actions.onPlaybackClick
+                    )
+                )
+            )
+            SettingsRootCategory.DATA_BACKUP -> DataStorageSection(
+                customDownloadPath = state.customDownloadPath,
+                customImageSavePath = state.customImageSavePath,
+                cacheSize = state.cacheSize,
+                onSettingsShareClick = actions.onSettingsShareClick,
+                onWebDavBackupClick = actions.onWebDavBackupClick,
+                onDownloadPathClick = actions.onDownloadPathClick,
+                onImageSavePathClick = actions.onImageSavePathClick,
+                onClearCacheClick = actions.onClearCacheClick
+            )
+            SettingsRootCategory.PRIVACY_PERMISSION -> PrivacySection(
+                privacyModeEnabled = state.privacyModeEnabled,
+                privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
+                onPrivacyModeChange = actions.onPrivacyModeChange,
+                onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
+                onPermissionClick = actions.onPermissionClick,
+                onBlockedListClick = actions.onBlockedListClick
+            )
+            SettingsRootCategory.DIAGNOSTICS_DEVELOPER -> {
+                SettingsSceneShortcutSection(
+                    shortcuts = listOf(
+                        SettingsSceneShortcut(
+                            target = SettingsSearchTarget.DIAGNOSTICS,
+                            title = "播放器诊断",
+                            value = "诊断日志、详细统计信息、画质降档弹窗与仅提示一次",
+                            onClick = actions.onPlaybackClick
+                        )
+                    )
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                DeveloperSection(
+                    crashTrackingEnabled = state.crashTrackingEnabled,
+                    analyticsEnabled = state.analyticsEnabled,
+                    pluginCount = state.pluginCount,
+                    onCrashTrackingChange = actions.onCrashTrackingChange,
+                    onAnalyticsChange = actions.onAnalyticsChange,
+                    onPluginsClick = actions.onPluginsClick,
+                    onExportLogsClick = actions.onExportLogsClick
+                )
+            }
+            SettingsRootCategory.ABOUT_SUPPORT -> {
+                AboutSection(
+                    versionName = state.versionName,
+                    easterEggEnabled = state.easterEggEnabled,
+                    onLicenseClick = actions.onLicenseClick,
+                    onGithubClick = actions.onGithubClick,
+                    onVerificationClick = actions.onVerificationClick,
+                    onBuildSourceClick = actions.onBuildSourceClick,
+                    onBuildFingerprintClick = actions.onBuildFingerprintClick,
+                    onCheckUpdateClick = actions.onCheckUpdateClick,
+                    onViewReleaseNotesClick = actions.onViewReleaseNotesClick,
+                    autoCheckUpdateEnabled = state.autoCheckUpdateEnabled,
+                    onAutoCheckUpdateChange = actions.onAutoCheckUpdateChange,
+                    onVersionClick = actions.onVersionClick,
+                    onReplayOnboardingClick = actions.onReplayOnboardingClick,
+                    onEasterEggChange = actions.onEasterEggChange,
+                    updateStatusText = state.updateStatusText,
+                    isCheckingUpdate = state.isCheckingUpdate,
+                    verificationLabel = state.verificationLabel,
+                    verificationSubtitle = state.verificationSubtitle,
+                    buildSourceValue = state.buildSourceValue,
+                    buildSourceSubtitle = state.buildSourceSubtitle,
+                    buildFingerprintValue = state.buildFingerprintValue,
+                    buildFingerprintCopyValue = state.buildFingerprintCopyValue,
+                    buildFingerprintSubtitle = state.buildFingerprintSubtitle,
+                    versionClickCount = state.versionClickCount,
+                    versionClickThreshold = state.versionClickThreshold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ReleaseChannelPinnedCard(
+                    onGithubClick = actions.onGithubClick,
+                    onTelegramClick = actions.onTelegramClick,
+                    onDisclaimerClick = actions.onDisclaimerClick
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SupportToolsSection(
+                    onTipsClick = actions.onTipsClick,
+                    onOpenLinksClick = actions.onOpenLinksClick
+                )
+            }
+        }
     }
 }
 
@@ -235,7 +521,7 @@ fun ReleaseChannelPinnedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = AppShapes.container(ContainerLevel.Dialog),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         )
@@ -256,22 +542,52 @@ fun ReleaseChannelPinnedCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "不存在其他官方发布渠道，请注意安装来源安全",
+                        text = "不存在其他官方发布渠道，请注意安装来源安全。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onGithubClick) {
-                    Text("GitHub")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onGithubClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    Text(
+                        text = "GitHub",
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
                 }
-                OutlinedButton(onClick = onTelegramClick) {
-                    Text("Telegram")
+                OutlinedButton(
+                    onClick = onTelegramClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    Text(
+                        text = "Telegram",
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
                 }
-                TextButton(onClick = onDisclaimerClick) {
-                    Text("完整声明")
+                TextButton(
+                    onClick = onDisclaimerClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    Text(
+                        text = "完整声明",
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
                 }
             }
         }
@@ -290,10 +606,10 @@ fun SettingsSubpageEntrySection(
     val privacyTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
     val developerTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSTeal, uiPreset)
     val aboutTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
-    val contentAndStorageIcon = rememberAppCollectionIcon()
-    val privacyIcon = rememberAppLockIcon()
-    val developerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset)
-    val aboutIcon = rememberAppInfoIcon()
+    val contentAndStorageIcon = rememberSettingsSemanticIcon(SettingsIconRole.DATA_BACKUP, uiPreset)
+    val privacyIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_PERMISSION, uiPreset)
+    val developerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DIAGNOSTICS, uiPreset)
+    val aboutIcon = rememberSettingsSemanticIcon(SettingsIconRole.ABOUT_SUPPORT, uiPreset)
     SettingsCardGroup {
         SettingClickableItem(
             icon = contentAndStorageIcon,
@@ -336,6 +652,8 @@ fun FeedApiSection(
     onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    dynamicImagePreviewTextVisible: Boolean,
+    onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
     dynamicVisibleTabIds: Set<String>,
     onDynamicTabVisibilityChange: (String) -> Unit,
     homeRefreshCount: Int,
@@ -344,9 +662,10 @@ fun FeedApiSection(
     val uiPreset = LocalUiPreset.current
     val feedTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
     val incrementalRefreshTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSGreen, uiPreset)
-    val feedIcon = rememberAppDynamicIcon()
-    val refreshIcon = rememberAppRefreshIcon()
-    val visibilityIcon = rememberAppVisibilityOffIcon()
+    val feedIcon = rememberSettingsSemanticIcon(SettingsIconRole.FEED_API, uiPreset)
+    val refreshIcon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_COUNT, uiPreset)
+    val visibilityIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_TAB_VISIBILITY, uiPreset)
+    val previewTextIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_PREVIEW_TEXT, uiPreset)
     SettingsCardGroup {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -392,6 +711,15 @@ fun FeedApiSection(
             iconTint = incrementalRefreshTint
         )
         SettingsDivider(startIndent = 66.dp)
+        FeedSwitchItem(
+            icon = previewTextIcon,
+            title = "动态图片默认显示文字",
+            subtitle = "打开图文动态图片时默认显示下方文字，可用右上角眼睛临时切换",
+            checked = dynamicImagePreviewTextVisible,
+            onCheckedChange = onDynamicImagePreviewTextVisibleChange,
+            iconTint = feedTint
+        )
+        SettingsDivider(startIndent = 66.dp)
         FeedDynamicTabVisibilityItem(
             icon = visibilityIcon,
             visibleTabIds = dynamicVisibleTabIds,
@@ -416,7 +744,8 @@ private fun FeedDynamicTabVisibilityItem(
     iconTint: Color
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset)
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -462,7 +791,7 @@ private fun FeedDynamicTabVisibilityItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(AppShapes.container(ContainerLevel.Card))
                     .clickable(enabled = enabled) { onTabVisibilityChange(tab.id) }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -477,6 +806,7 @@ private fun FeedDynamicTabVisibilityItem(
                     },
                     modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(12.dp))
                 AppAdaptiveSwitch(
                     checked = checked,
                     onCheckedChange = { onTabVisibilityChange(tab.id) },
@@ -500,7 +830,8 @@ private fun FeedSwitchItem(
     iconTint: Color
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset)
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -543,8 +874,7 @@ private fun FeedSwitchItem(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -617,7 +947,9 @@ internal fun resolveHomeRefreshSliderSteps(): Int {
 @Composable
 fun PrivacySection(
     privacyModeEnabled: Boolean,
+    privacyContentAuthenticationEnabled: Boolean,
     onPrivacyModeChange: (Boolean) -> Unit,
+    onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onPermissionClick: () -> Unit,
     onBlockedListClick: () -> Unit // [New]
 ) {
@@ -625,16 +957,29 @@ fun PrivacySection(
     val privacyModeTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
     val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION, uiPreset)
     val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST, uiPreset)
-    val visibilityOffIcon = rememberAppVisibilityOffIcon()
+    val visibilityOffIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_PERMISSION, uiPreset)
+    val contentAuthenticationIcon = rememberSettingsSemanticIcon(
+        SettingsIconRole.PRIVACY_CONTENT_AUTHENTICATION,
+        uiPreset
+    )
 
     SettingsCardGroup {
         SettingSwitchItem(
             icon = visibilityOffIcon,
-            title = "隐私无痕模式",
+            title = "不记录历史",
             subtitle = "启用后不记录播放历史和搜索历史",
             checked = privacyModeEnabled,
             onCheckedChange = onPrivacyModeChange,
             iconTint = privacyModeTint
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingSwitchItem(
+            icon = contentAuthenticationIcon,
+            title = "进入隐私内容时验证",
+            subtitle = "进入收藏、历史等页面时使用指纹、人脸或锁屏密码",
+            checked = privacyContentAuthenticationEnabled,
+            onCheckedChange = onPrivacyContentAuthenticationChange,
+            iconTint = permissionVisual.iconTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -660,16 +1005,19 @@ fun PrivacySection(
 @Composable
 fun DataStorageSection(
     customDownloadPath: String?,
+    customImageSavePath: String?,
     cacheSize: String,
     onSettingsShareClick: () -> Unit,
     onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
+    onImageSavePathClick: () -> Unit,
     onClearCacheClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
     val settingsShareVisual = rememberSettingsEntryVisual(SettingsSearchTarget.SETTINGS_SHARE, uiPreset)
     val webDavVisual = rememberSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP, uiPreset)
     val downloadPathVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DOWNLOAD_PATH, uiPreset)
+    val imageSavePathVisual = rememberSettingsEntryVisual(SettingsSearchTarget.IMAGE_SAVE_PATH, uiPreset)
     val clearCacheVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE, uiPreset)
 
     SettingsCardGroup {
@@ -702,6 +1050,15 @@ fun DataStorageSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
+            icon = imageSavePathVisual.icon,
+            iconPainter = imageSavePathVisual.iconResId?.let { painterResource(id = it) },
+            title = "图片保存位置",
+            value = if (customImageSavePath != null) "已选择目录" else "默认",
+            onClick = onImageSavePathClick,
+            iconTint = imageSavePathVisual.iconTint
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
             icon = clearCacheVisual.icon,
             iconPainter = clearCacheVisual.iconResId?.let { painterResource(id = it) },
             title = "清除缓存",
@@ -727,8 +1084,8 @@ fun DeveloperSection(
     val analyticsTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
     val pluginsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset)
     val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS, uiPreset)
-    val crashTrackingIcon = rememberAppWarningIcon()
-    val analyticsIcon = rememberAppAnalyticsIcon()
+    val crashTrackingIcon = rememberSettingsSemanticIcon(SettingsIconRole.CRASH_TRACKING, uiPreset)
+    val analyticsIcon = rememberSettingsSemanticIcon(SettingsIconRole.ANALYTICS, uiPreset)
 
     SettingsCardGroup {
         SettingSwitchItem(
@@ -743,7 +1100,7 @@ fun DeveloperSection(
         SettingSwitchItem(
             icon = analyticsIcon,
             title = "使用情况统计",
-            subtitle = "默认关闭，开启后用于匿名统计功能使用情况",
+            subtitle = "默认开启，开启后用于匿名统计每日活跃与基础使用情况",
             checked = analyticsEnabled,
             onCheckedChange = onAnalyticsChange,
             iconTint = analyticsTint
@@ -773,7 +1130,6 @@ fun DeveloperSection(
 fun AboutSection(
     versionName: String,
     easterEggEnabled: Boolean,
-    onDisclaimerClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onGithubClick: () -> Unit,
     onVerificationClick: () -> Unit,
@@ -802,18 +1158,17 @@ fun AboutSection(
     val uiPreset = LocalUiPreset.current
     val autoCheckTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
     val easterEggTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSYellow, uiPreset)
-    val disclaimerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DISCLAIMER, uiPreset)
     val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES, uiPreset)
     val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME, uiPreset)
     val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE, uiPreset)
     val releaseNotesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.VIEW_RELEASE_NOTES, uiPreset)
     val replayOnboardingVisual = rememberSettingsEntryVisual(SettingsSearchTarget.REPLAY_ONBOARDING, uiPreset)
-    val notificationIcon = rememberAppNotificationIcon()
-    val infoIcon = rememberAppInfoIcon()
-    val sparklesIcon = rememberAppSparklesIcon()
-    val verificationIcon = rememberAppWarningIcon()
-    val buildSourceIcon = CupertinoIcons.Default.Tag
-    val buildFingerprintIcon = rememberAppLockIcon()
+    val notificationIcon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_CHECK_UPDATE, uiPreset)
+    val infoIcon = rememberSettingsSemanticIcon(SettingsIconRole.ABOUT_SUPPORT, uiPreset)
+    val sparklesIcon = rememberSettingsSemanticIcon(SettingsIconRole.EASTER_EGG, uiPreset)
+    val verificationIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_VERIFICATION, uiPreset)
+    val buildSourceIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_SOURCE, uiPreset)
+    val buildFingerprintIcon = rememberSettingsSemanticIcon(SettingsIconRole.BUILD_FINGERPRINT, uiPreset)
 
     val safeThreshold = versionClickThreshold.coerceAtLeast(1)
     val normalizedClickCount = versionClickCount.coerceAtLeast(0)
@@ -889,15 +1244,6 @@ fun AboutSection(
     }
 
     SettingsCardGroup {
-        SettingClickableItem(
-            icon = disclaimerVisual.icon,
-            iconPainter = disclaimerVisual.iconResId?.let { painterResource(id = it) },
-            title = "发布渠道声明",
-            value = "仅 GitHub / Telegram",
-            onClick = onDisclaimerClick,
-            iconTint = disclaimerVisual.iconTint
-        )
-        SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
             icon = licensesVisual.icon,
             iconPainter = licensesVisual.iconResId?.let { painterResource(id = it) },
@@ -1022,4 +1368,3 @@ fun AboutSection(
         )
     }
 }
-

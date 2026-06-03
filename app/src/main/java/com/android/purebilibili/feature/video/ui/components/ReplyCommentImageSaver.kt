@@ -9,6 +9,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Build
 import android.provider.MediaStore
+import com.android.purebilibili.feature.dynamic.components.resolveDefaultImageMediaStoreRelativePath
+import com.android.purebilibili.feature.dynamic.components.saveBitmapToCustomImageSaveDirectory
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
@@ -184,11 +186,23 @@ private fun savePngBitmapToGallery(
     fileName: String
 ): Boolean {
     val resolver = context.contentResolver
+    if (
+        saveBitmapToCustomImageSaveDirectory(
+            context = context,
+            bitmap = bitmap,
+            fileName = fileName,
+            format = Bitmap.CompressFormat.PNG,
+            quality = 100,
+            mimeType = "image/png"
+        )
+    ) {
+        return true
+    }
     val values = ContentValues().apply {
         put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
         put(MediaStore.Images.Media.MIME_TYPE, "image/png")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/BiliPai")
+            put(MediaStore.Images.Media.RELATIVE_PATH, resolveDefaultImageMediaStoreRelativePath())
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
     }

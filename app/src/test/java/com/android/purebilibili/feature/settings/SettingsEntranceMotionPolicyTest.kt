@@ -7,15 +7,6 @@ import kotlin.test.assertEquals
 class SettingsEntranceMotionPolicyTest {
 
     @Test
-    fun settingsEntranceMotion_keepsBaseTierWhenHomeCardEntranceDisabled() {
-        val tier = resolveSettingsEntranceMotionTier(
-            baseTier = MotionTier.Enhanced
-        )
-
-        assertEquals(MotionTier.Enhanced, tier)
-    }
-
-    @Test
     fun animationSettingsCardMotion_stillReflectsDisabledHomeCardEntrance() {
         val tier = resolveAnimationSettingsCardMotionTier(
             baseTier = MotionTier.Enhanced,

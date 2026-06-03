@@ -116,6 +116,68 @@ data class SessionSystemMsg(
     val msg_count: Int = 0
 )
 
+@Serializable
+data class SessionDetailResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: SessionItem? = null
+)
+
+@Serializable
+data class MessageSessionLimitResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageSessionLimitData? = null
+)
+
+@Serializable
+data class MessageSessionLimitData(
+    val is_limit: Int = 0,
+    val report_limit: Int = 0
+)
+
+@Serializable
+data class MessageDndResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageDndData? = null
+)
+
+@Serializable
+data class MessageDndData(
+    val uid_settings: List<MessageDndSetting> = emptyList(),
+    val group_settings: List<MessageDndSetting> = emptyList()
+)
+
+@Serializable
+data class MessageDndSetting(
+    val id: Long = 0,
+    val setting: Int = 0
+)
+
+@Serializable
+data class MessageSessionPushResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val msg: String = "",
+    val ttl: Int = 1,
+    val data: MessageSessionPushData? = null
+)
+
+@Serializable
+data class MessageSessionPushData(
+    val follow_status: Int = 0,
+    val special: Int = 0,
+    val push_setting: Int = 0,
+    val show_push_setting: Int = 0
+)
+
 // ==================== 私信消息记录 ====================
 
 @Serializable
@@ -260,6 +322,18 @@ data class MessageFeedReplyItem(
 
 @Serializable
 data class MessageFeedReplyContent(
+    @SerialName("subject_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val subjectId: Long = 0,
+    @SerialName("root_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val rootId: Long = 0,
+    @SerialName("source_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val sourceId: Long = 0,
+    @SerialName("target_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val targetId: Long = 0,
     val business: String = "",
     @SerialName("business_id")
     val businessId: Int = 0,
@@ -370,6 +444,18 @@ data class MessageFeedLikeItem(
 
 @Serializable
 data class MessageFeedLikeContent(
+    @SerialName("subject_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val subjectId: Long = 0,
+    @SerialName("root_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val rootId: Long = 0,
+    @SerialName("source_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val sourceId: Long = 0,
+    @SerialName("target_id")
+    @Serializable(with = FlexibleLongSerializer::class)
+    val targetId: Long = 0,
     val business: String = "",
     @SerialName("business_id")
     val businessId: Int = 0,

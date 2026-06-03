@@ -70,4 +70,42 @@ class AudioModeCoverLayoutPolicyTest {
             )
         )
     }
+
+    @Test
+    fun verticalPageTransformTiltsAroundHorizontalAxis() {
+        val style = resolveAudioModeCoverArtworkStyle()
+
+        assertEquals(
+            AudioModeVerticalPageTransform(
+                rotationXDegrees = 9f,
+                translationYDp = -17f,
+                scale = 1f,
+                alpha = 0.86f,
+                pivotFractionY = 0f
+            ),
+            resolveAudioModeVerticalPageTransform(
+                pageOffset = 0.5f,
+                style = style
+            )
+        )
+    }
+
+    @Test
+    fun verticalPageTransformClampsFarPages() {
+        val style = resolveAudioModeCoverArtworkStyle()
+
+        assertEquals(
+            AudioModeVerticalPageTransform(
+                rotationXDegrees = -18f,
+                translationYDp = 34f,
+                scale = 1f,
+                alpha = 0.72f,
+                pivotFractionY = 1f
+            ),
+            resolveAudioModeVerticalPageTransform(
+                pageOffset = -2f,
+                style = style
+            )
+        )
+    }
 }

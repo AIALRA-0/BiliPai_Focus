@@ -282,6 +282,28 @@ internal fun resolveDisplayedSpaceContributionTabs(
     return tabs.filterNot { it.subTab == SpaceSubTab.AUDIO && totalAudios <= 0 }
 }
 
+internal fun ensureSpaceContributionTabsForAvailableContent(
+    tabs: List<SpaceContributionTab>,
+    hasArticles: Boolean
+): List<SpaceContributionTab> {
+    val result = tabs.toMutableList()
+    val defaults = buildDefaultSpaceContributionTabs()
+
+    fun addDefaultIfMissing(
+        shouldAdd: Boolean,
+        matches: (SpaceContributionTab) -> Boolean
+    ) {
+        if (!shouldAdd || result.any(matches)) return
+        defaults.firstOrNull(matches)?.let { result += it }
+    }
+
+    addDefaultIfMissing(hasArticles) {
+        it.subTab == SpaceSubTab.ARTICLE || it.subTab == SpaceSubTab.OPUS
+    }
+
+    return result.distinctBy { it.id }
+}
+
 internal fun createSpaceContributionTabId(
     param: String,
     seasonId: Long = 0,

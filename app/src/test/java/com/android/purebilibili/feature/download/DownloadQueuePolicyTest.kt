@@ -24,6 +24,30 @@ class DownloadQueuePolicyTest {
         assertEquals(older.id, resolveNextQueuedDownloadTaskId(listOf(newer, older)))
     }
 
+    @Test
+    fun workerCancellationFinishesOnlyForUserStableStates() {
+        assertEquals(
+            DownloadWorkerCancellationDecision.FINISH,
+            resolveDownloadWorkerCancellationDecision(null)
+        )
+        assertEquals(
+            DownloadWorkerCancellationDecision.FINISH,
+            resolveDownloadWorkerCancellationDecision(DownloadStatus.PAUSED)
+        )
+        assertEquals(
+            DownloadWorkerCancellationDecision.FINISH,
+            resolveDownloadWorkerCancellationDecision(DownloadStatus.COMPLETED)
+        )
+        assertEquals(
+            DownloadWorkerCancellationDecision.RETRY,
+            resolveDownloadWorkerCancellationDecision(DownloadStatus.DOWNLOADING)
+        )
+        assertEquals(
+            DownloadWorkerCancellationDecision.RETRY,
+            resolveDownloadWorkerCancellationDecision(DownloadStatus.PENDING)
+        )
+    }
+
     private val baseTask = DownloadTask(
         bvid = "BV1queue",
         cid = 1L,

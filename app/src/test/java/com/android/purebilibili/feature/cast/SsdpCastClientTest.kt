@@ -74,6 +74,107 @@ class SsdpCastClientTest {
     }
 
     @Test
+    fun `parseDeviceProfile returns null for blank XML`() {
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = "   ",
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+        assertNull(profile)
+    }
+
+    @Test
+    fun `parseDeviceProfile returns null for empty string`() {
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = "",
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+        assertNull(profile)
+    }
+
+    @Test
+    fun `parseDeviceProfile returns null for non-xml garbage`() {
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = "{not xml at all}",
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+        assertNull(profile)
+    }
+
+    @Test
+    fun `parseDeviceProfile accepts DOCTYPE with AVTransport`() {
+        val descriptionXml = """
+            <?xml version="1.0"?>
+            <!DOCTYPE root [
+              <!ENTITY myentity "myvalue">
+            ]>
+            <root xmlns="urn:schemas-upnp-org:device-1-0">
+              <device>
+                <friendlyName>TV with DOCTYPE</friendlyName>
+                <modelName>Model X</modelName>
+                <serviceList>
+                  <service>
+                    <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+                    <controlURL>/ctl</controlURL>
+                  </service>
+                </serviceList>
+              </device>
+            </root>
+        """.trimIndent()
+
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = descriptionXml,
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+
+        assertNotNull(profile)
+        assertEquals("TV with DOCTYPE", profile?.friendlyName)
+        assertEquals("Model X", profile?.modelName)
+        assertEquals(
+            "http://192.168.31.8:8899/ctl",
+            profile?.avTransportEndpoint?.controlUrl
+        )
+    }
+
+    @Test
+    fun `parseDeviceProfile returns null for invalid XML even with DOCTYPE handling`() {
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = "<root><unclosed>",
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+        assertNull(profile)
+    }
+
+    @Test
+    fun `parseDeviceProfile with DOCTYPE and no AVTransport returns null endpoint`() {
+        val descriptionXml = """
+            <?xml version="1.0"?>
+            <!DOCTYPE root [
+              <!ENTITY foo "bar">
+            ]>
+            <root xmlns="urn:schemas-upnp-org:device-1-0">
+              <device>
+                <friendlyName>Non AV Device</friendlyName>
+                <serviceList>
+                  <service>
+                    <serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>
+                    <controlURL>/rc/ctl</controlURL>
+                  </service>
+                </serviceList>
+              </device>
+            </root>
+        """.trimIndent()
+
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = descriptionXml,
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+
+        assertNotNull(profile)
+        assertEquals("Non AV Device", profile?.friendlyName)
+        assertNull(profile?.avTransportEndpoint)
+    }
+
+    @Test
     fun `parseDeviceProfile extracts friendly name and avtransport endpoint`() {
         val descriptionXml = """
             <?xml version="1.0"?>

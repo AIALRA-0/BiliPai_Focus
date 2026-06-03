@@ -7,17 +7,33 @@ import kotlin.test.assertNull
 class VideoPlayerSeekGesturePolicyTest {
 
     @Test
-    fun `fullscreen uses fixed step when setting enabled`() {
+    fun `fullscreen fixed setting uses precise proportional range`() {
         val delta = resolveHorizontalSeekDeltaMs(
             isFullscreen = true,
             fullscreenSwipeSeekEnabled = true,
-            totalDragDistanceX = 110f,
+            totalDragDistanceX = 240f,
             containerWidthPx = 800f,
-            fullscreenSwipeSeekSeconds = 15,
+            fullscreenSwipeSeekSeconds = 10,
+            inlineSwipeSeekSeconds = 30,
             gestureSensitivity = 1f
         )
 
-        assertEquals(15_000L, delta)
+        assertEquals(3_000L, delta)
+    }
+
+    @Test
+    fun `fullscreen precise range caps long drags at selected maximum`() {
+        val delta = resolveHorizontalSeekDeltaMs(
+            isFullscreen = true,
+            fullscreenSwipeSeekEnabled = true,
+            totalDragDistanceX = 1200f,
+            containerWidthPx = 800f,
+            fullscreenSwipeSeekSeconds = 10,
+            inlineSwipeSeekSeconds = 30,
+            gestureSensitivity = 1f
+        )
+
+        assertEquals(10_000L, delta)
     }
 
     @Test
@@ -28,6 +44,7 @@ class VideoPlayerSeekGesturePolicyTest {
             totalDragDistanceX = 110f,
             containerWidthPx = 800f,
             fullscreenSwipeSeekSeconds = 15,
+            inlineSwipeSeekSeconds = 30,
             gestureSensitivity = 1f
         )
 
@@ -35,31 +52,48 @@ class VideoPlayerSeekGesturePolicyTest {
     }
 
     @Test
-    fun `portrait always uses linear seek regardless of fullscreen setting`() {
+    fun `portrait uses configurable precise seek range regardless of fullscreen setting`() {
         val delta = resolveHorizontalSeekDeltaMs(
             isFullscreen = false,
             fullscreenSwipeSeekEnabled = true,
             totalDragDistanceX = 50f,
             containerWidthPx = 800f,
             fullscreenSwipeSeekSeconds = 30,
+            inlineSwipeSeekSeconds = 30,
             gestureSensitivity = 1.2f
         )
 
-        assertEquals(12_000L, delta)
+        assertEquals(2_250L, delta)
     }
 
     @Test
-    fun `fullscreen uses linear fallback when drag is below one step`() {
+    fun `portrait precise seek range caps long drags`() {
+        val delta = resolveHorizontalSeekDeltaMs(
+            isFullscreen = false,
+            fullscreenSwipeSeekEnabled = true,
+            totalDragDistanceX = 1200f,
+            containerWidthPx = 800f,
+            fullscreenSwipeSeekSeconds = 30,
+            inlineSwipeSeekSeconds = 15,
+            gestureSensitivity = 2f
+        )
+
+        assertEquals(15_000L, delta)
+    }
+
+    @Test
+    fun `fullscreen precise range keeps very small drags below commit threshold`() {
         val delta = resolveHorizontalSeekDeltaMs(
             isFullscreen = true,
             fullscreenSwipeSeekEnabled = true,
             totalDragDistanceX = 20f,
             containerWidthPx = 800f,
-            fullscreenSwipeSeekSeconds = 15,
+            fullscreenSwipeSeekSeconds = 10,
+            inlineSwipeSeekSeconds = 30,
             gestureSensitivity = 1f
         )
 
-        assertEquals(4_000L, delta)
+        assertEquals(250L, delta)
     }
 
     @Test
@@ -70,6 +104,7 @@ class VideoPlayerSeekGesturePolicyTest {
             totalDragDistanceX = 110f,
             containerWidthPx = 800f,
             fullscreenSwipeSeekSeconds = null,
+            inlineSwipeSeekSeconds = 30,
             gestureSensitivity = 1f
         )
 
@@ -82,14 +117,14 @@ class VideoPlayerSeekGesturePolicyTest {
             false,
             shouldCommitGestureSeek(
                 currentPositionMs = 100_000L,
-                targetPositionMs = 100_150L
+                targetPositionMs = 100_500L
             )
         )
         assertEquals(
             true,
             shouldCommitGestureSeek(
                 currentPositionMs = 100_000L,
-                targetPositionMs = 101_000L
+                targetPositionMs = 102_000L
             )
         )
     }

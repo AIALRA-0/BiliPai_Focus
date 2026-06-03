@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.rememberAppClearIcon
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 
@@ -47,6 +48,7 @@ fun CommentInputBar(
     onEmoteClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val clearIcon = rememberAppClearIcon()
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     
@@ -71,7 +73,7 @@ fun CommentInputBar(
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Icon(
-                    imageVector = CupertinoIcons.Default.Xmark,
+                    imageVector = clearIcon,
                     contentDescription = "取消回复",
                     modifier = Modifier
                         .size(16.dp)

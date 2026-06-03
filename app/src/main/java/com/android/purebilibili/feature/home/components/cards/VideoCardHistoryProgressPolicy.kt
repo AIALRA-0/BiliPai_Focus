@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.feature.list.VideoProgressDisplayState
 import com.android.purebilibili.feature.list.resolveVideoDisplayProgressState
 
@@ -41,3 +42,7 @@ internal fun resolveVideoCardHistoryProgressFraction(
         progressSec = progressSec
     ).progressFraction
 }
+
+internal fun resolveVideoCardHistoryProgressBarColor(
+    themePrimary: Color
+): Color = themePrimary

@@ -6,7 +6,11 @@ import com.android.purebilibili.data.model.response.DynamicBasic
 import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicMajor
+import com.android.purebilibili.data.model.response.DynamicMoreModule
 import com.android.purebilibili.data.model.response.DynamicModules
+import com.android.purebilibili.data.model.response.DynamicThreePointItem
+import com.android.purebilibili.data.model.response.DynamicThreePointModal
+import com.android.purebilibili.data.model.response.DynamicThreePointParams
 import com.android.purebilibili.data.model.response.LiveRcmdMajor
 import com.android.purebilibili.data.model.response.OpusMajor
 import com.android.purebilibili.data.model.response.UgcSeasonMajor
@@ -60,6 +64,48 @@ class DynamicInteractionPolicyTest {
         val target = resolveDynamicCommentTarget(item)
 
         assertEquals(DynamicCommentTarget(oid = 1129813966L, type = 1), target)
+    }
+
+    @Test
+    fun `resolve dynamic delete action uses three point params`() {
+        val item = DynamicItem(
+            id_str = "fallback-id",
+            modules = DynamicModules(
+                module_more = DynamicMoreModule(
+                    three_point_items = listOf(
+                        DynamicThreePointItem(
+                            label = "删除",
+                            type = "THREE_POINT_DELETE",
+                            modal = DynamicThreePointModal(
+                                cancel = "取消",
+                                confirm = "确认删除",
+                                content = "动态删除后将无法恢复，请谨慎操作",
+                                title = "要删除动态吗？"
+                            ),
+                            params = DynamicThreePointParams(
+                                dyn_id_str = "1063487284684259332",
+                                dyn_type = 1,
+                                rid_str = "1063487284684259332"
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val action = resolveDynamicDeleteAction(item)
+
+        assertEquals("1063487284684259332", action?.dynamicId)
+        assertEquals(1, action?.dynType)
+        assertEquals("1063487284684259332", action?.rid)
+        assertEquals("确认删除", action?.confirmText)
+    }
+
+    @Test
+    fun `resolve dynamic delete action hidden when server menu is absent`() {
+        val item = DynamicItem(id_str = "1063487284684259332")
+
+        assertEquals(null, resolveDynamicDeleteAction(item))
     }
 
     @Test

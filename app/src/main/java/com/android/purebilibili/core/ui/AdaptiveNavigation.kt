@@ -1,6 +1,7 @@
 // 文件路径: core/ui/AdaptiveNavigation.kt
 package com.android.purebilibili.core.ui
 
+import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -14,10 +15,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.WindowWidthSizeClass
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
@@ -116,6 +118,8 @@ fun AdaptiveSideNavigationRail(
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+    val activeHazeState = hazeState
+        ?.takeIf { shouldAllowRuntimeShaderBackedHazeEffect(Build.VERSION.SDK_INT) }
     
     // Expanded 模式使用带标签的 NavigationDrawer，Medium 模式使用纯图标的 Rail
     NavigationRail(
@@ -123,14 +127,14 @@ fun AdaptiveSideNavigationRail(
             .fillMaxHeight()
             .width(if (isExpanded) 80.dp else 72.dp)
             .then(
-                if (hazeState != null) {
-                    Modifier.hazeChild(
-                        state = hazeState,
+                if (activeHazeState != null) {
+                    Modifier.hazeEffect(
+                        state = activeHazeState,
                         style = HazeMaterials.ultraThin()
                     )
                 } else Modifier
             ),
-        containerColor = if (hazeState != null) {
+        containerColor = if (activeHazeState != null) {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
         } else {
             MaterialTheme.colorScheme.surface
@@ -183,18 +187,20 @@ private fun AdaptiveBottomNavigationBar(
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
+    val activeHazeState = hazeState
+        ?.takeIf { shouldAllowRuntimeShaderBackedHazeEffect(Build.VERSION.SDK_INT) }
     NavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (hazeState != null) {
-                    Modifier.hazeChild(
-                        state = hazeState,
+                if (activeHazeState != null) {
+                    Modifier.hazeEffect(
+                        state = activeHazeState,
                         style = HazeMaterials.ultraThin()
                     )
                 } else Modifier
             ),
-        containerColor = if (hazeState != null) {
+        containerColor = if (activeHazeState != null) {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
         } else {
             MaterialTheme.colorScheme.surface

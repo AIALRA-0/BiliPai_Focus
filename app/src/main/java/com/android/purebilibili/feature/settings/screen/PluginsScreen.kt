@@ -2,6 +2,8 @@
 package com.android.purebilibili.feature.settings
 
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -21,13 +23,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.R
+import com.android.purebilibili.core.plugin.ExternalPluginInstallDecision
+import com.android.purebilibili.core.plugin.evaluateExternalPluginInstall
+import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginInstallStore
+import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginPackagePreview
+import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.plugin.skin.UiSkinImportPackageResolver
+import com.android.purebilibili.core.plugin.skin.InstalledUiSkinPackage
+import com.android.purebilibili.core.plugin.skin.UiSkinInstallStore
+import com.android.purebilibili.core.plugin.skin.UiSkinPackagePreview
+import com.android.purebilibili.core.plugin.skin.UiSkinSelection
+import com.android.purebilibili.core.plugin.skin.UiSkinSettingsStore
+import com.android.purebilibili.core.plugin.skin.rememberUiSkinState
 import com.android.purebilibili.core.plugin.PluginInfo
 import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.plugin.json.JsonPluginStatsNotificationConfig
+import com.android.purebilibili.core.plugin.json.persistJsonPluginStatsNotificationConfig
+import com.android.purebilibili.core.plugin.json.postJsonPluginStatsTestNotification
+import com.android.purebilibili.core.plugin.json.readJsonPluginStatsNotificationConfig
+import com.android.purebilibili.core.plugin.json.scheduleJsonPluginStatsSummary
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.iOSPink  // 插件图标色
 import com.android.purebilibili.core.theme.iOSBlue
@@ -42,8 +63,15 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.rememberNotificationPermissionState
 import com.android.purebilibili.feature.plugin.SPONSOR_BLOCK_PLUGIN_ID
+import com.android.purebilibili.feature.settings.buildUiSkinImagePreviewItems
+import com.android.purebilibili.feature.settings.buildUiSkinPackagePreview
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 internal suspend fun dispatchBuiltInPluginToggle(
     pluginId: String,
@@ -58,6 +86,27 @@ internal suspend fun dispatchBuiltInPluginToggle(
     }
 }
 
+internal fun downloadUiSkinRemotePackage(url: String): ByteArray {
+    val request = Request.Builder()
+        .url(url)
+        .header("User-Agent", "BiliPai")
+        .build()
+    NetworkModule.okHttpClient.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+            throw IllegalArgumentException("皮肤资源下载失败: HTTP ${response.code}")
+        }
+        return response.body.bytes()
+    }
+}
+
+internal fun resolveUiSkinImportErrorMessage(rawMessage: String?): String {
+    val message = rawMessage?.takeIf { it.isNotBlank() } ?: return "皮肤包导入失败"
+    if (message.contains("装扮存档解压后内容超过 33554432 字节")) {
+        return "装扮存档资源较大，已放宽导入限制；请重新选择该装扮包导入"
+    }
+    return message
+}
+
 /**
  *  插件中心页面
  * 
@@ -70,8 +119,8 @@ fun PluginsScreen(
     initialImportUrl: String? = null
 ) {
     // Top-level state for managing plugins and editing
-    val plugins by PluginManager.pluginsFlow.collectAsState()
-    val jsonPlugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsState()
+    val plugins by PluginManager.pluginsFlow.collectAsStateWithLifecycle()
+    val jsonPlugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val screenTitle = stringResource(R.string.plugins_center_title)
     val backLabel = stringResource(R.string.common_back)
@@ -142,6 +191,23 @@ fun PluginsContent(
     
     // Local UI states
     var expandedPluginId by remember { mutableStateOf<String?>(null) }
+    var jsonStatsNotificationEnabled by remember(context) {
+        mutableStateOf(readJsonPluginStatsNotificationConfig(context).enabled)
+    }
+    fun showToast(message: String) {
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+    fun sendJsonStatsTestNotification() {
+        val posted = postJsonPluginStatsTestNotification(context)
+        showToast(if (posted) "测试通知已发送" else "系统通知未开启")
+    }
+    val notificationPermission = rememberNotificationPermissionState { granted ->
+        if (granted) {
+            sendJsonStatsTestNotification()
+        } else {
+            showToast("通知权限未开启")
+        }
+    }
     
     //  导入插件对话框状态
     var showImportDialog by remember { mutableStateOf(false) }
@@ -153,12 +219,99 @@ fun PluginsContent(
     var previewPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
     var previewSourceUrl by remember { mutableStateOf<String?>(null) }
     var initialImportConsumed by remember(initialImportUrl) { mutableStateOf(false) }
+    val kotlinPluginStore = remember(context) {
+        ExternalKotlinPluginInstallStore.createDefault(context)
+    }
+    var installedKotlinPackages by remember {
+        mutableStateOf(kotlinPluginStore.listInstalledPackages())
+    }
+    var kotlinPreview by remember {
+        mutableStateOf<Pair<ExternalKotlinPluginPackagePreview, ExternalPluginInstallDecision>?>(null)
+    }
+    var kotlinPackageBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var kotlinImportError by remember { mutableStateOf<String?>(null) }
+    var isKotlinPackageLoading by remember { mutableStateOf(false) }
+    val uiSkinStore = remember(context) {
+        UiSkinInstallStore.createDefault(context)
+    }
+    val uiSkinState by rememberUiSkinState(context)
+    var installedUiSkins by remember {
+        mutableStateOf(uiSkinStore.listInstalledPackages())
+    }
+    var uiSkinPreview by remember { mutableStateOf<UiSkinPackagePreview?>(null) }
+    var uiSkinPackageBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var uiSkinPreviewAssetFiles by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var uiSkinInstalledPreview by remember { mutableStateOf<InstalledUiSkinPackage?>(null) }
+    var uiSkinPendingDelete by remember { mutableStateOf<InstalledUiSkinPackage?>(null) }
+    var uiSkinImportError by remember { mutableStateOf<String?>(null) }
+    var isUiSkinPackageLoading by remember { mutableStateOf(false) }
+    val uiSkinPackagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        isUiSkinPackageLoading = true
+        uiSkinImportError = null
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IllegalArgumentException("无法读取皮肤包")
+                    val importPackage = UiSkinImportPackageResolver.resolve(
+                        inputBytes = bytes,
+                        remotePackageFetcher = ::downloadUiSkinRemotePackage
+                    ).getOrThrow()
+                    val preview = uiSkinStore.previewPackage(importPackage.packageBytes).getOrThrow()
+                    val previewAssetFiles = uiSkinStore.extractPreviewAssetFiles(
+                        preview = preview,
+                        packageBytes = importPackage.packageBytes
+                    ).getOrThrow()
+                    Triple(preview, importPackage.packageBytes, previewAssetFiles)
+                }
+            }
+            isUiSkinPackageLoading = false
+            result.onSuccess { (preview, bytes, previewAssetFiles) ->
+                uiSkinPreview = preview
+                uiSkinPackageBytes = bytes
+                uiSkinPreviewAssetFiles = previewAssetFiles
+            }.onFailure { error ->
+                uiSkinImportError = resolveUiSkinImportErrorMessage(error.message)
+            }
+        }
+    }
     
     //  测试对话框状态
     var testingPluginId by remember { mutableStateOf<String?>(null) }
     var testResult by remember { mutableStateOf<Triple<Int, Int, List<com.android.purebilibili.data.model.response.VideoItem>>?>(null) }
     var testingSampleVideos by remember { mutableStateOf<List<com.android.purebilibili.data.model.response.VideoItem>>(emptyList()) }
     val importTint = rememberAdaptiveSemanticIconTint(iOSBlue)
+    val kotlinPackagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        isKotlinPackageLoading = true
+        kotlinImportError = null
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IllegalArgumentException("无法读取插件包")
+                    val preview = kotlinPluginStore.previewPackage(bytes).getOrThrow()
+                    val decision = evaluateExternalPluginInstall(
+                        packageDescriptor = preview.descriptor,
+                        trustedSignerSha256 = emptySet()
+                    )
+                    bytes to (preview to decision)
+                }
+            }
+            isKotlinPackageLoading = false
+            result.onSuccess { (bytes, previewAndDecision) ->
+                kotlinPackageBytes = bytes
+                kotlinPreview = previewAndDecision
+            }.onFailure { error ->
+                kotlinImportError = error.message ?: "预览失败"
+            }
+        }
+    }
 
     fun validateImportUrlOrError(raw: String): String? {
         val normalized = raw.trim()
@@ -329,7 +482,7 @@ fun PluginsContent(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "通过链接安装 JSON 规则插件",
+                                text = "通过链接安装 JSON 规则插件，安装前预览能力",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -343,12 +496,284 @@ fun PluginsContent(
                     }
                 }
             }
+
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(enabled = !isKotlinPackageLoading) {
+                            kotlinPackagePicker.launch("*/*")
+                        },
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                    tonalElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Filled.Shield,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "开放 Kotlin 插件包",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isKotlinPackageLoading) {
+                                    "正在读取 .bpplugin..."
+                                } else {
+                                    "选择 .bpplugin，展示 SHA-256、签名状态和敏感能力"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                        ) {
+                            Text(
+                                text = "预览",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (kotlinImportError != null) {
+                item {
+                    Text(
+                        text = kotlinImportError ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
+            if (installedKotlinPackages.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp
+                    ) {
+                        Column {
+                            buildInstalledExternalPluginUiModels(installedKotlinPackages)
+                                .forEachIndexed { index, installed ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = installed.title,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${installed.subtitle} · ${installed.stateText}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = installed.packageHashText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (index < installedKotlinPackages.lastIndex) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(0.5.dp)
+                                                .padding(start = 16.dp)
+                                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        )
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "界面皮肤",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 32.dp, bottom = 8.dp)
+                )
+            }
+
+            item {
+                Surface(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(enabled = !isUiSkinPackageLoading) {
+                            uiSkinPackagePicker.launch("*/*")
+                        },
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                    tonalElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Filled.Paintbrush,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "导入界面皮肤包",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isUiSkinPackageLoading) {
+                                    "正在读取 .bpskin..."
+                                } else {
+                                    "选择 .bpskin、主题目录 ZIP 或装扮 _package.zip，只保存资源和启用记录"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                        ) {
+                            Text(
+                                text = "资源包",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (uiSkinImportError != null) {
+                item {
+                    Text(
+                        text = uiSkinImportError ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
+            if (installedUiSkins.isNotEmpty()) {
+                item {
+                    Surface(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp
+                    ) {
+                        Column {
+                            installedUiSkins.forEachIndexed { index, skin ->
+                                val isActive = uiSkinState.enabled &&
+                                    uiSkinState.activeSkin?.installId == skin.installId
+                                InstalledUiSkinItem(
+                                    skin = skin,
+                                    isActive = isActive,
+                                    onToggle = { enabled ->
+                                        UiSkinSettingsStore.setSelection(
+                                            context = context,
+                                            selection = UiSkinSelection(
+                                                enabled = enabled,
+                                                selectedSkinId = if (enabled) skin.skinId else null,
+                                                selectedInstallId = if (enabled) skin.installId else null
+                                            )
+                                        )
+                                    },
+                                    onPreview = { uiSkinInstalledPreview = skin },
+                                    onDelete = { uiSkinPendingDelete = skin }
+                                )
+                                if (index < installedUiSkins.lastIndex) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(0.5.dp)
+                                            .padding(start = 16.dp)
+                                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
             //  已安装的 JSON 插件列表
             if (jsonPlugins.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
-                    val filterStats by com.android.purebilibili.core.plugin.json.JsonPluginManager.filterStats.collectAsState()
+                    JsonPluginStatsNotificationSection(
+                        enabled = jsonStatsNotificationEnabled,
+                        onEnabledChange = { enabled ->
+                            jsonStatsNotificationEnabled = enabled
+                            persistJsonPluginStatsNotificationConfig(
+                                context,
+                                JsonPluginStatsNotificationConfig(enabled = enabled)
+                            )
+                            scheduleJsonPluginStatsSummary(context, enabled)
+                        },
+                        onSendTest = {
+                            notificationPermission.launchWithPermission {
+                                sendJsonStatsTestNotification()
+                            }
+                        }
+                    )
+                }
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val filterStats by com.android.purebilibili.core.plugin.json.JsonPluginManager.filterStats.collectAsStateWithLifecycle()
                     
                     Surface(
                         modifier = Modifier
@@ -437,7 +862,7 @@ fun PluginsContent(
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "插件可以扩展应用功能，如自动跳过广告、过滤推荐内容等\n启用插件后可点击展开查看详细设置",
+                    text = "插件可以扩展应用功能，如自动跳过广告、过滤推荐内容等。\n启用插件后可点击展开查看详细设置。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = 32.dp)
@@ -592,6 +1017,9 @@ fun PluginsContent(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        PluginCapabilityDetailSection(
+                            capabilities = resolveJsonRulePluginCapabilities(plugin.type)
+                        )
                         if (isImporting) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -647,6 +1075,334 @@ fun PluginsContent(
             )
         }
     }
+
+    kotlinPreview?.let { (preview, decision) ->
+        val previewModel = buildExternalPluginInstallPreview(decision)
+        AlertDialog(
+            onDismissRequest = {
+                if (!isImporting) {
+                    kotlinPreview = null
+                    kotlinPackageBytes = null
+                }
+            },
+            icon = { Icon(CupertinoIcons.Filled.Shield, contentDescription = null) },
+            title = { Text("Kotlin 插件包预览") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = previewModel.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = previewModel.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.packageHashText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${previewModel.signerText} · ${buildExternalPluginPayloadSummary(preview.payloadEntries)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    PluginCapabilityDetailSection(
+                        capabilities = preview.descriptor.manifest.capabilities
+                    )
+                    if (decision is ExternalPluginInstallDecision.Rejected) {
+                        Text(
+                            text = decision.reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = decision is ExternalPluginInstallDecision.RequiresUserApproval,
+                    onClick = {
+                        val bytes = kotlinPackageBytes ?: return@TextButton
+                        val result = kotlinPluginStore.installPreview(
+                            preview = preview,
+                            packageBytes = bytes,
+                            grantedCapabilities = preview.descriptor.manifest.capabilities
+                        )
+                        result.onSuccess {
+                            installedKotlinPackages = kotlinPluginStore.listInstalledPackages()
+                            kotlinPreview = null
+                            kotlinPackageBytes = null
+                            android.widget.Toast.makeText(
+                                context,
+                                "插件包已保存，当前不会运行",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }.onFailure { error ->
+                            kotlinImportError = error.message ?: "安装失败"
+                            kotlinPreview = null
+                            kotlinPackageBytes = null
+                        }
+                    }
+                ) {
+                    Text("保存授权")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        kotlinPreview = null
+                        kotlinPackageBytes = null
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    uiSkinPreview?.let { preview ->
+        val previewModel = buildUiSkinPackagePreview(preview)
+        val imagePreviewItems = buildUiSkinImagePreviewItems(uiSkinPreviewAssetFiles)
+        AlertDialog(
+            onDismissRequest = {
+                if (!isImporting) {
+                    uiSkinPreview = null
+                    uiSkinPackageBytes = null
+                    uiSkinPreviewAssetFiles = emptyMap()
+                }
+            },
+            icon = { Icon(CupertinoIcons.Filled.Paintbrush, contentDescription = null) },
+            title = { Text("界面皮肤包预览") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = previewModel.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = previewModel.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.packageHashText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.assetSummaryText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.sourceText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.licenseText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${previewModel.shareText} · ${previewModel.officialAssetText}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (preview.manifest.containsOfficialAssets) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    UiSkinImagePreviewGrid(items = imagePreviewItems)
+                    Text(
+                        text = "宿主只保存资源和启用记录，不执行代码；可替换首页皮肤图标和装饰层，不替换底栏液态玻璃链路。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val bytes = uiSkinPackageBytes ?: return@TextButton
+                        val result = uiSkinStore.installPreview(preview, bytes)
+                        result.onSuccess { installed ->
+                            installedUiSkins = uiSkinStore.listInstalledPackages()
+                            UiSkinSettingsStore.setSelection(
+                                context = context,
+                                selection = UiSkinSelection(
+                                    enabled = true,
+                                    selectedSkinId = installed.skinId,
+                                    selectedInstallId = installed.installId
+                                )
+                            )
+                            uiSkinPreview = null
+                            uiSkinPackageBytes = null
+                            uiSkinPreviewAssetFiles = emptyMap()
+                            android.widget.Toast.makeText(
+                                context,
+                                "皮肤包已保存并启用",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }.onFailure { error ->
+                            uiSkinImportError = error.message ?: "皮肤包导入失败"
+                            uiSkinPreview = null
+                            uiSkinPackageBytes = null
+                            uiSkinPreviewAssetFiles = emptyMap()
+                        }
+                    }
+                ) {
+                    Text("保存并启用")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        uiSkinPreview = null
+                        uiSkinPackageBytes = null
+                        uiSkinPreviewAssetFiles = emptyMap()
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    uiSkinInstalledPreview?.let { installed ->
+        val isActive = uiSkinState.enabled && uiSkinState.activeSkin?.installId == installed.installId
+        val previewModel = buildInstalledUiSkinPreview(
+            installed = installed,
+            isActive = isActive
+        )
+        val imagePreviewItems = buildUiSkinImagePreviewItems(installed.assetFiles)
+        AlertDialog(
+            onDismissRequest = { uiSkinInstalledPreview = null },
+            icon = { Icon(CupertinoIcons.Default.Eye, contentDescription = null) },
+            title = { Text("皮肤预览") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = previewModel.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = previewModel.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.packageHashText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.assetSummaryText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.sourceText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = previewModel.licenseText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${previewModel.shareText} · ${previewModel.officialAssetText}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (installed.manifest.containsOfficialAssets) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                    UiSkinImagePreviewGrid(items = imagePreviewItems)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        UiSkinSettingsStore.setSelection(
+                            context = context,
+                            selection = UiSkinSelection(
+                                enabled = true,
+                                selectedSkinId = installed.skinId,
+                                selectedInstallId = installed.installId
+                            )
+                        )
+                        uiSkinInstalledPreview = null
+                        android.widget.Toast.makeText(
+                            context,
+                            "已启用皮肤预览",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    enabled = !isActive
+                ) {
+                    Text(if (isActive) "已启用" else "启用预览")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { uiSkinInstalledPreview = null }) {
+                    Text("关闭")
+                }
+            }
+        )
+    }
+
+    uiSkinPendingDelete?.let { skin ->
+        AlertDialog(
+            onDismissRequest = { uiSkinPendingDelete = null },
+            icon = { Icon(CupertinoIcons.Default.Trash, contentDescription = null) },
+            title = { Text("删除皮肤") },
+            text = { Text("确定要删除皮肤 \"${skin.displayName}\" 吗？删除后会清理本地包和已解压资源。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val wasActive = uiSkinState.enabled &&
+                            uiSkinState.activeSkin?.installId == skin.installId
+                        val result = uiSkinStore.deleteInstalledPackage(skin.installId)
+                        result.onSuccess { deleted ->
+                            if (deleted) {
+                                installedUiSkins = uiSkinStore.listInstalledPackages()
+                                if (wasActive) {
+                                    UiSkinSettingsStore.setSelection(
+                                        context = context,
+                                        selection = UiSkinSelection()
+                                    )
+                                }
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "皮肤已删除",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            uiSkinPendingDelete = null
+                        }.onFailure { error ->
+                            uiSkinPendingDelete = null
+                            uiSkinImportError = error.message ?: "皮肤删除失败"
+                        }
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { uiSkinPendingDelete = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
     
     //  测试结果对话框
     testingPluginId?.let { pluginId ->
@@ -662,6 +1418,119 @@ fun PluginsContent(
                     testResult = null
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun UiSkinImagePreviewGrid(
+    items: List<com.android.purebilibili.feature.settings.UiSkinImagePreviewItem>
+) {
+    if (items.isEmpty()) {
+        Text(
+            text = "图片预览：未找到可展示资源",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items.take(6).forEach { item ->
+            Column(
+                modifier = Modifier.width(88.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AsyncImage(
+                    model = item.localPath,
+                    contentDescription = item.label,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+                Text(
+                    text = item.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InstalledUiSkinItem(
+    skin: InstalledUiSkinPackage,
+    isActive: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onPreview: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val previewModel = remember(skin, isActive) {
+        buildInstalledUiSkinPreview(
+            installed = skin,
+            isActive = isActive
+        )
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = skin.displayName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = buildInstalledUiSkinSubtitle(skin.manifest),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp,
+                maxLines = 2
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            AppAdaptiveSwitch(
+                checked = isActive,
+                onCheckedChange = onToggle
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onClick = onPreview) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Eye,
+                        contentDescription = "预览皮肤",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onDelete,
+                    enabled = previewModel.canDelete
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Trash,
+                        contentDescription = "删除皮肤",
+                        tint = if (previewModel.canDelete) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        },
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -748,6 +1617,11 @@ private fun PluginItem(
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
                 }
+                PluginCapabilityChips(
+                    capabilities = plugin.capabilityManifest.capabilities,
+                    showAuthorizationLabels = false,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
             
             Spacer(modifier = Modifier.width(8.dp))
@@ -793,8 +1667,94 @@ private fun PluginItem(
                         modifier = Modifier.padding(12.dp)
                     )
                 } else {
-                    plugin.SettingsContent()
+                    Column {
+                        PluginCapabilityDetailSection(
+                            capabilities = plugin.capabilityManifest.capabilities,
+                            showAuthorizationLabels = false,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                        plugin.SettingsContent()
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PluginCapabilityChips(
+    capabilities: Set<com.android.purebilibili.core.plugin.PluginCapability>,
+    showAuthorizationLabels: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val models = remember(capabilities) { resolvePluginCapabilityUiModels(capabilities) }
+    if (models.isEmpty()) return
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        models.forEach { model ->
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (showAuthorizationLabels && model.requiresExplicitApproval) {
+                    MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.62f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+                }
+            ) {
+                Text(
+                    text = if (showAuthorizationLabels && model.requiresExplicitApproval) {
+                        "${model.label} · 需授权"
+                    } else {
+                        model.label
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (showAuthorizationLabels && model.requiresExplicitApproval) {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PluginCapabilityDetailSection(
+    capabilities: Set<com.android.purebilibili.core.plugin.PluginCapability>,
+    showAuthorizationLabels: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val models = remember(capabilities) { resolvePluginCapabilityUiModels(capabilities) }
+    if (models.isEmpty()) return
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = if (showAuthorizationLabels) "能力与授权" else "能力",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        models.forEach { model ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = if (showAuthorizationLabels && model.requiresExplicitApproval) {
+                        "${model.label} · 安装前确认"
+                    } else {
+                        model.label
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = model.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -806,6 +1766,81 @@ private fun PluginItem(
 private fun getPluginColor(index: Int): Color {
     val colors = listOf(iOSTeal, iOSOrange, iOSBlue, iOSGreen, iOSPurple, iOSPink)
     return colors[index % colors.size]
+}
+
+@Composable
+private fun JsonPluginStatsNotificationSection(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    onSendTest: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(12.dp)),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iOSPurple.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Bell,
+                        contentDescription = null,
+                        tint = iOSPurple,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "插件统计通知",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "每天汇总 JSON 规则插件过滤数量",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                AppAdaptiveSwitch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 66.dp)
+                    .height(0.5.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            )
+            TextButton(
+                onClick = onSendTest,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = iOSPurple)
+            ) {
+                Icon(CupertinoIcons.Default.Bell, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("发送测试通知", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
 }
 
 /**
@@ -910,6 +1945,10 @@ private fun JsonPluginItem(
                         )
                     }
                 }
+                PluginCapabilityChips(
+                    capabilities = resolveJsonRulePluginCapabilities(plugin.type),
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
             
             // 开关
@@ -1036,15 +2075,15 @@ private fun TestResultDialog(
 ) {
     val blockedCount = originalCount - filteredCount
     val dialogIconTint = rememberAdaptiveSemanticIconTint(iOSBlue)
-    
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { 
+        icon = {
             Icon(
-                CupertinoIcons.Default.Lightbulb, 
+                CupertinoIcons.Default.Lightbulb,
                 contentDescription = null,
                 tint = dialogIconTint
-            ) 
+            )
         },
         title = { Text("规则测试结果") },
         text = {

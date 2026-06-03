@@ -79,6 +79,21 @@ class PlaybackLifecycleCoordinatorTest {
     }
 
     @Test
+    fun pauseDecision_doesNotMarkTransientResumeIntent_whenLeavingByNavigation() {
+        val decision = resolvePlaybackPauseDecision(
+            isMiniMode = false,
+            isPip = false,
+            isBackgroundAudio = false,
+            wasPlaybackActive = true,
+            hasRecentUserLeaveHint = false,
+            isLeavingByNavigation = true
+        )
+
+        assertTrue(decision.shouldPausePlayback)
+        assertFalse(decision.shouldPersistTransientResumeIntent)
+    }
+
+    @Test
     fun resumeDecision_doesNotResumeWhenNavigationLeaveWasMarked() {
         val decision = resolvePlaybackResumeDecision(
             wasPlaybackActive = true,
@@ -117,6 +132,25 @@ class PlaybackLifecycleCoordinatorTest {
         val decision = resolvePlaybackResumeDecision(
             wasPlaybackActive = false,
             hasTransientResumeIntent = true,
+            hasForegroundResumeIntent = false,
+            isPlaying = false,
+            playWhenReady = false,
+            playbackState = Player.STATE_READY,
+            currentVolume = 1f,
+            shouldEnsureAudibleOnForeground = true,
+            isLeavingByNavigation = false
+        )
+
+        assertTrue(decision.shouldResumePlayback)
+        assertFalse(decision.shouldRestoreVolume)
+    }
+
+    @Test
+    fun resumeDecision_resumesWhenForegroundIntentSurvivesAndroid16PlayWhenReadyReset() {
+        val decision = resolvePlaybackResumeDecision(
+            wasPlaybackActive = false,
+            hasTransientResumeIntent = false,
+            hasForegroundResumeIntent = true,
             isPlaying = false,
             playWhenReady = false,
             playbackState = Player.STATE_READY,
@@ -134,9 +168,28 @@ class PlaybackLifecycleCoordinatorTest {
         val decision = resolvePlaybackResumeDecision(
             wasPlaybackActive = false,
             hasTransientResumeIntent = false,
+            hasForegroundResumeIntent = false,
             isPlaying = false,
             playWhenReady = true,
             playbackState = Player.STATE_BUFFERING,
+            currentVolume = 1f,
+            shouldEnsureAudibleOnForeground = true,
+            isLeavingByNavigation = false
+        )
+
+        assertTrue(decision.shouldResumePlayback)
+        assertFalse(decision.shouldRestoreVolume)
+    }
+
+    @Test
+    fun resumeDecision_kicksForegroundPlaybackWhenReadyButNotActuallyRunning() {
+        val decision = resolvePlaybackResumeDecision(
+            wasPlaybackActive = false,
+            hasTransientResumeIntent = false,
+            hasForegroundResumeIntent = false,
+            isPlaying = false,
+            playWhenReady = true,
+            playbackState = Player.STATE_READY,
             currentVolume = 1f,
             shouldEnsureAudibleOnForeground = true,
             isLeavingByNavigation = false

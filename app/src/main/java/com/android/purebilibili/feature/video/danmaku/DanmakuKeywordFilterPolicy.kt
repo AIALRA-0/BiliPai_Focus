@@ -1,11 +1,19 @@
 package com.android.purebilibili.feature.video.danmaku
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+
 private const val REGEX_RULE_PREFIX = "regex:"
 private const val SHORT_REGEX_RULE_PREFIX = "re:"
 private const val USER_HASH_RULE_PREFIX = "uid:"
 private const val USER_RULE_PREFIX = "user:"
 private const val HASH_RULE_PREFIX = "hash:"
 private val DANMAKU_RULE_SPLITTER = Regex("[\\n,，]+")
+private val DANMAKU_BLOCK_RULE_JSON = Json { ignoreUnknownKeys = true }
 
 enum class DanmakuBlockRuleGroup {
     KEYWORD,
@@ -49,10 +57,62 @@ internal data class DanmakuUserHashMatcher(
 }
 
 fun parseDanmakuBlockRules(raw: String): List<String> {
+    parseDanmakuBlockRulesJson(raw)?.let { return it }
     return raw.split(DANMAKU_RULE_SPLITTER)
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .distinct()
+}
+
+private fun parseDanmakuBlockRulesJson(raw: String): List<String>? {
+    val trimmed = raw.trim()
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null
+    val element = runCatching { DANMAKU_BLOCK_RULE_JSON.parseToJsonElement(trimmed) }.getOrNull()
+        ?: return null
+    return when (element) {
+        is JsonArray -> element.toRuleStrings()
+        is JsonObject -> element.toRuleStrings()
+        else -> null
+    }?.distinct()?.takeIf { it.isNotEmpty() }
+}
+
+private fun JsonObject.toRuleStrings(): List<String> {
+    val keywordRules = readStringArray("keywords", "keywordRules", "keyword", "words")
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+    val regexRules = readStringArray("regex", "regexRules", "regexp")
+        .mapNotNull(::normalizeDanmakuRegexImportRule)
+    val userHashRules = readStringArray("userHashes", "userHashRules", "uids", "users")
+        .mapNotNull(::normalizeDanmakuUserHashManagerInput)
+    val directRules = readStringArray("rules", "items", "blockRules")
+        .mapNotNull(::normalizeDanmakuBlockRuleForAppend)
+    return keywordRules + regexRules + userHashRules + directRules
+}
+
+private fun JsonObject.readStringArray(vararg keys: String): List<String> {
+    return keys.firstNotNullOfOrNull { key ->
+        when (val value = this[key]) {
+            is JsonArray -> value.toRuleStrings()
+            is JsonPrimitive -> value.contentOrNull?.let(::parseDanmakuBlockRules)
+            else -> null
+        }
+    }.orEmpty()
+}
+
+private fun JsonArray.toRuleStrings(): List<String> {
+    return mapNotNull { element ->
+        when (element) {
+            is JsonPrimitive -> element.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
+            is JsonObject -> element["value"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
+            else -> null
+        }
+    }
+}
+
+private fun normalizeDanmakuRegexImportRule(rule: String): String? {
+    val normalized = rule.trim()
+    if (normalized.isEmpty()) return null
+    return if (isDanmakuRegexRule(normalized)) normalized else "$REGEX_RULE_PREFIX$normalized"
 }
 
 fun matchesDanmakuBlockRule(content: String, rule: String, userHash: String = ""): Boolean {

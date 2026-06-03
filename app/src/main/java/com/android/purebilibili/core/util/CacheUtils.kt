@@ -5,6 +5,7 @@ import coil.annotation.ExperimentalCoilApi
 import coil.imageLoader
 import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.cooldown.PlaybackCooldownManager
+import com.android.purebilibili.core.player.PlaybackMediaCache
 import com.android.purebilibili.core.store.FollowingCacheStore
 import com.android.purebilibili.data.repository.DanmakuRepository
 import com.android.purebilibili.data.repository.VideoRepository
@@ -45,19 +46,21 @@ object CacheUtils {
         val imageDiskCache: Long = 0L,  // Coil 图片磁盘缓存
         val imageMemoryCache: Long = 0L, // Coil 图片内存缓存
         val httpCache: Long = 0L,       // OkHttp HTTP 缓存
+        val playbackMediaCache: Long = 0L, // 播放器媒体分片缓存
         val otherCache: Long = 0L,      // 其他文件缓存
         val playUrlMemoryCache: Long = 0L, // PlayUrl 内存缓存
         val subtitleDanmakuMemoryCache: Long = 0L // 字幕/弹幕内存缓存
     ) {
         val imageCache: Long get() = imageDiskCache + imageMemoryCache
         val memoryCache: Long get() = imageMemoryCache + playUrlMemoryCache + subtitleDanmakuMemoryCache
-        val totalSize: Long get() = imageDiskCache + httpCache + otherCache + memoryCache
+        val networkCache: Long get() = httpCache + playbackMediaCache
+        val totalSize: Long get() = imageDiskCache + networkCache + otherCache + memoryCache
         
         fun format(): String = formatSize(totalSize.toDouble())
         
         fun formatBreakdown(): String = buildString {
             append("图片: ${formatSize(imageCache.toDouble())}")
-            append(" | HTTP: ${formatSize(httpCache.toDouble())}")
+            append(" | 网络: ${formatSize(networkCache.toDouble())}")
             append(" | 其他: ${formatSize(otherCache.toDouble())}")
             if (memoryCache > 0) {
                 append(" | 内存: ${formatSize(memoryCache.toDouble())}")
@@ -103,6 +106,7 @@ object CacheUtils {
                     when {
                         // Coil 图片缓存目录
                         file.absolutePath.contains("image_cache") -> imageDiskCache += size
+                        file.absolutePath.contains("playback_media_cache") -> Unit
                         // OkHttp 缓存目录
                         file.absolutePath.contains("http_cache") ||
                         file.absolutePath.contains("okhttp") -> httpCache += size
@@ -111,6 +115,7 @@ object CacheUtils {
                     }
                 }
         }
+        val playbackMediaCache = PlaybackMediaCache.estimateBytes(context)
 
         // 5. 应用私有日志文件
         otherCache += Logger.getPrivateLogArtifactsSize(context)
@@ -124,6 +129,7 @@ object CacheUtils {
             imageDiskCache = imageDiskCache,
             imageMemoryCache = imageMemoryCache,
             httpCache = httpCache,
+            playbackMediaCache = playbackMediaCache,
             otherCache = otherCache,
             playUrlMemoryCache = playUrlMemoryCache,
             subtitleDanmakuMemoryCache = subtitleDanmakuMemoryCache
@@ -163,6 +169,7 @@ object CacheUtils {
             if (CacheClearTarget.NETWORK in targets) {
                 try {
                     com.android.purebilibili.core.network.NetworkModule.okHttpClient.cache?.evictAll()
+                    PlaybackMediaCache.clear(context)
                     Logger.d(TAG, " Network cache cleared")
                 } catch (e: Exception) {
                     Logger.w(TAG, "OkHttp cache clear failed: ${e.message}")
@@ -175,6 +182,7 @@ object CacheUtils {
                     if (CacheClearTarget.NETWORK !in targets) {
                         add("okhttp")
                         add("http_cache")
+                        add("playback_media_cache")
                     }
                 }
                 context.cacheDir?.let { cacheDir ->
@@ -216,12 +224,13 @@ object CacheUtils {
         emit(ClearProgress(60, "正在清除网络缓存..."))
         try {
             com.android.purebilibili.core.network.NetworkModule.okHttpClient.cache?.evictAll()
+            PlaybackMediaCache.clear(context)
         } catch (_: Exception) {}
         emit(ClearProgress(70, "网络缓存已清除"))
         
         // 文件缓存
         emit(ClearProgress(80, "正在清除临时文件..."))
-        context.cacheDir?.let { clearDirContentsSelective(it, listOf("image_cache", "okhttp")) }
+        context.cacheDir?.let { clearDirContentsSelective(it, listOf("image_cache", "okhttp", "playback_media_cache")) }
         context.externalCacheDir?.let { clearDirContents(it) }
         emit(ClearProgress(90, "临时文件已清除"))
         
@@ -295,9 +304,10 @@ object CacheUtils {
         
         // 网络缓存
         emit(ClearProgressV2(clearedSize, totalSize, false, "正在清除网络缓存..."))
-        val httpSize = breakdown.httpCache
+        val httpSize = breakdown.networkCache
         try {
             com.android.purebilibili.core.network.NetworkModule.okHttpClient.cache?.evictAll()
+            PlaybackMediaCache.clear(context)
         } catch (_: Exception) {}
         clearedSize += httpSize
         emit(ClearProgressV2(clearedSize, totalSize, false, "网络缓存已清除"))
@@ -306,7 +316,7 @@ object CacheUtils {
         // 文件缓存
         emit(ClearProgressV2(clearedSize, totalSize, false, "正在清除临时文件..."))
         val otherSize = breakdown.otherCache
-        context.cacheDir?.let { clearDirContentsSelective(it, listOf("image_cache", "okhttp")) }
+        context.cacheDir?.let { clearDirContentsSelective(it, listOf("image_cache", "okhttp", "playback_media_cache")) }
         context.externalCacheDir?.let { clearDirContents(it) }
         clearedSize += otherSize
         emit(ClearProgressV2(clearedSize, totalSize, false, "临时文件已清除"))

@@ -67,6 +67,24 @@ class VideoActionFeedbackPolicyTest {
     }
 
     @Test
+    fun `detail action active colors derive from active theme roles`() {
+        val primary = Color(0xFF3366FF)
+        val secondary = Color(0xFF00A884)
+        val tertiary = Color(0xFFFF8A00)
+
+        val colors = resolveVideoDetailActionActiveColors(
+            primary = primary,
+            secondary = secondary,
+            tertiary = tertiary
+        )
+
+        assertEquals(primary, colors.primaryAction)
+        assertEquals(tertiary, colors.watchLater)
+        assertEquals(secondary, colors.downloadInProgress)
+        assertEquals(primary, colors.downloaded)
+    }
+
+    @Test
     fun `portrait placement anchors feedback at bottom center`() {
         val placement = resolveVideoFeedbackPlacement(
             isFullscreen = false,

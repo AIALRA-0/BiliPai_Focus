@@ -55,3 +55,24 @@ data class UserOfficial(
     val desc: String = "",
     val type: Int = -1
 )
+
+@Serializable
+data class MemberAccountResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0,
+    val data: MemberAccountData? = null
+)
+
+@Serializable
+data class MemberAccountData(
+    val mid: Long = 0,
+    val uname: String = "",
+    val userid: String = "",
+    val sign: String = "",
+    val birthday: String = "",
+    val sex: String = "",
+    @SerialName("nick_free")
+    val nickFree: Boolean = false,
+    val rank: String = ""
+)

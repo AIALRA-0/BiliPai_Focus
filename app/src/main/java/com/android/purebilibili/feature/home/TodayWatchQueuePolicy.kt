@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.home
 
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
+
 internal data class TodayWatchQueueConsumeUpdate(
     val updatedPlan: TodayWatchPlan,
     val consumedApplied: Boolean,
@@ -28,8 +31,8 @@ internal fun consumeVideoFromTodayWatchPlan(
 
     val updatedQueue = plan.videoQueue.filterNot { it.bvid == consumedBvid }
     val updatedPlan = plan.copy(
-        videoQueue = updatedQueue,
-        explanationByBvid = plan.explanationByBvid - consumedBvid
+        videoQueue = updatedQueue.toImmutableList(),
+        explanationByBvid = (plan.explanationByBvid - consumedBvid).toImmutableMap()
     )
     val previewLimit = queuePreviewLimit.coerceAtLeast(1)
     return TodayWatchQueueConsumeUpdate(

@@ -123,4 +123,46 @@ class BangumiFollowStatusPolicyTest {
         assertEquals(65, followedSeasonIds.size)
         assertTrue(followedSeasonIds.contains(65L))
     }
+
+    @Test
+    fun `cached status should override followed list and api status`() {
+        val result = resolveBangumiMergedFollowStatus(
+            seasonId = 1L,
+            apiUserStatus = UserStatus(follow = 1, followStatus = BANGUMI_FOLLOW_STATUS_WATCHING),
+            cachedFollow = emptyMap(),
+            cachedStatus = mapOf(1L to BANGUMI_FOLLOW_STATUS_WATCHED),
+            followedSeasonIds = setOf(1L)
+        )
+
+        assertEquals(true, result.isFollowing)
+        assertEquals(BANGUMI_FOLLOW_STATUS_WATCHED, result.followStatus)
+    }
+
+    @Test
+    fun `local unfollow should override stale api follow`() {
+        val result = resolveBangumiMergedFollowStatus(
+            seasonId = 1L,
+            apiUserStatus = UserStatus(follow = 1, followStatus = BANGUMI_FOLLOW_STATUS_WATCHING),
+            cachedFollow = mapOf(1L to false),
+            cachedStatus = emptyMap(),
+            followedSeasonIds = emptySet()
+        )
+
+        assertEquals(false, result.isFollowing)
+        assertEquals(0, result.followStatus)
+    }
+
+    @Test
+    fun `followed list should repair missing api user status`() {
+        val result = resolveBangumiMergedFollowStatus(
+            seasonId = 1L,
+            apiUserStatus = null,
+            cachedFollow = emptyMap(),
+            cachedStatus = emptyMap(),
+            followedSeasonIds = setOf(1L)
+        )
+
+        assertEquals(true, result.isFollowing)
+        assertEquals(BANGUMI_FOLLOW_STATUS_WANT, result.followStatus)
+    }
 }

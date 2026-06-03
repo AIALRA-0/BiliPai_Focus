@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,21 +26,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
 import com.android.purebilibili.core.ui.components.UpBadgeName
-import com.android.purebilibili.core.util.shouldLoadMorePaginatedContent
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
+import com.android.purebilibili.feature.home.components.HomeUiSkinDecoration
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
@@ -49,37 +53,44 @@ import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import androidx.compose.ui.Alignment
 import coil.compose.AsyncImage
+import java.io.File
 import kotlinx.coroutines.yield
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-internal fun shouldLoadMoreHomeCategoryContent(
-    totalItems: Int,
-    lastVisibleItemIndex: Int,
-    contentItemCount: Int,
-    isLoading: Boolean,
-    hasMore: Boolean,
-    autoLoadMoreEnabled: Boolean = true,
-    preloadThreshold: Int = 4,
-    requireUserScrollObservation: Boolean = false,
-    userScrollObserved: Boolean = true
-): Boolean {
-    return shouldLoadMorePaginatedContent(
-        totalItems = totalItems,
-        lastVisibleItemIndex = lastVisibleItemIndex,
-        contentItemCount = contentItemCount,
-        isLoading = isLoading,
-        hasMore = hasMore,
-        autoLoadMoreEnabled = autoLoadMoreEnabled,
-        preloadThreshold = preloadThreshold,
-        requireUserScrollObservation = requireUserScrollObservation,
-        userScrollObserved = userScrollObserved
-    )
+internal fun resolveHomeCategoryVideoGridKey(
+    video: VideoItem,
+    index: Int
+): String {
+    val primaryId = when {
+        video.bvid.isNotBlank() -> video.bvid
+        video.id > 0L -> "${video.id}_${video.aid.takeIf { it > 0L } ?: video.cid}"
+        video.aid > 0L -> "aid_${video.aid}"
+        video.cid > 0L -> "cid_${video.cid}"
+        else -> "${video.owner.mid}_${video.title.hashCode()}_${video.pubdate}"
+    }
+    return "home_video_${primaryId}_$index"
 }
 
-internal fun hasObservedFollowLoadMoreScroll(
-    firstVisibleItemIndex: Int,
-    firstVisibleItemScrollOffset: Int
+internal fun shouldRequestHomeCategoryLoadMore(
+    totalItems: Int,
+    lastVisibleItemIndex: Int,
+    isLoading: Boolean,
+    hasMore: Boolean,
+    hasVisibleContent: Boolean
 ): Boolean {
-    return firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > 0
+    return hasVisibleContent &&
+        totalItems > 0 &&
+        lastVisibleItemIndex >= totalItems - 4 &&
+        !isLoading &&
+        hasMore
+}
+
+internal fun resolveHomeFeedSkinAtmosphereImagePath(
+    decoration: HomeUiSkinDecoration?
+): String? {
+    return decoration?.sideBackgroundImagePath
+        ?: decoration?.profileSquaredBackgroundImagePath
+        ?: decoration?.profileBackgroundImagePath
 }
 
 @Composable
@@ -92,6 +103,7 @@ internal fun HomeCategoryPageContent(
     dissolvingVideos: Set<String>,
     followingMids: Set<Long>,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
+    onUpClick: (Long) -> Unit = {},
     onLiveClick: (Long, String, String) -> Unit,
     onLoadMore: () -> Unit,
     onDismissVideo: (String) -> Unit,
@@ -99,18 +111,19 @@ internal fun HomeCategoryPageContent(
     onDissolveComplete: (String) -> Unit,
     longPressCallback: (VideoItem) -> Unit, // [Feature] Long Press
     displayMode: Int,
-    autoLoadMoreEnabled: Boolean = true,
     cardAnimationEnabled: Boolean,
     cardMotionTier: MotionTier = MotionTier.Normal,
     cardTransitionEnabled: Boolean,
+    isReturningFromVideoDetail: Boolean = false,
+    isQuickReturningFromVideoDetail: Boolean = false,
     smartVisualGuardEnabled: Boolean = false,
     isDataSaverActive: Boolean,
     preferLowQualityCover: Boolean = false,
     compactStatsOnCover: Boolean = true,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
-    followLoadMoreArmed: Boolean = true,
-    onFollowScrollInteraction: () -> Unit = {},
+    wallpaperTintEnabled: Boolean = false,
+    wallpaperEffectMode: HomeWallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
     showUpBadges: Boolean = true,
     showDurationBadges: Boolean = true,
     oldContentAnchorBvid: String? = null,
@@ -125,6 +138,7 @@ internal fun HomeCategoryPageContent(
     onTodayWatchModeChange: (TodayWatchMode) -> Unit = {},
     onTodayWatchCollapsedChange: (Boolean) -> Unit = {},
     onTodayWatchRefresh: () -> Unit = {},
+    onTodayWatchUpClick: (Long) -> Unit = {},
     popularSubCategory: PopularSubCategory = PopularSubCategory.COMPREHENSIVE,
     onPopularSubCategoryChange: (PopularSubCategory) -> Unit = {},
     onTodayWatchVideoClick: (VideoItem) -> Unit = { video ->
@@ -133,94 +147,70 @@ internal fun HomeCategoryPageContent(
                 bvid = video.bvid,
                 cid = video.cid,
                 coverUrl = video.pic,
+                isVerticalVideo = video.isVertical,
                 source = HomeVideoClickSource.TODAY_WATCH
             )
         )
     },
     firstGridItemModifier: Modifier = Modifier,
+    uiSkinDecoration: HomeUiSkinDecoration? = null,
     modifier: Modifier = Modifier,
 ) {
-    val scrollLiteModeEnabled = false
+    val scrollLiteModeEnabled by remember(gridState) {
+        derivedStateOf { gridState.isScrollInProgress }
+    }
     val context = LocalContext.current
     val showOnlineCount by SettingsManager
         .getShowOnlineCount(context)
-        .collectAsState(initial = false)
+        .collectAsStateWithLifecycle(initialValue = false
+        )
     TrackScrollJank(
         scrollableState = gridState,
         stateName = "home:feed:${category.name.lowercase()}"
     )
 
     // Check for load more
-    val shouldLoadMore by remember(
-        category,
-        gridState,
-        categoryState.videos.size,
-        categoryState.liveRooms.size,
-        categoryState.followedLiveRooms.size,
-        categoryState.isLoading,
-        categoryState.hasMore,
-        autoLoadMoreEnabled,
-        followLoadMoreArmed
-    ) {
+    val shouldLoadMore by remember {
         derivedStateOf {
             val layoutInfo = gridState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            shouldLoadMoreHomeCategoryContent(
+            shouldRequestHomeCategoryLoadMore(
                 totalItems = totalItems,
                 lastVisibleItemIndex = lastVisibleItemIndex,
-                contentItemCount = if (category == HomeCategory.LIVE) {
-                    categoryState.followedLiveRooms.size + categoryState.liveRooms.size
-                } else {
-                    categoryState.videos.size
-                },
                 isLoading = categoryState.isLoading,
                 hasMore = categoryState.hasMore,
-                autoLoadMoreEnabled = autoLoadMoreEnabled,
-                requireUserScrollObservation = category == HomeCategory.FOLLOW,
-                userScrollObserved = followLoadMoreArmed
+                hasVisibleContent = categoryState.videos.isNotEmpty() ||
+                    categoryState.liveRooms.isNotEmpty() ||
+                    categoryState.followedLiveRooms.isNotEmpty()
             )
         }
     }
-    LaunchedEffect(
-        shouldLoadMore,
-        categoryState.videos.size,
-        categoryState.liveRooms.size,
-        categoryState.followedLiveRooms.size,
-        categoryState.isLoading,
-        categoryState.hasMore
-    ) {
+    LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) onLoadMore()
     }
 
-    if (category == HomeCategory.FOLLOW) {
-        LaunchedEffect(gridState, onFollowScrollInteraction) {
-            snapshotFlow {
-                Triple(
-                    gridState.isScrollInProgress,
-                    gridState.firstVisibleItemIndex,
-                    gridState.firstVisibleItemScrollOffset
-                )
-            }.collect { (isScrolling, firstVisibleItemIndex, firstVisibleItemScrollOffset) ->
-                    if (isScrolling && hasObservedFollowLoadMoreScroll(
-                            firstVisibleItemIndex = firstVisibleItemIndex,
-                            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset
-                        )
-                    ) {
-                        onFollowScrollInteraction()
-                    }
-                }
+    val feedAtmosphereImagePath = resolveHomeFeedSkinAtmosphereImagePath(uiSkinDecoration)
+    Box(modifier = modifier) {
+        if (!feedAtmosphereImagePath.isNullOrBlank()) {
+            AsyncImage(
+                model = File(feedAtmosphereImagePath),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .matchParentSize()
+                    .alpha(0.16f)
+                    .clearAndSetSemantics {}
+            )
         }
-    }
-
-    LazyVerticalGrid(
-        state = gridState,
-        columns = GridCells.Fixed(gridColumns),
-        contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier
-    ) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(gridColumns),
+            contentPadding = contentPadding,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
         if (category == HomeCategory.LIVE) {
             // Live Category Content
             
@@ -299,6 +289,7 @@ internal fun HomeCategoryPageContent(
                             onModeChange = onTodayWatchModeChange,
                             onCollapsedChange = onTodayWatchCollapsedChange,
                             onRefresh = onTodayWatchRefresh,
+                            onUpClick = onTodayWatchUpClick,
                             onVideoClick = onTodayWatchVideoClick
                         )
                     }
@@ -306,21 +297,13 @@ internal fun HomeCategoryPageContent(
             }
             if (category == HomeCategory.POPULAR) {
                 item(span = { GridItemSpan(gridColumns) }) {
-                    FlowRow(
+                    PopularSubCategorySegmentedControl(
+                        selectedSubCategory = popularSubCategory,
+                        onSubCategoryChange = onPopularSubCategoryChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        PopularSubCategory.entries.forEach { subCategory ->
-                            FilterChip(
-                                selected = popularSubCategory == subCategory,
-                                onClick = { onPopularSubCategoryChange(subCategory) },
-                                label = { Text(stringResource(resolvePopularSubCategoryLabelRes(subCategory))) }
-                            )
-                        }
-                    }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
             }
 
@@ -347,7 +330,7 @@ internal fun HomeCategoryPageContent(
                     }
 
                     item(
-                        key = if (video.bvid.isNotBlank()) video.bvid else "video_${video.id}_$index",
+                        key = resolveHomeCategoryVideoGridKey(video, index),
                         contentType = "home_video_card"
                     ) {
                         val isDynamicDetailCard = video.dynamicId.isNotBlank() && !video.bvid.startsWith("BV", ignoreCase = true)
@@ -359,7 +342,10 @@ internal fun HomeCategoryPageContent(
                             cardId = video.bvid,
                             preset = DissolveAnimationPreset.TELEGRAM_FAST,
                             modifier = Modifier
-                                .jiggleOnDissolve(video.bvid)
+                                .jiggleOnDissolve(
+                                    cardId = video.bvid,
+                                    isCurrentCardDissolving = isDissolving
+                                )
                                 .then(if (index == 0) firstGridItemModifier else Modifier)
                         ) {
                             when (displayMode) {
@@ -370,6 +356,8 @@ internal fun HomeCategoryPageContent(
                                         animationEnabled = cardAnimationEnabled,
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
+                                        isReturningFromVideoDetail = isReturningFromVideoDetail,
+                                        isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
                                         isDataSaverActive = isDataSaverActive,
                                         preferLowQualityCover = preferLowQualityCover,
@@ -378,6 +366,7 @@ internal fun HomeCategoryPageContent(
                                         showUpBadge = showUpBadges,
                                         showDurationBadge = showDurationBadges,
                                         showOnlineCount = showOnlineCount,
+                                        onUpClick = onUpClick,
                                         showPublishTime = true,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
@@ -388,6 +377,7 @@ internal fun HomeCategoryPageContent(
                                                     dynamicId = video.dynamicId,
                                                     cid = cid,
                                                     coverUrl = video.pic,
+                                                    isVerticalVideo = video.isVertical,
                                                     source = HomeVideoClickSource.GRID
                                                 )
                                             )
@@ -403,6 +393,8 @@ internal fun HomeCategoryPageContent(
                                         animationEnabled = cardAnimationEnabled,
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
+                                        isReturningFromVideoDetail = isReturningFromVideoDetail,
+                                        isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
                                         showPublishTime = true,
                                         isDataSaverActive = isDataSaverActive,
@@ -410,9 +402,12 @@ internal fun HomeCategoryPageContent(
                                         compactStatsOnCover = compactStatsOnCover,
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
+                                        wallpaperTintEnabled = wallpaperTintEnabled,
+                                        wallpaperEffectMode = wallpaperEffectMode,
                                         showUpBadge = showUpBadges,
                                         showDurationBadge = showDurationBadges,
                                         showOnlineCount = showOnlineCount,
+                                        onUpClick = onUpClick,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onWatchLater = if (isDynamicDetailCard) null else ({
                                             onWatchLater(video.bvid, resolveWatchLaterAid(video))
@@ -425,6 +420,7 @@ internal fun HomeCategoryPageContent(
                                                     dynamicId = video.dynamicId,
                                                     cid = cid,
                                                     coverUrl = video.pic,
+                                                    isVerticalVideo = video.isVertical,
                                                     source = HomeVideoClickSource.GRID
                                                 )
                                             )
@@ -461,7 +457,68 @@ internal fun HomeCategoryPageContent(
         item(span = { GridItemSpan(gridColumns) }) {
             Box(modifier = Modifier.fillMaxWidth().height(20.dp))
         }
+        }
     }
+}
+
+@Composable
+private fun PopularSubCategorySegmentedControl(
+    selectedSubCategory: PopularSubCategory,
+    onSubCategoryChange: (PopularSubCategory) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val subCategories = PopularSubCategory.entries
+    val selectedIndex = subCategories.indexOf(selectedSubCategory).coerceAtLeast(0)
+    val labels = subCategories.map { subCategory ->
+        stringResource(resolvePopularSubCategoryLabelRes(subCategory))
+    }
+
+    BottomBarLiquidSegmentedControl(
+        items = labels,
+        selectedIndex = selectedIndex,
+        onSelected = { index ->
+            subCategories.getOrNull(index)?.let(onSubCategoryChange)
+        },
+        modifier = modifier,
+        labelFontSize = 14.sp,
+        containerHorizontalPadding = 3.dp,
+        containerVerticalPadding = 3.dp,
+        liquidGlassEffectsEnabled = true,
+        dragSelectionEnabled = true,
+        preferInlineContentStyle = true
+    )
+}
+
+@Composable
+private fun TodayWatchModeSegmentedControl(
+    selectedMode: TodayWatchMode,
+    enabled: Boolean,
+    onModeChange: (TodayWatchMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val modes = TodayWatchMode.entries
+    val selectedIndex = modes.indexOf(selectedMode).coerceAtLeast(0)
+    val labels = modes.map { mode ->
+        stringResource(resolveTodayWatchModeLabelRes(mode))
+    }
+
+    BottomBarLiquidSegmentedControl(
+        items = labels,
+        selectedIndex = selectedIndex,
+        onSelected = { index ->
+            modes.getOrNull(index)?.takeIf { it != selectedMode }?.let(onModeChange)
+        },
+        modifier = modifier,
+        enabled = enabled,
+        height = 42.dp,
+        indicatorHeight = 34.dp,
+        labelFontSize = 14.sp,
+        containerHorizontalPadding = 3.dp,
+        containerVerticalPadding = 3.dp,
+        liquidGlassEffectsEnabled = true,
+        dragSelectionEnabled = true,
+        preferInlineContentStyle = false
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -477,6 +534,7 @@ private fun TodayWatchPlanCard(
     onModeChange: (TodayWatchMode) -> Unit,
     onCollapsedChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
+    onUpClick: (Long) -> Unit,
     onVideoClick: (VideoItem) -> Unit
 ) {
     var revealContent by remember(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
@@ -548,7 +606,7 @@ private fun TodayWatchPlanCard(
 
             if (collapsed) {
                 Text(
-                    text = "已收起推荐单；展开后恢复自动更新；也可以直接点“刷新”换一批",
+                    text = "已收起推荐单。展开后恢复自动更新；也可以直接点“刷新”换一批。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -562,23 +620,14 @@ private fun TodayWatchPlanCard(
                 return@Column
             }
 
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TodayWatchMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = selectedMode == mode,
-                        onClick = { onModeChange(mode) },
-                        label = {
-                            Text(
-                                stringResource(resolveTodayWatchModeLabelRes(mode)),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    )
-                }
-            }
+            TodayWatchModeSegmentedControl(
+                selectedMode = selectedMode,
+                enabled = !isLoading,
+                onModeChange = onModeChange,
+                modifier = Modifier.fillMaxWidth()
+            )
             Text(
-                text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”",
+                text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -646,11 +695,17 @@ private fun TodayWatchPlanCard(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         activePlan.upRanks.forEachIndexed { index, up ->
+                            val clickable = shouldEnableTodayWatchUpRankClick(up)
                             Text(
                                 text = "${index + 1}. ${up.name}",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (clickable) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
                                 modifier = Modifier
+                                    .clickable(enabled = clickable) { onUpClick(up.mid) }
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }

@@ -2,8 +2,6 @@ package com.android.purebilibili.feature.cast
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.wifi.WifiManager
-import android.text.format.Formatter
 import com.android.purebilibili.core.util.Logger
 import fi.iki.elonen.NanoHTTPD
 import okhttp3.OkHttpClient
@@ -13,10 +11,12 @@ import java.io.InputStream
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.URLEncoder
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 运行在手机上的轻量级 HTTP 代理服务器。
- * 作用：拦截 DLNA 设备的播放请求，转发给 Bilibili 服务器并修改请求头，从而绕过防盗链 (403 Forbidden)。
+ * 作用：拦截 DLNA/Chromecast 设备的播放请求，转发给 Bilibili 服务器并修改请求头，从而绕过防盗链 (403 Forbidden)。
  *
  * 原理：
  * 1. 电视/DLNA 设备请求: http://<手机IP>:<端口>/proxy?url=<编码后的B站视频URL>
@@ -28,36 +28,56 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
 
     private val client = OkHttpClient.Builder()
         .followRedirects(true)
-        .followSslRedirects(true) // 虽然电视可能只发起 HTTP 请求，但我们需要从 B 站获取 HTTPS 数据
+        .followSslRedirects(true)
         .build()
 
     override fun serve(session: IHTTPSession): NanoHTTPD.Response {
-        val uri = session.uri
-        // 仅处理 /proxy 路径的请求
-        if (uri != "/proxy") {
-            return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
+        val uri = session.uri ?: "/"
+
+        if (session.method == Method.OPTIONS) {
+            val corsHeaders = corsHeaders()
+            return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "").also { resp ->
+                corsHeaders.forEach { (key, value) -> resp.addHeader(key, value) }
+            }
         }
 
-        val params = session.parms
+        if (uri.startsWith("/dash/") && uri.endsWith(".mpd")) {
+            val key = uri.removePrefix("/dash/").removeSuffix(".mpd")
+            val manifest = manifestStore[key]
+            if (manifest != null) {
+                val resp = newFixedLengthResponse(Response.Status.OK, DASH_CONTENT_TYPE, manifest)
+                corsHeaders().forEach { (key, value) -> resp.addHeader(key, value) }
+                return resp
+            }
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Manifest not found")
+        }
+
+        if (uri == "/proxy") {
+            return serveProxy(session)
+        }
+
+        return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
+    }
+
+    private fun serveProxy(session: IHTTPSession): NanoHTTPD.Response {
+        val params = session.parameters.mapValues { (_, values) -> values.firstOrNull().orEmpty() }
         val targetUrl = params["url"]
-        
-        // 基础校验：必须包含目标 URL
+
         if (targetUrl.isNullOrEmpty()) {
-             return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Missing 'url' parameter")
+            return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Missing 'url' parameter")
         }
         if (!isSupportedTargetUrl(targetUrl)) {
             return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Unsupported target URL")
         }
         val parsedTargetUrl = targetUrl.toHttpUrlOrNull()
             ?: return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid target URL")
-        
+
         Logger.d("LocalProxyServer", "📺 [Proxy] 正在代理请求: $targetUrl")
 
         try {
-            // 构建发往 Bilibili 的请求
-            // 关键点：设置 Referer 和 User-Agent 以绕过 B 站的防盗链检查
             val referer = params["referer"] ?: "https://www.bilibili.com"
-            val userAgent = params["ua"] ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            val userAgent =
+                params["ua"] ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
             val request = Request.Builder()
                 .url(parsedTargetUrl)
@@ -69,9 +89,9 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
             val upstreamRequest = request.build()
 
             val upstreamResponse = client.newCall(upstreamRequest).execute()
-            
+
             if (!upstreamResponse.isSuccessful) {
-                val body = upstreamResponse.body?.string().orEmpty()
+                val body = upstreamResponse.body.string()
                 upstreamResponse.close()
                 return newFixedLengthResponse(
                     mapToNanoStatus(upstreamResponse.code),
@@ -80,27 +100,22 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
                 )
             }
 
-            // 获取 B 站返回的视频流和元数据
             val body = upstreamResponse.body
-            if (body == null) {
-                upstreamResponse.close()
-                return newFixedLengthResponse(Response.Status.NO_CONTENT, MIME_PLAINTEXT, "")
-            }
             val inputStream = UpstreamRelayInputStream(upstreamResponse, body.byteStream())
             val contentType = upstreamResponse.header("Content-Type") ?: "video/mp4"
             val contentLength = body.contentLength()
 
-            // 构造返回给电视的响应
-            // 使用 ChunkedResponse 以支持流式传输，避免将整个视频加载到内存中
-            val nanoResponse = newChunkedResponse(mapToNanoStatus(upstreamResponse.code), contentType, inputStream)
-            
-            // 转发关键响应头 (如 Content-Length)，这对播放器的进度条显示和拖动至关重要
+            val nanoResponse =
+                newChunkedResponse(mapToNanoStatus(upstreamResponse.code), contentType, inputStream)
+
             if (contentLength != -1L) {
-                 nanoResponse.addHeader("Content-Length", contentLength.toString())
+                nanoResponse.addHeader("Content-Length", contentLength.toString())
             }
             upstreamResponse.header("Content-Range")?.let { nanoResponse.addHeader("Content-Range", it) }
             upstreamResponse.header("Accept-Ranges")?.let { nanoResponse.addHeader("Accept-Ranges", it) }
-            
+
+            corsHeaders().forEach { (key, value) -> nanoResponse.addHeader(key, value) }
+
             return nanoResponse
 
         } catch (e: Exception) {
@@ -111,8 +126,11 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
 
     companion object {
         const val PORT = 8901
+        const val DASH_CONTENT_TYPE = "application/dash+xml"
+
         @Volatile private var sharedServer: LocalProxyServer? = null
         private val bootstrapLock = Any()
+        private val manifestStore = ConcurrentHashMap<String, String>()
 
         @JvmStatic
         fun ensureStarted(): Boolean {
@@ -124,7 +142,25 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
                 return true
             }
         }
-        
+
+        fun dashManifestPath(key: String): String = "/dash/$key.mpd"
+
+        fun corsHeaders(): Map<String, String> = mapOf(
+            "Access-Control-Allow-Origin" to "*",
+            "Access-Control-Allow-Methods" to "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers" to "Range, Content-Type, Origin, Accept",
+            "Access-Control-Max-Age" to "3600"
+        )
+
+        fun registerDashManifest(context: Context, manifest: String): String {
+            ensureStarted()
+            val digest = MessageDigest.getInstance("SHA-256").digest(manifest.toByteArray(Charsets.UTF_8))
+            val key = digest.joinToString("") { "%02x".format(it) }.take(12)
+            manifestStore[key] = manifest
+            val ipAddress = resolveLocalIpv4Address(context)
+            return "http://$ipAddress:$PORT${dashManifestPath(key)}"
+        }
+
         /**
          * 生成代理 URL供 DLNA 设备使用
          * @param context 用于获取 Wi-Fi IP 地址
@@ -133,10 +169,10 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
          */
         fun getProxyUrl(context: Context, targetUrl: String): String {
             val ipAddress = resolveLocalIpv4Address(context)
-            
+
             // 对目标 URL 进行编码，作为参数传递
             val encodedUrl = URLEncoder.encode(targetUrl, "UTF-8")
-            
+
             return "http://$ipAddress:$PORT/proxy?url=$encodedUrl"
         }
 
@@ -162,11 +198,6 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
                 .orEmpty()
             pickBestIpv4Address(linkAddresses)?.let { return it }
 
-            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val fallbackIp = Formatter.formatIpAddress(wifiManager.connectionInfo.ipAddress)
-            if (!fallbackIp.isNullOrBlank() && fallbackIp != "0.0.0.0") {
-                return fallbackIp
-            }
             return "127.0.0.1"
         }
 

@@ -19,3 +19,19 @@ internal fun resolveNextQueuedDownloadTaskId(tasks: Collection<DownloadTask>): S
         .map { it.id }
         .firstOrNull()
 }
+
+internal enum class DownloadWorkerCancellationDecision {
+    FINISH,
+    RETRY
+}
+
+internal fun resolveDownloadWorkerCancellationDecision(
+    status: DownloadStatus?
+): DownloadWorkerCancellationDecision {
+    return when (status) {
+        null,
+        DownloadStatus.PAUSED,
+        DownloadStatus.COMPLETED -> DownloadWorkerCancellationDecision.FINISH
+        else -> DownloadWorkerCancellationDecision.RETRY
+    }
+}

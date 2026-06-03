@@ -1,9 +1,13 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.refresh.WatchLaterRefreshBus
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.data.model.response.FollowingUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 
 private const val FAVORITE_SEASON_PATH = "x/v3/fav/season/fav"
@@ -30,6 +34,11 @@ internal fun buildCollectionSubscriptionRequest(
     )
 }
 
+data class FollowStateChange(
+    val mid: Long,
+    val isFollowing: Boolean
+)
+
 /**
  * 用户操作相关 Repository
  * - 关注/取关 UP 主
@@ -37,7 +46,10 @@ internal fun buildCollectionSubscriptionRequest(
  */
 object ActionRepository {
     private val api = NetworkModule.api
+    private val _followStateChanges = MutableSharedFlow<FollowStateChange>(extraBufferCapacity = 32)
+    val followStateChanges = _followStateChanges.asSharedFlow()
     private const val SPECIAL_FOLLOW_TAG_ID = -10L
+    private const val ALL_FOLLOW_TAG_ID = -20L
     private const val FOLLOW_GROUP_BATCH_SIZE = 20
     private const val FOLLOW_GROUP_MAX_RETRIES = 3
     private const val FOLLOW_GROUP_REQUEST_INTERVAL_MS = 220L
@@ -148,6 +160,7 @@ object ActionRepository {
                 com.android.purebilibili.core.util.Logger.d("ActionRepository", " Response: code=${response.code}, message=${response.message}")
                 
                 if (response.code == 0) {
+                    _followStateChanges.tryEmit(FollowStateChange(mid = mid, isFollowing = follow))
                     Result.success(follow)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "操作失败: ${response.code}" }))
@@ -453,6 +466,43 @@ object ActionRepository {
         }
     }
 
+    suspend fun getAllFollowGroupUsers(): Result<List<FollowingUser>> {
+        return getFollowGroupUsers(tagId = ALL_FOLLOW_TAG_ID)
+    }
+
+    private suspend fun getFollowGroupUsers(tagId: Long): Result<List<FollowingUser>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val result = linkedMapOf<Long, FollowingUser>()
+                var page = 1
+
+                while (page <= FOLLOW_GROUP_TAG_MEMBERS_MAX_PAGES) {
+                    val response = api.getRelationTagFollowingUsers(
+                        tagId = tagId,
+                        pageSize = FOLLOW_GROUP_TAG_MEMBERS_PAGE_SIZE,
+                        page = page
+                    )
+                    if (response.code != 0) {
+                        return@withContext Result.failure(
+                            Exception(response.message.ifEmpty { "获取分组成员失败: ${response.code}" })
+                        )
+                    }
+
+                    val users = response.data.filter { it.mid > 0L }
+                    users.forEach { user -> result[user.mid] = user }
+
+                    if (users.size < FOLLOW_GROUP_TAG_MEMBERS_PAGE_SIZE) break
+                    page += 1
+                    delay(FOLLOW_GROUP_REQUEST_INTERVAL_MS)
+                }
+
+                Result.success(result.values.toList())
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     suspend fun overwriteFollowGroupIds(
         targetMids: Set<Long>,
         selectedTagIds: Set<Long>
@@ -740,7 +790,10 @@ object ActionRepository {
                 com.android.purebilibili.core.util.Logger.d("ActionRepository", " toggleWatchLater: aid=$aid, add=$add, code=${response.code}")
                 
                 when (response.code) {
-                    0 -> Result.success(add)
+                    0 -> {
+                        WatchLaterRefreshBus.notifyChanged()
+                        Result.success(add)
+                    }
                     90001 -> Result.failure(Exception("稍后再看列表已满"))
                     90003 -> Result.failure(Exception("视频已被删除"))
                     else -> Result.failure(Exception(response.message.ifEmpty { "操作失败: ${response.code}" }))

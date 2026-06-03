@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.feature.video.interaction.InteractiveChoicePanelUiState
@@ -109,9 +110,12 @@ fun InteractiveChoiceOverlay(
                     ) {
                         Text(
                             text = state.title,
+                            modifier = Modifier.weight(1f),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         val countdown = state.remainingMs
                         if (countdown != null) {
@@ -120,6 +124,12 @@ fun InteractiveChoiceOverlay(
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.error
                             )
+                        }
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(width = 56.dp, height = 32.dp)
+                        ) {
+                            Text("关闭")
                         }
                     }
 
@@ -137,14 +147,6 @@ fun InteractiveChoiceOverlay(
                         }
                     }
 
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .size(width = 72.dp, height = 32.dp)
-                    ) {
-                        Text("关闭")
-                    }
                 }
             }
         }

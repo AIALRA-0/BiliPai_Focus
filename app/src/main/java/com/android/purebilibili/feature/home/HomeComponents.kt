@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 
 // ==========================================
 // 对话框组件
@@ -28,7 +29,7 @@ fun WelcomeDialog(githubUrl: String, onConfirm: () -> Unit) {
         title = { Text("欢迎") },
         text = {
             Column {
-                Text("本应用仅供学习使用")
+                Text("本应用仅供学习使用。")
                 TextButton(onClick = { uriHandler.openUri(githubUrl) }) {
                     Text("开源地址: $githubUrl", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
@@ -39,7 +40,7 @@ fun WelcomeDialog(githubUrl: String, onConfirm: () -> Unit) {
                 Text("进入")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = AppSurfaceTokens.cardContainer()
     )
 }
 

@@ -121,6 +121,35 @@ class PlaylistManagerShufflePolicyTest {
         assertEquals("BV3", PlaylistManager.playNext()?.bvid)
     }
 
+    @Test
+    fun `sequential mode should stop at queue end`() {
+        PlaylistManager.setPlaylist(
+            items = listOf(
+                playlistItem("BV1"),
+                playlistItem("BV2")
+            ),
+            startIndex = 1
+        )
+        PlaylistManager.setPlayMode(PlayMode.SEQUENTIAL)
+
+        assertEquals(null, PlaylistManager.playNext())
+    }
+
+    @Test
+    fun `repeat one mode should keep current item on next`() {
+        PlaylistManager.setPlaylist(
+            items = listOf(
+                playlistItem("BV1"),
+                playlistItem("BV2")
+            ),
+            startIndex = 1
+        )
+        PlaylistManager.setPlayMode(PlayMode.REPEAT_ONE)
+
+        assertEquals("BV2", PlaylistManager.playNext()?.bvid)
+        assertEquals(1, PlaylistManager.currentIndex.value)
+    }
+
     private fun playlistItem(bvid: String) = PlaylistItem(
         bvid = bvid,
         title = bvid,

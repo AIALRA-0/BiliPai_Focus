@@ -2,9 +2,11 @@ package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.data.model.response.HistoryBusiness
 import com.android.purebilibili.data.model.response.HistoryItem
+import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class HistoryNavigationPolicyTest {
 
@@ -52,5 +54,21 @@ class HistoryNavigationPolicyTest {
         )
 
         assertEquals(HistoryNavigationKind.ARTICLE, kind)
+    }
+
+    @Test
+    fun `pgc history card hides up badge and uses content type when owner is missing`() {
+        val item = HistoryItem(
+            videoItem = VideoItem(
+                title = "名侦探柯南：犯人犯泽先生",
+                owner = Owner()
+            ),
+            business = HistoryBusiness.PGC
+        )
+
+        val presentation = requireNotNull(resolveHistoryCardPresentation(item))
+
+        assertFalse(presentation.showUpBadge)
+        assertEquals("番剧", presentation.videoItem.owner.name)
     }
 }

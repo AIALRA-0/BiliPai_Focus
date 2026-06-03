@@ -16,11 +16,46 @@ enum class DownloadStatus {
     PAUSED          // 已暂停
 }
 
+@Serializable
+data class DownloadOptions(
+    val includeDanmaku: Boolean = true
+)
+
+@Serializable
+enum class DownloadAssetKind {
+    VIDEO,
+    AUDIO,
+    COVER,
+    DANMAKU
+}
+
+@Serializable
+enum class DownloadAssetStatus {
+    PENDING,
+    DOWNLOADING,
+    COMPLETED,
+    FAILED,
+    SKIPPED
+}
+
+@Serializable
+data class DownloadAssetState(
+    val kind: DownloadAssetKind,
+    val status: DownloadAssetStatus = DownloadAssetStatus.PENDING,
+    val totalBytes: Long = 0L,
+    val downloadedBytes: Long = 0L,
+    val filePath: String? = null,
+    val tempPath: String? = null,
+    val errorMessage: String? = null,
+    val segmentCount: Int = 0
+)
+
 /**
  * 下载任务数据模型
  */
 @Serializable
 data class DownloadTask(
+    val aid: Long = 0L,
     val bvid: String,
     val cid: Long,
     val title: String,
@@ -51,7 +86,11 @@ data class DownloadTask(
     val exportedFileUri: String? = null, // 📁 [新增] 导出到用户授权目录后的 URI
     val isAudioOnly: Boolean = false,    // 🎵 [新增] 仅下载音频
     val isVerticalVideo: Boolean = false,
-    val lastPlaybackPositionMs: Long = 0L
+    val lastPlaybackPositionMs: Long = 0L,
+    val options: DownloadOptions = DownloadOptions(),
+    val assets: List<DownloadAssetState> = emptyList(),
+    val localDanmakuSegmentPaths: List<String> = emptyList(),
+    val localDanmakuMetadataPath: String? = null
 ) {
     val id: String get() = if (isAudioOnly) "${bvid}_${cid}_audio" else "${bvid}_${cid}_$quality"
     

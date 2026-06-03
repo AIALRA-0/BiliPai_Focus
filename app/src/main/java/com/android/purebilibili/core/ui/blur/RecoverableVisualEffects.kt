@@ -9,8 +9,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import com.android.purebilibili.core.lifecycle.BackgroundManager
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+
+fun Modifier.hazeSourceCompat(state: HazeState): Modifier {
+    if (!shouldAllowRuntimeShaderBackedHazeEffect(Build.VERSION.SDK_INT)) return this
+    return hazeSource(state)
+}
 
 internal fun shouldEnableRecoverableHeavyVisualEffects(
     userEnabled: Boolean,
@@ -26,6 +33,12 @@ internal fun shouldRecreateRecoverableHazeState(
 }
 
 internal fun shouldAllowHomeChromeLiquidGlass(
+    sdkInt: Int
+): Boolean {
+    return sdkInt >= Build.VERSION_CODES.TIRAMISU
+}
+
+internal fun shouldAllowRuntimeShaderBackedHazeEffect(
     sdkInt: Int
 ): Boolean {
     return sdkInt >= Build.VERSION_CODES.TIRAMISU

@@ -20,7 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -141,7 +141,7 @@ fun AtMeScreen(
     onOpenSpace: (Long) -> Unit,
     viewModel: AtMeViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     AdaptiveScaffold(
         topBar = {
@@ -187,7 +187,17 @@ fun AtMeScreen(
                             AtMeCard(
                                 item = item,
                                 onClick = {
-                                    firstNonBlank(item.item?.nativeUri, item.item?.uri)?.let(onOpenLink)
+                                    item.item?.let { content ->
+                                        buildMessageFeedCommentNavigationLink(
+                                            nativeUri = content.nativeUri,
+                                            uri = content.uri,
+                                            businessId = content.businessId.toInt(),
+                                            subjectId = content.subjectId,
+                                            rootId = content.rootId,
+                                            sourceId = content.sourceId,
+                                            targetId = content.targetId
+                                        )?.let(onOpenLink)
+                                    }
                                 },
                                 onUserClick = {
                                     item.user?.mid?.takeIf { it > 0 }?.let(onOpenSpace)

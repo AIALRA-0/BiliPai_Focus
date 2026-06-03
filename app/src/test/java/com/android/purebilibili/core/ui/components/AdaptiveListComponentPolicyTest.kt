@@ -252,4 +252,47 @@ class AdaptiveListComponentPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `global wallpaper should make default grouped settings translucent`() {
+        val colorScheme = lightColorScheme(
+            surface = Color(0xFFFFFFFF),
+            surfaceContainerLow = Color(0xFFF8F4FA)
+        )
+
+        assertEquals(
+            colorScheme.surfaceContainerLow.copy(alpha = 0.62f),
+            resolveAdaptiveGroupContainerColor(
+                uiPreset = UiPreset.MD3,
+                colorScheme = colorScheme,
+                fallbackColor = Color.White,
+                globalWallpaperVisible = true
+            )
+        )
+        assertEquals(
+            colorScheme.surface.copy(alpha = 0.62f),
+            resolveAdaptiveGroupContainerColor(
+                uiPreset = UiPreset.IOS,
+                colorScheme = colorScheme,
+                fallbackColor = colorScheme.surface,
+                globalWallpaperVisible = true
+            )
+        )
+    }
+
+    @Test
+    fun `global wallpaper should keep custom grouped settings colors opaque`() {
+        val colorScheme = lightColorScheme()
+        val customColor = Color(0xFF123456)
+
+        assertEquals(
+            customColor,
+            resolveAdaptiveGroupContainerColor(
+                uiPreset = UiPreset.IOS,
+                colorScheme = colorScheme,
+                fallbackColor = customColor,
+                globalWallpaperVisible = true
+            )
+        )
+    }
 }

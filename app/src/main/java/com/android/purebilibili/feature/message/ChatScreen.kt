@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,11 +52,13 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.EmoteInfo
 import com.android.purebilibili.data.model.response.PrivateMessageItem
+import com.android.purebilibili.data.repository.MessageSessionControlInfo
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,12 +68,15 @@ fun ChatScreen(
     userName: String,
     onBack: () -> Unit,
     onNavigateToVideo: (String) -> Unit,
+    onOpenBilibiliLink: (String) -> Unit = {},
     viewModel: ChatViewModel = viewModel(factory = ChatViewModel.Factory(talkerId, sessionType))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     var pendingWithdrawMessage by remember { mutableStateOf<PrivateMessageItem?>(null) }
+    var showSessionMenu by remember { mutableStateOf(false) }
+    var showInterceptConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -94,6 +100,40 @@ fun ChatScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showSessionMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "会话设置")
+                        }
+                        ChatSessionControlMenu(
+                            expanded = showSessionMenu,
+                            sessionType = sessionType,
+                            controlInfo = uiState.sessionControlInfo,
+                            isUpdating = uiState.isSessionControlUpdating,
+                            onDismiss = { showSessionMenu = false },
+                            onToggleDnd = {
+                                showSessionMenu = false
+                                viewModel.toggleDnd()
+                            },
+                            onTogglePush = {
+                                showSessionMenu = false
+                                viewModel.togglePushMuted()
+                            },
+                            onToggleIntercept = {
+                                showSessionMenu = false
+                                if (uiState.sessionControlInfo.isIntercept == true) {
+                                    viewModel.toggleIntercept()
+                                } else {
+                                    showInterceptConfirm = true
+                                }
+                            },
+                            onRefresh = {
+                                showSessionMenu = false
+                                viewModel.loadSessionControlInfo()
+                            }
+                        )
                     }
                 }
             )
@@ -190,6 +230,9 @@ fun ChatScreen(
                                 },
                                 onVideoClick = { bvid ->
                                     onNavigateToVideo(bvid)
+                                },
+                                onLinkClick = { link ->
+                                    onOpenBilibiliLink(link)
                                 }
                             )
                         }
@@ -251,6 +294,96 @@ fun ChatScreen(
         if (uiState.withdrawingMessageKey == null) {
             pendingWithdrawMessage = null
         }
+    }
+
+    if (showInterceptConfirm) {
+        AlertDialog(
+            onDismissRequest = { showInterceptConfirm = false },
+            title = { Text("移入拦截") },
+            text = { Text("后续这类会话会进入拦截分类，仍可在拦截列表中查看和恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.toggleIntercept()
+                        showInterceptConfirm = false
+                    }
+                ) {
+                    Text("移入")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showInterceptConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ChatSessionControlMenu(
+    expanded: Boolean,
+    sessionType: Int,
+    controlInfo: MessageSessionControlInfo,
+    isUpdating: Boolean,
+    onDismiss: () -> Unit,
+    onToggleDnd: () -> Unit,
+    onTogglePush: () -> Unit,
+    onToggleIntercept: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss
+    ) {
+        DropdownMenuItem(
+            text = {
+                Text(if (controlInfo.isDnd == true) "关闭免打扰" else "开启免打扰")
+            },
+            enabled = !isUpdating,
+            onClick = onToggleDnd
+        )
+
+        if (sessionType == 1 && controlInfo.showPushSetting) {
+            DropdownMenuItem(
+                text = {
+                    Text(if (controlInfo.pushMuted == true) "接收推送" else "关闭推送")
+                },
+                enabled = !isUpdating,
+                onClick = onTogglePush
+            )
+        }
+
+        if (sessionType == 1) {
+            DropdownMenuItem(
+                text = {
+                    Text(if (controlInfo.isIntercept == true) "移出拦截" else "移入拦截")
+                },
+                enabled = !isUpdating,
+                onClick = onToggleIntercept
+            )
+        }
+
+        if (controlInfo.isLimit == true || controlInfo.reportLimit == true) {
+            DropdownMenuItem(
+                text = {
+                    val text = when {
+                        controlInfo.isLimit == true && controlInfo.reportLimit == true -> "会话受限，举报也受限"
+                        controlInfo.isLimit == true -> "会话受限"
+                        else -> "举报受限"
+                    }
+                    Text(text)
+                },
+                enabled = false,
+                onClick = {}
+            )
+        }
+
+        DropdownMenuItem(
+            text = { Text("刷新状态") },
+            enabled = !isUpdating,
+            onClick = onRefresh
+        )
     }
 }
 
@@ -324,7 +457,8 @@ fun MessageBubble(
     videoPreviews: Map<String, VideoPreviewInfo> = emptyMap(),
     canWithdraw: Boolean = false,
     onLongPress: (() -> Unit)? = null,
-    onVideoClick: ((String) -> Unit)? = null
+    onVideoClick: ((String) -> Unit)? = null,
+    onLinkClick: ((String) -> Unit)? = null
 ) {
     val bubbleColor = if (isOwnMessage) {
         MaterialTheme.colorScheme.primary
@@ -396,7 +530,8 @@ fun MessageBubble(
                         text = content,
                         emoteInfos = emoteInfos,
                         color = textColor,
-                        fontSize = 15.sp
+                        fontSize = 15.sp,
+                        onLinkClick = onLinkClick
                     )
                 }
                 message.msg_type == 2 -> {
@@ -449,24 +584,35 @@ fun MessageBubble(
                     )
                 }
                 message.msg_type == 11 -> {
-                    MessagePreviewParser.parseVideoCard(message.content)?.let { videoCard ->
-                        VideoLinkPreviewCard(
-                            preview = VideoPreviewInfo(
-                                bvid = videoCard.bvid,
-                                title = videoCard.title,
-                                cover = videoCard.cover,
-                                ownerName = "",
-                                viewCount = 0,
-                                duration = videoCard.duration
-                            ),
+                    MessagePreviewParser.parseMessageCard(message.content, message.msg_type)?.let { card ->
+                        MessageCardPreviewCard(
+                            preview = card,
                             onClick = {
-                                if (videoCard.bvid.isNotBlank()) {
-                                    onVideoClick?.invoke(videoCard.bvid)
+                                when {
+                                    card.bvid.isNotBlank() -> onVideoClick?.invoke(card.bvid)
+                                    card.targetUrl.isNotBlank() -> onLinkClick?.invoke(card.targetUrl)
                                 }
                             }
                         )
                     } ?: Text(
                         text = "[视频]",
+                        color = textColor,
+                        fontSize = 15.sp
+                    )
+                }
+                message.msg_type in setOf(7, 12, 13, 14) -> {
+                    MessagePreviewParser.parseMessageCard(message.content, message.msg_type)?.let { card ->
+                        MessageCardPreviewCard(
+                            preview = card,
+                            onClick = {
+                                when {
+                                    card.bvid.isNotBlank() -> onVideoClick?.invoke(card.bvid)
+                                    card.targetUrl.isNotBlank() -> onLinkClick?.invoke(card.targetUrl)
+                                }
+                            }
+                        )
+                    } ?: Text(
+                        text = "[${getMessageTypeName(message.msg_type)}]",
                         color = textColor,
                         fontSize = 15.sp
                     )
@@ -608,6 +754,67 @@ fun VideoLinkPreviewCard(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MessageCardPreviewCard(
+    preview: MessageCardPreview,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .widthIn(max = 260.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (preview.cover.isNotBlank()) {
+                AsyncImage(
+                    model = preview.cover,
+                    contentDescription = preview.title,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentScale = ContentScale.Crop
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = preview.kind.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = preview.title.ifBlank { preview.kind.label },
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (preview.subtitle.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = preview.subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -787,13 +994,15 @@ fun EmoteText(
     text: String,
     emoteInfos: List<EmoteInfo>,
     color: Color,
-    fontSize: androidx.compose.ui.unit.TextUnit
+    fontSize: androidx.compose.ui.unit.TextUnit,
+    onLinkClick: ((String) -> Unit)? = null
 ) {
     RichMessageText(
         text = text,
         emoteInfos = emoteInfos,
         color = color,
-        fontSize = fontSize
+        fontSize = fontSize,
+        onLinkClick = onLinkClick
     )
 }
 
@@ -864,6 +1073,8 @@ private fun getMessageTypeName(msgType: Int): String {
         10 -> "通知"
         11 -> "视频"
         12 -> "专栏"
+        13 -> "图片卡片"
+        14 -> "分享"
         else -> "消息"
     }
 }

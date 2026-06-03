@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.WatchLater
 import com.android.purebilibili.core.theme.UiPreset
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.Tv
@@ -103,6 +104,8 @@ class AppIconsPresetPolicyTest {
         assertEquals(Icons.Outlined.Info, resolveAppInfoIcon(UiPreset.MD3))
         assertEquals(Icons.Outlined.NotificationsNone, resolveAppNotificationIcon(UiPreset.MD3))
         assertEquals(Icons.Outlined.AutoAwesome, resolveAppSparklesIcon(UiPreset.MD3))
+        assertEquals(Icons.Outlined.WatchLater, resolveAppWatchLaterIcon(UiPreset.MD3))
+        assertEquals(AppIcons.BiliCoin, resolveAppCoinIcon(UiPreset.MD3))
     }
 
     @Test
@@ -146,5 +149,7 @@ class AppIconsPresetPolicyTest {
         assertEquals(CupertinoIcons.Outlined.InfoCircle, resolveAppInfoIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.BellBadge, resolveAppNotificationIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.Sparkles, resolveAppSparklesIcon(UiPreset.IOS))
+        assertEquals(CupertinoIcons.Outlined.Clock, resolveAppWatchLaterIcon(UiPreset.IOS))
+        assertEquals(AppIcons.BiliCoin, resolveAppCoinIcon(UiPreset.IOS))
     }
 }

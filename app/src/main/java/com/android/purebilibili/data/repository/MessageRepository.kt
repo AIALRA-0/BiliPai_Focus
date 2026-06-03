@@ -15,6 +15,16 @@ import java.util.UUID
  * 私信相关数据仓库
  * 负责处理会话列表、私信消息的获取和发送
  */
+data class MessageSessionControlInfo(
+    val isLimit: Boolean? = null,
+    val reportLimit: Boolean? = null,
+    val isDnd: Boolean? = null,
+    val pushMuted: Boolean? = null,
+    val showPushSetting: Boolean = false,
+    val followStatus: Int? = null,
+    val isIntercept: Boolean? = null
+)
+
 object MessageRepository {
     private val api = NetworkModule.messageApi
     private val bilibiliApi = NetworkModule.api
@@ -28,6 +38,15 @@ object MessageRepository {
     private fun getDeviceId(): String {
         return deviceIdCache ?: UUID.randomUUID().toString().also {
             deviceIdCache = it
+        }
+    }
+
+    private fun requireCsrf(): Result<String> {
+        val csrf = TokenManager.csrfCache
+        return if (csrf.isNullOrEmpty()) {
+            Result.failure(Exception("请先登录"))
+        } else {
+            Result.success(csrf)
         }
     }
 
@@ -329,6 +348,172 @@ object MessageRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("MessageRepo", "getMessages exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSessionControlInfo(
+        talkerId: Long,
+        sessionType: Int
+    ): Result<MessageSessionControlInfo> = withContext(Dispatchers.IO) {
+        try {
+            val detail = runCatching {
+                api.getSessionDetail(talkerId = talkerId, sessionType = sessionType)
+                    .takeIf { it.code == 0 }
+                    ?.data
+            }.getOrNull()
+
+            val ownUid = TokenManager.midCache
+            val dnd = if (ownUid != null && ownUid > 0) {
+                runCatching {
+                    api.getMsgDnd(
+                        ownUid = ownUid,
+                        uid = talkerId.takeIf { sessionType == 1 },
+                        groupId = talkerId.takeIf { sessionType == 2 }
+                    ).takeIf { it.code == 0 }?.data
+                }.getOrNull()
+            } else {
+                null
+            }
+            val isDnd = when (sessionType) {
+                2 -> dnd?.group_settings?.firstOrNull { it.id == talkerId }?.setting == 1
+                else -> dnd?.uid_settings?.firstOrNull { it.id == talkerId }?.setting == 1
+            }.takeIf { dnd != null } ?: detail?.is_dnd?.let { it == 1 }
+
+            val limit = if (sessionType == 1) {
+                runCatching {
+                    api.getSessionLimit(uid = talkerId)
+                        .takeIf { it.code == 0 }
+                        ?.data
+                }.getOrNull()
+            } else {
+                null
+            }
+            val push = if (sessionType == 1) {
+                runCatching {
+                    api.getSessionPushSetting(talkerUid = talkerId)
+                        .takeIf { it.code == 0 }
+                        ?.data
+                }.getOrNull()
+            } else {
+                null
+            }
+
+            Result.success(
+                MessageSessionControlInfo(
+                    isLimit = limit?.let { it.is_limit == 1 },
+                    reportLimit = limit?.let { it.report_limit == 1 },
+                    isDnd = isDnd,
+                    pushMuted = push?.let { it.push_setting == 1 },
+                    showPushSetting = push?.show_push_setting == 1,
+                    followStatus = push?.follow_status,
+                    isIntercept = detail?.is_intercept?.let { it == 1 }
+                )
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "getSessionControlInfo exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setSessionDnd(
+        talkerId: Long,
+        sessionType: Int,
+        enabled: Boolean
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = requireCsrf().getOrElse { return@withContext Result.failure(it) }
+            val response = api.setMsgDnd(
+                ownUid = TokenManager.midCache,
+                setting = if (enabled) 1 else 0,
+                dndUid = talkerId.takeIf { sessionType == 1 },
+                dndGroupId = talkerId.takeIf { sessionType == 2 },
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "更新免打扰失败 (${response.code})" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "setSessionDnd exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setSessionPushMuted(
+        talkerId: Long,
+        muted: Boolean
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = requireCsrf().getOrElse { return@withContext Result.failure(it) }
+            val response = api.setPushSetting(
+                talkerUid = talkerId,
+                setting = if (muted) 1 else 0,
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "更新推送设置失败 (${response.code})" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "setSessionPushMuted exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setSessionIntercept(
+        talkerId: Long,
+        intercepted: Boolean
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = requireCsrf().getOrElse { return@withContext Result.failure(it) }
+            val response = api.updateIntercept(
+                talkerId = talkerId,
+                status = if (intercepted) 1 else 0,
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "更新拦截状态失败 (${response.code})" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "setSessionIntercept exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markDustbinRead(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = requireCsrf().getOrElse { return@withContext Result.failure(it) }
+            val response = api.batchUpdateDustbinAck(csrf = csrf, csrfToken = csrf)
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "拦截会话已读失败 (${response.code})" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "markDustbinRead exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun clearDustbinSessions(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = requireCsrf().getOrElse { return@withContext Result.failure(it) }
+            val response = api.batchRemoveDustbin(csrf = csrf, csrfToken = csrf)
+            if (response.code == 0) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifEmpty { "清空拦截会话失败 (${response.code})" }))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MessageRepo", "clearDustbinSessions exception: ${e.message}", e)
             Result.failure(e)
         }
     }

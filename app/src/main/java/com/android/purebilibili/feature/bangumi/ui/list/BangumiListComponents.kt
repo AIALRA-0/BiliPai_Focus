@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +37,7 @@ fun BangumiCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(AppShapes.container(ContainerLevel.Chip))
             .clickable(onClick = onClick)
     ) {
         // 封面
@@ -43,7 +45,7 @@ fun BangumiCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.75f)  // 3:4 比例
-                .clip(RoundedCornerShape(8.dp))
+                .clip(AppShapes.container(ContainerLevel.Chip))
         ) {
             AsyncImage(
                 model = FormatUtils.fixImageUrl(item.cover),
@@ -125,9 +127,9 @@ fun BangumiSearchCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(AppShapes.container(ContainerLevel.Chip))
             .clickable(onClick = onClick)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(AppSurfaceTokens.cardContainer())
             .padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -136,7 +138,7 @@ fun BangumiSearchCard(
             modifier = Modifier
                 .width(80.dp)
                 .aspectRatio(0.75f)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(AppShapes.container(ContainerLevel.Chip))
         ) {
             AsyncImage(
                 model = FormatUtils.fixImageUrl(item.cover),
@@ -217,18 +219,19 @@ fun BangumiSearchCard(
 fun BangumiSearchCardGrid(
     item: BangumiSearchItem,
     onClick: () -> Unit,
+    onEpisodeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(AppShapes.container(ContainerLevel.Chip))
             .clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.75f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(AppShapes.container(ContainerLevel.Chip))
         ) {
             AsyncImage(
                 model = FormatUtils.fixImageUrl(item.cover),
@@ -295,6 +298,23 @@ fun BangumiSearchCardGrid(
             fontSize = 12.sp,
             lineHeight = 16.sp
         )
+        val hitEpisode = item.episodes?.firstOrNull { it.id > 0L }
+        if (hitEpisode != null && onEpisodeClick != null) {
+            TextButton(
+                onClick = onEpisodeClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 36.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = item.buttonText.ifBlank { "播匹配分集" },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 11.sp
+                )
+            }
+        }
     }
 }
 
@@ -310,7 +330,7 @@ fun BangumiBadge(
     Surface(
         modifier = modifier,
         color = containerColor,
-        shape = RoundedCornerShape(4.dp)
+        shape = AppShapes.container(ContainerLevel.Tag)
     ) {
         Text(
             text = text,
@@ -356,7 +376,7 @@ fun BangumiGrid(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier.fillMaxSize()
     ) {
-        items(items) { item ->
+        items(items, key = { it.seasonId }) { item ->
             BangumiCard(
                 item = item,
                 onClick = { onItemClick(item) }

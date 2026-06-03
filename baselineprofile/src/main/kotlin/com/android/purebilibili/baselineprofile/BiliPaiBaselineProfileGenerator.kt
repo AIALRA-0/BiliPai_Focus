@@ -85,9 +85,8 @@ class BiliPaiBaselineProfileGenerator {
     }
 
     private fun MacrobenchmarkScope.startVideoDetailActivity() {
-        device.executeShellCommand(
-            "am start -W -n $TARGET_VIDEO_ACTIVITY_COMPONENT --es bvid ${resolveBenchmarkBvid()}"
-        )
+        val component = "$TARGET_PACKAGE_NAME/.feature.video.VideoActivity"
+        device.executeShellCommand("am start -W -n $component --es bvid ${resolveBenchmarkBvid()}")
         device.wait(Until.findObject(By.pkg(TARGET_PACKAGE_NAME)), 8_000)
         device.waitForIdle()
     }

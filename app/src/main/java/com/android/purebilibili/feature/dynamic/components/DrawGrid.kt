@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 fun DrawGridV2(
     items: List<DrawItem>,
     gifImageLoader: ImageLoader,
+    maxDisplayImages: Int? = 9,
     onImageClick: (Int, Rect?) -> Unit = { _, _ -> }  //  [修改] 图片点击回调，新增 Rect 参数
 ) {
     if (items.isEmpty()) return
@@ -48,7 +49,11 @@ fun DrawGridV2(
     val context = LocalContext.current
     val defaultImageLoader = context.imageLoader
     val totalCount = items.size  //  保存总图片数
-    val displayItems = items.take(9)
+    val displayCount = resolveDrawGridDisplayCount(
+        totalImages = totalCount,
+        maxDisplayImages = maxDisplayImages
+    )
+    val displayItems = items.take(displayCount)
     val columns = when {
         displayItems.size == 1 -> 1
         displayItems.size <= 4 -> 2
@@ -182,7 +187,7 @@ private fun DrawGridImage(
             )
         }
 
-        if (index == displayCount - 1 && totalCount > 9) {
+        if (shouldDrawGridShowMoreBadge(index = index, displayCount = displayCount, totalCount = totalCount)) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -190,7 +195,7 @@ private fun DrawGridImage(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "+${totalCount - 9}",
+                    "+${totalCount - displayCount}",
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold

@@ -13,7 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,13 +30,14 @@ fun StoryScreen(
     viewModel: StoryViewModel = viewModel(),
     playerViewModel: PlayerViewModel = viewModel(),
     commentViewModel: VideoCommentViewModel = viewModel(),
+    isActive: Boolean = true,
     onBack: () -> Unit,
     onVideoClick: (String, Long, String) -> Unit = { _, _, _ -> },
     onUserClick: (Long) -> Unit = {},
     onSearchClick: () -> Unit = {},
     onRotateToLandscape: () -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val portraitFeed = remember(uiState.items) {
         buildStoryPortraitFeed(uiState.items)
     }
@@ -76,6 +77,7 @@ fun StoryScreen(
                     initialBvid = portraitFeed.initialInfo.bvid,
                     initialInfo = portraitFeed.initialInfo,
                     recommendations = portraitFeed.recommendations,
+                    isActive = isActive,
                     onBack = onBack,
                     onHomeClick = onBack,
                     onVideoChange = { },

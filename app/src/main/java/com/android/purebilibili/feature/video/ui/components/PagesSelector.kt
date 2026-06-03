@@ -204,7 +204,7 @@ fun PagesSelector(
                 contentPadding = PaddingValues(horizontal = layoutPolicy.horizontalPaddingDp.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(pages.size) { index ->
+                items(pages.size, key = { index -> pages[index].cid }) { index ->
                     val page = pages[index]
                     PageSelectorItem(
                         page = page,
@@ -355,7 +355,7 @@ private fun PagesSelectorFilterBar(
                         label = { Text("全部 $totalCount") }
                     )
                 }
-                items(groups) { group ->
+                items(groups, key = { it.key }) { group ->
                     FilterChip(
                         selected = selectedGroupKey == group.key,
                         onClick = { onGroupSelect(group.key) },
@@ -414,7 +414,7 @@ private fun PagesGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(visiblePageIndices.size) { itemIndex ->
+        items(visiblePageIndices.size, key = { itemIndex -> pages[visiblePageIndices[itemIndex]].cid }) { itemIndex ->
             val index = visiblePageIndices[itemIndex]
             val page = pages[index]
             PageSelectorItem(

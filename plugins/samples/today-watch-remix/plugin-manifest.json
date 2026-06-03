@@ -1,0 +1,11 @@
+{
+  "pluginId": "dev.example.today_watch_remix",
+  "displayName": "Today Watch Remix",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "entryClassName": "dev.example.todaywatchremix.TodayWatchRemixPlugin",
+  "capabilities": [
+    "RECOMMENDATION_CANDIDATES",
+    "LOCAL_HISTORY_READ"
+  ]
+}

@@ -36,6 +36,7 @@ import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.live.rememberLiveChromePalette
 import com.android.purebilibili.feature.live.resolveLivePiliPlusChatBubbleTokens
 import com.android.purebilibili.feature.live.resolveLivePiliPlusRoomColorTokens
+import com.android.purebilibili.feature.live.shouldRenderLiveDanmakuImageEmoticon
 import com.android.purebilibili.feature.live.shouldRenderLiveDanmaku
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.Paperplane
@@ -45,6 +46,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 直播聊天区域组件
@@ -89,7 +91,7 @@ fun LiveChatSection(
                 try {
                     val shouldAutoScroll = !listState.isScrollInProgress && !isAwayFromBottom
                     messages.add(item)
-                    if (messages.size > 200) messages.removeFirst()
+                    if (messages.size > 200) messages.removeAt(0)
                     // 只有当用户没有滚动时才自动滚动
                     if (shouldAutoScroll && messages.isNotEmpty()) {
                         listState.animateScrollToItem(messages.size - 1)
@@ -244,7 +246,7 @@ private fun ChatMessageItem(
         palette.primaryText.copy(alpha = tokens.nameAlpha)
     }
     val bodyColor = if (isOverlay) Color.White else palette.primaryText
-    val emoticonMap by DanmakuEmoticonMapper.emoticonMap.collectAsState()
+    val emoticonMap by DanmakuEmoticonMapper.emoticonMap.collectAsStateWithLifecycle()
     val replyColor = if (isOverlay) Color(0xFF8FD5FF) else palette.accent
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -257,7 +259,7 @@ private fun ChatMessageItem(
             .padding(horizontal = tokens.horizontalPaddingDp.dp, vertical = tokens.verticalPaddingDp.dp)
 
         Box(modifier = bubbleModifier) {
-            if (item.emoticonUrl != null) {
+            if (shouldRenderLiveDanmakuImageEmoticon(item.emoticonUrl)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "${item.uname.ifBlank { "直播观众" }}: ",

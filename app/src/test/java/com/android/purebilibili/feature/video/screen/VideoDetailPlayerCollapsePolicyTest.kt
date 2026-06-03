@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import androidx.media3.common.Player
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -84,37 +85,23 @@ class VideoDetailPlayerCollapsePolicyTest {
     }
 
     @Test
-    fun `inline layout resets for portrait external navigation only when portrait fullscreen is active`() {
+    fun `resolveIsPlaybackPausedForCollapse follows explicit pause intent only`() {
         assertTrue(
-            shouldResetInlineLayoutForPortraitExternalNavigation(
-                isPortraitFullscreen = true
+            resolveIsPlaybackPausedForCollapse(
+                playWhenReady = false,
+                playbackState = Player.STATE_READY
             )
         )
         assertFalse(
-            shouldResetInlineLayoutForPortraitExternalNavigation(
-                isPortraitFullscreen = false
-            )
-        )
-    }
-
-    @Test
-    fun `inline layout resets on deferred portrait return only after portrait fullscreen exits`() {
-        assertTrue(
-            shouldResetInlineLayoutOnDeferredPortraitReturn(
-                hasDeferredRestore = true,
-                isPortraitFullscreen = false
+            resolveIsPlaybackPausedForCollapse(
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING
             )
         )
         assertFalse(
-            shouldResetInlineLayoutOnDeferredPortraitReturn(
-                hasDeferredRestore = false,
-                isPortraitFullscreen = false
-            )
-        )
-        assertFalse(
-            shouldResetInlineLayoutOnDeferredPortraitReturn(
-                hasDeferredRestore = true,
-                isPortraitFullscreen = true
+            resolveIsPlaybackPausedForCollapse(
+                playWhenReady = false,
+                playbackState = Player.STATE_ENDED
             )
         )
     }

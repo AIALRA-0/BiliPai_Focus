@@ -24,6 +24,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlayer
@@ -35,6 +36,7 @@ import coil.size.Scale
 import coil.transform.RoundedCornersTransformation
 import com.android.purebilibili.R
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.player.PlaybackMediaCache
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.NetworkUtils
@@ -60,6 +62,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 
 private const val NOTIFICATION_ID = 1001
@@ -177,7 +180,6 @@ internal fun applyPlaybackResolutionDebugInfo(
     return current.copy(resolution = "$width x $height")
 }
 
-@androidx.media3.common.util.UnstableApi
 internal fun applyVideoFormatDebugInfo(
     current: PlaybackDebugInfo,
     format: Format?,
@@ -201,7 +203,6 @@ internal fun applyVideoFormatDebugInfo(
     return updated
 }
 
-@androidx.media3.common.util.UnstableApi
 internal fun applyAudioFormatDebugInfo(
     current: PlaybackDebugInfo,
     format: Format?,
@@ -802,8 +803,10 @@ fun rememberVideoPlayerState(
                 "Referer" to "https://www.bilibili.com",
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             )
-            val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
+            val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
                 .setDefaultRequestProperties(headers)
+            val dataSourceFactory: DataSource.Factory =
+                PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
@@ -885,7 +888,8 @@ fun rememberVideoPlayerState(
     }
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
-        .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
+        .collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
+        )
     LaunchedEffect(player, playbackCompletionBehavior) {
         player.repeatMode = resolvePlaybackCompletionRepeatMode(playbackCompletionBehavior)
     }
@@ -910,7 +914,7 @@ fun rememberVideoPlayerState(
         VideoPlayerState(context, player, scope)
     }
 
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(uiState) {
         if (uiState is PlayerUiState.Success) {
             val info = (uiState as PlayerUiState.Success).info
@@ -962,8 +966,9 @@ fun rememberVideoPlayerState(
     //  [修复] 记录是否从后台音频模式恢复（后台音频时不应 seek 回旧位置）
     var wasBackgroundAudio by remember { mutableStateOf(false) }
     var hasTransientResumeIntent by remember { mutableStateOf(false) }
+    var hasForegroundResumeIntent by remember { mutableStateOf(false) }
     
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, player) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
@@ -980,6 +985,8 @@ fun rememberVideoPlayerState(
                         playWhenReady = player.playWhenReady,
                         playbackState = player.playbackState
                     )
+                    val isLeavingByNavigation = miniPlayerManager.isLeavingByNavigation
+                    hasForegroundResumeIntent = wasPlaying && !isLeavingByNavigation
                     
                     //  [新增] 判断是否应该继续播放
                     // 1. 应用内小窗模式 - 继续播放
@@ -994,7 +1001,8 @@ fun rememberVideoPlayerState(
                         isPip = isPip,
                         isBackgroundAudio = isBackgroundAudio,
                         wasPlaybackActive = wasPlaying,
-                        hasRecentUserLeaveHint = hasRecentUserLeaveHint
+                        hasRecentUserLeaveHint = hasRecentUserLeaveHint,
+                        isLeavingByNavigation = isLeavingByNavigation
                     )
                     
                     //  [修复] 记录后台音频状态，恢复时不要 seek 回旧位置
@@ -1019,15 +1027,17 @@ fun rememberVideoPlayerState(
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     val shouldEnsureAudibleOnForeground =
                         !miniPlayerManager.isMiniMode && !miniPlayerManager.isSystemPipActive
+                    val isLeavingByNavigation = miniPlayerManager.isLeavingByNavigation
                     val resumeDecision = resolvePlaybackResumeDecision(
                         wasPlaybackActive = wasPlaying,
                         hasTransientResumeIntent = hasTransientResumeIntent,
+                        hasForegroundResumeIntent = hasForegroundResumeIntent,
                         isPlaying = player.isPlaying,
                         playWhenReady = player.playWhenReady,
                         playbackState = player.playbackState,
                         currentVolume = player.volume,
                         shouldEnsureAudibleOnForeground = shouldEnsureAudibleOnForeground,
-                        isLeavingByNavigation = miniPlayerManager.isLeavingByNavigation
+                        isLeavingByNavigation = isLeavingByNavigation
                     )
 
                     if (resumeDecision.shouldRestoreVolume) {
@@ -1044,6 +1054,13 @@ fun rememberVideoPlayerState(
                         // 移除 seekTo(savedPosition)，因为 player.currentPosition 才是最新的（即使暂停了也还在该位置）
                         // 且 seekTo 会导致 PiP 返回时回退到进入 PiP 前的旧位置
                         if (shouldEnsureAudibleOnForeground) {
+                             if (
+                                 player.playbackState == Player.STATE_IDLE &&
+                                 player.mediaItemCount > 0
+                             ) {
+                                 player.prepare()
+                             }
+                             player.playWhenReady = true
                              player.play()
                              holder.recordDiagnosticEvent("lifecycleResume -> resumePlayback")
                              com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_RESUME: Resuming playback")
@@ -1056,6 +1073,10 @@ fun rememberVideoPlayerState(
                     // 重置标志
                     wasBackgroundAudio = false
                     hasTransientResumeIntent = false
+                    hasForegroundResumeIntent = false
+                    if (isLeavingByNavigation) {
+                        miniPlayerManager.resetNavigationFlag()
+                    }
                 }
                 else -> {}
             }

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.feature.video.subtitle.SubtitleTrackOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,6 +28,38 @@ class BottomControlBarPolicyTest {
                 subtitleTrackAvailable = true
             )
         )
+    }
+
+    @Test
+    fun subtitlePanelTrackOptions_dropBlankAndDeduplicateByTrackKey() {
+        val options = resolveSubtitlePanelTrackOptions(
+            listOf(
+                SubtitleTrackOption(
+                    trackKey = "zh",
+                    languageCode = "zh-Hans",
+                    label = "中文（简体）",
+                    selected = true,
+                    likelyAi = false
+                ),
+                SubtitleTrackOption(
+                    trackKey = "zh",
+                    languageCode = "zh-Hans",
+                    label = "重复中文",
+                    selected = false,
+                    likelyAi = false
+                ),
+                SubtitleTrackOption(
+                    trackKey = "",
+                    languageCode = "en-US",
+                    label = "英语",
+                    selected = false,
+                    likelyAi = false
+                )
+            )
+        )
+
+        assertEquals(1, options.size)
+        assertEquals("中文（简体）", options.single().label)
     }
 
     @Test
@@ -61,6 +94,36 @@ class BottomControlBarPolicyTest {
             shouldShowEpisodeButtonInControlBar(
                 isFullscreen = false,
                 hasEpisodeEntry = true
+            )
+        )
+    }
+
+    @Test
+    fun compactFullscreenMovesEpisodeAndDanmakuInputOutOfInlineRow() {
+        assertFalse(
+            shouldShowEpisodeButtonInControlBar(
+                isFullscreen = true,
+                hasEpisodeEntry = true,
+                widthDp = 393
+            )
+        )
+        assertTrue(
+            shouldShowEpisodeInMoreActions(
+                isFullscreen = true,
+                hasEpisodeEntry = true,
+                showInlineEpisodeButton = false
+            )
+        )
+        assertFalse(
+            shouldShowDanmakuInputInControlBar(
+                isFullscreen = true,
+                widthDp = 393
+            )
+        )
+        assertTrue(
+            shouldShowDanmakuInputInControlBar(
+                isFullscreen = true,
+                widthDp = 720
             )
         )
     }
@@ -125,6 +188,16 @@ class BottomControlBarPolicyTest {
 
     @Test
     fun moreActionsButtonVisibleWhenFullscreenAndAnyActionAvailable() {
+        assertTrue(
+            shouldShowMoreActionsButtonInControlBar(
+                isFullscreen = true,
+                showEpisodeInMoreActions = true,
+                showNextEpisodeButton = false,
+                showPlaybackOrderLabel = false,
+                showAspectRatioButton = false,
+                showPortraitSwitchButton = false
+            )
+        )
         assertTrue(
             shouldShowMoreActionsButtonInControlBar(
                 isFullscreen = true,

@@ -12,6 +12,9 @@ interface BlockedUpDao {
     @Query("SELECT * FROM blocked_ups ORDER BY blockedAt DESC")
     fun getAllBlockedUps(): Flow<List<BlockedUp>>
 
+    @Query("SELECT * FROM blocked_ups ORDER BY blockedAt DESC")
+    suspend fun getAllBlockedUpsSnapshot(): List<BlockedUp>
+
     @Query("SELECT * FROM blocked_ups WHERE mid = :mid LIMIT 1")
     suspend fun getBlockedUp(mid: Long): BlockedUp?
 

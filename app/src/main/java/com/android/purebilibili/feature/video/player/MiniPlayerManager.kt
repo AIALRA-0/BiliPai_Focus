@@ -4,8 +4,10 @@ package com.android.purebilibili.feature.video.player
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.RemoteAction
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
@@ -26,6 +28,7 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -39,6 +42,7 @@ import coil.size.Scale
 import coil.transform.RoundedCornersTransformation
 import com.android.purebilibili.R
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.player.PlaybackMediaCache
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.normalizeAppIconKey
@@ -46,6 +50,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.MediaUtils
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.data.repository.resolveVideoPlaybackAuthState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,6 +65,9 @@ import com.android.purebilibili.feature.video.playback.session.resolveShouldCont
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 import com.android.purebilibili.feature.video.usecase.VideoLoadResult
 import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
+import com.android.purebilibili.feature.video.usecase.pausePlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
 private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002
@@ -77,7 +85,7 @@ internal fun shouldShowInAppMiniPlayerByPolicy(
     stopPlaybackOnExit: Boolean
 ): Boolean {
     if (stopPlaybackOnExit) return false
-    return mode == SettingsManager.MiniPlayerMode.IN_APP_ONLY && isActive && !isNavigatingToVideo
+    return mode.supportsInAppMiniPlayer && isActive && !isNavigatingToVideo
 }
 
 internal fun shouldEnterPipByPolicy(
@@ -86,7 +94,7 @@ internal fun shouldEnterPipByPolicy(
     stopPlaybackOnExit: Boolean
 ): Boolean {
     if (stopPlaybackOnExit) return false
-    return mode == SettingsManager.MiniPlayerMode.SYSTEM_PIP && isActive
+    return mode.supportsSystemPip && isActive
 }
 
 internal fun shouldContinueBackgroundAudioByPolicy(
@@ -104,7 +112,8 @@ internal fun shouldContinueBackgroundAudioByPolicy(
     return when (mode) {
         SettingsManager.MiniPlayerMode.OFF -> true
         SettingsManager.MiniPlayerMode.IN_APP_ONLY -> true
-        SettingsManager.MiniPlayerMode.SYSTEM_PIP -> !shouldKeepPlaybackForPipTransition
+        SettingsManager.MiniPlayerMode.SYSTEM_PIP,
+        SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP -> !shouldKeepPlaybackForPipTransition
     }
 }
 
@@ -183,9 +192,24 @@ internal fun shouldRefreshVideoFrameOnEnterForeground(
 internal fun shouldKickPlaybackAfterForegroundTrackRestore(
     hadSavedTrackParams: Boolean,
     playWhenReady: Boolean,
-    playbackState: Int
+    playbackState: Int,
+    hasForegroundResumeIntent: Boolean = false,
+    isLeavingByNavigation: Boolean = false
 ): Boolean {
-    return hadSavedTrackParams && playWhenReady && playbackState != Player.STATE_IDLE
+    if (isLeavingByNavigation) return false
+    return hadSavedTrackParams &&
+        (playWhenReady || hasForegroundResumeIntent) &&
+        playbackState != Player.STATE_IDLE
+}
+
+internal fun shouldPreparePlaybackOnForegroundResume(
+    hasForegroundResumeIntent: Boolean,
+    hasMediaItems: Boolean,
+    playbackState: Int,
+    isLeavingByNavigation: Boolean = false
+): Boolean {
+    if (isLeavingByNavigation) return false
+    return hasForegroundResumeIntent && hasMediaItems && playbackState == Player.STATE_IDLE
 }
 
 internal fun shouldResumePlaybackOnEnterForeground(
@@ -300,16 +324,13 @@ internal fun shouldRebindMediaSessionPlayer(
 internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
     val normalizedKey = normalizeAppIconKey(iconKey)
     return when (normalizedKey) {
-        "icon_blue" -> R.mipmap.ic_launcher_blue
-        "icon_neon" -> R.mipmap.ic_launcher_neon
         "icon_flat" -> R.mipmap.ic_launcher_flat
         "icon_bilipai" -> R.mipmap.ic_launcher_bilipai
+        "icon_bilipai_pink" -> R.mipmap.ic_launcher_bilipai_pink
+        "icon_bilipai_white" -> R.mipmap.ic_launcher_bilipai_white
+        "icon_bilipai_monet" -> R.mipmap.ic_launcher_bilipai_monet
         "icon_anime" -> R.mipmap.ic_launcher_anime
         "icon_telegram_blue" -> R.mipmap.ic_launcher_telegram_blue
-        "icon_telegram_blue_coin" -> R.mipmap.ic_launcher_telegram_blue_coin
-        "icon_telegram_green" -> R.mipmap.ic_launcher_telegram_green
-        "icon_telegram_pink" -> R.mipmap.ic_launcher_telegram_pink
-        "icon_telegram_purple" -> R.mipmap.ic_launcher_telegram_purple
         "icon_telegram_dark" -> R.mipmap.ic_launcher_telegram_dark
         "Headphone" -> R.mipmap.ic_launcher_headphone
         "Yuki" -> R.mipmap.ic_launcher
@@ -320,6 +341,8 @@ internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
 
 internal enum class MediaControlType {
     PREVIOUS,
+    PLAY,
+    PAUSE,
     PLAY_PAUSE,
     NEXT
 }
@@ -337,6 +360,8 @@ internal enum class PlaylistSkipExecutionMode {
 internal fun resolveMediaControlType(controlType: Int): MediaControlType? {
     return when (controlType) {
         MiniPlayerManager.ACTION_PREVIOUS -> MediaControlType.PREVIOUS
+        MiniPlayerManager.ACTION_PLAY -> MediaControlType.PLAY
+        MiniPlayerManager.ACTION_PAUSE -> MediaControlType.PAUSE
         MiniPlayerManager.ACTION_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
         MiniPlayerManager.ACTION_NEXT -> MediaControlType.NEXT
         else -> null
@@ -348,11 +373,74 @@ internal fun resolveMediaButtonControlType(keyCode: Int, action: Int): MediaCont
     return when (keyCode) {
         KeyEvent.KEYCODE_MEDIA_PREVIOUS -> MediaControlType.PREVIOUS
         KeyEvent.KEYCODE_MEDIA_NEXT -> MediaControlType.NEXT
-        KeyEvent.KEYCODE_MEDIA_PLAY,
-        KeyEvent.KEYCODE_MEDIA_PAUSE,
+        KeyEvent.KEYCODE_MEDIA_PLAY -> MediaControlType.PLAY
+        KeyEvent.KEYCODE_MEDIA_PAUSE -> MediaControlType.PAUSE
         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
         else -> null
     }
+}
+
+internal fun resolvePipPlaybackControlType(
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int
+): Int {
+    return if (
+        isPlaybackActiveForLifecycle(
+            isPlaying = isPlaying,
+            playWhenReady = playWhenReady,
+            playbackState = playbackState
+        )
+    ) {
+        MiniPlayerManager.ACTION_PAUSE
+    } else {
+        MiniPlayerManager.ACTION_PLAY
+    }
+}
+
+internal fun applyPlaybackMediaControlToPlayer(
+    player: Player,
+    controlType: MediaControlType
+): Boolean {
+    when (controlType) {
+        MediaControlType.PLAY -> playPlayerFromUserAction(player)
+        MediaControlType.PAUSE -> pausePlayerFromUserAction(player)
+        MediaControlType.PLAY_PAUSE -> togglePlayerPlaybackFromUserAction(player)
+        else -> return false
+    }
+    return true
+}
+
+@androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+internal fun buildPipPlaybackRemoteActions(
+    context: Context,
+    player: Player?
+): List<RemoteAction> {
+    val actionType = resolvePipPlaybackControlType(
+        isPlaying = player?.isPlaying == true,
+        playWhenReady = player?.playWhenReady == true,
+        playbackState = player?.playbackState ?: Player.STATE_IDLE
+    )
+    val isPauseAction = actionType == MiniPlayerManager.ACTION_PAUSE
+    val intent = PendingIntent.getBroadcast(
+        context,
+        actionType,
+        Intent(MiniPlayerManager.ACTION_MEDIA_CONTROL)
+            .setPackage(context.packageName)
+            .putExtra(MiniPlayerManager.EXTRA_CONTROL_TYPE, actionType),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    )
+    return listOf(
+        RemoteAction(
+            Icon.createWithResource(
+                context,
+                if (isPauseAction) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            ),
+            if (isPauseAction) "暂停" else "播放",
+            if (isPauseAction) "暂停播放" else "继续播放",
+            intent
+        )
+    )
 }
 
 internal fun resolveExternalTransportActionOrder(): IntArray {
@@ -431,7 +519,6 @@ internal fun resolveQueueNavigationCommandIds(
     return commands
 }
 
-@androidx.media3.common.util.UnstableApi
 internal fun buildQueueAwarePlayerCommands(
     baseCommands: Player.Commands,
     hasNext: Boolean,
@@ -534,6 +621,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
         const val ACTION_PREVIOUS = 1
         const val ACTION_PLAY_PAUSE = 2
         const val ACTION_NEXT = 3
+        const val ACTION_PLAY = 4
+        const val ACTION_PAUSE = 5
     }
 
     // --- 协程作用域 ---
@@ -586,6 +675,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
         
         isLowMemoryMode = true
         val currentPlayer = player ?: return
+        foregroundResumeIntent = isPlaybackActiveForLifecycle(
+            isPlaying = currentPlayer.isPlaying,
+            playWhenReady = currentPlayer.playWhenReady,
+            playbackState = currentPlayer.playbackState
+        )
         
         // 🔧 [优化] 如果未在播放，直接暂停/停止缓冲，避免浪费 CDN 请求
         val shouldPauseBuffering = shouldPauseBackgroundBuffering(
@@ -658,13 +752,27 @@ class MiniPlayerManager private constructor(private val context: Context) :
             Logger.d(TAG, "🎬 前台模式：请求重新渲染当前帧，避免返回视频页黑屏")
         }
 
+        val shouldPrepareForegroundPlayback = shouldPreparePlaybackOnForegroundResume(
+            hasForegroundResumeIntent = foregroundResumeIntent,
+            hasMediaItems = currentPlayer.mediaItemCount > 0,
+            playbackState = currentPlayer.playbackState,
+            isLeavingByNavigation = isLeavingByNavigation
+        )
+        if (shouldPrepareForegroundPlayback) {
+            currentPlayer.prepare()
+        }
         if (shouldKickPlaybackAfterForegroundTrackRestore(
                 hadSavedTrackParams = hadSavedTrackParams,
                 playWhenReady = currentPlayer.playWhenReady,
-                playbackState = currentPlayer.playbackState
+                playbackState = currentPlayer.playbackState,
+                hasForegroundResumeIntent = foregroundResumeIntent,
+                isLeavingByNavigation = isLeavingByNavigation
             )
+            || shouldPrepareForegroundPlayback
         ) {
+            currentPlayer.playWhenReady = true
             currentPlayer.play()
+            foregroundResumeIntent = false
             Logger.d(TAG, "▶️ 前台模式：恢复视频轨道后主动唤醒渲染链路")
         } else if (shouldResumePlaybackOnEnterForeground(
                 playWhenReady = currentPlayer.playWhenReady,
@@ -672,8 +780,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 playbackState = currentPlayer.playbackState
             )
         ) {
+            currentPlayer.playWhenReady = true
             currentPlayer.play()
+            foregroundResumeIntent = false
             Logger.d(TAG, "▶️ 前台模式：恢复卡在 READY 的播放会话")
+        }
+        if (isLeavingByNavigation) {
+            foregroundResumeIntent = false
         }
     }
 
@@ -716,6 +829,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private var playbackServiceRequested = false
     @Volatile
     private var lastForegroundStartAtMs = 0L
+    @Volatile
+    private var foregroundResumeIntent = false
 
     // --- 当前视频信息 ---
     var currentBvid by mutableStateOf<String?>(null)
@@ -1209,8 +1324,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 "Referer" to "https://www.bilibili.com",
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
-            val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
+            val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
                 .setDefaultRequestProperties(headers)
+            val dataSourceFactory: DataSource.Factory =
+                PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
@@ -1297,8 +1414,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
+        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
             .setDefaultRequestProperties(headers)
+        val dataSourceFactory: DataSource.Factory =
+            PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 
         val videoSource = ProgressiveMediaSource.Factory(dataSourceFactory)
             .createMediaSource(MediaItem.fromUri(videoUrl))
@@ -1329,9 +1448,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         val mode = getCurrentMode()
         Logger.d(TAG) { "📲 enterMiniMode called: isActive=$isActive, forced=$forced, mode=$mode" }
         
-        // 非强制模式下，只有 IN_APP_ONLY 才自动进入小窗
-        if (!forced && mode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY) {
-            Logger.d(TAG) { "⚠️ Auto mini player only works in IN_APP_ONLY mode, current mode=$mode" }
+        // 非强制模式下，只有支持应用内小窗的模式才自动进入小窗
+        if (!forced && !mode.supportsInAppMiniPlayer) {
+            Logger.d(TAG) { "⚠️ Auto mini player only works in in-app mini modes, current mode=$mode" }
             return
         }
         
@@ -1592,17 +1711,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun togglePlayPause() {
         val currentPlayer = player ?: return
-        if (currentPlayer.isPlaying) {
-            currentPlayer.pause()
-        } else {
-            currentPlayer.play()
-        }
+        applyPlaybackMediaControlToPlayer(currentPlayer, MediaControlType.PLAY_PAUSE)
     }
 
     private fun performMediaControl(controlType: MediaControlType) {
         when (controlType) {
             MediaControlType.PREVIOUS -> playPrevious()
-            MediaControlType.PLAY_PAUSE -> togglePlayPause()
+            MediaControlType.PLAY,
+            MediaControlType.PAUSE,
+            MediaControlType.PLAY_PAUSE -> player?.let {
+                applyPlaybackMediaControlToPlayer(it, controlType)
+            }
             MediaControlType.NEXT -> playNext()
         }
     }
@@ -1644,8 +1763,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
         backgroundSkipJob?.cancel()
         backgroundSkipJob = scope.launch {
             backgroundPlaybackUseCase.attachPlayer(currentPlayer)
-            val isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty() ||
-                !TokenManager.accessTokenCache.isNullOrEmpty()
+            val isLoggedIn = resolveVideoPlaybackAuthState(
+                hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty(),
+                hasAccessToken = !TokenManager.accessTokenCache.isNullOrEmpty()
+            )
             val storedQuality = NetworkUtils.getDefaultQualityId(context)
             val autoHighestEnabled = SettingsManager.getAutoHighestQualitySync(context)
             val effectiveVip = VideoRepository.refreshVipStatusForPreferredQualityIfNeeded(

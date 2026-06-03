@@ -6,7 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -84,7 +85,7 @@ fun BangumiDetailHeader(
                 modifier = Modifier
                     .width(120.dp)
                     .aspectRatio(0.75f)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .clip(AppShapes.container(ContainerLevel.Chip)),
                 contentScale = ContentScale.Crop
             )
             
@@ -241,7 +242,7 @@ fun SeasonSelector(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(seasons) { season ->
+            items(seasons, key = { it.seasonId }) { season ->
                 val isCurrentSeason = season.seasonId == currentSeasonId
                 Surface(
                     modifier = Modifier.clickable {
@@ -249,7 +250,7 @@ fun SeasonSelector(
                             onSeasonClick(season.seasonId)
                         }
                     },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = AppShapes.container(ContainerLevel.Chip),
                     color = if (isCurrentSeason) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -287,7 +288,7 @@ fun EpisodeChip(
         modifier = modifier
             .width(140.dp)
             .aspectRatio(16f / 9f),
-        shape = RoundedCornerShape(8.dp),
+        shape = AppShapes.container(ContainerLevel.Chip),
         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     ) {
         Box {
@@ -323,7 +324,7 @@ fun EpisodeChip(
                         .align(Alignment.TopEnd)
                         .padding(4.dp),
                     color = badgeColors.backgroundColor,
-                    shape = RoundedCornerShape(4.dp)
+                    shape = AppShapes.container(ContainerLevel.Tag)
                 ) {
                     Text(
                         text = episode.badge,
@@ -380,7 +381,7 @@ fun EpisodePreviewRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
     ) {
-        items(previewEpisodes) { episode ->
+        items(previewEpisodes, key = { it.id }) { episode ->
             EpisodeChip(
                 episode = episode,
                 onClick = { onEpisodeClick(episode) }
@@ -395,7 +396,7 @@ fun EpisodePreviewRow(
                     modifier = Modifier
                         .width(80.dp)
                         .aspectRatio(16f / 9f),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = AppShapes.container(ContainerLevel.Chip),
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Box(contentAlignment = Alignment.Center) {

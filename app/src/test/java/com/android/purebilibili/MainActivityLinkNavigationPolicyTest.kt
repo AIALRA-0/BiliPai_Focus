@@ -46,6 +46,15 @@ class MainActivityLinkNavigationPolicyTest {
     }
 
     @Test
+    fun articleTarget_mapsToArticleRoute() {
+        val navigation = resolveMainActivityLinkNavigation(
+            BilibiliNavigationTarget.Article(12345L)
+        )
+
+        assertEquals("article/12345?title=", navigation?.pendingNavigationRoute)
+    }
+
+    @Test
     fun musicTarget_ignoresUnsupportedNonAuIds() {
         val navigation = resolveMainActivityLinkNavigation(
             BilibiliNavigationTarget.Music("ma123")

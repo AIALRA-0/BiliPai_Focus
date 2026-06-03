@@ -135,3 +135,15 @@ internal fun shouldFinalizeHistoryDeleteSession(
         completedKeys = session.completedKeys
     )
 }
+
+internal fun resolveHistoryPauseActionLabel(isHistoryPaused: Boolean): String {
+    return if (isHistoryPaused) "继续记录" else "暂停记录"
+}
+
+internal fun resolveHistoryPauseSuccessMessage(nextPaused: Boolean): String {
+    return if (nextPaused) "已暂停历史记录" else "已继续记录历史"
+}
+
+internal fun resolveHistoryClearConfirmText(visibleCount: Int): String {
+    return "确认清空全部历史记录吗？当前仅显示 $visibleCount 条，本操作会清空账号全部历史。"
+}

@@ -37,4 +37,24 @@ class DissolveRenderPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `shouldPublishGlobalDissolveState follows explicit flag`() {
+        assertTrue(shouldPublishGlobalDissolveState(publishGlobalState = true))
+        assertFalse(shouldPublishGlobalDissolveState(publishGlobalState = false))
+    }
+
+    @Test
+    fun `shouldCreateDissolveBitmap requires positive width and height`() {
+        assertTrue(shouldCreateDissolveBitmap(width = 1, height = 1))
+        assertFalse(shouldCreateDissolveBitmap(width = 0, height = 1))
+        assertFalse(shouldCreateDissolveBitmap(width = 1, height = 0))
+        assertFalse(shouldCreateDissolveBitmap(width = 0, height = 0))
+    }
+
+    @Test
+    fun `shouldDispatchDissolveCompletion blocks repeated completion`() {
+        assertTrue(shouldDispatchDissolveCompletion(hasCompletedCurrentDissolve = false))
+        assertFalse(shouldDispatchDissolveCompletion(hasCompletedCurrentDissolve = true))
+    }
 }

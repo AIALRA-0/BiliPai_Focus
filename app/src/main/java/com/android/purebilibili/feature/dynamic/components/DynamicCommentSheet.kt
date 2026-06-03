@@ -27,11 +27,15 @@ import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.DynamicViewModel
 import com.android.purebilibili.feature.dynamic.resolveDynamicCommentSheetTotalCount
 import com.android.purebilibili.feature.video.ui.components.RichCommentText
+import com.android.purebilibili.feature.video.ui.components.FanGroupDecorationBadge
+import com.android.purebilibili.feature.video.ui.components.resolveFanGroupDecorationCardBgs
+import com.android.purebilibili.feature.video.ui.components.resolveFanGroupVisualFromMemberAndSailing
 import com.android.purebilibili.feature.video.ui.components.resolveInlineSubReplyToggleLabel
 import com.android.purebilibili.feature.video.ui.components.resolveVisibleSubReplies
 import com.android.purebilibili.feature.video.ui.components.shouldShowInlineSubReplyToggle
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun DynamicCommentOverlayHost(
@@ -40,11 +44,11 @@ fun DynamicCommentOverlayHost(
     secondaryItems: List<DynamicItem> = emptyList(),
     toastContext: Context
 ) {
-    val selectedDynamicId by viewModel.selectedDynamicId.collectAsState()
-    val comments by viewModel.comments.collectAsState()
-    val commentsLoading by viewModel.commentsLoading.collectAsState()
-    val subReplyState by viewModel.subReplyState.collectAsState()
-    val liveCommentCount by viewModel.commentTotalCount.collectAsState()
+    val selectedDynamicId by viewModel.selectedDynamicId.collectAsStateWithLifecycle()
+    val comments by viewModel.comments.collectAsStateWithLifecycle()
+    val commentsLoading by viewModel.commentsLoading.collectAsStateWithLifecycle()
+    val subReplyState by viewModel.subReplyState.collectAsStateWithLifecycle()
+    val liveCommentCount by viewModel.commentTotalCount.collectAsStateWithLifecycle()
     val inspectionMode = LocalInspectionMode.current
 
     if (!selectedDynamicId.isNullOrBlank()) {
@@ -174,7 +178,7 @@ fun DynamicCommentSheet(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(comments) { reply ->
+                    items(comments, key = { it.rpid }) { reply ->
                         CommentItem(
                             reply = reply,
                             onViewReplies = onViewReplies
@@ -246,6 +250,12 @@ private fun CommentItem(
     val showInlineToggle = remember(reply.replies) {
         shouldShowInlineSubReplyToggle(reply.replies.orEmpty().size)
     }
+    val fanGroupVisual = remember(member) {
+        resolveFanGroupVisualFromMemberAndSailing(
+            member = member,
+            cardBgs = resolveFanGroupDecorationCardBgs(member)
+        )
+    }
     
     Row(modifier = Modifier.fillMaxWidth()) {
         // 头像
@@ -269,7 +279,10 @@ private fun CommentItem(
                     text = member.uname,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (fanGroupVisual != null) Modifier.weight(1f, fill = false) else Modifier
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -277,6 +290,10 @@ private fun CommentItem(
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f)
                 )
+                if (fanGroupVisual != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FanGroupDecorationBadge(visual = fanGroupVisual)
+                }
             }
             
             Spacer(modifier = Modifier.height(4.dp))
@@ -291,7 +308,7 @@ private fun CommentItem(
                 color = MaterialTheme.colorScheme.onSurface,
                 emoteMap = emoteMap
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
             
             // 点赞数

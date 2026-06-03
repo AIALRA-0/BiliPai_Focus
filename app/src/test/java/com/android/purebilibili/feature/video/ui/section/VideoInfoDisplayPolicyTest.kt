@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.video.ui.section
 import com.android.purebilibili.data.model.response.AiModelResult
 import com.android.purebilibili.data.model.response.AiOutline
 import com.android.purebilibili.data.model.response.AiSummaryData
+import com.android.purebilibili.data.model.response.VideoDetailRights
+import com.android.purebilibili.data.model.response.VideoStaff
+import com.android.purebilibili.data.model.response.ViewInfo
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.test.Test
@@ -11,6 +14,69 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoInfoDisplayPolicyTest {
+
+    @Test
+    fun videoInfoInitialExpanded_whenDescriptionOrTagsExist() {
+        assertTrue(resolveVideoInfoInitialExpandedState(hasDescription = true, hasTags = false))
+        assertTrue(resolveVideoInfoInitialExpandedState(hasDescription = false, hasTags = true))
+        assertFalse(resolveVideoInfoInitialExpandedState(hasDescription = false, hasTags = false))
+    }
+
+    @Test
+    fun videoInfoInitialExpanded_respectsDefaultExpandedSwitch() {
+        assertFalse(
+            resolveVideoInfoInitialExpandedState(
+                hasDescription = true,
+                hasTags = true,
+                defaultExpanded = false
+            )
+        )
+        assertTrue(
+            resolveVideoInfoInitialExpandedState(
+                hasDescription = true,
+                hasTags = false,
+                defaultExpanded = true
+            )
+        )
+    }
+
+    @Test
+    fun videoDescriptionAnnotatedString_marksPlainUrlsClickable() {
+        val annotated = buildVideoDescriptionAnnotatedString(
+            desc = "简介 https://www.bilibili.com/video/BV1xx411c7mD 和 https://example.com/demo",
+            urlColor = androidx.compose.ui.graphics.Color.Blue
+        )
+
+        val links = annotated.getStringAnnotations(
+            tag = VIDEO_DESCRIPTION_URL_TAG,
+            start = 0,
+            end = annotated.length
+        )
+
+        assertEquals(
+            listOf(
+                "https://www.bilibili.com/video/BV1xx411c7mD",
+                "https://example.com/demo"
+            ),
+            links.map { it.item }
+        )
+    }
+
+    @Test
+    fun videoDescriptionAnnotatedString_marksInlineBvidClickable() {
+        val annotated = buildVideoDescriptionAnnotatedString(
+            desc = "相关视频 BV1xx411c7mD",
+            urlColor = androidx.compose.ui.graphics.Color.Blue
+        )
+
+        val link = annotated.getStringAnnotations(
+            tag = VIDEO_DESCRIPTION_URL_TAG,
+            start = 0,
+            end = annotated.length
+        ).single()
+
+        assertEquals("https://www.bilibili.com/video/BV1xx411c7mD", link.item)
+    }
 
     @Test
     fun aiSummaryEntryShownOnlyWhenEnabledAndContentExists() {
@@ -38,9 +104,44 @@ class VideoInfoDisplayPolicyTest {
     }
 
     @Test
+    fun videoNoteEntryShownOnlyForLoadedVideoWithAid() {
+        assertTrue(shouldShowVideoNoteEntry(isVideoLoaded = true, aid = 123L))
+        assertFalse(shouldShowVideoNoteEntry(isVideoLoaded = false, aid = 123L))
+        assertFalse(shouldShowVideoNoteEntry(isVideoLoaded = true, aid = 0L))
+    }
+
+    @Test
     fun inlineOwnerIdentityShownOnlyWhenLeadingAvatarHidden() {
         assertTrue(shouldShowInlineOwnerIdentity(showOwnerAvatar = false))
         assertFalse(shouldShowInlineOwnerIdentity(showOwnerAvatar = true))
+    }
+
+    @Test
+    fun videoBadgesPrioritizeUpowerExclusiveAndIncludePreviewState() {
+        val info = ViewInfo(
+            isUpowerExclusive = true,
+            isUpowerPreview = true,
+            rights = VideoDetailRights(isCooperation = 1)
+        )
+
+        assertEquals(
+            listOf("充电专属 · 可试看", "联合投稿"),
+            resolveVideoDetailBadges(info)
+        )
+    }
+
+    @Test
+    fun creatorTeamShownOnlyWhenStaffListExists() {
+        assertTrue(
+            shouldShowCreatorTeamSection(
+                ViewInfo(staff = listOf(VideoStaff(mid = 101L, name = "Lucky-101")))
+            )
+        )
+        assertFalse(
+            shouldShowCreatorTeamSection(
+                ViewInfo(rights = VideoDetailRights(isCooperation = 1))
+            )
+        )
     }
 
     @Test

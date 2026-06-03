@@ -17,6 +17,8 @@ Use this file as the project-specific overlay on top of the global Codex/OMX gui
 - Reuse the repository's existing `Policy`, `UseCase`, `ViewModel`, and feature package patterns before creating new abstractions.
 - Avoid adding business logic to [`MainActivity.kt`](/Users/yiyang/Desktop/BiliPai/app/src/main/java/com/android/purebilibili/MainActivity.kt) unless the behavior truly belongs to app shell, deep link routing, or top-level playback orchestration.
 - Do not add new dependencies unless the user explicitly asks for one.
+- Do not run full package, APK packaging, bundle, install, or release-smoke verification paths unless the user explicitly asks for them.
+- After each meaningful completed slice, commit and push the changes so progress is easy to roll back and resume.
 
 ## Android and Compose conventions
 
@@ -47,12 +49,15 @@ Pick the smallest command set that proves the change:
 
 - Targeted unit tests for the touched feature:
   `./gradlew :app:testDebugUnitTest --tests '<ExactTestName>'`
+- Lightweight compile validation for touched Kotlin/Compose code:
+  `./gradlew :app:compileDebugKotlin`
 - Broad local regression for app logic and UI policies:
   `./gradlew :app:testDebugUnitTest`
 - Static checks for Android resources and code:
   `./gradlew :app:lintDebug`
 - Build validation for packaging and manifest/resource regressions:
   `./gradlew :app:assembleDebug`
+- Do not run full package/build validation such as `./gradlew :app:assembleDebug`, `assemble*`, `bundle*`, `install*`, APK packaging, or release smoke gates unless the user explicitly asks for it. Prefer targeted unit tests, strategy/policy tests, `:app:compileDebugKotlin`, lint, or narrow device checks that match the changed surface.
 
 Use extra verification when the task touches these areas:
 

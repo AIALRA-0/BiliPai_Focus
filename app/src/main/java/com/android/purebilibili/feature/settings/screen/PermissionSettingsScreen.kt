@@ -37,9 +37,11 @@ import com.android.purebilibili.R
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.components.*
-import com.android.purebilibili.core.ui.animation.staggeredEntrance
+import com.android.purebilibili.core.ui.animation.EntranceGroup
+import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.theme.iOSPink  // 存储权限图标色
@@ -48,6 +50,7 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 
 /**
@@ -74,13 +77,13 @@ fun PermissionSettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = AppSurfaceTokens.cardContainer(),
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = AppSurfaceTokens.groupedListContainer(),
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         PermissionSettingsContent(
@@ -100,9 +103,6 @@ fun PermissionSettingsContent(
         resolveDeviceUiProfile(
             widthSizeClass = windowSizeClass.widthSizeClass
         )
-    }
-    val effectiveMotionTier = remember(deviceUiProfile.motionTier) {
-        resolveSettingsEntranceMotionTier(deviceUiProfile.motionTier)
     }
     
     //  [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
@@ -204,7 +204,6 @@ fun PermissionSettingsContent(
     
     // 检查权限状态
     var permissionStates by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
-    var isVisible by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         permissionStates = permissions.associate { info ->
@@ -215,7 +214,6 @@ fun PermissionSettingsContent(
                     ?: (ContextCompat.checkSelfPermission(context, info.permission) == PackageManager.PERMISSION_GRANTED)
             }
         }
-        isVisible = true
     }
     val grantedCount = permissions.count { info ->
         info.alwaysGranted || permissionStates[info.permission] == true
@@ -224,6 +222,7 @@ fun PermissionSettingsContent(
         0.2f + grantedCount.toFloat() / permissions.size.coerceAtLeast(1) * 0.8f
         ).coerceIn(0f, 1f)
 
+    EntranceGroup {
     LazyColumn(
         modifier = modifier
             .fillMaxSize(),
@@ -235,9 +234,9 @@ fun PermissionSettingsContent(
             
             // 说明文字
             item {
-                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.entrance()) {
                     Text(
-                        text = "以下是应用所需的权限及其用途说明；普通权限在安装时自动授予，无需手动操作",
+                        text = "以下是应用所需的权限及其用途说明。普通权限在安装时自动授予，无需手动操作。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -247,12 +246,12 @@ fun PermissionSettingsContent(
             
             // 需要运行时请求的权限
             item {
-                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.entrance()) {
                     IOSSectionTitle("需要授权的权限")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.entrance()) {
                     IOSGroup {
                         permissions.filter { !it.isNormal }.forEachIndexed { index, info ->
                             if (index > 0) HorizontalDivider()
@@ -270,12 +269,12 @@ fun PermissionSettingsContent(
             
             // 普通权限（自动授予）
             item {
-                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.entrance()) {
                     IOSSectionTitle("自动授予的权限")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.entrance()) {
                     IOSGroup {
                         permissions.filter { it.isNormal }.forEachIndexed { index, info ->
                             if (index > 0) HorizontalDivider()
@@ -291,11 +290,11 @@ fun PermissionSettingsContent(
             
             // 隐私说明
             item {
-                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.entrance()) {
                     Column {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "BiliPai 仅在必要功能的前提下申请部分敏感权限",
+                            text = "BiliPai 仅在必要功能的前提下申请部分敏感权限。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -304,6 +303,7 @@ fun PermissionSettingsContent(
                 }
             }
         }
+    }
     }
 
 
@@ -331,7 +331,10 @@ private fun PermissionItem(
     onOpenSettings: (() -> Unit)?
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(info.iconTint, uiPreset)
     val grantedTint = rememberAdaptiveSemanticIconTint(iOSGreen, uiPreset)
     val deniedTint = rememberAdaptiveSemanticIconTint(com.android.purebilibili.core.theme.iOSRed, uiPreset)

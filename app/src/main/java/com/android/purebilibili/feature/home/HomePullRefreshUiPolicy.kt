@@ -1,11 +1,9 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
-import kotlin.math.min
 import kotlin.math.max
-import kotlin.math.abs
-
-private const val FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS = 280L
+import kotlin.math.min
 
 internal fun resolvePullRefreshThresholdDp(): Float = 56f
 
@@ -14,11 +12,43 @@ enum class HomePullRefreshMotionStyle {
     MD3
 }
 
+enum class HomePullRefreshIndicatorStyle {
+    IOS,
+    MATERIAL_DEFAULT,
+    MD3_SCREENSHOT_HANDLE
+}
+
 internal fun resolveHomePullRefreshMotionStyle(uiPreset: UiPreset): HomePullRefreshMotionStyle {
-    return if (uiPreset == UiPreset.MD3) {
-        HomePullRefreshMotionStyle.MD3
-    } else {
-        HomePullRefreshMotionStyle.IOS
+    return resolveHomePullRefreshMotionStyle(
+        uiPreset = uiPreset,
+        androidNativeVariant = AndroidNativeVariant.MATERIAL3
+    )
+}
+
+internal fun resolveHomePullRefreshMotionStyle(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant
+): HomePullRefreshMotionStyle {
+    return when {
+        uiPreset == UiPreset.MD3 -> HomePullRefreshMotionStyle.MD3
+        else -> HomePullRefreshMotionStyle.IOS
+    }
+}
+
+internal fun resolveHomePullRefreshIndicatorStyle(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant
+): HomePullRefreshIndicatorStyle {
+    return when {
+        uiPreset == UiPreset.MD3 &&
+            androidNativeVariant == AndroidNativeVariant.MATERIAL3 -> {
+            HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE
+        }
+        uiPreset == UiPreset.MD3 &&
+            androidNativeVariant == AndroidNativeVariant.MIUIX -> {
+            HomePullRefreshIndicatorStyle.MATERIAL_DEFAULT
+        }
+        else -> HomePullRefreshIndicatorStyle.IOS
     }
 }
 
@@ -51,59 +81,6 @@ internal fun shouldResetToTopAfterIncrementalRefresh(
         firstVisibleItemIndex = firstVisibleItemIndex,
         firstVisibleItemScrollOffset = firstVisibleItemScrollOffset
     )
-}
-
-internal fun shouldResetFollowToTopAfterRefreshCompletion(
-    currentCategory: HomeCategory,
-    resetKey: Long,
-    handledKey: Long
-): Boolean {
-    if (currentCategory != HomeCategory.FOLLOW) return false
-    if (resetKey <= 0L) return false
-    return resetKey > handledKey
-}
-
-internal fun shouldCommitFollowRefreshPresentationAfterPullSettles(
-    currentCategory: HomeCategory,
-    hasPendingPresentation: Boolean,
-    isRefreshing: Boolean,
-    isStateAnimating: Boolean,
-    distanceFraction: Float,
-    contentOffsetFraction: Float = 0f,
-    settledDistanceTolerance: Float = 0.01f
-): Boolean {
-    if (currentCategory != HomeCategory.FOLLOW) return false
-    if (!hasPendingPresentation) return false
-    if (isRefreshing || isStateAnimating) return false
-    val tolerance = settledDistanceTolerance.coerceAtLeast(0f)
-    if (distanceFraction > tolerance) return false
-    return abs(contentOffsetFraction) <= tolerance
-}
-
-internal fun resolveFollowRefreshPresentationCommitDelayMillis(
-    currentCategory: HomeCategory,
-    hasPendingPresentation: Boolean
-): Long {
-    if (currentCategory != HomeCategory.FOLLOW) return 0L
-    if (!hasPendingPresentation) return 0L
-    return FOLLOW_REFRESH_PRESENTATION_COMMIT_SETTLE_DELAY_MS
-}
-
-internal fun shouldUseStrictFollowRefreshSettleMotion(
-    currentCategory: HomeCategory,
-    hasPendingPresentation: Boolean
-): Boolean {
-    if (currentCategory != HomeCategory.FOLLOW) return false
-    return hasPendingPresentation
-}
-
-internal fun shouldDeferFollowRefreshPreviewWhilePullRefreshing(
-    currentCategory: HomeCategory,
-    isRefreshing: Boolean,
-    hasPendingPresentation: Boolean
-): Boolean {
-    if (currentCategory != HomeCategory.FOLLOW) return false
-    return isRefreshing || hasPendingPresentation
 }
 
 internal fun shouldShowReleaseToRefreshHint(
@@ -146,12 +123,87 @@ internal fun resolvePullIndicatorTranslationY(
     return min(centeredY, maxAllowedY)
 }
 
+internal fun resolvePullContentMaxOffsetDp(
+    indicatorStyle: HomePullRefreshIndicatorStyle
+): Float {
+    return when (indicatorStyle) {
+        HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE -> 196f
+        else -> 140f
+    }
+}
+
 internal fun resolvePullContentOffsetFraction(
     distanceFraction: Float,
     isRefreshing: Boolean,
-    motionStyle: HomePullRefreshMotionStyle = HomePullRefreshMotionStyle.IOS
+    motionStyle: HomePullRefreshMotionStyle = HomePullRefreshMotionStyle.IOS,
+    indicatorStyle: HomePullRefreshIndicatorStyle = HomePullRefreshIndicatorStyle.IOS
 ): Float {
-    if (motionStyle == HomePullRefreshMotionStyle.MD3) return 0f
+    if (isRefreshing) return 0f
+    if (indicatorStyle == HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE) {
+        val clampedDistance = distanceFraction.coerceIn(0f, 1.12f)
+        return clampedDistance
+    }
     val clampedDistance = distanceFraction.coerceAtMost(2f).coerceAtLeast(0f)
     return clampedDistance * 0.5f
+}
+
+internal fun resolveStablePullContentOffsetFraction(
+    distanceFraction: Float,
+    isRefreshing: Boolean,
+    isStateAnimating: Boolean,
+    previousOffsetFraction: Float,
+    motionStyle: HomePullRefreshMotionStyle = HomePullRefreshMotionStyle.IOS,
+    indicatorStyle: HomePullRefreshIndicatorStyle = HomePullRefreshIndicatorStyle.IOS
+): Float {
+    val currentOffset = resolvePullContentOffsetFraction(
+        distanceFraction = distanceFraction,
+        isRefreshing = isRefreshing,
+        motionStyle = motionStyle,
+        indicatorStyle = indicatorStyle
+    )
+    if (!isRefreshing && !isStateAnimating && distanceFraction <= 0f) return 0f
+    return currentOffset
+}
+
+internal fun shouldSnapPullOffsetToFinger(
+    distanceFraction: Float,
+    isRefreshing: Boolean,
+    isStateAnimating: Boolean,
+    indicatorStyle: HomePullRefreshIndicatorStyle = HomePullRefreshIndicatorStyle.IOS
+): Boolean {
+    if (isRefreshing) return false
+    if (indicatorStyle == HomePullRefreshIndicatorStyle.MD3_SCREENSHOT_HANDLE) {
+        return distanceFraction > 0f
+    }
+    if (isStateAnimating) return false
+    return distanceFraction > 0f
+}
+
+internal fun resolveMd3ScreenshotRefreshIndicatorHeightDp(
+    progress: Float,
+    isRefreshing: Boolean
+): Float {
+    if (isRefreshing) return 42f
+    val clampedProgress = progress.coerceIn(0f, 1.35f)
+    return 44f + (clampedProgress * 42f)
+}
+
+internal fun resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(
+    indicatorHeightDp: Float,
+    hasHintText: Boolean
+): Float {
+    val verticalPaddingDp = 16f
+    val hintBlockDp = if (hasHintText) 30f else 0f
+    return max(0f, indicatorHeightDp) + verticalPaddingDp + hintBlockDp
+}
+
+internal fun resolveMd3ScreenshotRefreshIndicatorTranslationY(
+    dragOffsetPx: Float,
+    indicatorTotalHeightPx: Float,
+    minGapPx: Float
+): Float {
+    if (dragOffsetPx <= 0f || indicatorTotalHeightPx <= 0f) return 0f
+    val centeredInGap = (dragOffsetPx - indicatorTotalHeightPx) / 2f
+    val maxTop = (dragOffsetPx - indicatorTotalHeightPx - minGapPx).coerceAtLeast(0f)
+    return centeredInGap.coerceIn(0f, maxTop)
 }

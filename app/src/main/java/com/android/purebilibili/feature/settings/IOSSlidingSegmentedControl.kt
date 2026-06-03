@@ -1,56 +1,105 @@
 package com.android.purebilibili.feature.settings
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
-import com.android.purebilibili.core.ui.animation.horizontalDragGesture
-import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.home.components.BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP
+import com.android.purebilibili.feature.home.components.BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
+import com.kyant.backdrop.Backdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlin.math.roundToInt
 
 internal fun resolveMd3SegmentedLabelFontSizeSp(
     optionCount: Int,
     longestLabelLength: Int
 ): Float {
     return when {
-        optionCount >= 5 -> 12f
-        optionCount >= 4 && longestLabelLength >= 6 -> 13f
-        optionCount >= 4 -> 14f
-        longestLabelLength >= 8 -> 13f
-        else -> 15f
+        optionCount >= 5 -> 13f
+        optionCount >= 4 && longestLabelLength >= 6 -> 14f
+        optionCount >= 4 -> 15f
+        longestLabelLength >= 8 -> 14f
+        else -> 16f
+    }
+}
+
+internal data class Md3SegmentedControlColorTokens(
+    val outerContainerColor: Color,
+    val activeContainerColor: Color,
+    val activeContentColor: Color,
+    val inactiveContentColor: Color
+)
+
+internal enum class IosSlidingSegmentedControlChrome {
+    LIQUID_INDICATOR,
+    MD3_SEGMENTED
+}
+
+internal fun resolveIosSlidingSegmentedControlChrome(
+    uiPreset: UiPreset,
+    androidNativeLiquidGlassEnabled: Boolean
+): IosSlidingSegmentedControlChrome {
+    return if (uiPreset == UiPreset.MD3 && !androidNativeLiquidGlassEnabled) {
+        IosSlidingSegmentedControlChrome.MD3_SEGMENTED
+    } else {
+        IosSlidingSegmentedControlChrome.LIQUID_INDICATOR
+    }
+}
+
+internal fun resolveMd3SegmentedControlColorTokens(
+    androidNativeVariant: AndroidNativeVariant,
+    materialPrimaryContainer: Color,
+    materialOnPrimaryContainer: Color,
+    materialSurfaceContainerHigh: Color,
+    materialOnSurfaceVariant: Color,
+    miuixSecondaryContainer: Color,
+    miuixOnSecondaryContainer: Color,
+    miuixSurfaceContainerHigh: Color,
+    miuixOnSurfaceVariantSummary: Color
+): Md3SegmentedControlColorTokens {
+    return if (androidNativeVariant == AndroidNativeVariant.MATERIAL3) {
+        Md3SegmentedControlColorTokens(
+            outerContainerColor = materialSurfaceContainerHigh,
+            activeContainerColor = materialPrimaryContainer,
+            activeContentColor = materialOnPrimaryContainer,
+            inactiveContentColor = materialOnSurfaceVariant
+        )
+    } else {
+        Md3SegmentedControlColorTokens(
+            outerContainerColor = miuixSurfaceContainerHigh,
+            activeContainerColor = miuixSecondaryContainer,
+            activeContentColor = miuixOnSecondaryContainer,
+            inactiveContentColor = miuixOnSurfaceVariantSummary
+        )
     }
 }
 
@@ -110,11 +159,29 @@ internal fun <T> IOSSlidingSegmentedControl(
     selectedValue: T,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    forceLiquidIndicator: Boolean = false,
+    height: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP.dp,
+    indicatorHeight: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP.dp,
+    labelFontSize: TextUnit = 14.sp,
+    backdrop: Backdrop? = null,
+    tapPressRefractionEnabled: Boolean = true,
     onSelectionChange: (T) -> Unit
 ) {
     if (options.isEmpty()) return
     val uiPreset = LocalUiPreset.current
-    if (uiPreset == UiPreset.MD3) {
+    val context = LocalContext.current
+    val homeSettings by SettingsManager
+        .getHomeSettings(context)
+        .collectAsStateWithLifecycle(initialValue = HomeSettings())
+    val effectiveAndroidNativeLiquidGlassEnabled =
+        forceLiquidIndicator || homeSettings.androidNativeLiquidGlassEnabled
+    val chrome = remember(uiPreset, effectiveAndroidNativeLiquidGlassEnabled) {
+        resolveIosSlidingSegmentedControlChrome(
+            uiPreset = uiPreset,
+            androidNativeLiquidGlassEnabled = effectiveAndroidNativeLiquidGlassEnabled
+        )
+    }
+    if (chrome == IosSlidingSegmentedControlChrome.MD3_SEGMENTED) {
         Md3SegmentedControl(
             options = options,
             selectedValue = selectedValue,
@@ -129,6 +196,12 @@ internal fun <T> IOSSlidingSegmentedControl(
         selectedValue = selectedValue,
         modifier = modifier,
         enabled = enabled,
+        forceLiquidIndicator = forceLiquidIndicator,
+        height = height,
+        indicatorHeight = indicatorHeight,
+        labelFontSize = labelFontSize,
+        backdrop = backdrop,
+        tapPressRefractionEnabled = tapPressRefractionEnabled,
         onSelectionChange = onSelectionChange
     )
 }
@@ -144,6 +217,20 @@ private fun <T> Md3SegmentedControl(
     val longestLabelLength = remember(options) {
         options.maxOfOrNull { it.label.length } ?: 0
     }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val materialColorScheme = MaterialTheme.colorScheme
+    val miuixColorScheme = MiuixTheme.colorScheme
+    val colorTokens = resolveMd3SegmentedControlColorTokens(
+        androidNativeVariant = androidNativeVariant,
+        materialPrimaryContainer = materialColorScheme.primaryContainer,
+        materialOnPrimaryContainer = materialColorScheme.onPrimaryContainer,
+        materialSurfaceContainerHigh = materialColorScheme.surfaceContainerHigh,
+        materialOnSurfaceVariant = materialColorScheme.onSurfaceVariant,
+        miuixSecondaryContainer = miuixColorScheme.secondaryContainer,
+        miuixOnSecondaryContainer = miuixColorScheme.onSecondaryContainer,
+        miuixSurfaceContainerHigh = miuixColorScheme.surfaceContainerHigh,
+        miuixOnSurfaceVariantSummary = miuixColorScheme.onSurfaceVariantSummary
+    )
     val labelFontSize = remember(options.size, longestLabelLength) {
         resolveMd3SegmentedLabelFontSizeSp(
             optionCount = options.size,
@@ -153,8 +240,10 @@ private fun <T> Md3SegmentedControl(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainerHigh)
+            // Outer segmented container uses the preset-aware pill radius
+            // (iOS 10 / MD3 28 / Miuix 22dp) — replaces the hardcoded 24dp.
+            .clip(AppShapes.container(ContainerLevel.Pill))
+            .background(colorTokens.outerContainerColor)
             .padding(4.dp)
     ) {
         SingleChoiceSegmentedButtonRow(
@@ -170,14 +259,14 @@ private fun <T> Md3SegmentedControl(
                         count = options.size
                     ),
                     colors = SegmentedButtonDefaults.colors(
-                        activeContainerColor = MiuixTheme.colorScheme.secondaryContainer,
-                        activeContentColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                        activeContainerColor = colorTokens.activeContainerColor,
+                        activeContentColor = colorTokens.activeContentColor,
                         inactiveContainerColor = Color.Transparent,
-                        inactiveContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        disabledActiveContainerColor = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
-                        disabledActiveContentColor = MiuixTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f),
+                        inactiveContentColor = colorTokens.inactiveContentColor,
+                        disabledActiveContainerColor = colorTokens.activeContainerColor.copy(alpha = 0.35f),
+                        disabledActiveContentColor = colorTokens.activeContentColor.copy(alpha = 0.55f),
                         disabledInactiveContainerColor = Color.Transparent,
-                        disabledInactiveContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.45f)
+                        disabledInactiveContentColor = colorTokens.inactiveContentColor.copy(alpha = 0.45f)
                     ),
                     modifier = Modifier.weight(1f),
                     icon = {}
@@ -201,108 +290,30 @@ private fun <T> IOSSlidingSegmentedControlImpl(
     selectedValue: T,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    forceLiquidIndicator: Boolean = false,
+    height: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP.dp,
+    indicatorHeight: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP.dp,
+    labelFontSize: TextUnit = 14.sp,
+    backdrop: Backdrop? = null,
+    tapPressRefractionEnabled: Boolean = true,
     onSelectionChange: (T) -> Unit
 ) {
     val selectedIndex = resolveSelectionIndex(options = options, selectedValue = selectedValue)
-    val dragState = rememberDampedDragAnimationState(
-        initialIndex = selectedIndex,
-        itemCount = options.size,
-        onIndexChanged = { index ->
+    BottomBarLiquidSegmentedControl(
+        items = options.map { it.label },
+        selectedIndex = selectedIndex,
+        onSelected = { index ->
             options.getOrNull(index)?.let { option ->
                 onSelectionChange(option.value)
             }
-        }
+        },
+        modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
+        height = height,
+        indicatorHeight = indicatorHeight,
+        labelFontSize = labelFontSize,
+        backdrop = backdrop,
+        forceLiquidChrome = forceLiquidIndicator,
+        tapPressRefractionEnabled = tapPressRefractionEnabled
     )
-    val containerShape = RoundedCornerShape(20.dp)
-    val indicatorShape = RoundedCornerShape(16.dp)
-    val density = LocalDensity.current
-
-    LaunchedEffect(selectedIndex) {
-        dragState.updateIndex(selectedIndex)
-    }
-
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .clip(containerShape)
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (enabled) 0.42f else 0.28f)
-            )
-            .border(
-                width = 0.8.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.10f else 0.05f),
-                shape = containerShape
-            )
-            .padding(3.dp)
-    ) {
-        val segmentWidth = maxWidth / options.size
-        val dragModifier = if (enabled && options.size > 1) {
-            Modifier.horizontalDragGesture(
-                dragState = dragState,
-                itemWidthPx = with(density) { segmentWidth.toPx() }
-            )
-        } else {
-            Modifier
-        }
-        val indicatorOffsetX = segmentWidth * dragState.value
-
-        Box(
-            modifier = Modifier
-                .offset(x = indicatorOffsetX)
-                .fillMaxWidth(1f / options.size)
-                .height(40.dp)
-                .clip(indicatorShape)
-                .background(
-                    if (enabled) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                    }
-                )
-                .border(
-                    width = 0.6.dp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.12f else 0.06f),
-                    shape = indicatorShape
-                )
-        )
-
-        Row(modifier = Modifier.fillMaxWidth().then(dragModifier)) {
-            val activeIndex = dragState.value.roundToInt().coerceIn(0, options.lastIndex)
-            options.forEachIndexed { index, option ->
-                val isSelected = index == activeIndex
-                val labelColor by animateColorAsState(
-                    targetValue = when {
-                        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-                        isSelected -> MaterialTheme.colorScheme.onPrimary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    animationSpec = tween(durationMillis = 180),
-                    label = "segmentedLabelColor"
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp)
-                        .clip(indicatorShape)
-                        .clickable(
-                            enabled = enabled,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            onSelectionChange(option.value)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = option.label,
-                        color = labelColor,
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-    }
 }

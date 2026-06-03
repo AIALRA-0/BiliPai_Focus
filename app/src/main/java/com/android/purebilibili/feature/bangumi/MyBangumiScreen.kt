@@ -440,10 +440,10 @@ private fun MyFollowGrid(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(
+            itemsIndexed(
                 items = items,
-                key = { it.seasonId }
-            ) { item ->
+                key = { index, item -> resolveMyFollowItemLazyKey(index, item) }
+            ) { _, item ->
                 MyFollowCard(
                     item = item,
                     onClick = { onItemClick(item.seasonId) }

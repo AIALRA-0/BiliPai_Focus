@@ -9,6 +9,11 @@
     <cache-path
         name="app_update"
         path="app_update/" />
+
+    <!-- 图片预览分享缓存目录 -->
+    <cache-path
+        name="shared_images"
+        path="shared_images/" />
     
     <!-- 外部 Download 目录（用于日志导出） -->
     <external-path

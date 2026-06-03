@@ -10,7 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -18,8 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,6 +33,7 @@ import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
+import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
 
 // iOS Visual Styles
 private val MenuBackground = Color(0xCC1C1C1E) // Translucent Black
@@ -92,7 +92,7 @@ fun DanmakuContextMenu(
     canBlockUser: Boolean = true,
     onBlockUser: () -> Unit = {}
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     var currentPage by remember { mutableStateOf(DanmakuContextMenuPage.MAIN) }
 
     Dialog(
@@ -148,7 +148,7 @@ fun DanmakuContextMenu(
                         },
                         onReportClick = { currentPage = DanmakuContextMenuPage.REPORT },
                         onCopy = {
-                            clipboardManager.setText(AnnotatedString(text))
+                            copyPlainTextToClipboard(context, text, "弹幕")
                             onDismiss()
                         },
                         onBlockKeyword = {
@@ -300,8 +300,8 @@ private fun MainMenu(
         MenuSeparator()
 
         val voteLabel = when {
-            voteLoading -> "加载投票状态..."
-            !canVote -> "当前弹幕不支持投票"
+            voteLoading -> "加载点赞状态..."
+            !canVote -> "当前弹幕不支持点赞"
             hasLiked -> "取消点赞 (${formatVoteCount(voteCount)})"
             else -> "点赞弹幕 (${formatVoteCount(voteCount)})"
         }
@@ -467,7 +467,7 @@ private fun MenuItem(
 
 @Composable
 private fun MenuSeparator() {
-    Divider(
+    HorizontalDivider(
         color = SeparatorColor,
         thickness = 0.5.dp
     )

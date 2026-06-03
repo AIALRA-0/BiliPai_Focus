@@ -100,41 +100,41 @@ internal fun resolveBottomBarMotionSpec(
         )
         BottomBarMotionProfile.ANDROID_NATIVE_FLOATING -> base.copy(
             drag = base.drag.copy(
-                baseResistance = 0.98f,
-                overscrollResistance = 0.28f,
-                flingProjectionTimeSeconds = 0.16f,
+                baseResistance = 1.02f,
+                overscrollResistance = 0.34f,
+                flingProjectionTimeSeconds = 0.20f,
                 selectionSpring = MotionSpringConfig(
-                    dampingRatio = 0.88f,
-                    stiffness = 560f
+                    dampingRatio = 0.68f,
+                    stiffness = 520f
                 ),
                 offsetSnapSpring = MotionSpringConfig(
-                    dampingRatio = 0.84f,
-                    stiffness = 460f
+                    dampingRatio = 0.62f,
+                    stiffness = 420f
                 )
             ),
             refraction = base.refraction.copy(
-                movingVelocityThresholdPxPerSecond = 52f,
-                speedProgressDivisorPxPerSecond = 1650f,
-                dragProgressFloor = 0.14f,
-                panelOffsetMaxDp = 3.5f
+                movingVelocityThresholdPxPerSecond = 38f,
+                speedProgressDivisorPxPerSecond = 1250f,
+                dragProgressFloor = 0.22f,
+                panelOffsetMaxDp = 5f
             ),
             indicator = base.indicator.copy(
-                deformationScaleXDelta = 0.26f,
-                deformationScaleYCompressionRatio = 0.44f,
+                deformationScaleXDelta = 0.40f,
+                deformationScaleYCompressionRatio = 0.54f,
                 scaleSpring = MotionSpringConfig(
-                    dampingRatio = 0.62f,
-                    stiffness = 700f
+                    dampingRatio = 0.46f,
+                    stiffness = 620f
                 ),
                 dragScaleSpring = MotionSpringConfig(
-                    dampingRatio = 0.68f,
-                    stiffness = 480f
+                    dampingRatio = 0.54f,
+                    stiffness = 400f
                 ),
-                lensVelocityRangePxPerSecond = 3000f,
-                railFractionStretchMultiplier = 0.05f,
-                capsuleVelocityNormalizationDivisor = 12f,
-                capsuleVelocityScaleXMultiplier = 0.56f,
-                capsuleVelocityScaleYMultiplier = 0.20f,
-                capsuleVelocityClamp = 0.16f
+                lensVelocityRangePxPerSecond = 2500f,
+                railFractionStretchMultiplier = 0.095f,
+                capsuleVelocityNormalizationDivisor = 10.5f,
+                capsuleVelocityScaleXMultiplier = 0.72f,
+                capsuleVelocityScaleYMultiplier = 0.24f,
+                capsuleVelocityClamp = 0.20f
             )
         )
         BottomBarMotionProfile.MIUI_FLOATING -> base.copy(

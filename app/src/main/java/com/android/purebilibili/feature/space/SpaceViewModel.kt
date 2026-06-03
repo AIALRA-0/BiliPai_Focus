@@ -42,8 +42,6 @@ sealed class SpaceUiState {
         val upStat: UpStatData? = null,
         val videos: List<SpaceVideoItem> = emptyList(),
         val totalVideos: Int = 0,
-        val videoLoadError: String? = null,
-        val hasConfirmedEmptyVideos: Boolean = false,
         val isLoadingMore: Boolean = false,
         val hasMoreVideos: Boolean = true,
         //  视频分类
@@ -94,6 +92,7 @@ sealed class SpaceUiState {
         val totalArticles: Int = 0,
         val audioPage: Int = 1,
         val articlePage: Int = 1,
+        val articleOffset: String = "",
         val isLoadingAudios: Boolean = false,
         val isLoadingArticles: Boolean = false,
         val hasMoreAudios: Boolean = true,
@@ -248,6 +247,7 @@ class SpaceViewModel(
                 }
                 cachedImgKey = keys.first
                 cachedSubKey = keys.second
+
                 if (!loadSpaceInfoLegacy(mid, requestGeneration, userCardTopPhoto)) {
                     if (shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
                         _uiState.value = SpaceUiState.Error("获取用户信息失败")
@@ -446,30 +446,17 @@ class SpaceViewModel(
                 }
                 val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
                 if (result == null) {
-                    _uiState.value = latest.copy(
-                        isLoadingMore = false,
-                        videoLoadError = "投稿视频加载失败",
-                        hasConfirmedEmptyVideos = false
-                    )
+                    _uiState.value = latest.copy(isLoadingMore = false)
                     return@launch
                 }
                 currentPage = result.resolvedPage
-                val totalVideos = result.data.page.count
-                val hasConfirmedEmptyVideos = result.data.list.vlist.isEmpty() && totalVideos == 0
-                val videoLoadError = if (result.data.list.vlist.isEmpty() && totalVideos > 0) {
-                    "投稿视频加载失败"
-                } else {
-                    null
-                }
                 _uiState.value = latest.copy(
                     videos = result.data.list.vlist,
-                    totalVideos = totalVideos,
-                    videoLoadError = videoLoadError,
-                    hasConfirmedEmptyVideos = hasConfirmedEmptyVideos,
+                    totalVideos = result.data.page.count,
                     hasMoreVideos = resolveNextSpaceVideoPage(
                         order = requestOrder,
                         currentPage = currentPage,
-                        totalCount = totalVideos,
+                        totalCount = result.data.page.count,
                         pageSize = pageSize
                     ) != null,
                     categories = extractCategories(result.data.list.vlist),
@@ -481,11 +468,7 @@ class SpaceViewModel(
                     return@launch
                 }
                 val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = latest.copy(
-                    isLoadingMore = false,
-                    videoLoadError = "投稿视频加载失败",
-                    hasConfirmedEmptyVideos = false
-                )
+                _uiState.value = latest.copy(isLoadingMore = false)
             }
         }
     }
@@ -503,19 +486,27 @@ class SpaceViewModel(
                 val series = seasonsSeriesResult?.items_lists?.series_list ?: emptyList()
                 val createdFavoriteFolders = createdFavoriteFoldersDeferred.await()
                 val collectedFavoriteFolders = collectedFavoriteFoldersDeferred.await()
+                val embeddedSeasonArchives = resolveEmbeddedSeasonArchives(seasons)
+                val embeddedSeriesArchives = resolveEmbeddedSeriesArchives(series)
 
                 com.android.purebilibili.core.util.Logger.d("SpaceVM", " Seasons: ${seasons.size}, Series: ${series.size}")
 
-                val seasonArchiveDeferreds = seasons.take(collectionPreviewLimit).associate { season ->
-                    season.meta.season_id to async { fetchSeasonArchives(mid, season.meta.season_id).orEmpty() }
-                }
-                val seriesArchiveDeferreds = series.take(collectionPreviewLimit).associate { seriesItem ->
-                    seriesItem.meta.series_id to async { fetchSeriesArchives(mid, seriesItem.meta.series_id).orEmpty() }
-                }
+                val seasonArchiveDeferreds = seasons
+                    .take(collectionPreviewLimit)
+                    .filter { it.meta.season_id !in embeddedSeasonArchives }
+                    .associate { season ->
+                        season.meta.season_id to async { fetchSeasonArchives(mid, season.meta.season_id).orEmpty() }
+                    }
+                val seriesArchiveDeferreds = series
+                    .take(collectionPreviewLimit)
+                    .filter { it.meta.series_id !in embeddedSeriesArchives }
+                    .associate { seriesItem ->
+                        seriesItem.meta.series_id to async { fetchSeriesArchives(mid, seriesItem.meta.series_id).orEmpty() }
+                    }
 
-                val seasonArchives = seasonArchiveDeferreds.mapValues { (_, deferred) -> deferred.await() }
+                val seasonArchives = embeddedSeasonArchives + seasonArchiveDeferreds.mapValues { (_, deferred) -> deferred.await() }
                     .filterValues { it.isNotEmpty() }
-                val seriesArchives = seriesArchiveDeferreds.mapValues { (_, deferred) -> deferred.await() }
+                val seriesArchives = embeddedSeriesArchives + seriesArchiveDeferreds.mapValues { (_, deferred) -> deferred.await() }
                     .filterValues { it.isNotEmpty() }
 
                 if (!shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
@@ -796,59 +787,26 @@ class SpaceViewModel(
         order: VideoSortOrder = VideoSortOrder.PUBDATE,
         keyword: String = ""
     ): SpaceVideoLoadResult? {
-        var effectiveImgKey = imgKey
-        var effectiveSubKey = subKey
-        var firstPageResult = fetchSpaceVideosWithRetry(
+        val firstPageResult = fetchSpaceVideosWithRetry(
             mid = mid,
             page = 1,
-            imgKey = effectiveImgKey,
-            subKey = effectiveSubKey,
+            imgKey = imgKey,
+            subKey = subKey,
             tid = tid,
             order = order,
             keyword = keyword
-        )
-
-        if (shouldRetrySuspiciousInitialSpaceVideoResult(
-                order = order,
-                tid = tid,
-                keyword = keyword,
-                firstPageResult = firstPageResult
-            )
-        ) {
-            com.android.purebilibili.core.util.Logger.w(
-                "SpaceVM",
-                "Retrying suspicious empty space video result: mid=$mid, tid=$tid, order=${order.apiValue}"
-            )
-            val refreshedKeys = fetchWbiKeys()
-            if (refreshedKeys != null) {
-                effectiveImgKey = refreshedKeys.first
-                effectiveSubKey = refreshedKeys.second
-                cachedImgKey = effectiveImgKey
-                cachedSubKey = effectiveSubKey
-                firstPageResult = fetchSpaceVideos(
-                    mid = mid,
-                    page = 1,
-                    imgKey = effectiveImgKey,
-                    subKey = effectiveSubKey,
-                    tid = tid,
-                    order = order,
-                    keyword = keyword
-                )
-            }
-        }
-
-        val resolvedFirstPageResult = firstPageResult ?: return null
+        ) ?: return null
 
         val resolvedPage = resolveInitialSpaceVideoPage(
             order = order,
-            totalCount = resolvedFirstPageResult.page.count,
+            totalCount = firstPageResult.page.count,
             pageSize = pageSize
         )
         if (resolvedPage == 1) {
             return SpaceVideoLoadResult(
-                data = resolvedFirstPageResult.copy(
-                    list = resolvedFirstPageResult.list.copy(
-                        vlist = normalizeSpaceVideoPage(order, resolvedFirstPageResult.list.vlist)
+                data = firstPageResult.copy(
+                    list = firstPageResult.list.copy(
+                        vlist = normalizeSpaceVideoPage(order, firstPageResult.list.vlist)
                     )
                 ),
                 resolvedPage = 1
@@ -858,8 +816,8 @@ class SpaceViewModel(
         val resolvedPageResult = fetchSpaceVideosWithRetry(
             mid = mid,
             page = resolvedPage,
-            imgKey = effectiveImgKey,
-            subKey = effectiveSubKey,
+            imgKey = imgKey,
+            subKey = subKey,
             tid = tid,
             order = order,
             keyword = keyword
@@ -867,7 +825,7 @@ class SpaceViewModel(
 
         return SpaceVideoLoadResult(
             data = resolvedPageResult.copy(
-                page = resolvedPageResult.page.copy(count = resolvedFirstPageResult.page.count),
+                page = resolvedPageResult.page.copy(count = firstPageResult.page.count),
                 list = resolvedPageResult.list.copy(
                     vlist = normalizeSpaceVideoPage(order, resolvedPageResult.list.vlist)
                 )
@@ -896,8 +854,6 @@ class SpaceViewModel(
             _uiState.value = current.copy(
                 sortOrder = order,
                 videos = emptyList(),
-                videoLoadError = null,
-                hasConfirmedEmptyVideos = false,
                 isLoadingMore = true
             )
             
@@ -925,44 +881,26 @@ class SpaceViewModel(
                 
                 if (result != null) {
                     currentPage = result.resolvedPage
-                    val totalVideos = result.data.page.count
-                    val hasConfirmedEmptyVideos = result.data.list.vlist.isEmpty() && totalVideos == 0
-                    val videoLoadError = if (result.data.list.vlist.isEmpty() && totalVideos > 0) {
-                        "投稿视频加载失败"
-                    } else {
-                        null
-                    }
                     _uiState.value = currentState.copy(
                         videos = result.data.list.vlist,
-                        totalVideos = totalVideos,
-                        videoLoadError = videoLoadError,
-                        hasConfirmedEmptyVideos = hasConfirmedEmptyVideos,
+                        totalVideos = result.data.page.count,
                         hasMoreVideos = resolveNextSpaceVideoPage(
                             order = order,
                             currentPage = currentPage,
-                            totalCount = totalVideos,
+                            totalCount = result.data.page.count,
                             pageSize = pageSize
                         ) != null,
                         isLoadingMore = false
                     )
                 } else {
-                    _uiState.value = currentState.copy(
-                        isLoadingMore = false,
-                        videoLoadError = "投稿视频加载失败",
-                        hasConfirmedEmptyVideos = false,
-                        hasMoreVideos = false
-                    )
+                    _uiState.value = currentState.copy(isLoadingMore = false)
                 }
             } catch (e: Exception) {
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, order, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(
-                    isLoadingMore = false,
-                    videoLoadError = "投稿视频加载失败",
-                    hasConfirmedEmptyVideos = false
-                )
+                _uiState.value = currentState.copy(isLoadingMore = false)
             }
         }
     }
@@ -982,8 +920,6 @@ class SpaceViewModel(
             _uiState.value = current.copy(
                 selectedTid = tid,
                 videos = emptyList(),
-                videoLoadError = null,
-                hasConfirmedEmptyVideos = false,
                 isLoadingMore = true
             )
             
@@ -1011,35 +947,21 @@ class SpaceViewModel(
                 
                 if (result != null) {
                     currentPage = result.resolvedPage
-                    val totalVideos = result.data.page.count
-                    val hasConfirmedEmptyVideos = result.data.list.vlist.isEmpty() && totalVideos == 0
-                    val videoLoadError = if (result.data.list.vlist.isEmpty() && totalVideos > 0) {
-                        "投稿视频加载失败"
-                    } else {
-                        null
-                    }
                     android.util.Log.d("SpaceVM", " selectCategory success: ${result.data.list.vlist.size} videos")
                     _uiState.value = currentState.copy(
                         videos = result.data.list.vlist,
-                        totalVideos = totalVideos,
-                        videoLoadError = videoLoadError,
-                        hasConfirmedEmptyVideos = hasConfirmedEmptyVideos,
+                        totalVideos = result.data.page.count,
                         hasMoreVideos = resolveNextSpaceVideoPage(
                             order = currentOrder,
                             currentPage = currentPage,
-                            totalCount = totalVideos,
+                            totalCount = result.data.page.count,
                             pageSize = pageSize
                         ) != null,
                         isLoadingMore = false
                     )
                 } else {
                     android.util.Log.e("SpaceVM", " selectCategory failed: result is null")
-                    _uiState.value = currentState.copy(
-                        isLoadingMore = false,
-                        videoLoadError = "投稿视频加载失败",
-                        hasConfirmedEmptyVideos = false,
-                        hasMoreVideos = false
-                    )
+                    _uiState.value = currentState.copy(isLoadingMore = false)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("SpaceVM", " selectCategory error: ${e.message}", e)
@@ -1047,11 +969,7 @@ class SpaceViewModel(
                     return@launch
                 }
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(
-                    isLoadingMore = false,
-                    videoLoadError = "投稿视频加载失败",
-                    hasConfirmedEmptyVideos = false
-                )
+                _uiState.value = currentState.copy(isLoadingMore = false)
             }
         }
     }
@@ -1304,6 +1222,13 @@ class SpaceViewModel(
         }
     }
 
+    fun removeSpaceDynamic(dynamicId: String) {
+        val current = _uiState.value as? SpaceUiState.Success ?: return
+        _uiState.value = current.copy(
+            dynamics = current.dynamics.filterNot { it.id_str == dynamicId }
+        )
+    }
+
     fun loadSpaceBangumi(refresh: Boolean = false) {
         val current = _uiState.value as? SpaceUiState.Success ?: return
         if (current.isLoadingBangumi) return
@@ -1427,7 +1352,49 @@ class SpaceViewModel(
                     loadSpaceArticles(refresh = true)
                 }
             }
+            SpaceSubTab.SEASON_VIDEO -> {
+                val seasonId = selectedContributionTab.seasonId
+                val season = current.seasons.firstOrNull { it.meta.season_id == seasonId }
+                val currentArchives = current.seasonArchives[seasonId].orEmpty()
+                val expectedCount = (season?.meta?.total ?: 1).coerceAtLeast(1)
+                if (seasonId > 0L && currentArchives.size < expectedCount) {
+                    loadSelectedSeasonArchives(seasonId)
+                }
+            }
+            SpaceSubTab.SERIES -> {
+                val seriesId = selectedContributionTab.seriesId
+                val series = current.series.firstOrNull { it.meta.series_id == seriesId }
+                val currentArchives = current.seriesArchives[seriesId].orEmpty()
+                val expectedCount = (series?.meta?.total ?: 1).coerceAtLeast(1)
+                if (seriesId > 0L && currentArchives.size < expectedCount) {
+                    loadSelectedSeriesArchives(seriesId)
+                }
+            }
             else -> Unit
+        }
+    }
+
+    private fun loadSelectedSeasonArchives(seasonId: Long) {
+        viewModelScope.launch {
+            val requestMid = currentMid
+            val archives = fetchSeasonArchives(requestMid, seasonId).orEmpty()
+            if (archives.isEmpty() || requestMid != currentMid) return@launch
+            val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
+            _uiState.value = latest.copy(
+                seasonArchives = latest.seasonArchives + (seasonId to archives)
+            )
+        }
+    }
+
+    private fun loadSelectedSeriesArchives(seriesId: Long) {
+        viewModelScope.launch {
+            val requestMid = currentMid
+            val archives = fetchSeriesArchives(requestMid, seriesId).orEmpty()
+            if (archives.isEmpty() || requestMid != currentMid) return@launch
+            val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
+            _uiState.value = latest.copy(
+                seriesArchives = latest.seriesArchives + (seriesId to archives)
+            )
         }
     }
 
@@ -1535,19 +1502,22 @@ class SpaceViewModel(
             val page = if (refresh) 1 else current.articlePage + 1
             
             try {
-                val result = fetchSpaceArticleList(currentMid, page)
+                val articleOffset = if (refresh) "" else current.articleOffset
+                val result = fetchSpaceArticleList(currentMid, page, articleOffset)
                  val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                  
                  if (result != null && result.code == 0) {
                      val newItems = result.data?.lists ?: emptyList()
                      val allItems = if (refresh) newItems else currentState.articles + newItems
-                     val totalCount = result.data?.total ?: currentState.totalArticles
-                     val hasMore = allItems.size < totalCount.coerceAtLeast(allItems.size)
+                     val totalCount = result.data?.total?.takeIf { it > 0 } ?: allItems.size
+                     val hasMore = result.data?.has_more
+                         ?: (allItems.size < totalCount.coerceAtLeast(allItems.size))
                      
                      _uiState.value = currentState.copy(
                          articles = allItems,
                          totalArticles = totalCount,
                          articlePage = page,
+                         articleOffset = result.data?.offset.orEmpty(),
                          hasMoreArticles = hasMore,
                          isLoadingArticles = false
                      ).markTabResult(SpaceMainTab.CONTRIBUTION)
@@ -1580,9 +1550,21 @@ class SpaceViewModel(
         }
     }
 
-    private suspend fun fetchSpaceArticleList(mid: Long, page: Int): SpaceArticleResponse? {
+    private suspend fun fetchSpaceArticleList(mid: Long, page: Int, offset: String): SpaceArticleResponse? {
         return try {
-            spaceApi.getSpaceArticleList(mid = mid, pn = page)
+            if (!ensureWbiKeysLoaded()) return null
+            val params = WbiUtils.sign(
+                mapOf(
+                    "host_mid" to mid.toString(),
+                    "page" to page.toString(),
+                    "offset" to offset,
+                    "type" to "all",
+                    "web_location" to "333.1387"
+                ),
+                cachedImgKey,
+                cachedSubKey
+            )
+            spaceApi.getSpaceArticleList(params)
         } catch (e: Exception) {
             android.util.Log.e("SpaceVM", "fetchArticle error: ${e.message}")
             null
@@ -1746,7 +1728,7 @@ class SpaceViewModel(
 
     private fun clearVideoSearchResults() {
         currentKeyword = ""
-        refreshCurrentVideoResults()
+        refreshVideoSearchResults()
     }
 
     private fun mergeSpaceBangumiItems(
@@ -1769,14 +1751,6 @@ class SpaceViewModel(
     }
 
     private fun refreshVideoSearchResults() {
-        refreshCurrentVideoResults()
-    }
-
-    fun retryCurrentVideoList() {
-        refreshCurrentVideoResults()
-    }
-
-    private fun refreshCurrentVideoResults() {
         val current = _uiState.value as? SpaceUiState.Success ?: return
         val requestGeneration = beginVideoListRequest()
         val requestTid = currentTid
@@ -1786,8 +1760,6 @@ class SpaceViewModel(
         activeVideoListJob = viewModelScope.launch {
             val loadingState = (_uiState.value as? SpaceUiState.Success ?: current).copy(
                 videos = emptyList(),
-                videoLoadError = null,
-                hasConfirmedEmptyVideos = false,
                 isLoadingMore = true,
                 hasMoreVideos = true
             )
@@ -1819,22 +1791,13 @@ class SpaceViewModel(
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 if (result != null) {
                     currentPage = result.resolvedPage
-                    val totalVideos = result.data.page.count
-                    val hasConfirmedEmptyVideos = result.data.list.vlist.isEmpty() && totalVideos == 0
-                    val videoLoadError = if (result.data.list.vlist.isEmpty() && totalVideos > 0) {
-                        "投稿视频加载失败"
-                    } else {
-                        null
-                    }
                     _uiState.value = currentState.copy(
                         videos = result.data.list.vlist,
-                        totalVideos = totalVideos,
-                        videoLoadError = videoLoadError,
-                        hasConfirmedEmptyVideos = hasConfirmedEmptyVideos,
+                        totalVideos = result.data.page.count,
                         hasMoreVideos = resolveNextSpaceVideoPage(
                             order = requestOrder,
                             currentPage = currentPage,
-                            totalCount = totalVideos,
+                            totalCount = result.data.page.count,
                             pageSize = pageSize
                         ) != null,
                         isLoadingMore = false
@@ -1842,9 +1805,7 @@ class SpaceViewModel(
                 } else {
                     _uiState.value = currentState.copy(
                         isLoadingMore = false,
-                        hasMoreVideos = false,
-                        videoLoadError = "投稿视频加载失败",
-                        hasConfirmedEmptyVideos = false
+                        hasMoreVideos = false
                     )
                 }
             } catch (e: Exception) {
@@ -1852,11 +1813,7 @@ class SpaceViewModel(
                     return@launch
                 }
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(
-                    isLoadingMore = false,
-                    videoLoadError = "投稿视频加载失败",
-                    hasConfirmedEmptyVideos = false
-                )
+                _uiState.value = currentState.copy(isLoadingMore = false)
             }
         }
     }

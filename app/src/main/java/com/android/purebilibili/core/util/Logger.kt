@@ -36,6 +36,7 @@ internal fun resolvePlayerDiagnosticExportFileName(
     exportedAtMillis: Long
 ): String {
     val formatter = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+    formatter.timeZone = TimeZone.getTimeZone("Asia/Shanghai")
     return "player_diagnostic_${formatter.format(Date(exportedAtMillis))}.txt"
 }
 
@@ -335,7 +336,7 @@ object LogCollector {
 
             while (buffer.size > MAX_ENTRIES) {
                 if (buffer.isNotEmpty()) {
-                    buffer.removeFirst()
+                    buffer.pollFirst()
                 } else {
                     break
                 }

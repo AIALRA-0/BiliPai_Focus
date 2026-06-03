@@ -37,6 +37,7 @@ import com.android.purebilibili.core.ui.resolveAdaptiveBottomSheetMotionSpec
 import com.android.purebilibili.feature.video.ui.section.resolvePublishTimeRowText
 import com.android.purebilibili.feature.video.ui.section.shouldEmphasizePrecisePublishTime
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 竖屏视频详情页 (简介)
@@ -49,7 +50,6 @@ fun PortraitDetailSheet(
     info: ViewInfo?,
     recommendationTitle: String = "推荐视频",
     recommendations: List<RelatedVideo> = emptyList(),
-    showRecommendationsSection: Boolean = true,
     onRecommendationClick: (String) -> Unit = {},
     onAuthorClick: (Long) -> Unit = {},
     danmakuEnabled: Boolean = true,
@@ -163,7 +163,8 @@ fun PortraitDetailSheet(
                             // 标题
                             val context = LocalContext.current
                             val blockedUpRepository = remember { com.android.purebilibili.data.repository.BlockedUpRepository(context) }
-                            val isBlocked by blockedUpRepository.isBlocked(info.owner.mid).collectAsState(initial = false)
+                            val isBlocked by blockedUpRepository.isBlocked(info.owner.mid).collectAsStateWithLifecycle(initialValue = false
+        )
                             val scope = rememberCoroutineScope()
                             var showBlockConfirmDialog by remember { mutableStateOf(false) }
                             
@@ -171,17 +172,17 @@ fun PortraitDetailSheet(
                                 com.android.purebilibili.core.ui.IOSAlertDialog(
                                     onDismissRequest = { showBlockConfirmDialog = false },
                                     title = { Text(if (isBlocked) "解除屏蔽" else "屏蔽 UP 主") },
-                                    text = { Text(if (isBlocked) "确定要解除对 ${info.owner.name} 的屏蔽吗？" else "屏蔽后，将不再推荐该 UP 主的视频\n确定要屏蔽 ${info.owner.name} 吗？") },
+                                    text = { Text(if (isBlocked) "确定要解除对 ${info.owner.name} 的屏蔽吗？" else "屏蔽后，将不再推荐该 UP 主的视频。\n确定要屏蔽 ${info.owner.name} 吗？") },
                                     confirmButton = {
                                         com.android.purebilibili.core.ui.IOSDialogAction(
                                             onClick = {
                                                 scope.launch {
                                                     if (isBlocked) {
-                                                        blockedUpRepository.unblockUp(info.owner.mid)
-                                                        android.widget.Toast.makeText(context, "已解除屏蔽", android.widget.Toast.LENGTH_SHORT).show()
+                                                        val result = blockedUpRepository.unblockUpWithBilibiliSync(info.owner.mid)
+                                                        android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_SHORT).show()
                                                     } else {
-                                                        blockedUpRepository.blockUp(info.owner.mid, info.owner.name, info.owner.face)
-                                                        android.widget.Toast.makeText(context, "已屏蔽该 UP 主", android.widget.Toast.LENGTH_SHORT).show()
+                                                        val result = blockedUpRepository.blockUpWithBilibiliSync(info.owner.mid, info.owner.name, info.owner.face)
+                                                        android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_SHORT).show()
                                                     }
                                                     showBlockConfirmDialog = false
                                                 }
@@ -302,7 +303,7 @@ fun PortraitDetailSheet(
                                 modifier = Modifier.padding(bottom = 16.dp)
                             )
 
-                            if (showRecommendationsSection && recommendations.isNotEmpty()) {
+                            if (recommendations.isNotEmpty()) {
                                 Text(
                                     text = recommendationTitle,
                                     fontSize = 15.sp,
