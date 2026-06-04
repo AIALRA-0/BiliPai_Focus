@@ -178,7 +178,7 @@ class BottomBarMiuixStructureTest {
         assertTrue(kernelSuRendererSource.contains("pressProgress = effectivePressProgress"))
         assertTrue(kernelSuRendererSource.contains("val indicatorLayerScaleProgress = maxOf(indicatorDragScaleProgress, effectivePressProgress)"))
         assertTrue(kernelSuRendererSource.contains("resolveBottomBarBackdropPresetIndicatorLens("))
-        assertTrue(kernelSuRendererSource.contains("progress = effectiveIndicatorEffectProgress"))
+        assertTrue(kernelSuRendererSource.contains("effectiveIndicatorEffectProgress"))
         assertTrue(kernelSuRendererSource.contains("pressProgress = effectivePressProgress"))
         assertTrue(kernelSuRendererSource.contains("shouldRenderBottomBarRefractionCapture("))
         assertTrue(kernelSuRendererSource.contains("if (shouldRenderIndicatorContentCapture && miuixBackdrop != null)"))

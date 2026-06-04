@@ -98,7 +98,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
+import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.PortraitPlayerCollapseMode
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.LocalUiPreset
 //  已改用 MaterialTheme.colorScheme.primary
 
@@ -253,6 +255,7 @@ internal fun shouldClearStaleReturningStateOnVideoDetailEnter(
 }
 
 private const val COVER_TAKEOVER_PRE_BACK_DELAY_MILLIS = 16L
+private const val VIDEO_CONTENT_COMMENT_TAB_INDEX = 1
 
 internal fun resolveForceCoverOnlyForReturn(
     forceCoverOnlyOnReturn: Boolean,
@@ -1087,6 +1090,12 @@ fun VideoDetailScreen(
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val configuration = LocalConfiguration.current
+    val homeSettings by SettingsManager.getHomeSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = HomeSettings(),
+            lifecycle = lifecycleOwner.lifecycle
+        )
+    val videoDetailLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled
     val homeUpBadgesVisible by com.android.purebilibili.core.store.SettingsManager
         .getHomeUpBadgesVisible(context)
         .collectAsStateWithLifecycle(initialValue = true
@@ -1377,6 +1386,7 @@ fun VideoDetailScreen(
             lifecycle = lifecycleOwner.lifecycle
         )
     val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsStateWithLifecycle()
+    val showCommentInput by viewModel.showCommentDialog.collectAsStateWithLifecycle()
     val favoriteFolders by viewModel.favoriteFolders.collectAsStateWithLifecycle()
     val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsStateWithLifecycle()
     val selectedFavoriteFolderIds by viewModel.favoriteSelectedFolderIds.collectAsStateWithLifecycle()
@@ -3081,6 +3091,8 @@ fun VideoDetailScreen(
                     )
                     var introFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
                     var introFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
+                    var commentFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
+                    var commentFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
                     val compactInlinePlayerForCommentTab =
                         shouldUseCompactInlinePortraitPlayerForCommentTab(
                             useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
@@ -3532,6 +3544,24 @@ fun VideoDetailScreen(
                                                 exit = detailContentExitFade
                                             ) {
                                                 Box(modifier = Modifier.fillMaxSize()) {
+                                                    val showFrozenCommentBar = shouldShowVideoDetailBottomInteractionBar(
+                                                        isLiquidGlassEnabled = videoDetailLiquidGlassEnabled,
+                                                        useTabletLayout = useTabletLayout,
+                                                        selectedTabIndex = selectedVideoContentTabIndex,
+                                                        isFullscreenMode = isFullscreenMode,
+                                                        isPortraitFullscreen = isPortraitFullscreen,
+                                                        isCommentInputVisible = showCommentInput,
+                                                        isCommentThreadVisible = subReplyState.visible,
+                                                        isFavoriteFolderDialogVisible = showFavoriteFolderDialog,
+                                                        isExternalPlaylistQueueBarVisible = shouldShowExternalPlaylistQueueBar
+                                                    )
+                                                    val videoContentBottomPadding = if (showFrozenCommentBar) {
+                                                        96.dp
+                                                    } else if (shouldShowVideoDetailActionButtons()) {
+                                                        84.dp
+                                                    } else {
+                                                        12.dp
+                                                    }
                                                     VideoContentSection(
                                                         info = success.info,
                                                         relatedVideos = focusRelatedVideos,
@@ -3680,11 +3710,16 @@ fun VideoDetailScreen(
                                                         onIntroScrollStateChange = { index, offset ->
                                                             introFirstVisibleItemIndex = index
                                                             introFirstVisibleItemScrollOffset = offset
-                                                        }
+                                                        },
+                                                        onCommentScrollStateChange = { index, offset ->
+                                                            commentFirstVisibleItemIndex = index
+                                                            commentFirstVisibleItemScrollOffset = offset
+                                                        },
+                                                        bottomContentPadding = videoContentBottomPadding
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)
-                                                    if (shouldShowVideoDetailBottomInteractionBar() && !shouldShowExternalPlaylistQueueBar) {
+                                                    if (showFrozenCommentBar) {
                                                         BottomInputBar(
                                                             modifier = Modifier.align(Alignment.BottomCenter),
                                                             isLiked = success.isLiked,
@@ -4128,7 +4163,6 @@ fun VideoDetailScreen(
         )
 
         //  [新增] 评论输入对话框
-        val showCommentInput by viewModel.showCommentDialog.collectAsStateWithLifecycle()
         val isSendingComment by viewModel.isSendingComment.collectAsStateWithLifecycle() // 暂时复用 ViewModel 状态?
         val replyingToComment by viewModel.replyingToComment.collectAsStateWithLifecycle()
         val emotePackages by viewModel.emotePackages.collectAsStateWithLifecycle() // [新增]
@@ -5512,7 +5546,14 @@ internal fun resolvePhoneVideoRequestedOrientation(
         return null
     }
     if (!shouldApplyPhoneAutoRotatePolicy(isCompactDevice)) {
-        return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        return if (isFullscreenMode || manualFullscreenRequested) {
+            resolvePhoneFullscreenEnterOrientation(
+                fullscreenMode = fullscreenMode,
+                isVerticalVideo = isVerticalVideo
+            )
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
     }
     if (fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.NONE) {
         return null
@@ -5832,8 +5873,26 @@ internal fun shouldEnablePortraitExperience(): Boolean {
     return true
 }
 
-internal fun shouldShowVideoDetailBottomInteractionBar(): Boolean {
-    return false
+internal fun shouldShowVideoDetailBottomInteractionBar(
+    isLiquidGlassEnabled: Boolean,
+    useTabletLayout: Boolean,
+    selectedTabIndex: Int,
+    isFullscreenMode: Boolean,
+    isPortraitFullscreen: Boolean,
+    isCommentInputVisible: Boolean,
+    isCommentThreadVisible: Boolean,
+    isFavoriteFolderDialogVisible: Boolean,
+    isExternalPlaylistQueueBarVisible: Boolean
+): Boolean {
+    return isLiquidGlassEnabled &&
+        !useTabletLayout &&
+        selectedTabIndex == VIDEO_CONTENT_COMMENT_TAB_INDEX &&
+        !isFullscreenMode &&
+        !isPortraitFullscreen &&
+        !isCommentInputVisible &&
+        !isCommentThreadVisible &&
+        !isFavoriteFolderDialogVisible &&
+        !isExternalPlaylistQueueBarVisible
 }
 
 internal fun shouldShowVideoDetailActionButtons(): Boolean {

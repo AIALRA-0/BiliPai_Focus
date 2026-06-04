@@ -88,8 +88,8 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
-import dev.chrisbanes.haze.hazeSource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.slideInHorizontally
@@ -1097,7 +1097,7 @@ fun AppNavigation(
                         .layerBackdrop(bottomBarBackdrop)
                         // [Fix] 将内容标记为全局底栏模糊的源
                         // 必须添加 hazeSource，否则底栏的 hazeEffect 无法获取背景内容，导致模糊失效
-                        .then(if (mainHazeState != null) Modifier.hazeSource(mainHazeState) else Modifier)
+                        .then(if (mainHazeState != null) Modifier.hazeSourceCompat(mainHazeState) else Modifier)
                 ) {
                     HomeWallpaperBackdrop(
                         wallpaperUri = globalHomeWallpaperUri,

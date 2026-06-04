@@ -371,6 +371,7 @@ data class HomeSettings(
     val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.FOLLOW_PRESET,
     val isBottomBarBlurEnabled: Boolean = true,
     val isTopBarLiquidGlassEnabled: Boolean = false,
+    val isHomeSearchLiquidGlassEnabled: Boolean = false,
     val isBottomBarLiquidGlassEnabled: Boolean = false,
     val bottomBarLiquidGlassPreset: BottomBarLiquidGlassPreset =
         BottomBarLiquidGlassPreset.BILIPAI_TUNED,
@@ -981,6 +982,8 @@ object SettingsManager {
     private val KEY_HOME_TOP_LAYOUT_ORDER = intPreferencesKey("home_top_layout_order")
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
     private val KEY_TOP_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("top_bar_liquid_glass_enabled")
+    private val KEY_HOME_SEARCH_LIQUID_GLASS_ENABLED =
+        booleanPreferencesKey("home_search_liquid_glass_enabled")
     private val KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("bottom_bar_liquid_glass_enabled")
     private val KEY_BOTTOM_BAR_LIQUID_GLASS_PRESET = intPreferencesKey("bottom_bar_liquid_glass_preset")
     private val KEY_BOTTOM_BAR_INTERACTIVE_HIGHLIGHT_ENABLED =
@@ -1099,6 +1102,9 @@ object SettingsManager {
             headerBlurMode = headerBlurMode,
             isBottomBarBlurEnabled = preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true,
             isTopBarLiquidGlassEnabled = preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: false,
+            isHomeSearchLiquidGlassEnabled =
+                preferences[KEY_HOME_SEARCH_LIQUID_GLASS_ENABLED]
+                    ?: (preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: false),
             isBottomBarLiquidGlassEnabled = preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: legacyLiquidGlassEnabled,
             bottomBarLiquidGlassPreset = BottomBarLiquidGlassPreset.fromValue(
                 preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_PRESET]
@@ -2607,6 +2613,18 @@ object SettingsManager {
     suspend fun setTopBarLiquidGlassEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = value
+        }
+    }
+
+    fun getHomeSearchLiquidGlassEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_HOME_SEARCH_LIQUID_GLASS_ENABLED]
+                ?: (preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: false)
+        }
+
+    suspend fun setHomeSearchLiquidGlassEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_SEARCH_LIQUID_GLASS_ENABLED] = value
         }
     }
 

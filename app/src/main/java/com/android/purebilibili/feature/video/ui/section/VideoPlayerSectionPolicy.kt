@@ -1029,9 +1029,11 @@ internal fun shouldStartForegroundSurfaceRecovery(
 internal fun shouldKickPlaybackAfterSurfaceRecovery(
     playWhenReady: Boolean,
     isPlaying: Boolean,
-    playbackState: Int
+    playbackState: Int,
+    hasPlaybackResumeIntent: Boolean = true
 ): Boolean {
-    return playWhenReady &&
+    return hasPlaybackResumeIntent &&
+        playWhenReady &&
         !isPlaying &&
         (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)
 }

@@ -46,10 +46,19 @@ class TopTabLayoutPolicyTest {
     @Test
     fun `md3 top tabs use compact scrollable item widths instead of fixed four slots`() {
         assertEquals(3, resolveMd3TopTabVisibleSlots())
-        assertEquals(96f, resolveMd3TopTabItemWidthDp(containerWidthDp = 320f), 0.001f)
-        assertEquals(108f, resolveMd3TopTabItemWidthDp(containerWidthDp = 360f), 0.001f)
-        assertEquals(120f, resolveMd3TopTabItemWidthDp(containerWidthDp = 640f), 0.001f)
+        assertEquals(106.666f, resolveMd3TopTabItemWidthDp(containerWidthDp = 320f), 0.001f)
+        assertEquals(120f, resolveMd3TopTabItemWidthDp(containerWidthDp = 360f), 0.001f)
+        assertEquals(213.333f, resolveMd3TopTabItemWidthDp(containerWidthDp = 640f), 0.001f)
         assertEquals(60f, resolveMd3TopTabItemWidthDp(containerWidthDp = 360f, visibleSlots = 6), 0.001f)
+    }
+
+    @Test
+    fun `md3 top tabs center sparse categories in three slot viewport`() {
+        val itemWidth = resolveMd3TopTabItemWidthDp(containerWidthDp = 360f)
+
+        assertEquals(60f, resolveMd3TopTabContentPaddingDp(360f, itemWidth, categoryCount = 2), 0.001f)
+        assertEquals(120f, resolveMd3TopTabContentPaddingDp(360f, itemWidth, categoryCount = 1), 0.001f)
+        assertEquals(0f, resolveMd3TopTabContentPaddingDp(360f, itemWidth, categoryCount = 3), 0.001f)
     }
 
     @Test

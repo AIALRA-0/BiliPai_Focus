@@ -1965,14 +1965,6 @@ fun VideoPlayerSection(
                     }
                 }
             }
-            if (shouldKickPlaybackAfterSurfaceRecovery(
-                    playWhenReady = player.playWhenReady,
-                    isPlaying = player.isPlaying,
-                    playbackState = player.playbackState
-                )
-            ) {
-                player.play()
-            }
         }
 
         LaunchedEffect(
@@ -2003,7 +1995,8 @@ fun VideoPlayerSection(
             if (shouldKickPlaybackAfterSurfaceRecovery(
                     playWhenReady = player.playWhenReady,
                     isPlaying = player.isPlaying,
-                    playbackState = player.playbackState
+                    playbackState = player.playbackState,
+                    hasPlaybackResumeIntent = true
                 )
             ) {
                 player.play()
@@ -2045,7 +2038,8 @@ fun VideoPlayerSection(
             if (shouldKickPlaybackAfterSurfaceRecovery(
                     playWhenReady = player.playWhenReady,
                     isPlaying = player.isPlaying,
-                    playbackState = player.playbackState
+                    playbackState = player.playbackState,
+                    hasPlaybackResumeIntent = true
                 )
             ) {
                 player.play()
@@ -2212,7 +2206,8 @@ fun VideoPlayerSection(
                         if (shouldKickPlaybackAfterSurfaceRecovery(
                                 playWhenReady = player.playWhenReady,
                                 isPlaying = player.isPlaying,
-                                playbackState = player.playbackState
+                                playbackState = player.playbackState,
+                                hasPlaybackResumeIntent = true
                             )
                         ) {
                             player.play()

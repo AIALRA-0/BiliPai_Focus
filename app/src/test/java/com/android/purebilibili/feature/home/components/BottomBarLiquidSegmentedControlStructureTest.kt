@@ -261,7 +261,7 @@ class BottomBarLiquidSegmentedControlStructureTest {
         assertTrue(source.contains("resolveSegmentedControlIndicatorOffsetDp("))
         assertTrue(source.contains("shouldDrawSegmentedControlIndicatorBackdrop("))
         assertTrue(source.contains("val indicatorShape = resolveSharedBottomBarCapsuleShape()"))
-        assertTrue(source.contains("val containerShape = AppShapes.container(ContainerLevel.Pill)"))
+        assertTrue(source.contains("val containerShape = indicatorShape"))
         assertTrue(source.contains("shellShape = indicatorShape"))
         assertTrue(source.contains("indicatorTranslationXPx = with(density) { indicatorOffset.toPx() }"))
         assertTrue(source.contains("indicatorWidth = indicatorWidth"))

@@ -434,6 +434,7 @@ fun PortraitVideoPager(
     }
     var lastAutoAdvancedBvid by remember { mutableStateOf<String?>(null) }
     var pendingUserSpaceNavigation by rememberSaveable { mutableStateOf(false) }
+    var portraitOverlayVisible by rememberSaveable(initialInfo.bvid) { mutableStateOf(true) }
     val lifecycleOwner = LocalLifecycleOwner.current
     var isLifecycleResumed by remember(lifecycleOwner) {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
@@ -962,6 +963,10 @@ fun PortraitVideoPager(
                         currentPageScale = scale
                     }
                 },
+                portraitOverlayVisible = portraitOverlayVisible,
+                onPortraitOverlayVisibleChange = { visible ->
+                    portraitOverlayVisible = visible
+                },
                 onRequestVideoChange = { targetBvid ->
                     val targetIndex = pageItems.indexOfFirst { candidate ->
                         when (candidate) {
@@ -1009,6 +1014,8 @@ private fun VideoPageItem(
     hasRenderedFirstFrame: Boolean,
     initialProgressPositionMs: Long,
     onCurrentPageScaleChange: (Float) -> Unit,
+    portraitOverlayVisible: Boolean,
+    onPortraitOverlayVisibleChange: (Boolean) -> Unit,
     onRequestVideoChange: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -1207,7 +1214,6 @@ private fun VideoPageItem(
     var showCommentSheet by remember { mutableStateOf(false) }
     var showDetailSheet by remember { mutableStateOf(false) }
     var detailSheetUpOnlyMode by remember { mutableStateOf(false) }
-    var isOverlayVisible by remember { mutableStateOf(true) }
     var commentSheetVisibilityProgress by remember { mutableFloatStateOf(0f) }
     var portraitPageWidthPx by remember { mutableIntStateOf(0) }
     var portraitPageHeightPx by remember { mutableIntStateOf(0) }
@@ -1420,7 +1426,7 @@ private fun VideoPageItem(
                                 val maxPanY = (size.height * updatedScale - size.height) / 2f
                                 panX = (panX + pan.x * updatedScale).coerceIn(-maxPanX, maxPanX)
                                 panY = (panY + pan.y * updatedScale).coerceIn(-maxPanY, maxPanY)
-                                isOverlayVisible = false
+                                onPortraitOverlayVisibleChange(false)
                             } else {
                                 panX = 0f
                                 panY = 0f
@@ -1449,7 +1455,7 @@ private fun VideoPageItem(
                         ) {
                             return@detectTapGestures
                         }
-                        isOverlayVisible = !isOverlayVisible
+                        onPortraitOverlayVisibleChange(!portraitOverlayVisible)
                     },
                     onDoubleTap = {
                         if (
@@ -1832,7 +1838,7 @@ private fun VideoPageItem(
             Button(
                 onClick = {
                     resetViewportTransform()
-                    isOverlayVisible = true
+                    onPortraitOverlayVisibleChange(true)
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.Black.copy(alpha = 0.6f),
@@ -2131,7 +2137,7 @@ private fun VideoPageItem(
             onSpeedClick = {
                 if (isCurrentPage) {
                     showSpeedMenu = true
-                    isOverlayVisible = true
+                    onPortraitOverlayVisibleChange(true)
                 }
             },
             onQualityClick = { },
@@ -2155,7 +2161,10 @@ private fun VideoPageItem(
                 onRotateToLandscape()
             },
             
-            showControls = isOverlayVisible && !showDetailSheet,
+            showControls = resolvePortraitOverlayControlsVisible(
+                portraitOverlayVisible = portraitOverlayVisible,
+                showDetailSheet = showDetailSheet
+            ),
             commentExpansionProgress = commentSheetVisibilityProgress
         )
 
@@ -2293,6 +2302,13 @@ internal fun shouldHandlePortraitVideoInteraction(
     bvid: String
 ): Boolean {
     return isCurrentPage && aid > 0L && bvid.isNotBlank()
+}
+
+internal fun resolvePortraitOverlayControlsVisible(
+    portraitOverlayVisible: Boolean,
+    showDetailSheet: Boolean
+): Boolean {
+    return portraitOverlayVisible && !showDetailSheet
 }
 
 internal fun resolvePortraitFavoriteAction(): PortraitFavoriteAction {

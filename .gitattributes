@@ -1,3 +1,4 @@
 .gitattributes text eol=lf
+*.md text eol=lf
 *.kt text eol=lf
 *.kts text eol=lf

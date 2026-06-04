@@ -14,7 +14,7 @@ internal fun resolveVideoCardScrollLiteVisualPolicy(
 ): VideoCardScrollLiteVisualPolicy {
     if (scrollLiteModeEnabled) {
         return VideoCardScrollLiteVisualPolicy(
-            coverShadowElevationDp = 1f,
+            coverShadowElevationDp = 0f,
             showCoverGradientMask = false,
             showHistoryProgressBar = false,
             showCompactStatsOnCover = compactStatsOnCover,
@@ -23,7 +23,7 @@ internal fun resolveVideoCardScrollLiteVisualPolicy(
     }
 
     return VideoCardScrollLiteVisualPolicy(
-        coverShadowElevationDp = 1f,
+        coverShadowElevationDp = 0f,
         // 播放量/弹幕贴在封面上时不再铺底部暗渐变，避免统计信息周围出现黑色阴影。
         showCoverGradientMask = !compactStatsOnCover,
         showHistoryProgressBar = true,
@@ -42,12 +42,12 @@ internal fun resolveStoryVideoCardScrollLiteVisualPolicy(
 ): StoryVideoCardScrollLiteVisualPolicy {
     return if (scrollLiteModeEnabled) {
         StoryVideoCardScrollLiteVisualPolicy(
-            coverShadowElevationDp = 3f,
+            coverShadowElevationDp = 0f,
             showSecondaryStatsRow = true
         )
     } else {
         StoryVideoCardScrollLiteVisualPolicy(
-            coverShadowElevationDp = 6f,
+            coverShadowElevationDp = 0f,
             showSecondaryStatsRow = true
         )
     }

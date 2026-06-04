@@ -212,7 +212,9 @@ internal fun HomeTopTabChrome(
                 }
             }
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (drawChromeSurface) Modifier.clip(tabShape) else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 content()

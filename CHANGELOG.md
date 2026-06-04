@@ -1,5 +1,20 @@
 # Changelog
 
+## v9.0.5 (2026-06-03)
+
+### 版本信息
+- 版本号从 `9.0.4` 升级到 `9.0.5`，`versionCode` 升级到 `218`。
+
+### 更新内容
+- **设置界面圆角修复**：修复播放设置中 AVC / HEVC / AV1 等液态分段控件外层容器圆角与选中指示器不匹配的问题，视觉边界更统一。
+- **评论体验优化**：液态玻璃总开关开启时，视频详情评论页支持底部冻结评论条；关闭时保持原有滚动入口。
+- **播放器交互修复**：修复双击暂停后再次双击需要两次才恢复播放、后台播放返回应用自动暂停等体验问题。
+- **沉浸与首页布局优化**：竖屏沉浸模式切换视频后保持隐藏状态；首页顶部标签布局更对称。
+
+### 验证
+- `./gradlew :app:testDebugUnitTest --tests 'com.android.purebilibili.feature.settings.PlaybackSettingsSelectionPolicyTest'`
+- `./gradlew :app:compileDebugKotlin`
+
 ## v9.0.3 (2026-06-03)
 
 ### 版本信息

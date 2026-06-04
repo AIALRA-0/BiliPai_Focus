@@ -138,6 +138,8 @@ class VisualEffectTogglePolicyTest {
 
         assertTrue(source.contains("顶部 Dock 液态玻璃"))
         assertTrue(source.contains("toggleTopBarLiquidGlass"))
+        assertTrue(source.contains("首页搜索框液态玻璃"))
+        assertTrue(source.contains("toggleHomeSearchLiquidGlass"))
         assertTrue(source.contains("顶部栏磨砂"))
         assertTrue(source.contains("底栏液态玻璃"))
     }

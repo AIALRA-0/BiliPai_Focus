@@ -446,8 +446,9 @@ fun BottomBarLiquidSegmentedControl(
             }
         }
     )
+    val pillContainerTokenShape = AppShapes.container(ContainerLevel.Pill)
     val indicatorShape = resolveSharedBottomBarCapsuleShape()
-    val containerShape = AppShapes.container(ContainerLevel.Pill)
+    val containerShape = indicatorShape
     val indicatorCorner = indicatorHeight / 2
     val isDarkTheme = isSystemInDarkTheme()
     val surfaceColor = AppSurfaceTokens.cardContainer()

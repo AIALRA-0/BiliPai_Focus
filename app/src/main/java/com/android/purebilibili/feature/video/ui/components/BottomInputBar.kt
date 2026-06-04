@@ -56,7 +56,7 @@ fun BottomInputBar(
                     .weight(1f)
                     .height(36.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
                     .clickable { onCommentClick() }
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.CenterStart

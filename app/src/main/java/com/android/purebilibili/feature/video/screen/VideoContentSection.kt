@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.common.copyOnLongPress
@@ -349,7 +350,9 @@ fun VideoContentSection(
     showInteractionActions: Boolean = true,
     isVideoPlaying: Boolean = false,
     onSelectedTabChange: (Int) -> Unit = {},
-    onIntroScrollStateChange: (Int, Int) -> Unit = { _, _ -> }
+    onIntroScrollStateChange: (Int, Int) -> Unit = { _, _ -> },
+    onCommentScrollStateChange: (Int, Int) -> Unit = { _, _ -> },
+    bottomContentPadding: Dp = if (showInteractionActions) 84.dp else 12.dp
 ) {
     val context = LocalContext.current
     val tabs = listOf("简介", "评论 $replyCount")
@@ -443,7 +446,13 @@ fun VideoContentSection(
                 onIntroScrollStateChange(state.first, state.second)
             }
     }
-    val bottomContentPadding = if (showInteractionActions) 84.dp else 12.dp
+    LaunchedEffect(commentListState) {
+        snapshotFlow { commentListState.firstVisibleItemIndex to commentListState.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
+            .collect { state: Pair<Int, Int> ->
+                onCommentScrollStateChange(state.first, state.second)
+            }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize()

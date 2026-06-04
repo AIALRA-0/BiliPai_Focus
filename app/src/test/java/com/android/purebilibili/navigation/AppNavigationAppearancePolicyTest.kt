@@ -93,7 +93,7 @@ class AppNavigationAppearancePolicyTest {
 
         assertTrue(wallpaperIndex >= 0)
         assertTrue(navDisplayIndex > wallpaperIndex)
-        assertTrue(capturedLayerSource.contains(".then(if (mainHazeState != null) Modifier.hazeSource(mainHazeState) else Modifier)"))
+        assertTrue(capturedLayerSource.contains(".then(if (mainHazeState != null) Modifier.hazeSourceCompat(mainHazeState) else Modifier)"))
     }
 
     @Test

@@ -74,4 +74,29 @@ class VideoDetailScreenPolicyTest {
                 relatedVideoSource.indexOf("onVideoClick(targetBvid, navOptions)")
         )
     }
+
+    @Test
+    fun frozenCommentBar_usesExistingLiquidGlassGlobalToggle() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreen.kt")
+            .readText()
+
+        assertTrue(source.contains("SettingsManager.getHomeSettings(context)"))
+        assertTrue(source.contains("val videoDetailLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled"))
+        assertTrue(source.contains("isLiquidGlassEnabled = videoDetailLiquidGlassEnabled"))
+        assertTrue(source.contains("val showFrozenCommentBar = shouldShowVideoDetailBottomInteractionBar("))
+    }
+
+    @Test
+    fun videoContentSection_reportsCommentScrollAndAcceptsBottomPadding() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt")
+            .readText()
+
+        assertTrue(source.contains("onCommentScrollStateChange: (Int, Int) -> Unit"))
+        assertTrue(source.contains("bottomContentPadding: Dp"))
+        assertTrue(
+            source.contains(
+                "snapshotFlow { commentListState.firstVisibleItemIndex to commentListState.firstVisibleItemScrollOffset }"
+            )
+        )
+    }
 }

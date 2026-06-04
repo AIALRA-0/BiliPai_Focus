@@ -28,6 +28,8 @@ class SettingsMiuixSimplificationStructureTest {
         assertFalse(source.contains("通透到磨砂"))
         assertTrue(source.contains("顶部 Dock 液态玻璃"))
         assertTrue(source.contains("toggleTopBarLiquidGlass("))
+        assertTrue(source.contains("首页搜索框液态玻璃"))
+        assertTrue(source.contains("toggleHomeSearchLiquidGlass("))
         assertTrue(source.contains("底栏液态玻璃"))
         assertFalse(source.contains("安卓原生液态玻璃"))
         assertFalse(source.contains("toggleAndroidNativeLiquidGlass("))
@@ -43,6 +45,10 @@ class SettingsMiuixSimplificationStructureTest {
 
         assertTrue(
             Regex("""icon = rememberSettingsSemanticIcon\(SettingsIconRole\.TOP_DOCK_GLASS\),\s*title = "顶部 Dock 液态玻璃"""")
+                .containsMatchIn(source)
+        )
+        assertTrue(
+            Regex("""icon = rememberSettingsSemanticIcon\(SettingsIconRole\.HOME_SEARCH_GLASS\),\s*title = "首页搜索框液态玻璃"""")
                 .containsMatchIn(source)
         )
         assertTrue(

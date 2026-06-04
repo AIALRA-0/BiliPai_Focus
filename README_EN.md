@@ -5,21 +5,21 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-06-03 · Synced to v9.0.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
-</p>
+    <sub>Last updated: 2026-06-03 · Synced to v9.0.5 Focus.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Version-9.0.3-fb7299?style=flat-square" alt="Version">
-  <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
-  <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
-  <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
+  <p align="center">
+    <img src="https://img.shields.io/badge/Version-9.0.5-focus.1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
+  <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
+  <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026)-brightgreen?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/APK-Varies-orange?style=flat-square" alt="Size">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/Plugins-7%20Built--in-blueviolet?style=flat-square" alt="Plugins">
+  <img src="https://img.shields.io/badge/Plugins-9%20Built--in-blueviolet?style=flat-square" alt="Plugins">
 </p>
 
 <p align="center">
@@ -31,8 +31,8 @@
 
 | Category | Entry |
 | --- | --- |
-| Get Started | [Download Releases](https://github.com/jay3-yy/BiliPai/releases) · [Changelog](CHANGELOG.md) |
-| Docs | [Wiki Home](docs/wiki/README.md) · [User FAQ](docs/wiki/FAQ.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
+| Get Started | [Download Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases) · [Changelog](CHANGELOG.md) |
+| Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
 > [!CAUTION]
@@ -41,12 +41,11 @@
 ## 📸 Preview
 
 <p align="center">
-  <img src="docs/images/screenshot1.png" alt="Preview 1" height="500">
-  <img src="docs/images/screenshot2.png" alt="Preview 2" height="500">
-  <img src="docs/images/screenshot4.png" alt="Preview 4" height="500">
-  <img src="docs/images/screenshot5.png" alt="Preview 5" height="500">
-  <img src="docs/images/screenshot6.png" alt="Preview 6" height="500">
-  <img src="docs/images/screenshot7.png" alt="Preview 7" height="500">
+  <img src="docs/images/screenshot_preview_1.png" alt="Preview 1" height="500">
+  <img src="docs/images/screenshot_preview_2.png" alt="Preview 2" height="500">
+  <img src="docs/images/screenshot_preview_3.png" alt="Preview 3" height="500">
+  <img src="docs/images/screenshot_preview_4.png" alt="Preview 4" height="500">
+  <img src="docs/images/screenshot_preview_5.png" alt="Preview 5" height="500">
 </p>
 ---
 
@@ -59,7 +58,7 @@
 | **HD Quality** | Supports 4K / 1080P60 / HDR / Dolby Vision (Login/Premium required) |
 | **DASH Streaming** | Adaptive bitrate selection, seamless quality switching, smooth playback |
 | **Danmaku System** | Adjustable opacity, font size, speed, and density filtering |
-| **Video Notes** | Private notes, AI-summary drafts, rich text editing, timestamps, Markdown as the editor interchange format, and system sharing |
+| **Video Notes** | Private notes, AI-summary drafts, rich text editing, timestamps, Markdown interchange, and system sharing |
 | **Gesture Control** | Brightness (left), Volume (right), Seek (horizontal) |
 | **Playback Speed** | 0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x, with swipe-up lock while long-press speed is active |
 | **Picture-in-Picture** | Floating window playback for multitasking |
@@ -72,7 +71,7 @@
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
 | **TV Login** | Scan QR code to login as TV client to unlock high quality |
-| **Plugin System** | Built-in SponsorBlock, AdBlock, Danmaku Enhancement, Eye Protection, Today Watch, CDN Region, and First Visit Recommendation plugins |
+| **Plugin System** | Built-in SponsorBlock, AdBlock, Danmaku Enhancement, Eye Protection, Today Watch, CDN Region, First Visit Recommendation, and cast plugins |
 
 ### 🔌 Plugin System
 
@@ -85,6 +84,7 @@
 | **🆕 Today Watch** | Local recommendation plugin with Relax/Learn modes, collapse/expand, independent refresh, UP ranking, and reason tags |
 | **🆕 CDN Region** | Off by default; prioritizes same-region CDN candidates for normal video playback while preserving original URLs for fallback |
 | **🆕 First Visit Recommendation** | Off by default; removes cookies only from the Web home recommendation API so the feed is closer to public guest recommendations |
+| **Cast Plugins** | Built-in DLNA and Google Cast routes for device discovery and playback routing |
 | **Plugin Center** | Unified management for all plugins with independent configurations |
 | **🆕 External Plugins** | Support loading dynamic JSON rule plugins via URL |
 
@@ -319,7 +319,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ## 📦 Download & Install
 
-<a href="https://github.com/jay3-yy/BiliPai/releases">
+<a href="https://github.com/AIALRA-0/BiliPai_Focus/releases/latest">
   <img src="https://img.shields.io/badge/Download-Latest%20Release-fb7299?style=for-the-badge&logo=github" alt="Download">
 </a>
 
@@ -334,7 +334,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ### Installation
 
-1. Download the latest APK from [Releases](https://github.com/jay3-yy/BiliPai/releases)
+1. Download the latest APK from [Releases](https://github.com/AIALRA-0/BiliPai_Focus/releases)
 2. Install on your device (Unknown Sources permission may be required)
 3. Open app, login via QR code or Web
 4. Enjoy the pure Bilibili experience!
@@ -414,7 +414,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] Tablet/Foldable Support (sidebar + bottom bar layout)
 - [x] In-app update flow (manual + auto-check + startup prompt + in-app download/install)
 - [x] Plugin System Core
-- [x] Built-in Plugins
+- [x] Built-in Plugins (SponsorBlock / AdBlock / Danmaku Enhancement / Eye Protection / Today Watch / CDN Region / First Visit Recommendation / DLNA / Google Cast)
 - [x] Message Center category pages (Replies / Mentions / Likes / System Notices) with deep-link routing
 - [x] Portrait video like/favorite interaction fixes with favorite-folder sync
 - [x] Seek preview redraw optimization and cross-tab bottom-bar switching polish
@@ -436,17 +436,20 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v9.0.3 · 2026-06-03)
+### Latest (v9.0.5 Focus.1 · 2026-06-03)
 
-- Bug fixes minor improments and more.
+- Merged upstream `v9.0.5` plus follow-up commit `e66434f3`.
+- Fixed mismatched rounded corners between settings segmented controls and their active indicator.
+- Improved frozen comment entry, playback resume behavior, portrait immersion, and home tab layout.
+- Restored and preserved the Focus README, Focus release links, Focus in-app update source, and Focus settings features.
 
 ---
 
 ## 🏗️ Build
 
 ```bash
-git clone https://github.com/jay3-yy/BiliPai.git
-cd BiliPai
+git clone https://github.com/AIALRA-0/BiliPai_Focus.git
+cd BiliPai_Focus
 ./gradlew assembleDebug
 ```
 

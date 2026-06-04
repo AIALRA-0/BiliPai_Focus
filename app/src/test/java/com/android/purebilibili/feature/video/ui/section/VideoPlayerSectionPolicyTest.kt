@@ -522,6 +522,14 @@ class VideoPlayerSectionPolicyTest {
                 playbackState = androidx.media3.common.Player.STATE_READY
             )
         )
+        assertFalse(
+            shouldKickPlaybackAfterSurfaceRecovery(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = androidx.media3.common.Player.STATE_READY,
+                hasPlaybackResumeIntent = false
+            )
+        )
     }
 
     @Test

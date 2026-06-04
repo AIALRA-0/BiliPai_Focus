@@ -63,14 +63,30 @@ class VideoDetailLayoutModePolicyTest {
     @Test
     fun portraitAndInteractionUi_policiesReflectCurrentBehavior() {
         assertTrue(shouldEnablePortraitExperience())
-        assertFalse(shouldShowVideoDetailBottomInteractionBar())
+        assertTrue(shouldShowFrozenCommentBar())
         assertTrue(shouldShowVideoDetailActionButtons())
     }
 
     @Test
-    fun interactionUi_isHiddenOnPhoneToo() {
-        assertFalse(shouldShowVideoDetailBottomInteractionBar())
+    fun frozenCommentBar_followsLiquidGlassGlobalToggle() {
+        assertFalse(shouldShowFrozenCommentBar(isLiquidGlassEnabled = false))
         assertTrue(shouldShowVideoDetailActionButtons())
+    }
+
+    @Test
+    fun frozenCommentBar_hidesOutsideSafePhoneCommentTab() {
+        assertFalse(shouldShowFrozenCommentBar(selectedTabIndex = 0))
+        assertFalse(shouldShowFrozenCommentBar(useTabletLayout = true))
+        assertFalse(shouldShowFrozenCommentBar(isFullscreenMode = true))
+        assertFalse(shouldShowFrozenCommentBar(isPortraitFullscreen = true))
+    }
+
+    @Test
+    fun frozenCommentBar_hidesBehindBlockingOverlays() {
+        assertFalse(shouldShowFrozenCommentBar(isCommentInputVisible = true))
+        assertFalse(shouldShowFrozenCommentBar(isCommentThreadVisible = true))
+        assertFalse(shouldShowFrozenCommentBar(isFavoriteFolderDialogVisible = true))
+        assertFalse(shouldShowFrozenCommentBar(isExternalPlaylistQueueBarVisible = true))
     }
 
     @Test
@@ -305,6 +321,21 @@ class VideoDetailLayoutModePolicyTest {
                 isCompactDevice = false,
                 isOrientationDrivenFullscreen = false,
                 isFullscreenMode = false
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_tabletFullscreen_respectsConfiguredHorizontalMode() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = false,
+                fullscreenMode = FullscreenMode.HORIZONTAL,
+                isCompactDevice = false,
+                isOrientationDrivenFullscreen = false,
+                isFullscreenMode = true
             )
         )
     }
@@ -836,6 +867,30 @@ class VideoDetailLayoutModePolicyTest {
                 isPortraitFullscreen = false,
                 hasAutoEnteredPortraitFromRoute = false
             )
+        )
+    }
+
+    private fun shouldShowFrozenCommentBar(
+        isLiquidGlassEnabled: Boolean = true,
+        useTabletLayout: Boolean = false,
+        selectedTabIndex: Int = 1,
+        isFullscreenMode: Boolean = false,
+        isPortraitFullscreen: Boolean = false,
+        isCommentInputVisible: Boolean = false,
+        isCommentThreadVisible: Boolean = false,
+        isFavoriteFolderDialogVisible: Boolean = false,
+        isExternalPlaylistQueueBarVisible: Boolean = false
+    ): Boolean {
+        return shouldShowVideoDetailBottomInteractionBar(
+            isLiquidGlassEnabled = isLiquidGlassEnabled,
+            useTabletLayout = useTabletLayout,
+            selectedTabIndex = selectedTabIndex,
+            isFullscreenMode = isFullscreenMode,
+            isPortraitFullscreen = isPortraitFullscreen,
+            isCommentInputVisible = isCommentInputVisible,
+            isCommentThreadVisible = isCommentThreadVisible,
+            isFavoriteFolderDialogVisible = isFavoriteFolderDialogVisible,
+            isExternalPlaylistQueueBarVisible = isExternalPlaylistQueueBarVisible
         )
     }
 }

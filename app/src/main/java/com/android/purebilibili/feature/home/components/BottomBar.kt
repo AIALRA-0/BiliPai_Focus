@@ -453,7 +453,11 @@ internal data class AndroidNativeIndicatorSpec(
 )
 
 internal fun resolveSharedBottomBarCapsuleShape(): androidx.compose.ui.graphics.Shape =
-    RoundedCornerShape(percent = 50)
+    AppShapes.resolveContainerShape(
+        level = ContainerLevel.Pill,
+        uiPreset = UiPreset.MD3,
+        androidNativeVariant = AndroidNativeVariant.MATERIAL3
+    )
 
 internal fun resolveKernelSuFloatingBottomBarWidth(
     containerWidth: Dp,

@@ -31,6 +31,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isHeaderCollapseEnabled)
         assertTrue(result.isBottomBarBlurEnabled)
         assertFalse(result.isTopBarLiquidGlassEnabled)
+        assertFalse(result.isHomeSearchLiquidGlassEnabled)
         assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertFalse(result.bottomBarInteractiveHighlightEnabled)
         assertFalse(result.isBottomBarSearchEnabled)
@@ -71,6 +72,7 @@ class HomeSettingsMappingPolicyTest {
             intPreferencesKey("home_header_collapse_mode") to HomeHeaderCollapseMode.TABS_ONLY.value,
             booleanPreferencesKey("bottom_bar_blur_enabled") to false,
             booleanPreferencesKey("top_bar_liquid_glass_enabled") to true,
+            booleanPreferencesKey("home_search_liquid_glass_enabled") to false,
             booleanPreferencesKey("bottom_bar_liquid_glass_enabled") to false,
             booleanPreferencesKey("bottom_bar_interactive_highlight_enabled") to false,
             booleanPreferencesKey("bottom_bar_search_enabled") to true,
@@ -108,6 +110,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isHeaderCollapseEnabled)
         assertFalse(result.isBottomBarBlurEnabled)
         assertTrue(result.isTopBarLiquidGlassEnabled)
+        assertFalse(result.isHomeSearchLiquidGlassEnabled)
         assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertFalse(result.bottomBarInteractiveHighlightEnabled)
         assertTrue(result.isBottomBarSearchEnabled)
@@ -145,6 +148,20 @@ class HomeSettingsMappingPolicyTest {
         val result = mapHomeSettingsFromPreferences(prefs)
 
         assertEquals(HomeFeedCardWidthPreset.AUTO, result.homeFeedCardWidthPreset)
+    }
+
+    @Test
+    fun homeSearchLiquidGlassFallsBackToTopDockPreferenceUntilConfigured() {
+        val fallbackPrefs = mutablePreferencesOf(
+            booleanPreferencesKey("top_bar_liquid_glass_enabled") to true
+        )
+        val overriddenPrefs = mutablePreferencesOf(
+            booleanPreferencesKey("top_bar_liquid_glass_enabled") to true,
+            booleanPreferencesKey("home_search_liquid_glass_enabled") to false
+        )
+
+        assertTrue(mapHomeSettingsFromPreferences(fallbackPrefs).isHomeSearchLiquidGlassEnabled)
+        assertFalse(mapHomeSettingsFromPreferences(overriddenPrefs).isHomeSearchLiquidGlassEnabled)
     }
 
     @Test

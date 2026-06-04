@@ -630,13 +630,16 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.ANIMATION,
-        title = "顶部 Dock / 底栏液态玻璃",
-        subtitle = "顶部 Dock 独立开关、底栏材质",
+        title = "顶部 Dock / 搜索框 / 底栏液态玻璃",
+        subtitle = "顶部 Dock、首页搜索框、底栏材质",
         section = "动画与效果",
         aliases = listOf(
             "顶部 Dock 液态玻璃",
             "顶部dock栏液态玻璃",
             "顶部玻璃效果",
+            "首页搜索框液态玻璃",
+            "首页搜索液态玻璃",
+            "搜索框玻璃效果",
             "底栏玻璃效果",
             "底栏液态玻璃",
             "BiliPai 调校"

@@ -147,55 +147,6 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `search content export layer stays disabled to avoid duplicate search capsule`() {
-        val scrolling = resolveHomeTopSearchRefractionLayerPolicy(
-            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
-            hasBackdrop = true,
-            searchRevealFraction = 1f,
-            isScrolling = true,
-            isTransitionRunning = false
-        )
-        val stable = resolveHomeTopSearchRefractionLayerPolicy(
-            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
-            hasBackdrop = true,
-            searchRevealFraction = 1f,
-            isScrolling = false,
-            isTransitionRunning = false
-        )
-        val collapsing = resolveHomeTopSearchRefractionLayerPolicy(
-            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
-            hasBackdrop = true,
-            searchRevealFraction = 0.82f,
-            isScrolling = false,
-            isTransitionRunning = false
-        )
-        val blur = resolveHomeTopSearchRefractionLayerPolicy(
-            renderMode = HomeTopChromeRenderMode.BLUR,
-            hasBackdrop = true,
-            searchRevealFraction = 1f,
-            isScrolling = false,
-            isTransitionRunning = false
-        )
-
-        assertFalse(scrolling.captureContentLayer)
-        assertFalse(scrolling.useExportedBackdrop)
-        assertEquals(0f, scrolling.overlayAlpha, 0.0001f)
-        assertEquals(1f, scrolling.visibleContentAlpha, 0.0001f)
-        assertEquals(0f, scrolling.exportTranslationMultiplier, 0.0001f)
-        assertFalse(stable.captureContentLayer)
-        assertFalse(stable.useExportedBackdrop)
-        assertEquals(0f, stable.overlayAlpha, 0.0001f)
-        assertEquals(1f, stable.visibleContentAlpha, 0.0001f)
-        assertEquals(0f, stable.exportTranslationMultiplier, 0.0001f)
-        assertFalse(collapsing.captureContentLayer)
-        assertFalse(collapsing.useExportedBackdrop)
-        assertEquals(0f, collapsing.overlayAlpha, 0.0001f)
-        assertFalse(blur.captureContentLayer)
-        assertFalse(blur.useExportedBackdrop)
-        assertEquals(0f, blur.overlayAlpha, 0.0001f)
-    }
-
-    @Test
     fun `compact controls keep structured glass treatment`() {
         assertEquals(
             HomeTopChromeSurfaceTreatment.STRUCTURED_GLASS,
@@ -988,6 +939,28 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `home search follows independent liquid glass setting`() {
+        assertFalse(
+            resolveHomeTopSearchLiquidGlassEnabled(
+                homeSettings = HomeSettings(
+                    isTopBarLiquidGlassEnabled = true,
+                    isHomeSearchLiquidGlassEnabled = false
+                ),
+                uiPreset = UiPreset.MD3
+            )
+        )
+        assertTrue(
+            resolveHomeTopSearchLiquidGlassEnabled(
+                homeSettings = HomeSettings(
+                    isTopBarLiquidGlassEnabled = false,
+                    isHomeSearchLiquidGlassEnabled = true
+                ),
+                uiPreset = UiPreset.MD3
+            )
+        )
+    }
+
+    @Test
     fun `md3 top chrome keeps status bar blur slab while local panel stays blurred`() {
         assertEquals(
             HomeTopChromeRenderMode.BLUR,
@@ -1745,7 +1718,7 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `home header skin search tint is applied as capsule surface not inner padded child`() {
+    fun `home header search capsule reuses top tab dock liquid glass surface`() {
         val headerSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/iOSHomeHeader.kt")
         val searchCapsuleSource = headerSource
             .substringAfter(".height(resolveHomeTopSearchPillHeight(uiPreset, androidNativeVariant))")
@@ -1753,8 +1726,12 @@ class iOSHomeHeaderVisualPolicyTest {
 
         assertTrue(searchCapsuleSource.contains("val skinSearchSurfaceColor = resolveHomeSkinSearchSurfaceColor("))
         assertTrue(searchCapsuleSource.contains("surfaceColor = skinSearchSurfaceColor"))
-        assertTrue(searchCapsuleSource.contains("KernelSuBottomBarIndicatorLayer("))
-        assertTrue(searchCapsuleSource.contains("drawShellLens = false"))
+        assertTrue(searchCapsuleSource.contains("Modifier.homeTopBottomBarMatchedSurface("))
+        assertTrue(searchCapsuleSource.contains("renderMode = searchChromeRenderMode"))
+        assertTrue(searchCapsuleSource.contains("liquidGlassPreset = bottomBarLiquidGlassPreset"))
+        assertTrue(searchCapsuleSource.contains("Modifier.homeTopChromeSurface("))
+        assertFalse(searchCapsuleSource.contains("KernelSuBottomBarIndicatorLayer("))
+        assertFalse(searchCapsuleSource.contains("searchChromeRenderModeEffective"))
         assertFalse(searchCapsuleSource.contains("SimpleLiquidIndicator("))
         assertFalse(searchCapsuleSource.contains(".matchParentSize()\n                                                .background("))
         assertFalse(searchCapsuleSource.contains("uiSkinDecoration.searchCapsuleTint.copy(alpha = 0.22f)"))

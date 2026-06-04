@@ -15,7 +15,7 @@ class VideoCardScrollLiteVisualPolicyTest {
             compactStatsOnCover = true
         )
 
-        assertEquals(1f, policy.coverShadowElevationDp, 0.0001f)
+        assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertFalse(policy.showCoverGradientMask)
         assertTrue(policy.showHistoryProgressBar)
         assertTrue(policy.showCompactStatsOnCover)
@@ -29,6 +29,7 @@ class VideoCardScrollLiteVisualPolicyTest {
             compactStatsOnCover = false
         )
 
+        assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertTrue(policy.showCoverGradientMask)
         assertTrue(policy.showHistoryProgressBar)
         assertFalse(policy.showCompactStatsOnCover)
@@ -36,13 +37,13 @@ class VideoCardScrollLiteVisualPolicyTest {
     }
 
     @Test
-    fun `scroll lite mode keeps stats and a perceivable cover shadow`() {
+    fun `scroll lite mode keeps stats without cover shadow`() {
         val policy = resolveVideoCardScrollLiteVisualPolicy(
             scrollLiteModeEnabled = true,
             compactStatsOnCover = true
         )
 
-        assertEquals(1f, policy.coverShadowElevationDp, 0.0001f)
+        assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertFalse(policy.showCoverGradientMask)
         assertFalse(policy.showHistoryProgressBar)
         assertTrue(policy.showCompactStatsOnCover)
@@ -56,6 +57,7 @@ class VideoCardScrollLiteVisualPolicyTest {
             compactStatsOnCover = false
         )
 
+        assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertFalse(policy.showCompactStatsOnCover)
         assertTrue(policy.showSecondaryStatsRow)
     }
@@ -66,17 +68,17 @@ class VideoCardScrollLiteVisualPolicyTest {
             scrollLiteModeEnabled = false
         )
 
-        assertEquals(6f, policy.coverShadowElevationDp, 0.0001f)
+        assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertTrue(policy.showSecondaryStatsRow)
     }
 
     @Test
-    fun `scroll lite mode simplifies story card shadows but keeps stats`() {
+    fun `scroll lite mode removes story card shadows but keeps stats`() {
         val policy = resolveStoryVideoCardScrollLiteVisualPolicy(
             scrollLiteModeEnabled = true
         )
 
-        assertEquals(3f, policy.coverShadowElevationDp, 0.0001f)
+        assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertTrue(policy.showSecondaryStatsRow)
     }
 

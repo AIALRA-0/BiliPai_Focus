@@ -186,6 +186,28 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitOverlayControlsVisible_preservesHiddenModeUnlessDetailSheetIsOpen() {
+        assertFalse(
+            resolvePortraitOverlayControlsVisible(
+                portraitOverlayVisible = false,
+                showDetailSheet = false
+            )
+        )
+        assertFalse(
+            resolvePortraitOverlayControlsVisible(
+                portraitOverlayVisible = true,
+                showDetailSheet = true
+            )
+        )
+        assertTrue(
+            resolvePortraitOverlayControlsVisible(
+                portraitOverlayVisible = true,
+                showDetailSheet = false
+            )
+        )
+    }
+
+    @Test
     fun portraitPlaybackAllowed_onlyWhenStoryTabVisibleAndLifecycleResumed() {
         assertTrue(
             shouldAllowPortraitPlayback(
@@ -410,5 +432,15 @@ class PortraitVideoPagerPolicyTest {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt").readText()
 
         assertTrue(source.contains("commentExpansionProgress = commentSheetVisibilityProgress"))
+    }
+
+    @Test
+    fun portraitOverlayVisibility_isHoistedAboveIndividualPageItems() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/pager/PortraitVideoPager.kt").readText()
+
+        assertTrue(source.contains("var portraitOverlayVisible by rememberSaveable(initialInfo.bvid)"))
+        assertTrue(source.contains("portraitOverlayVisible = portraitOverlayVisible"))
+        assertTrue(source.contains("onPortraitOverlayVisibleChange = { visible ->"))
+        assertFalse(source.contains("var isOverlayVisible by remember"))
     }
 }

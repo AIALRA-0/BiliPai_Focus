@@ -284,6 +284,15 @@ fun AnimationSettingsContent(
                             )
                             IOSDivider()
                             IOSSwitchItem(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_SEARCH_GLASS),
+                                title = "首页搜索框液态玻璃",
+                                subtitle = "首页搜索框上下滑动时的液态玻璃折射效果",
+                                checked = state.homeSearchLiquidGlassEnabled,
+                                onCheckedChange = { viewModel.toggleHomeSearchLiquidGlass(it) },
+                                iconTint = iOSBlue
+                            )
+                            IOSDivider()
+                            IOSSwitchItem(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.BOTTOM_BAR_GLASS),
                                 title = "底栏液态玻璃",
                                 subtitle = "底部导航栏的液态玻璃折射效果",
