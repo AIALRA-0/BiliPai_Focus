@@ -1,5 +1,17 @@
 # Changelog
 
+## v9.0.5-focus.5 (2026-06-04)
+
+### 版本信息
+- Focus 版本号从 `9.0.5-focus.4` 升级到 `9.0.5-focus.5`，`versionCode` 升级到 `222`。
+
+### 更新内容
+- **Focus 设置语义修复**：搜索页三个 Focus 设置项改为“显示大家都在搜 / 显示搜索发现 / 显示搜索历史”，开关打开即显示、关闭即隐藏，与其它 Focus 显示类开关保持一致。
+
+### 验证
+- `./gradlew :app:testDebugUnitTest --tests "*FocusSettingsScreenPolicyTest"`
+- `./gradlew :app:compileDebugKotlin`
+
 ## v9.0.5-focus.4 (2026-06-04)
 
 ### 版本信息

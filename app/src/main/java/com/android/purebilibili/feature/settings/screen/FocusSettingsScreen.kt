@@ -192,31 +192,31 @@ fun FocusSettingsScreen(
                 IOSGroup {
                     IOSSwitchItem(
                         icon = Icons.Outlined.Search,
-                        title = "隐藏大家都在搜",
-                        subtitle = "搜索首页完全不渲染热搜关键词区块和标题",
-                        checked = !settings.showSearchHotSection,
-                        onCheckedChange = { hidden ->
-                            scope.launch { SettingsManager.setSearchHotSectionEnabled(context, !hidden) }
+                        title = "显示大家都在搜",
+                        subtitle = "在搜索首页显示热搜关键词区块",
+                        checked = settings.showSearchHotSection,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setSearchHotSectionEnabled(context, enabled) }
                         }
                     )
                     IOSDivider(startIndent = 66.dp)
                     IOSSwitchItem(
                         icon = Icons.Outlined.Search,
-                        title = "隐藏搜索发现",
-                        subtitle = "搜索首页完全不渲染搜索发现区块和标题",
-                        checked = !settings.showSearchDiscoverSection,
-                        onCheckedChange = { hidden ->
-                            scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, !hidden) }
+                        title = "显示搜索发现",
+                        subtitle = "在搜索首页显示搜索发现区块",
+                        checked = settings.showSearchDiscoverSection,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, enabled) }
                         }
                     )
                     IOSDivider(startIndent = 66.dp)
                     IOSSwitchItem(
                         icon = Icons.Outlined.Search,
-                        title = "隐藏搜索历史",
-                        subtitle = "搜索首页完全不渲染搜索历史列表和标题",
-                        checked = !settings.showSearchHistorySection,
-                        onCheckedChange = { hidden ->
-                            scope.launch { SettingsManager.setSearchHistorySectionEnabled(context, !hidden) }
+                        title = "显示搜索历史",
+                        subtitle = "在搜索首页显示搜索历史列表",
+                        checked = settings.showSearchHistorySection,
+                        onCheckedChange = { enabled ->
+                            scope.launch { SettingsManager.setSearchHistorySectionEnabled(context, enabled) }
                         }
                     )
                 }
