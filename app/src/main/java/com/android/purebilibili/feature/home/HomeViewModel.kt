@@ -1485,39 +1485,51 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                val oldSize = oldState.videos.size
-                val visibleVideos = filterHomeFollowVideosByFocusFollowGroups(
-                    videos = videos,
-                    config = focusFollowGroupConfig,
-                    filterEnabled = focusFollowGroupFilteringEnabled
+                val baselineRawVideos = oldState.rawVideos.takeIf { it.isNotEmpty() } ?: oldState.videos
+                val shouldPreserveRefreshBaseline = shouldPreserveHomeFollowRefreshBaseline(
+                    isLoadMore = isLoadMore,
+                    baselineRawCount = baselineRawVideos.size,
+                    incomingRawCount = videos.size
                 )
-                val refreshCandidateVideos = if (!isLoadMore && incrementalTimelineRefreshEnabled) {
+                val shouldMergeRawVideos = isLoadMore ||
+                    (!isLoadMore && (incrementalTimelineRefreshEnabled || shouldPreserveRefreshBaseline))
+                val nextRawVideos = if (shouldMergeRawVideos) {
                     resolveHomeFollowPresentedRawVideos(
-                        baselineRawVideos = oldState.videos,
-                        roundRawVideos = visibleVideos,
-                        isLoadMore = false,
+                        baselineRawVideos = baselineRawVideos,
+                        roundRawVideos = videos,
+                        isLoadMore = isLoadMore,
                         keySelector = ::videoItemKey
                     )
                 } else {
-                    visibleVideos
+                    videos
                 }
+                val visibleVideosForPresentation = filterHomeFollowVideosByFocusFollowGroups(
+                    videos = if (isLoadMore) videos else nextRawVideos,
+                    config = focusFollowGroupConfig,
+                    filterEnabled = focusFollowGroupFilteringEnabled
+                )
                 val mergedVideos = presentHomeFollowVisibleVideos(
                     existingPresentedVisibleVideos = if (isLoadMore) oldState.videos else emptyList(),
-                    incomingVisibleVideos = refreshCandidateVideos,
+                    incomingVisibleVideos = visibleVideosForPresentation,
                     isLoadMore = isLoadMore,
                     seed = System.currentTimeMillis(),
                     reshuffleOnRefresh = !isLoadMore,
                     sortMode = focusFollowGroupConfig.homeFeedSortMode
                 ).toImmutableList()
                 if (isManualRefresh && !isLoadMore) {
-                    addedCount = if (incrementalTimelineRefreshEnabled) {
-                        (mergedVideos.size - oldSize).coerceAtLeast(0)
+                    val oldVisibleKeys = oldState.videos.map(::videoItemKey).toSet()
+                    addedCount = if (incrementalTimelineRefreshEnabled || shouldPreserveRefreshBaseline) {
+                        visibleVideosForPresentation
+                            .map(::videoItemKey)
+                            .distinct()
+                            .count { key -> key !in oldVisibleKeys }
                     } else {
-                        visibleVideos.size
+                        visibleVideosForPresentation.size
                     }
                 }
                 oldState.copy(
                     videos = mergedVideos,
+                    rawVideos = nextRawVideos.toImmutableList(),
                     liveRooms = emptyList<LiveRoom>().toImmutableList(),
                     isLoading = false,
                     error = if (!isLoadMore && mergedVideos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null,

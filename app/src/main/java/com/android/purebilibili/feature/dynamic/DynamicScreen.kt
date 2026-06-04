@@ -75,6 +75,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
 import com.android.purebilibili.feature.dynamic.components.DynamicUserLiveBadge
+import com.android.purebilibili.feature.dynamic.components.FocusFollowGroupSheet
 import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
@@ -133,6 +134,8 @@ fun DynamicScreen(
 
     // 侧边栏状态
     val followedUsers by viewModel.followedUsers.collectAsStateWithLifecycle()
+    val focusFollowings by viewModel.focusFollowings.collectAsStateWithLifecycle()
+    val isFocusFollowingsLoading by viewModel.isFocusFollowingsLoading.collectAsStateWithLifecycle()
     val selectedUserId by viewModel.selectedUserId.collectAsStateWithLifecycle()
     val isSidebarExpanded by viewModel.isSidebarExpanded.collectAsStateWithLifecycle()
     val showHiddenUsers by viewModel.showHiddenUsers.collectAsStateWithLifecycle()
@@ -206,10 +209,16 @@ fun DynamicScreen(
     val hazeState = rememberRecoverableHazeState()
     val dynamicChromeBackdrop = rememberLayerBackdrop()
     val scope = rememberCoroutineScope()
+    var showFocusFollowGroupSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel, isCurrentPage) {
         if (isCurrentPage) {
             viewModel.activateStartupLoads()
+        }
+    }
+    LaunchedEffect(showFocusFollowGroupSheet, focusFollowings.isEmpty()) {
+        if (showFocusFollowGroupSheet && focusFollowings.isEmpty()) {
+            viewModel.refreshFocusFollowings()
         }
     }
 
@@ -653,6 +662,7 @@ fun DynamicScreen(
                                     },
                                     displayMode = displayMode,
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
+                                    onFocusFollowGroupClick = { showFocusFollowGroupSheet = true },
                                     hazeState = hazeState, // 传入 hazeState
                                     backdrop = dynamicChromeBackdrop,
                                     modifier = Modifier.align(Alignment.TopCenter)
@@ -770,6 +780,7 @@ fun DynamicScreen(
                                          },
                                          displayMode = displayMode,
                                          onDisplayModeChange = { viewModel.setDisplayMode(it) },
+                                         onFocusFollowGroupClick = { showFocusFollowGroupSheet = true },
                                          hazeState = null // 禁用内部模糊，由外层统一处理
                                      )
 
@@ -846,6 +857,34 @@ fun DynamicScreen(
         secondaryItems = state.userItems,
         toastContext = context
     )
+
+    if (showFocusFollowGroupSheet) {
+        FocusFollowGroupSheet(
+            config = focusFollowGroupConfig,
+            followings = focusFollowings,
+            isLoading = isFocusFollowingsLoading,
+            onDismissRequest = { showFocusFollowGroupSheet = false },
+            onRefreshFollowings = { viewModel.refreshFocusFollowings() },
+            onCreateGroup = { name ->
+                scope.launch { FocusFollowGroupStore.createGroup(context, name) }
+            },
+            onRenameGroup = { groupId, name ->
+                scope.launch { FocusFollowGroupStore.renameGroup(context, groupId, name) }
+            },
+            onDeleteGroup = { groupId ->
+                scope.launch { FocusFollowGroupStore.deleteGroup(context, groupId) }
+            },
+            onSetGroupVisible = { groupId, visible ->
+                scope.launch { FocusFollowGroupStore.setGroupVisible(context, groupId, visible) }
+            },
+            onSetHomeFeedSortMode = { sortMode ->
+                scope.launch { FocusFollowGroupStore.setHomeFeedSortMode(context, sortMode) }
+            },
+            onAssignUserToGroup = { mid, groupId ->
+                scope.launch { FocusFollowGroupStore.assignUserToGroup(context, mid, groupId) }
+            }
+        )
+    }
 
     //  [新增] 转发弹窗
     showRepostDialog?.let { dynamicId ->

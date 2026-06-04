@@ -398,6 +398,33 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `refresh with partial update should preserve existing list even when incremental setting is off`() {
+        val existing = listOf(
+            buildDynamicItem("old_a"),
+            buildDynamicItem("old_b"),
+            buildDynamicItem("old_c")
+        ).toImmutableList()
+        val result = resolveDynamicFeedStateAfterSuccess(
+            currentState = DynamicUiState(
+                items = existing,
+                timelineRequestType = "all"
+            ),
+            incomingItems = listOf(buildDynamicItem("new_1")),
+            isRefresh = true,
+            requestType = "all",
+            incrementalRefreshEnabled = false,
+            hasMore = true
+        )
+
+        assertEquals(
+            listOf("new_1", "old_a", "old_b", "old_c"),
+            result.items.map { it.id_str }
+        )
+        assertEquals(null, result.incrementalRefreshBoundaryKey)
+        assertEquals(0, result.incrementalPrependedCount)
+    }
+
+    @Test
     fun `incremental refresh keeps merged timeline sorted by publish timestamp`() {
         val existing = listOf(
             buildDynamicItem(id = "today_0900", pubTs = 1_800L),

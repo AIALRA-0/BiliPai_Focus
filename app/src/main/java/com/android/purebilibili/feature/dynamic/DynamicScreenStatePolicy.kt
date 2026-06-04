@@ -225,9 +225,14 @@ internal fun resolveDynamicFeedStateAfterSuccess(
     hasMore: Boolean
 ): DynamicUiState {
     val currentItems = currentState.items
-    val canUseIncrementalRefresh = isRefresh &&
-        incrementalRefreshEnabled &&
+    val shouldPreserveRefreshList = isRefresh &&
+        currentItems.isNotEmpty() &&
+        incomingItems.size < currentItems.size &&
         currentState.timelineRequestType == requestType
+    val canUseIncrementalRefresh = isRefresh &&
+        (incrementalRefreshEnabled || shouldPreserveRefreshList) &&
+        currentState.timelineRequestType == requestType
+    val shouldTrackIncrementalBoundary = canUseIncrementalRefresh && incrementalRefreshEnabled
     val mergedItems = when {
         canUseIncrementalRefresh -> sortDynamicTimelineItemsByPublishTime(
             prependDistinctByKey(
@@ -244,7 +249,7 @@ internal fun resolveDynamicFeedStateAfterSuccess(
         )
     }
     val boundary = when {
-        canUseIncrementalRefresh -> resolveIncrementalRefreshBoundary(
+        shouldTrackIncrementalBoundary -> resolveIncrementalRefreshBoundary(
             existingKeys = currentItems.map(::dynamicFeedItemKey),
             mergedKeys = mergedItems.map(::dynamicFeedItemKey)
         )

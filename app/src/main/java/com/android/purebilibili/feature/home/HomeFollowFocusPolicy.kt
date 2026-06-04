@@ -282,6 +282,16 @@ internal fun resolveHomeFollowPresentedRawVideos(
     }
 }
 
+internal fun shouldPreserveHomeFollowRefreshBaseline(
+    isLoadMore: Boolean,
+    baselineRawCount: Int,
+    incomingRawCount: Int
+): Boolean {
+    return !isLoadMore &&
+        baselineRawCount > 0 &&
+        incomingRawCount < baselineRawCount
+}
+
 internal fun randomizeHomeFollowIncomingVideos(
     videos: List<VideoItem>,
     seed: Long,

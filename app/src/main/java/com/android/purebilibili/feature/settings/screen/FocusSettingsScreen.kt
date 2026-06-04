@@ -192,21 +192,31 @@ fun FocusSettingsScreen(
                 IOSGroup {
                     IOSSwitchItem(
                         icon = Icons.Outlined.Search,
-                        title = "显示大家都在搜",
-                        subtitle = "只控制搜索首页的热搜关键词区块，不影响联想、发现、结果和历史记录",
-                        checked = settings.showSearchHotSection,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setSearchHotSectionEnabled(context, enabled) }
+                        title = "隐藏大家都在搜",
+                        subtitle = "搜索首页完全不渲染热搜关键词区块和标题",
+                        checked = !settings.showSearchHotSection,
+                        onCheckedChange = { hidden ->
+                            scope.launch { SettingsManager.setSearchHotSectionEnabled(context, !hidden) }
                         }
                     )
                     IOSDivider(startIndent = 66.dp)
                     IOSSwitchItem(
                         icon = Icons.Outlined.Search,
-                        title = "显示搜索发现",
-                        subtitle = "只控制搜索首页的发现关键词区块，不影响联想、热搜、结果和历史记录",
-                        checked = settings.showSearchDiscoverSection,
-                        onCheckedChange = { enabled ->
-                            scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, enabled) }
+                        title = "隐藏搜索发现",
+                        subtitle = "搜索首页完全不渲染搜索发现区块和标题",
+                        checked = !settings.showSearchDiscoverSection,
+                        onCheckedChange = { hidden ->
+                            scope.launch { SettingsManager.setSearchDiscoverSectionEnabled(context, !hidden) }
+                        }
+                    )
+                    IOSDivider(startIndent = 66.dp)
+                    IOSSwitchItem(
+                        icon = Icons.Outlined.Search,
+                        title = "隐藏搜索历史",
+                        subtitle = "搜索首页完全不渲染搜索历史列表和标题",
+                        checked = !settings.showSearchHistorySection,
+                        onCheckedChange = { hidden ->
+                            scope.launch { SettingsManager.setSearchHistorySectionEnabled(context, !hidden) }
                         }
                     )
                 }
@@ -229,4 +239,3 @@ fun FocusSettingsScreen(
         }
     }
 }
-

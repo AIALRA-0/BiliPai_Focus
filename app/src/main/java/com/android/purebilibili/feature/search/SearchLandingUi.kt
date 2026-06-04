@@ -64,10 +64,6 @@ internal fun resolveSearchKeywordSectionToggleLabel(enabled: Boolean): String {
     return if (enabled) "隐藏" else "显示"
 }
 
-internal fun resolveSearchKeywordSectionHiddenText(title: String): String {
-    return "已隐藏$title"
-}
-
 internal fun shouldUseOriginalSearchDiscoverStyle(
     showTrendingAction: Boolean
 ): Boolean = !showTrendingAction
@@ -137,6 +133,7 @@ fun SearchLandingContent(
     historyList: List<SearchHistory>,
     hotSearchEnabled: Boolean,
     discoverSectionEnabled: Boolean,
+    historySectionEnabled: Boolean,
     onToggleHotSearch: () -> Unit,
     onToggleDiscoverSection: () -> Unit,
     onRefreshHot: () -> Unit,
@@ -163,30 +160,34 @@ fun SearchLandingContent(
                 ),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                item {
-                    SearchKeywordSection(
-                        title = "大家都在搜",
-                        items = hotList,
-                        columns = layoutPolicy.hotSearchColumns,
-                        enabled = hotSearchEnabled,
-                        showTrendingAction = true,
-                        onToggleEnabled = onToggleHotSearch,
-                        onOpenTrending = onOpenTrending,
-                        onRefresh = onRefreshHot,
-                        onKeywordClick = onKeywordClick
-                    )
+                if (hotSearchEnabled) {
+                    item {
+                        SearchKeywordSection(
+                            title = "大家都在搜",
+                            items = hotList,
+                            columns = layoutPolicy.hotSearchColumns,
+                            enabled = true,
+                            showTrendingAction = true,
+                            onToggleEnabled = onToggleHotSearch,
+                            onOpenTrending = onOpenTrending,
+                            onRefresh = onRefreshHot,
+                            onKeywordClick = onKeywordClick
+                        )
+                    }
                 }
-                item {
-                    SearchKeywordSection(
-                        title = discoverTitle,
-                        items = discoverList,
-                        columns = layoutPolicy.hotSearchColumns,
-                        enabled = discoverSectionEnabled,
-                        showTrendingAction = false,
-                        onToggleEnabled = onToggleDiscoverSection,
-                        onRefresh = onRefreshDiscover,
-                        onKeywordClick = onKeywordClick
-                    )
+                if (discoverSectionEnabled) {
+                    item {
+                        SearchKeywordSection(
+                            title = discoverTitle,
+                            items = discoverList,
+                            columns = layoutPolicy.hotSearchColumns,
+                            enabled = true,
+                            showTrendingAction = false,
+                            onToggleEnabled = onToggleDiscoverSection,
+                            onRefresh = onRefreshDiscover,
+                            onKeywordClick = onKeywordClick
+                        )
+                    }
                 }
             }
 
@@ -202,13 +203,15 @@ fun SearchLandingContent(
                     end = layoutPolicy.splitOuterPaddingDp.dp
                 )
             ) {
-                item {
-                    SearchHistorySectionModern(
-                        historyList = historyList,
-                        onItemClick = onKeywordClick,
-                        onClear = onClearHistory,
-                        onDelete = onDeleteHistory
-                    )
+                if (historySectionEnabled) {
+                    item {
+                        SearchHistorySectionModern(
+                            historyList = historyList,
+                            onItemClick = onKeywordClick,
+                            onClear = onClearHistory,
+                            onDelete = onDeleteHistory
+                        )
+                    }
                 }
             }
         }
@@ -226,38 +229,44 @@ fun SearchLandingContent(
             ),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            item {
-                SearchKeywordSection(
-                    title = "大家都在搜",
-                    items = hotList,
-                    columns = layoutPolicy.hotSearchColumns,
-                    enabled = hotSearchEnabled,
-                    showTrendingAction = true,
-                    onToggleEnabled = onToggleHotSearch,
-                    onOpenTrending = onOpenTrending,
-                    onRefresh = onRefreshHot,
-                    onKeywordClick = onKeywordClick
-                )
+            if (hotSearchEnabled) {
+                item {
+                    SearchKeywordSection(
+                        title = "大家都在搜",
+                        items = hotList,
+                        columns = layoutPolicy.hotSearchColumns,
+                        enabled = true,
+                        showTrendingAction = true,
+                        onToggleEnabled = onToggleHotSearch,
+                        onOpenTrending = onOpenTrending,
+                        onRefresh = onRefreshHot,
+                        onKeywordClick = onKeywordClick
+                    )
+                }
             }
-            item {
-                SearchKeywordSection(
-                    title = discoverTitle,
-                    items = discoverList,
-                    columns = layoutPolicy.hotSearchColumns,
-                    enabled = discoverSectionEnabled,
-                    showTrendingAction = false,
-                    onToggleEnabled = onToggleDiscoverSection,
-                    onRefresh = onRefreshDiscover,
-                    onKeywordClick = onKeywordClick
-                )
+            if (discoverSectionEnabled) {
+                item {
+                    SearchKeywordSection(
+                        title = discoverTitle,
+                        items = discoverList,
+                        columns = layoutPolicy.hotSearchColumns,
+                        enabled = true,
+                        showTrendingAction = false,
+                        onToggleEnabled = onToggleDiscoverSection,
+                        onRefresh = onRefreshDiscover,
+                        onKeywordClick = onKeywordClick
+                    )
+                }
             }
-            item {
-                SearchHistorySectionModern(
-                    historyList = historyList,
-                    onItemClick = onKeywordClick,
-                    onClear = onClearHistory,
-                    onDelete = onDeleteHistory
-                )
+            if (historySectionEnabled) {
+                item {
+                    SearchHistorySectionModern(
+                        historyList = historyList,
+                        onItemClick = onKeywordClick,
+                        onClear = onClearHistory,
+                        onDelete = onDeleteHistory
+                    )
+                }
             }
         }
     }
@@ -329,6 +338,8 @@ private fun SearchKeywordSection(
     onToggleEnabled: (() -> Unit)? = null,
     onOpenTrending: (() -> Unit)? = null
 ) {
+    if (!enabled) return
+
     val useOriginalDiscoverStyle = shouldUseOriginalSearchDiscoverStyle(showTrendingAction)
     val safeColumns = resolveSearchKeywordSectionColumns(columns, showTrendingAction)
     Column {
@@ -341,7 +352,7 @@ private fun SearchKeywordSection(
             onOpenTrending = onOpenTrending,
             onRefresh = onRefresh
         )
-        if (enabled && items.isNotEmpty()) {
+        if (items.isNotEmpty()) {
             Spacer(modifier = Modifier.height(if (useOriginalDiscoverStyle) 12.dp else 10.dp))
             Column(
                 verticalArrangement = Arrangement.spacedBy(if (useOriginalDiscoverStyle) 12.dp else 6.dp)
@@ -372,13 +383,6 @@ private fun SearchKeywordSection(
                     }
                 }
             }
-        } else if (!enabled) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = resolveSearchKeywordSectionHiddenText(title),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

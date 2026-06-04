@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +57,7 @@ fun DynamicTopBarWithTabs(
     modifier: Modifier = Modifier,
     displayMode: DynamicDisplayMode = DynamicDisplayMode.SIDEBAR,
     onDisplayModeChange: (DynamicDisplayMode) -> Unit = {},
+    onFocusFollowGroupClick: (() -> Unit)? = null,
     hazeState: HazeState? = null,
     backdrop: Backdrop? = null
 ) {
@@ -118,6 +121,20 @@ fun DynamicTopBarWithTabs(
                     modifier = Modifier.weight(1f),
                     backdrop = backdrop
                 )
+
+                if (onFocusFollowGroupClick != null) {
+                    IconButton(
+                        onClick = onFocusFollowGroupClick,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Tune,
+                            contentDescription = "关注分组过滤设置",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
                 
                 //  布局模式切换按钮
                 IconButton(

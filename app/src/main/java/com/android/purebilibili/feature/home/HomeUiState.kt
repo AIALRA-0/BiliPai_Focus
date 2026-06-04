@@ -131,6 +131,7 @@ data class TodayWatchCardUiConfig(
 @Stable
 data class CategoryContent(
     val videos: ImmutableList<VideoItem> = persistentListOf(),
+    val rawVideos: ImmutableList<VideoItem> = persistentListOf(),
     val liveRooms: ImmutableList<LiveRoom> = persistentListOf(),
     val followedLiveRooms: ImmutableList<LiveRoom> = persistentListOf(),
     val isLoading: Boolean = false,

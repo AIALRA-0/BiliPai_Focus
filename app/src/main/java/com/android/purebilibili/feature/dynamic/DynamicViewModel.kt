@@ -112,6 +112,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _followedUsers = MutableStateFlow<List<SidebarUser>>(emptyList())
     val followedUsers: StateFlow<List<SidebarUser>> = _followedUsers.asStateFlow()
 
+    private val _focusFollowings = MutableStateFlow<List<FollowingUser>>(emptyList())
+    val focusFollowings: StateFlow<List<FollowingUser>> = _focusFollowings.asStateFlow()
+
+    private val _isFocusFollowingsLoading = MutableStateFlow(false)
+    val isFocusFollowingsLoading: StateFlow<Boolean> = _isFocusFollowingsLoading.asStateFlow()
+
     private val _selectedUserId = MutableStateFlow<Long?>(null)
     val selectedUserId: StateFlow<Long?> = _selectedUserId.asStateFlow()
 
@@ -291,6 +297,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             return
         }
         isFollowingsLoading = true
+        _isFocusFollowingsLoading.value = true
         try {
             // 先获取当前用户 mid
             val navResponse = NetworkModule.api.getNavInfo()
@@ -307,12 +314,20 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
             
             cachedFollowings = allFollowings
+            _focusFollowings.value = allFollowings
             lastFollowingsLoadMs = now
             rebuildFollowedUsers()
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
             isFollowingsLoading = false
+            _isFocusFollowingsLoading.value = false
+        }
+    }
+
+    fun refreshFocusFollowings() {
+        viewModelScope.launch {
+            loadAllFollowings(force = true)
         }
     }
 
@@ -386,6 +401,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private fun applyAuthorUnfollow(authorMid: Long) {
         if (authorMid <= 0L) return
         cachedFollowings = cachedFollowings.filterNot { it.mid == authorMid }
+        _focusFollowings.value = cachedFollowings
         cachedLiveRooms = cachedLiveRooms.filterNot { it.uid == authorMid }
         _uiState.value = resolveDynamicStateAfterAuthorUnfollow(
             currentState = _uiState.value,

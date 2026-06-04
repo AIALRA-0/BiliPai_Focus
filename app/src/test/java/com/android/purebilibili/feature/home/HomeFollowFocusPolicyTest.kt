@@ -75,6 +75,31 @@ class HomeFollowFocusPolicyTest {
     }
 
     @Test
+    fun `refresh should preserve raw baseline when server returns partial update`() {
+        assertTrue(
+            shouldPreserveHomeFollowRefreshBaseline(
+                isLoadMore = false,
+                baselineRawCount = 24,
+                incomingRawCount = 3
+            )
+        )
+        assertFalse(
+            shouldPreserveHomeFollowRefreshBaseline(
+                isLoadMore = false,
+                baselineRawCount = 3,
+                incomingRawCount = 24
+            )
+        )
+        assertFalse(
+            shouldPreserveHomeFollowRefreshBaseline(
+                isLoadMore = true,
+                baselineRawCount = 24,
+                incomingRawCount = 3
+            )
+        )
+    }
+
+    @Test
     fun `follow incoming randomization should be deterministic per seed and vary across seeds`() {
         val source = listOf(
             video(id = 1, bvid = "BV1", dynamicId = "dyn-1", ownerMid = 101L, pubdate = 400L),

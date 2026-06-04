@@ -133,7 +133,7 @@ internal fun shouldShowSearchHotSection(
 internal fun shouldShowSearchHotHeader(
     hotItemCount: Int,
     hotSearchEnabled: Boolean
-): Boolean = hotItemCount > 0
+): Boolean = hotSearchEnabled && hotItemCount > 0
 
 internal data class SearchTopBarLayoutSpec(
     val showInlineHotToggle: Boolean,
@@ -527,8 +527,9 @@ fun SearchScreen(
         )
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsStateWithLifecycle(initialValue = true)
-    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsStateWithLifecycle(initialValue = true)
-    val discoverSectionEnabled by SettingsManager.getSearchDiscoverSectionEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val discoverSectionEnabled by SettingsManager.getSearchDiscoverSectionEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val historySectionEnabled by SettingsManager.getSearchHistorySectionEnabled(context).collectAsStateWithLifecycle(initialValue = false)
     val liquidGlassEnabled by SettingsManager.getLiquidGlassEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsStateWithLifecycle(initialValue = true)
@@ -1426,6 +1427,7 @@ fun SearchScreen(
                     historyList = state.historyList,
                     hotSearchEnabled = hotSearchEnabled,
                     discoverSectionEnabled = discoverSectionEnabled,
+                    historySectionEnabled = historySectionEnabled,
                     onToggleHotSearch = {
                         scope.launch {
                             SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)

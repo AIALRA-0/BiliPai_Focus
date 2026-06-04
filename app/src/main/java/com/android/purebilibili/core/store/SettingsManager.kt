@@ -623,7 +623,8 @@ data class FocusSettings(
     val showVideoRelatedVideosSection: Boolean = false,
     val showHistoryClearAllAction: Boolean = true,
     val showSearchHotSection: Boolean = false,
-    val showSearchDiscoverSection: Boolean = true
+    val showSearchDiscoverSection: Boolean = false,
+    val showSearchHistorySection: Boolean = false
 )
 
 data class PlayerInteractionSettings(
@@ -867,6 +868,7 @@ object SettingsManager {
     private val KEY_PIP_NO_DANMAKU = booleanPreferencesKey("pip_no_danmaku")
     private val KEY_SEARCH_HOT_SECTION_ENABLED = booleanPreferencesKey("search_hot_section_enabled")
     private val KEY_SEARCH_DISCOVER_SECTION_ENABLED = booleanPreferencesKey("search_discover_section_enabled")
+    private val KEY_SEARCH_HISTORY_SECTION_ENABLED = booleanPreferencesKey("search_history_section_enabled")
     //  [新增] 双击跳转秒数 (可分开设置快进和后退)
     private val KEY_DOUBLE_TAP_SEEK_ENABLED = booleanPreferencesKey("double_tap_seek_enabled")
     private val KEY_SEEK_FORWARD_SECONDS = intPreferencesKey("seek_forward_seconds")
@@ -1192,7 +1194,8 @@ object SettingsManager {
             showVideoRelatedVideosSection = preferences[KEY_FOCUS_VIDEO_RELATED_VIDEOS_SECTION_VISIBLE] ?: false,
             showHistoryClearAllAction = preferences[KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED] ?: true,
             showSearchHotSection = preferences[KEY_SEARCH_HOT_SECTION_ENABLED] ?: false,
-            showSearchDiscoverSection = preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] ?: true
+            showSearchDiscoverSection = preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] ?: false,
+            showSearchHistorySection = preferences[KEY_SEARCH_HISTORY_SECTION_ENABLED] ?: false
         )
     }
 
@@ -2393,10 +2396,17 @@ object SettingsManager {
     }
 
     fun getSearchDiscoverSectionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] ?: true }
+        .map { preferences -> preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] ?: false }
 
     suspend fun setSearchDiscoverSectionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_SEARCH_DISCOVER_SECTION_ENABLED] = value }
+    }
+
+    fun getSearchHistorySectionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SEARCH_HISTORY_SECTION_ENABLED] ?: false }
+
+    suspend fun setSearchHistorySectionEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_SEARCH_HISTORY_SECTION_ENABLED] = value }
     }
     
     //  [新增] --- 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字) ---
@@ -5585,6 +5595,7 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_FOCUS_HISTORY_CLEAR_ALL_ACTION_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_SEARCH_HOT_SECTION_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_SEARCH_DISCOVER_SECTION_ENABLED, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_SEARCH_HISTORY_SECTION_ENABLED, SettingsShareSection.NAVIGATION),
             StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
