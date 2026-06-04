@@ -24,6 +24,7 @@ import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.LiveRoom
+import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.HistoryRepository
 import com.android.purebilibili.data.repository.MessageRepository
@@ -1440,6 +1441,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             fetchUserInfo()
         }
 
+        val requestFocusConfig = focusFollowGroupConfig
+        val requestFocusFilteringEnabled = focusFollowGroupFilteringEnabled
+        val requestBlockedMids = blockedMids
+        val followStateBeforeRequest = _uiState.value.categoryStates[HomeCategory.FOLLOW] ?: CategoryContent()
+        val requestBaselineRawVideos = followStateBeforeRequest.rawVideos
+            .takeIf { it.isNotEmpty() }
+            ?: followStateBeforeRequest.videos
+        val cachedVisibleCount = if (isLoadMore) {
+            0
+        } else {
+            filterHomeFollowVideosByFocusFollowGroups(
+                videos = requestBaselineRawVideos,
+                config = requestFocusConfig,
+                filterEnabled = requestFocusFilteringEnabled
+            ).size
+        }
+        val requiredVisibleIncrement = resolveHomeFollowRequiredVisibleIncrement(
+            isLoadMore = isLoadMore,
+            cachedVisibleCount = cachedVisibleCount
+        )
+
         val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
             refresh = !isLoadMore,
             scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW,
@@ -1449,39 +1471,65 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (isLoadMore) delay(100)
         var addedCount = 0
         result.onSuccess { items ->
-            //  将 DynamicItem 转换为首页卡片：
-            // - 仅保留可直接跳转的视频动态，避免与“动态”页图文流重复
-            val videos = items.mapNotNull { item ->
-                // Check if author is blocked
-                if ((item.modules.module_author?.mid ?: 0) in blockedMids) return@mapNotNull null
-
-                val archive = item.modules.module_dynamic?.major?.archive ?: return@mapNotNull null
-                if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
-                    return@mapNotNull null
-                }
-
-                val resolvedAid = resolveDynamicArchiveAid(
-                    archiveAid = archive.aid,
-                    fallbackId = 0L
-                )
-                com.android.purebilibili.data.model.response.VideoItem(
-                    id = resolvedAid,
-                    bvid = archive.bvid,
-                    dynamicId = item.id_str.trim(),
-                    aid = resolvedAid,
-                    title = archive.title,
-                    pic = archive.cover,
-                    duration = parseDurationText(archive.duration_text),
-                    owner = com.android.purebilibili.data.model.response.Owner(
-                        mid = item.modules.module_author?.mid ?: 0,
-                        name = item.modules.module_author?.name ?: "",
-                        face = item.modules.module_author?.face ?: ""
-                    ),
-                    stat = com.android.purebilibili.data.model.response.Stat(
-                        view = parseStatText(archive.stat.play),
-                        danmaku = parseStatText(archive.stat.danmaku)
+            var videos = mapHomeFollowDynamicItemsToVideos(
+                items = items,
+                blockedMids = requestBlockedMids
+            )
+            var continuationFetches = 0
+            fun visibleIncrementAfterFocusFilter(roundRawVideos: List<VideoItem>): Int {
+                val candidateRawVideos = if (isLoadMore) {
+                    roundRawVideos
+                } else {
+                    resolveHomeFollowPresentedRawVideos(
+                        baselineRawVideos = requestBaselineRawVideos,
+                        roundRawVideos = roundRawVideos,
+                        isLoadMore = false,
+                        keySelector = ::videoItemKey
                     )
+                }
+                val visibleCount = filterHomeFollowVideosByFocusFollowGroups(
+                    videos = candidateRawVideos,
+                    config = requestFocusConfig,
+                    filterEnabled = requestFocusFilteringEnabled
+                ).size
+                return if (isLoadMore) {
+                    visibleCount
+                } else {
+                    (visibleCount - cachedVisibleCount).coerceAtLeast(0)
+                }
+            }
+            while (
+                requestFocusFilteringEnabled &&
+                shouldContinueHomeFollowFetchAfterFocusFilter(
+                    visibleIncrement = visibleIncrementAfterFocusFilter(videos),
+                    hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
+                        scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW,
+                        type = "video"
+                    ),
+                    continuationFetches = continuationFetches,
+                    isLoadMore = isLoadMore,
+                    requiredVisibleIncrement = requiredVisibleIncrement
                 )
+            ) {
+                val extraResult = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
+                    refresh = false,
+                    scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW,
+                    type = "video"
+                )
+                val extraItems = extraResult.getOrElse { break }
+                if (extraItems.isEmpty()) break
+                val extraVideos = mapHomeFollowDynamicItemsToVideos(
+                    items = extraItems,
+                    blockedMids = requestBlockedMids
+                )
+                if (extraVideos.isNotEmpty()) {
+                    videos = accumulateHomeFollowRoundRawVideos(
+                        existingRoundRawVideos = videos,
+                        incomingRawVideos = extraVideos,
+                        keySelector = ::videoItemKey
+                    )
+                }
+                continuationFetches += 1
             }
 
             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
@@ -1492,7 +1540,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     incomingRawCount = videos.size
                 )
                 val shouldMergeRawVideos = isLoadMore ||
-                    (!isLoadMore && (incrementalTimelineRefreshEnabled || shouldPreserveRefreshBaseline))
+                    (!isLoadMore && (
+                        incrementalTimelineRefreshEnabled ||
+                            shouldPreserveRefreshBaseline ||
+                            focusFollowGroupFilteringEnabled
+                        ))
                 val nextRawVideos = if (shouldMergeRawVideos) {
                     resolveHomeFollowPresentedRawVideos(
                         baselineRawVideos = baselineRawVideos,
@@ -1548,6 +1600,45 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         return addedCount
+    }
+
+    private fun mapHomeFollowDynamicItemsToVideos(
+        items: List<DynamicItem>,
+        blockedMids: Set<Long>
+    ): List<VideoItem> {
+        //  将 DynamicItem 转换为首页卡片：
+        // - 仅保留可直接跳转的视频动态，避免与“动态”页图文流重复
+        return items.mapNotNull { item ->
+            if ((item.modules.module_author?.mid ?: 0) in blockedMids) return@mapNotNull null
+
+            val archive = item.modules.module_dynamic?.major?.archive ?: return@mapNotNull null
+            if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
+                return@mapNotNull null
+            }
+
+            val resolvedAid = resolveDynamicArchiveAid(
+                archiveAid = archive.aid,
+                fallbackId = 0L
+            )
+            VideoItem(
+                id = resolvedAid,
+                bvid = archive.bvid,
+                dynamicId = item.id_str.trim(),
+                aid = resolvedAid,
+                title = archive.title,
+                pic = archive.cover,
+                duration = parseDurationText(archive.duration_text),
+                owner = com.android.purebilibili.data.model.response.Owner(
+                    mid = item.modules.module_author?.mid ?: 0,
+                    name = item.modules.module_author?.name ?: "",
+                    face = item.modules.module_author?.face ?: ""
+                ),
+                stat = com.android.purebilibili.data.model.response.Stat(
+                    view = parseStatText(archive.stat.play),
+                    danmaku = parseStatText(archive.stat.danmaku)
+                )
+            )
+        }
     }
 
     private fun videoItemKey(item: com.android.purebilibili.data.model.response.VideoItem): String {

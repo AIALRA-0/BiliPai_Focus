@@ -8,8 +8,8 @@ import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.VideoItem
 
 internal const val HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE = 16
-private const val HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT = 12
-private const val HOME_FOLLOW_LOAD_MORE_COMPLETION_FETCH_LIMIT = 32
+private const val HOME_FOLLOW_REFRESH_COMPLETION_FETCH_LIMIT = 24
+private const val HOME_FOLLOW_LOAD_MORE_COMPLETION_FETCH_LIMIT = 48
 private const val HOME_FOLLOW_EMPTY_MESSAGE = "没有可用关注对象"
 private const val HOME_FOLLOW_RANDOM_GAMMA = -7046029254386353131L
 private const val HOME_FOLLOW_RANDOM_MIX1 = -4658895280553007687L

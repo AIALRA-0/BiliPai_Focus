@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.DynamicDeleteRequest
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.buildDynamicRepostRequest
+import com.android.purebilibili.core.store.FocusFollowGroupConfig
+import com.android.purebilibili.core.store.FocusFollowGroupStore
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
@@ -107,6 +109,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var isUserLoadingLocked = false
     private var userDynamicsJob: Job? = null
     private var activeUserDynamicsRequestToken: Long = 0L
+    private var focusFollowGroupConfig: FocusFollowGroupConfig = FocusFollowGroupConfig()
+    private var focusFollowGroupFilteringEnabled: Boolean = true
 
     //  侧边栏相关状态
     private val _followedUsers = MutableStateFlow<List<SidebarUser>>(emptyList())
@@ -144,6 +148,18 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(appContext).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
+            }
+        }
+        viewModelScope.launch {
+            FocusFollowGroupStore.getConfig(appContext).collect { config ->
+                focusFollowGroupConfig = config
+                requestFocusDynamicPrefetchIfSparse()
+            }
+        }
+        viewModelScope.launch {
+            SettingsManager.getFocusFollowGroupFilteringEnabled(appContext).collect { enabled ->
+                focusFollowGroupFilteringEnabled = enabled
+                requestFocusDynamicPrefetchIfSparse()
             }
         }
         loadUserPreferences()
@@ -733,10 +749,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 return
             }
 
-            val result = DynamicRepository.getDynamicFeed(
+            val result = loadDynamicFeedRoundWithFocusCompletion(
                 refresh = refresh,
-                scope = DynamicFeedScope.DYNAMIC_SCREEN,
-                type = requestType
+                requestType = requestType,
+                baselineItems = if (refresh) requestState.items else emptyList()
             )
 
             result.fold(
@@ -786,6 +802,126 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             )
         } finally {
             finishTimelineRequest()
+        }
+    }
+
+    private suspend fun loadDynamicFeedRoundWithFocusCompletion(
+        refresh: Boolean,
+        requestType: String,
+        baselineItems: List<DynamicItem>
+    ): Result<List<DynamicItem>> {
+        val firstResult = DynamicRepository.getDynamicFeed(
+            refresh = refresh,
+            scope = DynamicFeedScope.DYNAMIC_SCREEN,
+            type = requestType
+        )
+        if (firstResult.isFailure) return firstResult
+
+        val requestFocusConfig = focusFollowGroupConfig
+        val requestFocusFilteringEnabled = focusFollowGroupFilteringEnabled
+        val baselineItemsForCompletion = filterDynamicItemsForTimelineRequestType(
+            items = baselineItems,
+            requestType = requestType
+        )
+        var accumulatedItems = firstResult.getOrDefault(emptyList())
+        var extraPagesFetched = 0
+
+        fun visibleItemCountAfterFocusFilter(): Int {
+            val candidateItems = if (baselineItemsForCompletion.isEmpty()) {
+                accumulatedItems
+            } else {
+                appendDistinctByKey(
+                    baselineItemsForCompletion,
+                    accumulatedItems,
+                    ::dynamicFeedItemKey
+                )
+            }
+            return filterDynamicItemsByFocusFollowGroups(
+                items = candidateItems,
+                config = requestFocusConfig,
+                filterEnabled = requestFocusFilteringEnabled
+            ).size
+        }
+
+        while (
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = visibleItemCountAfterFocusFilter(),
+                hasMore = DynamicRepository.hasMoreData(
+                    scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                    type = requestType
+                ),
+                filterEnabled = requestFocusFilteringEnabled,
+                extraPagesFetched = extraPagesFetched
+            )
+        ) {
+            val extraResult = DynamicRepository.getDynamicFeed(
+                refresh = false,
+                scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                type = requestType
+            )
+            val extraItems = extraResult.getOrElse { break }
+            if (extraItems.isEmpty()) break
+            accumulatedItems = appendDistinctByKey(
+                accumulatedItems,
+                extraItems,
+                ::dynamicFeedItemKey
+            )
+            extraPagesFetched += 1
+        }
+
+        val completedItems = if (
+            refresh &&
+            requestFocusFilteringEnabled &&
+            baselineItemsForCompletion.isNotEmpty()
+        ) {
+            prependDistinctByKey(
+                existing = baselineItemsForCompletion,
+                incoming = accumulatedItems,
+                keySelector = ::dynamicFeedItemKey
+            )
+        } else {
+            accumulatedItems
+        }
+        return Result.success(completedItems)
+    }
+
+    private fun filterDynamicItemsForTimelineRequestType(
+        items: List<DynamicItem>,
+        requestType: String
+    ): List<DynamicItem> {
+        return when (requestType) {
+            "video" -> items.filter(::shouldIncludeDynamicItemInVideoTab)
+            "pgc" -> items.filter(::shouldIncludeDynamicItemInPgcTab)
+            "article" -> items.filter(::shouldIncludeDynamicItemInArticleTab)
+            else -> items
+        }
+    }
+
+    private fun requestFocusDynamicPrefetchIfSparse() {
+        if (!focusFollowGroupFilteringEnabled) return
+        if (_uiState.value.items.isEmpty()) return
+        if (_uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked) return
+        val selectedTab = _selectedTab.value
+        if (selectedTab == 4) return
+        val requestType = resolveDynamicFeedRequestType(selectedTab)
+        val tabItems = filterDynamicItemsForTimelineRequestType(_uiState.value.items, requestType)
+        val visibleCount = filterDynamicItemsByFocusFollowGroups(
+            items = tabItems,
+            config = focusFollowGroupConfig,
+            filterEnabled = true
+        ).size
+        if (
+            shouldPrefetchMoreFocusDynamicItems(
+                visibleItemCount = visibleCount,
+                hasMore = DynamicRepository.hasMoreData(
+                    scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                    type = requestType
+                ),
+                filterEnabled = true,
+                extraPagesFetched = 0
+            )
+        ) {
+            loadDynamicFeed(refresh = false)
         }
     }
     

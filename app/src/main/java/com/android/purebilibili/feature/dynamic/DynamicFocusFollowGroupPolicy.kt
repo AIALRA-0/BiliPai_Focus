@@ -4,8 +4,8 @@ import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.data.model.response.DynamicItem
 
-private const val MIN_VISIBLE_DYNAMIC_ITEMS_AFTER_FOCUS_FILTER = 8
-private const val MAX_FOCUS_DYNAMIC_PREFETCH_PAGES = 6
+private const val MIN_VISIBLE_DYNAMIC_ITEMS_AFTER_FOCUS_FILTER = 16
+private const val MAX_FOCUS_DYNAMIC_PREFETCH_PAGES = 24
 
 internal fun filterDynamicItemsByFocusFollowGroups(
     items: List<DynamicItem>,

@@ -23,6 +23,46 @@ class HomeFollowFocusPolicyTest {
             )
         )
 
+        assertTrue(
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                visibleIncrement = 1,
+                hasMore = true,
+                continuationFetches = 23,
+                isLoadMore = false,
+                requiredVisibleIncrement = 16
+            )
+        )
+
+        assertFalse(
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                visibleIncrement = 1,
+                hasMore = true,
+                continuationFetches = 24,
+                isLoadMore = false,
+                requiredVisibleIncrement = 16
+            )
+        )
+
+        assertTrue(
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                visibleIncrement = 1,
+                hasMore = true,
+                continuationFetches = 47,
+                isLoadMore = true,
+                requiredVisibleIncrement = 16
+            )
+        )
+
+        assertFalse(
+            shouldContinueHomeFollowFetchAfterFocusFilter(
+                visibleIncrement = 1,
+                hasMore = true,
+                continuationFetches = 48,
+                isLoadMore = true,
+                requiredVisibleIncrement = 16
+            )
+        )
+
         assertFalse(
             shouldContinueHomeFollowFetchAfterFocusFilter(
                 visibleIncrement = 16,
