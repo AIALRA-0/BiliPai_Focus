@@ -24,10 +24,12 @@ data class SpaceUserInfo(
     val face: String = "",
     val sign: String = "",
     val level: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("fans_badge")
     val fansBadge: Boolean = false,
     val official: SpaceOfficial = SpaceOfficial(),
     val vip: SpaceVip = SpaceVip(),
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_followed")
     val isFollowed: Boolean = false,
     @SerialName("top_photo")
@@ -183,6 +185,7 @@ data class SpaceAggregateArchiveItem(
     val tname: String = "",
     @SerialName("first_cid")
     val firstCid: Long = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_pgc")
     val isPgc: Boolean = false,
     @SerialName("publish_time_text")
@@ -288,10 +291,12 @@ data class SpaceVideoItem(
     val author: String = "",
     val typeid: Int = 0,      //  分区 ID
     val typename: String = "", //  分区名称
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_charging_arc")
     val isChargingArc: Boolean = false,
     @SerialName("elec_arc_type")
     val elecArcType: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_ugcpay")
     val isUgcpay: Boolean = false,
     @SerialName("ugc_pay")
@@ -542,6 +547,7 @@ data class SpaceDynamicResponse(
 
 @kotlinx.serialization.Serializable
 data class SpaceDynamicData(
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val has_more: Boolean = false,
     val offset: String = "",
     val items: List<SpaceDynamicItem> = emptyList()
@@ -554,6 +560,7 @@ data class SpaceDynamicItem(
     val modules: SpaceDynamicModules = SpaceDynamicModules(),
     val orig: SpaceDynamicItem? = null,
     val type: String = "",  // DYNAMIC_TYPE_AV, DYNAMIC_TYPE_DRAW, DYNAMIC_TYPE_WORD 等
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val visible: Boolean = true
 )
 
@@ -620,10 +627,12 @@ data class SpaceDynamicArchive(
     val duration_text: String = "",
     val stat: SpaceDynamicArchiveStat = SpaceDynamicArchiveStat(),
     val badge: DynamicMajorBadge? = null,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_charging_arc")
     val isChargingArc: Boolean = false,
     @SerialName("elec_arc_type")
     val elecArcType: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_ugcpay")
     val isUgcpay: Boolean = false,
     @SerialName("ugc_pay")
@@ -687,8 +696,11 @@ data class SpaceDynamicStat(
 data class SpaceDynamicCount(
     @Serializable(with = FlexibleIntSerializer::class)
     val count: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val forbidden: Boolean = false,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val hidden: Boolean = false,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val status: Boolean = false
 )
 
@@ -751,6 +763,7 @@ data class SpaceArticleData(
     val ps: Int = 30,
     @JsonNames("count")
     val total: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val has_more: Boolean = false,
     val offset: String = ""
 )
@@ -775,6 +788,7 @@ data class SpaceArticleItem(
     val publish_time: Long = 0,
     val ctime: Long = 0,
     val mtime: Long = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val is_like: Boolean = false,
     val image_urls: List<String> = emptyList()
 )

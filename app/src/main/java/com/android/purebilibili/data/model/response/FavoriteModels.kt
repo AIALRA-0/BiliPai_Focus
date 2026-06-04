@@ -34,6 +34,7 @@ data class FavoriteResourceResponse(
 data class FavoriteResourceData(
     val info: FavoriteInfo? = null,
     val medias: List<FavoriteData>? = null,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val has_more: Boolean = false,
     val ttl: Int = 0
 )

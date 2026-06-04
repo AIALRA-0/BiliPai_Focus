@@ -134,6 +134,41 @@ internal fun applyHomeRefreshUndoSnapshot(
 
 private const val HISTORY_SAMPLE_CACHE_TTL_MS = 10 * 60 * 1000L
 private const val HOME_REFRESH_UNDO_TIMEOUT_MS = 5_000L
+private const val HOME_STARTUP_MAX_RETRIES = 2
+private const val HOME_RECOMMEND_MIN_VISIBLE_BATCH_SIZE = 16
+private const val HOME_RECOMMEND_FILTER_COMPLETION_FETCH_LIMIT = 8
+
+internal fun shouldRetryHomeStartupLoad(
+    visibleVideoCount: Int,
+    error: String?,
+    attempt: Int,
+    maxRetries: Int = HOME_STARTUP_MAX_RETRIES
+): Boolean {
+    if (visibleVideoCount > 0) return false
+    if (attempt >= maxRetries.coerceAtLeast(0)) return false
+    val normalizedError = error.orEmpty()
+    if (normalizedError.contains("未登录") || normalizedError.contains("登录")) return false
+    return true
+}
+
+internal fun resolveHomeStartupRetryDelayMs(attempt: Int): Long {
+    return when (attempt.coerceAtLeast(0)) {
+        0 -> 250L
+        else -> 1_000L
+    }
+}
+
+internal fun shouldContinueHomeRecommendFetchAfterFilters(
+    visibleCount: Int,
+    extraPagesFetched: Int,
+    filterCompletionEnabled: Boolean,
+    minVisibleCount: Int = HOME_RECOMMEND_MIN_VISIBLE_BATCH_SIZE,
+    maxExtraPages: Int = HOME_RECOMMEND_FILTER_COMPLETION_FETCH_LIMIT
+): Boolean {
+    if (!filterCompletionEnabled) return false
+    if (visibleCount >= minVisibleCount.coerceAtLeast(1)) return false
+    return extraPagesFetched < maxExtraPages.coerceAtLeast(0)
+}
 
 private fun TodayWatchPluginMode.toUiMode(): TodayWatchMode {
     return when (this) {
@@ -967,7 +1002,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            fetchData(isLoadMore = false)
+            fetchDataWithStartupRecovery(category = _uiState.value.currentCategory)
+        }
+    }
+
+    private suspend fun fetchDataWithStartupRecovery(category: HomeCategory) {
+        var attempt = 0
+        while (true) {
+            fetchData(isLoadMore = false, category = category)
+            val content = if (category == HomeCategory.POPULAR) {
+                _uiState.value.popularCategoryStates[_uiState.value.popularSubCategory] ?: CategoryContent()
+            } else {
+                _uiState.value.categoryStates[category] ?: CategoryContent()
+            }
+            if (!shouldRetryHomeStartupLoad(
+                    visibleVideoCount = content.videos.size,
+                    error = content.error,
+                    attempt = attempt
+                )
+            ) {
+                break
+            }
+            delay(resolveHomeStartupRetryDelayMs(attempt))
+            attempt += 1
         }
     }
 
@@ -1232,34 +1289,67 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         videoResult.onSuccess { videos ->
             val validVideos = videos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
+            var validVideoCount = validVideos.size
+
+            fun filterFetchedVideos(
+                sourceVideos: List<VideoItem>,
+                seenBvids: Set<String>
+            ): List<VideoItem> {
+                //  [Feature] 应用屏蔽 + 原生插件 + JSON 规则插件过滤器
+                val blockedFiltered = sourceVideos.filter { video -> video.owner.mid !in blockedMids }
+                val feedbackFiltered = filterHomeFeedbackVideos(blockedFiltered)
+                val builtinFiltered = PluginManager.filterFeedItems(feedbackFiltered)
+                val pluginFiltered = com.android.purebilibili.core.plugin.json.JsonPluginManager
+                    .filterVideos(builtinFiltered)
+                return if (currentCategory == HomeCategory.RECOMMEND) {
+                    pluginFiltered.filter { it.bvid !in seenBvids }
+                } else {
+                    pluginFiltered
+                }
+            }
+
+            var filteredVideos = filterFetchedVideos(validVideos, sessionSeenBvids)
+            var lastSuccessfulRecommendRequestIndex = recommendRequestIndex
+            if (currentCategory == HomeCategory.RECOMMEND) {
+                var extraPagesFetched = 0
+                while (
+                    shouldContinueHomeRecommendFetchAfterFilters(
+                        visibleCount = filteredVideos.size,
+                        extraPagesFetched = extraPagesFetched,
+                        filterCompletionEnabled = true
+                    )
+                ) {
+                    val nextRequestIndex = recommendRequestIndex + extraPagesFetched + 1
+                    val extraResult = VideoRepository.getHomeVideos(nextRequestIndex)
+                    val extraVideos = extraResult.getOrElse { break }
+                    val extraValidVideos = extraVideos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
+                    validVideoCount += extraValidVideos.size
+                    val seenForRound = sessionSeenBvids + filteredVideos.map { it.bvid }
+                    val extraFilteredVideos = filterFetchedVideos(extraValidVideos, seenForRound)
+                    if (extraFilteredVideos.isNotEmpty()) {
+                        filteredVideos = appendDistinctByKey(
+                            filteredVideos,
+                            extraFilteredVideos,
+                            ::videoItemKey
+                        )
+                    }
+                    lastSuccessfulRecommendRequestIndex = nextRequestIndex
+                    extraPagesFetched += 1
+                    if (extraVideos.isEmpty()) break
+                }
+            }
+
             if (shouldAdvanceRecommendFeedRequestIndex(
                     category = currentCategory,
                     isLoadMore = isLoadMore,
                     isManualRefresh = isManualRefresh,
-                    validVideoCount = validVideos.size
+                    validVideoCount = validVideoCount
                 )
             ) {
-                refreshIdx = maxOf(refreshIdx, recommendRequestIndex)
+                refreshIdx = maxOf(refreshIdx, lastSuccessfulRecommendRequestIndex)
             }
 
-            //  [Feature] 应用屏蔽 + 原生插件 + JSON 规则插件过滤器
-            val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
-            val feedbackFiltered = filterHomeFeedbackVideos(blockedFiltered)
-            val builtinFiltered = PluginManager.filterFeedItems(feedbackFiltered)
-            val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager
-                .filterVideos(builtinFiltered)
-
-            // Global deduplication for RECOMMEND only? Or per category?
-            // Usually Recommend needs global deduplication. Other categories might just need simple append.
-            // For now, let's keep sessionSeenBvids for RECOMMEND, or apply globally to avoid seeing same video across tabs?
-            // Let's apply globally for now as per existing logic, but maybe we should scope it?
-            // Existing logic had a single sessionSeenBvids.
-
-            val uniqueNewVideos = if (currentCategory == HomeCategory.RECOMMEND) {
-                filteredVideos.filter { it.bvid !in sessionSeenBvids }
-            } else {
-                filteredVideos
-            }
+            val uniqueNewVideos = filteredVideos
 
             val useIncrementalRecommendRefresh = !isLoadMore &&
                 currentCategory == HomeCategory.RECOMMEND &&
@@ -1315,8 +1405,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                  val updateContent: (CategoryContent) -> CategoryContent = { oldState ->
                     oldState.copy(
                         isLoading = false,
-                        error = if (!isLoadMore && oldState.videos.isEmpty()) "没有更多内容了" else null,
-                        hasMore = false
+                        error = if (!isLoadMore && oldState.videos.isEmpty()) {
+                            if (currentCategory == HomeCategory.RECOMMEND) {
+                                "暂时没有可显示内容，正在等待下一轮推荐"
+                            } else {
+                                "没有更多内容了"
+                            }
+                        } else {
+                            null
+                        },
+                        hasMore = currentCategory == HomeCategory.RECOMMEND
                     )
                  }
                  if (currentCategory == HomeCategory.POPULAR) {

@@ -507,6 +507,32 @@ object FlexibleBooleanSerializer : KSerializer<Boolean> {
     }
 }
 
+object FlexibleNullableBooleanSerializer : KSerializer<Boolean?> {
+    override val descriptor: SerialDescriptor = FlexibleBooleanSerializer.descriptor
+
+    override fun serialize(encoder: Encoder, value: Boolean?) {
+        if (value == null) {
+            encoder.encodeNull()
+        } else {
+            encoder.encodeBoolean(value)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): Boolean? {
+        if (decoder !is JsonDecoder) return decoder.decodeBoolean()
+        val element = decoder.decodeJsonElement()
+        if (element is JsonNull) return null
+        val primitive = element as? JsonPrimitive ?: return null
+        primitive.booleanOrNull?.let { return it }
+        val content = runCatching { primitive.content }.getOrNull()?.trim() ?: return null
+        return when (content.lowercase()) {
+            "true", "1" -> true
+            "false", "0" -> false
+            else -> content.toIntOrNull()?.let { it != 0 }
+        }
+    }
+}
+
 @Serializable
 data class ReplyContent(
     val message: String = "",

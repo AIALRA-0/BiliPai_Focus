@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.search
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -38,5 +39,25 @@ class SearchLandingUiPolicyTest {
         assertEquals("47分钟前更新", resolveSearchDiscoverOriginalSubtitle("47分钟前更新"))
         assertEquals(null, resolveSearchDiscoverOriginalSubtitle("关注的 UP 主"))
         assertEquals(null, resolveSearchDiscoverOriginalSubtitle("与最近搜索相关"))
+    }
+
+    @Test
+    fun `landing sections are fully guarded by focus visibility switches`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchLandingUi.kt")
+            .replace(Regex("\\s+"), " ")
+
+        assertTrue(source.contains("if (hotSearchEnabled) { item { SearchKeywordSection( title = \"大家都在搜\""))
+        assertTrue(source.contains("if (discoverSectionEnabled) { item { SearchKeywordSection( title = discoverTitle"))
+        assertTrue(source.contains("if (historySectionEnabled) { item { SearchHistorySectionModern("))
+    }
+
+    private fun loadSource(path: String): String {
+        val normalizedPath = path.removePrefix("app/")
+        val sourceFile = listOf(
+            File(path),
+            File(normalizedPath)
+        ).firstOrNull { it.exists() }
+        require(sourceFile != null) { "Cannot locate $path from ${File(".").absolutePath}" }
+        return sourceFile.readText()
     }
 }

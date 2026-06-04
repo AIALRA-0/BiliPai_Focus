@@ -32,6 +32,16 @@ class DynamicFocusPrefetchStructureTest {
         assertTrue(prefetchSource.contains("shouldPrefetchMoreFocusDynamicItems("))
     }
 
+    @Test
+    fun `dynamic top bar keeps focus follow group entry in both layouts`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt")
+        val topBarSource = loadSource("app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt")
+
+        assertTrue(source.contains("onFocusFollowGroupClick = { showFocusFollowGroupSheet = true }"))
+        assertTrue(source.contains("FocusFollowGroupSheet("))
+        assertTrue(topBarSource.contains("contentDescription = \"关注分组过滤设置\""))
+    }
+
     private fun loadSource(path: String): String {
         val normalizedPath = path.removePrefix("app/")
         val sourceFile = listOf(

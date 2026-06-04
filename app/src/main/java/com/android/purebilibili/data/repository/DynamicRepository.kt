@@ -32,11 +32,6 @@ object DynamicRepository {
             } else {
                 ""
             }
-            val refreshPaginationOffset = if (refresh) {
-                feedPagination.offset(scope, type)
-            } else {
-                ""
-            }
             if (!feedPagination.hasMore(scope, type) && !refresh) {
                 return@withContext Result.success(emptyList())
             }
@@ -61,11 +56,7 @@ object DynamicRepository {
                     feedPagination.update(
                         scope = scope,
                         type = type,
-                        offset = if (refreshUpdateBaseline.isNotBlank()) {
-                            refreshPaginationOffset
-                        } else {
-                            previousOffset
-                        },
+                        offset = previousOffset,
                         updateBaseline = refreshUpdateBaseline,
                         hasMore = false
                     )
@@ -77,11 +68,7 @@ object DynamicRepository {
                 feedPagination.update(
                     scope = scope,
                     type = type,
-                    offset = if (refreshUpdateBaseline.isNotBlank()) {
-                        refreshPaginationOffset
-                    } else {
-                        data.offset
-                    },
+                    offset = data.offset,
                     updateBaseline = data.update_baseline.ifBlank { refreshUpdateBaseline },
                     hasMore = data.has_more
                 )

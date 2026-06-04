@@ -1,6 +1,6 @@
 package com.android.purebilibili.data.repository
 
-internal const val DYNAMIC_EMPTY_PAGE_FETCH_LIMIT = 3
+internal const val DYNAMIC_EMPTY_PAGE_FETCH_LIMIT = 8
 
 internal fun shouldContinueDynamicFetchAfterFilter(
     accumulatedVisibleCount: Int,

@@ -12,6 +12,79 @@ import kotlin.test.assertTrue
 class HomeFollowFocusPolicyTest {
 
     @Test
+    fun `startup load retries empty non auth results with bounded backoff`() {
+        assertTrue(
+            shouldRetryHomeStartupLoad(
+                visibleVideoCount = 0,
+                error = null,
+                attempt = 0
+            )
+        )
+        assertTrue(
+            shouldRetryHomeStartupLoad(
+                visibleVideoCount = 0,
+                error = "网络错误",
+                attempt = 1
+            )
+        )
+        assertFalse(
+            shouldRetryHomeStartupLoad(
+                visibleVideoCount = 0,
+                error = "未登录，请先登录",
+                attempt = 0
+            )
+        )
+        assertFalse(
+            shouldRetryHomeStartupLoad(
+                visibleVideoCount = 1,
+                error = null,
+                attempt = 0
+            )
+        )
+        assertFalse(
+            shouldRetryHomeStartupLoad(
+                visibleVideoCount = 0,
+                error = null,
+                attempt = 2
+            )
+        )
+        assertEquals(250L, resolveHomeStartupRetryDelayMs(0))
+        assertEquals(1_000L, resolveHomeStartupRetryDelayMs(1))
+    }
+
+    @Test
+    fun `recommend completion keeps fetching while filters leave the first screen sparse`() {
+        assertTrue(
+            shouldContinueHomeRecommendFetchAfterFilters(
+                visibleCount = 3,
+                extraPagesFetched = 0,
+                filterCompletionEnabled = true
+            )
+        )
+        assertFalse(
+            shouldContinueHomeRecommendFetchAfterFilters(
+                visibleCount = 16,
+                extraPagesFetched = 0,
+                filterCompletionEnabled = true
+            )
+        )
+        assertFalse(
+            shouldContinueHomeRecommendFetchAfterFilters(
+                visibleCount = 3,
+                extraPagesFetched = 8,
+                filterCompletionEnabled = true
+            )
+        )
+        assertFalse(
+            shouldContinueHomeRecommendFetchAfterFilters(
+                visibleCount = 3,
+                extraPagesFetched = 0,
+                filterCompletionEnabled = false
+            )
+        )
+    }
+
+    @Test
     fun `follow completion keeps fetching until at least sixteen visible items are added`() {
         assertTrue(
             shouldContinueHomeFollowFetchAfterFocusFilter(

@@ -12,6 +12,52 @@ import kotlin.test.assertNull
 class DynamicFocusFollowGroupPolicyTest {
 
     @Test
+    fun startupLoadRetriesEmptyNonAuthResultsWithBoundedBackoff() {
+        assertEquals(
+            true,
+            shouldRetryDynamicStartupLoad(
+                visibleItemCount = 0,
+                error = null,
+                attempt = 0
+            )
+        )
+        assertEquals(
+            true,
+            shouldRetryDynamicStartupLoad(
+                visibleItemCount = 0,
+                error = "网络错误",
+                attempt = 1
+            )
+        )
+        assertEquals(
+            false,
+            shouldRetryDynamicStartupLoad(
+                visibleItemCount = 0,
+                error = "未登录，请先登录",
+                attempt = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldRetryDynamicStartupLoad(
+                visibleItemCount = 1,
+                error = null,
+                attempt = 0
+            )
+        )
+        assertEquals(
+            false,
+            shouldRetryDynamicStartupLoad(
+                visibleItemCount = 0,
+                error = null,
+                attempt = 2
+            )
+        )
+        assertEquals(250L, resolveDynamicStartupRetryDelayMs(0))
+        assertEquals(1_000L, resolveDynamicStartupRetryDelayMs(1))
+    }
+
+    @Test
     fun filterDynamicItemsByFocusFollowGroups_hidesItemsFromInvisibleGroup() {
         val config = FocusFollowGroupConfig(
             groups = listOf(

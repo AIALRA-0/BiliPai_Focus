@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-    <sub>最后更新：2026-06-03 · 文档已同步至 v9.0.5 Focus.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+    <sub>最后更新：2026-06-04 · 文档已同步至 v9.0.5 Focus.4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
   </p>
 
   <p align="center">
-    <img src="https://img.shields.io/badge/Version-9.0.5-focus.1-fb7299?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/Version-9.0.5-focus.4-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -578,12 +578,13 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v9.0.5 Focus.1 · 2026-06-03)
+### 最近更新 (v9.0.5 Focus.4 · 2026-06-04)
 
-- 合并上游 `v9.0.5` 以及后续 `e66434f3` 更新。
-- 修复设置界面液态分段控件外层圆角与选中指示器不匹配的问题。
-- 优化评论冻结入口、播放器恢复、竖屏沉浸和首页标签布局体验。
-- 恢复并保留 Focus README、Focus Release 地址、Focus 应用内更新源与 Focus 设置特性。
+- 修复上游接口返回 `0/1` 布尔值时首页、动态、空间动态、热门、收藏与导航信息解析失败的问题。
+- 首页推荐在过滤后不足首屏数量时会继续补页，空过滤页不再把分页状态判死，冷启动空白会自动有限重试。
+- 动态页刷新后使用新 offset 继续分页，并在冷启动空白时自动有限重试，保留动态页关注分组过滤入口。
+- Focus 搜索开关继续保证“大家都在搜 / 搜索发现 / 搜索历史”整个区块完全不渲染。
+- 保留 Focus README、Focus Release 地址、Focus 应用内更新源与 Focus 设置特性。
 
 ### 历史版本
 

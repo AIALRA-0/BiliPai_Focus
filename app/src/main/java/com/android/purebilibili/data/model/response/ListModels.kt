@@ -335,6 +335,7 @@ data class PopularResponse(
 @Serializable
 data class PopularData(
     val list: List<PopularItem>? = null,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val no_more: Boolean = false
 )
 

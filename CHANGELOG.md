@@ -1,5 +1,19 @@
 # Changelog
 
+## v9.0.5-focus.4 (2026-06-04)
+
+### 版本信息
+- Focus 版本号从 `9.0.5-focus.3` 升级到 `9.0.5-focus.4`，`versionCode` 升级到 `221`。
+
+### 更新内容
+- **P0 解析修复**：首页、动态、空间动态、热门、收藏与导航信息的布尔字段统一兼容 `0/1/true/false/"0"/"1"`，修复 `Failed to parse literal '1' as boolean value at path ...`。
+- **首页加载修复**：推荐流过滤后不足首屏数量时继续补页；过滤空页不再把 `hasMore` 判死；冷启动空白会自动有限重试。
+- **动态加载修复**：动态刷新后使用服务端返回的新 offset 继续分页；冷启动空白自动有限重试；过滤后稀疏内容继续补页。
+- **Focus 特性保护**：继续保留动态页关注分组过滤入口；搜索页三个 Focus 开关保持完整区块隐藏；README / README_EN 同步回 Focus 版本说明。
+
+### 验证
+- `./gradlew :app:testDebugUnitTest --tests "*FlexibleBooleanFeedParsingTest" --tests "*HomeFollowFocusPolicyTest" --tests "*DynamicFocusFollowGroupPolicyTest" --tests "*SearchLandingUiPolicyTest" --tests "*DynamicFocusPrefetchStructureTest"`
+
 ## v9.0.5 (2026-06-03)
 
 ### 版本信息

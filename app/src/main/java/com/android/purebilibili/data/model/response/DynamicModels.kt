@@ -35,6 +35,7 @@ data class DynamicFeedResponse(
 data class DynamicFeedData(
     val items: List<DynamicItem> = emptyList(),
     val offset: String = "", // 分页偏移量
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val has_more: Boolean = false,
     val update_baseline: String = "",
     val update_num: Int = 0
@@ -114,6 +115,7 @@ data class TopicFeedData(
 
 @Serializable
 data class TopicCardList(
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("has_more")
     val hasMore: Boolean = false,
     val offset: String = "",
@@ -134,6 +136,7 @@ data class DynamicItem(
     val id_str: String = "",
     @Serializable(with = FlexibleStringSerializer::class)
     val type: String = "", // DYNAMIC_TYPE_AV, DYNAMIC_TYPE_DRAW, DYNAMIC_TYPE_WORD, DYNAMIC_TYPE_FORWARD；opus/detail 可能返回数字
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val visible: Boolean = true,
     @Serializable(with = DynamicModulesFlexibleSerializer::class)
     val modules: DynamicModules = DynamicModules(),
@@ -553,6 +556,7 @@ data class DynamicAuthorModule(
     val face: String = "",
     val pub_time: String = "", // "昨天 18:00"
     val pub_ts: Long = 0, // 时间戳
+    @Serializable(with = FlexibleNullableBooleanSerializer::class)
     val following: Boolean? = null,
     val official_verify: DynamicOfficialVerify? = null,
     val vip: DynamicVipInfo? = null,
@@ -703,10 +707,12 @@ data class ArchiveMajor(
     val stat: ArchiveStat = ArchiveStat(),
     val jump_url: String = "",
     val badge: DynamicMajorBadge? = null,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_charging_arc")
     val isChargingArc: Boolean = false,
     @SerialName("elec_arc_type")
     val elecArcType: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     @SerialName("is_ugcpay")
     val isUgcpay: Boolean = false,
     @SerialName("ugc_pay")
@@ -768,6 +774,7 @@ data class DynamicStatModule(
 @Serializable
 data class StatItem(
     val count: Int = 0,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val forbidden: Boolean = false
 )
 

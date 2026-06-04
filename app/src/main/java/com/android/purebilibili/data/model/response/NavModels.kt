@@ -18,6 +18,7 @@ data class NavResponse(
 
 @Serializable
 data class NavData(
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val isLogin: Boolean = false,
     val uname: String = "",
     val face: String = "",

@@ -74,6 +74,28 @@ internal fun resolveDynamicFollowingsPageLimit(isStartupHydration: Boolean): Int
     return if (isStartupHydration) 1 else 3
 }
 
+private const val DYNAMIC_STARTUP_MAX_RETRIES = 2
+
+internal fun shouldRetryDynamicStartupLoad(
+    visibleItemCount: Int,
+    error: String?,
+    attempt: Int,
+    maxRetries: Int = DYNAMIC_STARTUP_MAX_RETRIES
+): Boolean {
+    if (visibleItemCount > 0) return false
+    if (attempt >= maxRetries.coerceAtLeast(0)) return false
+    val normalizedError = error.orEmpty()
+    if (normalizedError.contains("未登录") || normalizedError.contains("登录")) return false
+    return true
+}
+
+internal fun resolveDynamicStartupRetryDelayMs(attempt: Int): Long {
+    return when (attempt.coerceAtLeast(0)) {
+        0 -> 250L
+        else -> 1_000L
+    }
+}
+
 /**
  *  动态页面 ViewModel
  * 支持：动态列表、侧边栏关注用户、在线状态
@@ -261,8 +283,26 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         startupPlan: DynamicStartupLoadPlan = resolveDynamicStartupLoadPlan()
     ) {
         viewModelScope.launch {
-            refreshData(showRefreshIndicator = false)
+            refreshDataWithStartupRecovery()
             scheduleStartupFollowingsHydration(startupPlan)
+        }
+    }
+
+    private suspend fun refreshDataWithStartupRecovery() {
+        var attempt = 0
+        while (true) {
+            refreshData(showRefreshIndicator = false)
+            val state = _uiState.value
+            if (!shouldRetryDynamicStartupLoad(
+                    visibleItemCount = state.items.size,
+                    error = state.error,
+                    attempt = attempt
+                )
+            ) {
+                break
+            }
+            delay(resolveDynamicStartupRetryDelayMs(attempt))
+            attempt += 1
         }
     }
 
