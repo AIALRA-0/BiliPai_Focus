@@ -47,6 +47,70 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
+    fun mergeHomeRecommendIncrementalRefreshVideos_promotesFreshApiOrderAheadOfOldTail() {
+        val existing = listOf(
+            VideoItem(bvid = "BV_OLD_TOP"),
+            VideoItem(bvid = "BV_PROMOTED"),
+            VideoItem(bvid = "BV_OLD_TAIL")
+        )
+        val incoming = listOf(
+            VideoItem(bvid = "BV_PROMOTED"),
+            VideoItem(bvid = "BV_NEW"),
+            VideoItem(bvid = "BV_OLD_TOP")
+        )
+
+        val result = mergeHomeRecommendIncrementalRefreshVideos(
+            existing = existing,
+            incoming = incoming
+        ) { it.bvid }
+
+        assertEquals(
+            listOf("BV_PROMOTED", "BV_NEW", "BV_OLD_TOP", "BV_OLD_TAIL"),
+            result.videos.map { it.bvid }
+        )
+        assertEquals(2, result.topSegmentCount)
+    }
+
+    @Test
+    fun mergeHomeRecommendIncrementalRefreshVideos_keepsExistingWhenRefreshReturnsNoVisibleItems() {
+        val existing = listOf(
+            VideoItem(bvid = "BV_OLD_TOP"),
+            VideoItem(bvid = "BV_OLD_TAIL")
+        )
+
+        val result = mergeHomeRecommendIncrementalRefreshVideos(
+            existing = existing,
+            incoming = emptyList()
+        ) { it.bvid }
+
+        assertEquals(listOf("BV_OLD_TOP", "BV_OLD_TAIL"), result.videos.map { it.bvid })
+        assertEquals(0, result.topSegmentCount)
+    }
+
+    @Test
+    fun resolveHomeRecommendSeenBvidsForRequest_deduplicatesOnlyLoadMoreAgainstExistingList() {
+        val existing = listOf(
+            VideoItem(bvid = "BV_OLD_TOP"),
+            VideoItem(bvid = "BV_LOADED_MORE")
+        )
+
+        assertEquals(
+            emptySet(),
+            resolveHomeRecommendSeenBvidsForRequest(
+                isLoadMore = false,
+                existingVideos = existing
+            )
+        )
+        assertEquals(
+            setOf("BV_OLD_TOP", "BV_LOADED_MORE"),
+            resolveHomeRecommendSeenBvidsForRequest(
+                isLoadMore = true,
+                existingVideos = existing
+            )
+        )
+    }
+
+    @Test
     fun resolveRecommendFeedRequestIndex_refreshesFromFreshIndexAndOnlyLoadMoreAdvances() {
         assertEquals(
             0,

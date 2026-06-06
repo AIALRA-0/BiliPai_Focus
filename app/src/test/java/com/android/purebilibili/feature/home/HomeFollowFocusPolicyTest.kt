@@ -1,6 +1,13 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
+import com.android.purebilibili.data.model.response.ArchiveMajor
+import com.android.purebilibili.data.model.response.ArchiveStat
+import com.android.purebilibili.data.model.response.DynamicAuthorModule
+import com.android.purebilibili.data.model.response.DynamicContentModule
+import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.DynamicMajor
+import com.android.purebilibili.data.model.response.DynamicModules
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlin.test.Test
@@ -246,9 +253,46 @@ class HomeFollowFocusPolicyTest {
         )
 
         assertEquals(
-            listOf(newA, newB, oldA, oldB).map { it.dynamicId },
+            listOf(newA, newB, oldB, oldA).map { it.dynamicId },
             merged.map { it.dynamicId }
         )
+    }
+
+    @Test
+    fun `home follow dynamic mapping keeps author publish timestamp for sorting`() {
+        val mapped = mapHomeFollowDynamicItemToVideo(
+            item = DynamicItem(
+                id_str = "dyn-new",
+                modules = DynamicModules(
+                    module_author = DynamicAuthorModule(
+                        mid = 42L,
+                        name = "UP",
+                        face = "face",
+                        pub_ts = 1_780_700_000L
+                    ),
+                    module_dynamic = DynamicContentModule(
+                        major = DynamicMajor(
+                            archive = ArchiveMajor(
+                                aid = "77",
+                                bvid = "BV77",
+                                title = "new video",
+                                cover = "cover.jpg",
+                                duration_text = "01:02",
+                                stat = ArchiveStat(play = "1.2万", danmaku = "34")
+                            )
+                        )
+                    )
+                )
+            ),
+            blockedMids = emptySet()
+        ) ?: error("dynamic archive should map to home follow video")
+
+        assertEquals("dyn-new", mapped.dynamicId)
+        assertEquals(77L, mapped.aid)
+        assertEquals(1_780_700_000L, mapped.pubdate)
+        assertEquals(62, mapped.duration)
+        assertEquals(12_000, mapped.stat.view)
+        assertEquals(34, mapped.stat.danmaku)
     }
 
     @Test
@@ -343,7 +387,8 @@ class HomeFollowFocusPolicyTest {
             incomingVisibleVideos = source,
             isLoadMore = false,
             seed = 7L,
-            reshuffleOnRefresh = true
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.RANDOM
         )
 
         assertEquals(
@@ -369,14 +414,16 @@ class HomeFollowFocusPolicyTest {
             prioritizedVideoKeys = setOf(
                 resolveHomeFollowVideoKey(newA),
                 resolveHomeFollowVideoKey(newB)
-            )
+            ),
+            sortMode = FocusFollowHomeFeedSortMode.RANDOM
         )
         val refreshedWithoutPrioritization = presentHomeFollowVisibleVideos(
             existingPresentedVisibleVideos = emptyList(),
             incomingVisibleVideos = listOf(oldA, oldB, newA, newB),
             isLoadMore = false,
             seed = 5L,
-            reshuffleOnRefresh = true
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.RANDOM
         )
 
         assertEquals(
@@ -575,7 +622,8 @@ class HomeFollowFocusPolicyTest {
             incomingVisibleVideos = source,
             isLoadMore = true,
             seed = 99L,
-            reshuffleOnRefresh = true
+            reshuffleOnRefresh = true,
+            sortMode = FocusFollowHomeFeedSortMode.RANDOM
         )
 
         assertEquals(

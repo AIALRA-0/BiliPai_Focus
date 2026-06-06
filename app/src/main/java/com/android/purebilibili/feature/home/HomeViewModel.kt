@@ -22,7 +22,7 @@ import com.android.purebilibili.core.store.TodayWatchProfileStore
 import com.android.purebilibili.core.store.withDislikedVideoFeedback
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.Logger
-import com.android.purebilibili.core.util.prependDistinctByKey
+import com.android.purebilibili.core.util.promoteDistinctByKey
 import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.VideoItem
@@ -55,6 +55,113 @@ internal fun trimIncrementalRefreshVideosToEvenCount(videos: List<VideoItem>): L
     val size = videos.size
     if (size <= 1 || size % 2 == 0) return videos
     return videos.dropLast(1)
+}
+
+internal data class HomeRecommendRefreshMergeResult<T>(
+    val videos: List<T>,
+    val topSegmentCount: Int
+)
+
+internal fun <T, K> mergeHomeRecommendIncrementalRefreshVideos(
+    existing: List<T>,
+    incoming: List<T>,
+    keySelector: (T) -> K
+): HomeRecommendRefreshMergeResult<T> {
+    val incomingDistinct = incoming.distinctBy(keySelector)
+    if (existing.isEmpty()) {
+        return HomeRecommendRefreshMergeResult(
+            videos = incomingDistinct,
+            topSegmentCount = 0
+        )
+    }
+    if (incomingDistinct.isEmpty()) {
+        return HomeRecommendRefreshMergeResult(
+            videos = existing,
+            topSegmentCount = 0
+        )
+    }
+
+    val merged = promoteDistinctByKey(
+        existing = existing,
+        incoming = incomingDistinct,
+        keySelector = keySelector
+    )
+    val oldTopKey = keySelector(existing.first())
+    val oldTopIndex = merged.indexOfFirst { item -> keySelector(item) == oldTopKey }
+    return HomeRecommendRefreshMergeResult(
+        videos = merged,
+        topSegmentCount = oldTopIndex.coerceAtLeast(0)
+    )
+}
+
+internal fun resolveHomeRecommendSeenBvidsForRequest(
+    isLoadMore: Boolean,
+    existingVideos: List<VideoItem>
+): Set<String> {
+    if (!isLoadMore) return emptySet()
+    return existingVideos
+        .mapNotNull { video -> video.bvid.takeIf { it.isNotBlank() } }
+        .toSet()
+}
+
+internal fun mapHomeFollowDynamicItemToVideo(
+    item: DynamicItem,
+    blockedMids: Set<Long>
+): VideoItem? {
+    val author = item.modules.module_author
+    if ((author?.mid ?: 0) in blockedMids) return null
+
+    val archive = item.modules.module_dynamic?.major?.archive ?: return null
+    if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
+        return null
+    }
+
+    val resolvedAid = resolveDynamicArchiveAid(
+        archiveAid = archive.aid,
+        fallbackId = 0L
+    )
+    return VideoItem(
+        id = resolvedAid,
+        bvid = archive.bvid,
+        dynamicId = item.id_str.trim(),
+        aid = resolvedAid,
+        title = archive.title,
+        pic = archive.cover,
+        duration = parseHomeFollowDurationText(archive.duration_text),
+        pubdate = author?.pub_ts ?: 0L,
+        owner = com.android.purebilibili.data.model.response.Owner(
+            mid = author?.mid ?: 0,
+            name = author?.name ?: "",
+            face = author?.face ?: ""
+        ),
+        stat = com.android.purebilibili.data.model.response.Stat(
+            view = parseHomeFollowStatText(archive.stat.play),
+            danmaku = parseHomeFollowStatText(archive.stat.danmaku)
+        )
+    )
+}
+
+private fun parseHomeFollowDurationText(text: String): Int {
+    val parts = text.split(":")
+    return try {
+        when (parts.size) {
+            2 -> parts[0].toInt() * 60 + parts[1].toInt()
+            3 -> parts[0].toInt() * 3600 + parts[1].toInt() * 60 + parts[2].toInt()
+            else -> 0
+        }
+    } catch (e: Exception) { 0 }
+}
+
+private fun parseHomeFollowStatText(text: String): Int {
+    return try {
+        if (text.contains("万")) {
+            (text.replace("万", "").toFloat() * 10000).toInt()
+        } else if (text.contains("亿")) {
+            (text.replace("亿", "").toFloat() * 100000000).toInt()
+        } else {
+            text.toIntOrNull() ?: 0
+        }
+    } catch (e: Exception) { 0 }
 }
 
 internal fun resolveRecommendFeedRequestIndex(
@@ -320,8 +427,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var hasMoreLiveData = true  //  是否还有更多直播数据
     private var incrementalTimelineRefreshEnabled = false
 
-    //  [新增] 会话级去重集合 (避免重复推荐)
-    private val sessionSeenBvids = mutableSetOf<String>()
     //  [新增] 刷新撤销快照
     private var _undoSnapshot: HomeRefreshUndoSnapshot? = null
     private var undoDismissJob: Job? = null
@@ -1315,7 +1420,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            var filteredVideos = filterFetchedVideos(validVideos, sessionSeenBvids)
+            val requestSeenBvids = if (currentCategory == HomeCategory.RECOMMEND) {
+                resolveHomeRecommendSeenBvidsForRequest(
+                    isLoadMore = isLoadMore,
+                    existingVideos = currentCategoryState.videos
+                )
+            } else {
+                emptySet()
+            }
+            var filteredVideos = filterFetchedVideos(validVideos, requestSeenBvids)
             var lastSuccessfulRecommendRequestIndex = recommendRequestIndex
             if (currentCategory == HomeCategory.RECOMMEND) {
                 var extraPagesFetched = 0
@@ -1331,7 +1444,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val extraVideos = extraResult.getOrElse { break }
                     val extraValidVideos = extraVideos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
                     validVideoCount += extraValidVideos.size
-                    val seenForRound = sessionSeenBvids + filteredVideos.map { it.bvid }
+                    val seenForRound = requestSeenBvids + filteredVideos.map { it.bvid }
                     val extraFilteredVideos = filterFetchedVideos(extraValidVideos, seenForRound)
                     if (extraFilteredVideos.isNotEmpty()) {
                         filteredVideos = appendDistinctByKey(
@@ -1366,21 +1479,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 uniqueNewVideos
             }
 
-            if (currentCategory == HomeCategory.RECOMMEND) {
-                sessionSeenBvids.addAll(incomingVideos.map { it.bvid })
-            }
-
             if (incomingVideos.isNotEmpty() || useIncrementalRecommendRefresh) {
                 var addedCount = 0
                 val updateContent: (CategoryContent) -> CategoryContent = { oldState ->
                     val mergedVideos = when {
                         isLoadMore -> appendDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey).toImmutableList()
                         useIncrementalRecommendRefresh -> {
-                            val merged = prependDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey)
-                            addedCount = (merged.size - oldState.videos.size).coerceAtLeast(0)
-                            merged.toImmutableList()
+                            val merged = mergeHomeRecommendIncrementalRefreshVideos(
+                                existing = oldState.videos,
+                                incoming = incomingVideos,
+                                keySelector = ::videoItemKey
+                            )
+                            addedCount = merged.topSegmentCount
+                            merged.videos.toImmutableList()
                         }
-                        else -> incomingVideos.toImmutableList()
+                        else -> incomingVideos.distinctBy(::videoItemKey).toImmutableList()
                     }
 
                     oldState.copy(
@@ -1712,34 +1825,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         //  将 DynamicItem 转换为首页卡片：
         // - 仅保留可直接跳转的视频动态，避免与“动态”页图文流重复
         return items.mapNotNull { item ->
-            if ((item.modules.module_author?.mid ?: 0) in blockedMids) return@mapNotNull null
-
-            val archive = item.modules.module_dynamic?.major?.archive ?: return@mapNotNull null
-            if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
-                return@mapNotNull null
-            }
-
-            val resolvedAid = resolveDynamicArchiveAid(
-                archiveAid = archive.aid,
-                fallbackId = 0L
-            )
-            VideoItem(
-                id = resolvedAid,
-                bvid = archive.bvid,
-                dynamicId = item.id_str.trim(),
-                aid = resolvedAid,
-                title = archive.title,
-                pic = archive.cover,
-                duration = parseDurationText(archive.duration_text),
-                owner = com.android.purebilibili.data.model.response.Owner(
-                    mid = item.modules.module_author?.mid ?: 0,
-                    name = item.modules.module_author?.name ?: "",
-                    face = item.modules.module_author?.face ?: ""
-                ),
-                stat = com.android.purebilibili.data.model.response.Stat(
-                    view = parseStatText(archive.stat.play),
-                    danmaku = parseStatText(archive.stat.danmaku)
-                )
+            mapHomeFollowDynamicItemToVideo(
+                item = item,
+                blockedMids = blockedMids
             )
         }
     }
@@ -1750,31 +1838,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (item.aid > 0) return "aid:${item.aid}"
         if (item.id > 0) return "id:${item.id}"
         return "${item.owner.mid}:${item.title}:${item.pubdate}"
-    }
-
-    //  解析时长文本 "10:24" -> 624 秒
-    private fun parseDurationText(text: String): Int {
-        val parts = text.split(":")
-        return try {
-            when (parts.size) {
-                2 -> parts[0].toInt() * 60 + parts[1].toInt()
-                3 -> parts[0].toInt() * 3600 + parts[1].toInt() * 60 + parts[2].toInt()
-                else -> 0
-            }
-        } catch (e: Exception) { 0 }
-    }
-
-    //  解析统计文本 "123.4万" -> 1234000
-    private fun parseStatText(text: String): Int {
-        return try {
-            if (text.contains("万")) {
-                (text.replace("万", "").toFloat() * 10000).toInt()
-            } else if (text.contains("亿")) {
-                (text.replace("亿", "").toFloat() * 100000000).toInt()
-            } else {
-                text.toIntOrNull() ?: 0
-            }
-        } catch (e: Exception) { 0 }
     }
 
     //  🔴 [改进] 获取直播间列表（同时获取关注和热门）

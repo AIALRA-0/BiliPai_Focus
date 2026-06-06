@@ -4,7 +4,7 @@ import com.android.purebilibili.core.store.FocusFollowGroupConfig
 import com.android.purebilibili.core.store.FocusFollowHomeFeedSortMode
 import com.android.purebilibili.core.store.isFocusFollowUserVisible
 import com.android.purebilibili.core.util.appendDistinctByKey
-import com.android.purebilibili.core.util.prependDistinctByKey
+import com.android.purebilibili.core.util.promoteDistinctByKey
 import com.android.purebilibili.data.model.response.VideoItem
 
 internal const val HOME_FOLLOW_MIN_VISIBLE_BATCH_SIZE = 16
@@ -108,7 +108,7 @@ internal fun presentHomeFollowVisibleVideos(
     seed: Long,
     reshuffleOnRefresh: Boolean,
     prioritizedVideoKeys: Set<String> = emptySet(),
-    sortMode: FocusFollowHomeFeedSortMode = FocusFollowHomeFeedSortMode.RANDOM
+    sortMode: FocusFollowHomeFeedSortMode = FocusFollowHomeFeedSortMode.PUBLISH_TIME_DESC
 ): List<VideoItem> {
     val orderedVisibleVideos = orderHomeFollowVisibleVideos(
         videos = incomingVisibleVideos,
@@ -278,7 +278,7 @@ internal fun resolveHomeFollowPresentedRawVideos(
 ): List<VideoItem> {
     return when {
         isLoadMore -> appendDistinctByKey(baselineRawVideos, roundRawVideos, keySelector)
-        else -> prependDistinctByKey(baselineRawVideos, roundRawVideos, keySelector)
+        else -> promoteDistinctByKey(baselineRawVideos, roundRawVideos, keySelector)
     }
 }
 

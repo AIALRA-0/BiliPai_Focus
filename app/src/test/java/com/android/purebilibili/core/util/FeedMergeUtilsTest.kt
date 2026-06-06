@@ -41,4 +41,24 @@ class FeedMergeUtilsTest {
 
         assertEquals(listOf("a", "b"), merged)
     }
+
+    @Test
+    fun promoteDistinctByKeyMovesExistingItemsToFreshIncomingOrder() {
+        val existing = listOf("old_top", "promoted", "old_tail")
+        val incoming = listOf("promoted", "new", "old_top")
+
+        val merged = promoteDistinctByKey(existing, incoming) { it }
+
+        assertEquals(listOf("promoted", "new", "old_top", "old_tail"), merged)
+    }
+
+    @Test
+    fun promoteDistinctByKeyDeduplicatesIncomingBeforeAppendingOldTail() {
+        val existing = listOf("old", "tail")
+        val incoming = listOf("new", "new", "old")
+
+        val merged = promoteDistinctByKey(existing, incoming) { it }
+
+        assertEquals(listOf("new", "old", "tail"), merged)
+    }
 }
