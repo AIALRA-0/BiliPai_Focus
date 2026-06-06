@@ -89,4 +89,20 @@ class WatchLaterQueueUiPolicyTest {
             resolveExternalPlaylistQueueTitle(ExternalPlaylistSource.SPACE)
         )
     }
+
+    @Test
+    fun queueBarYieldsToCommentComposerOnCommentTab() {
+        assertFalse(
+            shouldShowExternalPlaylistQueueBarOnContentTab(
+                queueAvailable = true,
+                selectedTabIndex = VIDEO_CONTENT_COMMENT_TAB_INDEX
+            )
+        )
+        assertTrue(
+            shouldShowExternalPlaylistQueueBarOnContentTab(
+                queueAvailable = true,
+                selectedTabIndex = 0
+            )
+        )
+    }
 }

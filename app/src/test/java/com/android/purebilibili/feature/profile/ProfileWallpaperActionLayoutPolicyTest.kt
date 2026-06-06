@@ -69,4 +69,16 @@ class ProfileWallpaperActionLayoutPolicyTest {
             resolveProfileWallpaperBlendBandDp(topBannerHeightDp = 420f)
         )
     }
+
+    @Test
+    fun profileWallpaperDecodeSizeCapsLargeScreensAndProtectsSmallScreens() {
+        assertEquals(
+            1440 to 2560,
+            resolveProfileWallpaperDecodeSizePx(screenWidthDp = 1200, density = 3f)
+        )
+        assertEquals(
+            720 to 1280,
+            resolveProfileWallpaperDecodeSizePx(screenWidthDp = 320, density = 1f)
+        )
+    }
 }

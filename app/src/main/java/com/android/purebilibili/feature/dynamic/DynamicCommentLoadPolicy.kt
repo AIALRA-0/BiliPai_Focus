@@ -17,7 +17,10 @@ internal data class DynamicCommentLoadAttempt(
     val target: DynamicCommentTarget,
     val replies: List<ReplyItem>,
     val totalCount: Int,
-    val candidateIndex: Int
+    val candidateIndex: Int,
+    val nextPage: Int = 2,
+    val isEnd: Boolean = true,
+    val grpcNextOffset: String? = null
 )
 
 internal data class DynamicDetailInteractionModel(
@@ -66,6 +69,18 @@ internal fun selectPreferredDynamicCommentAttempt(
             .thenByDescending { it.totalCount }
             .thenByDescending { it.replies.size }
     )
+}
+
+internal fun resolveDynamicMainCommentPageEnd(
+    cursorIsEnd: Boolean,
+    fetchedReplyCount: Int,
+    loadedReplyCount: Int,
+    totalCount: Int
+): Boolean {
+    if (totalCount > loadedReplyCount.coerceAtLeast(0)) {
+        return false
+    }
+    return cursorIsEnd || fetchedReplyCount <= 0
 }
 
 internal fun resolveDynamicDetailInteractionModel(

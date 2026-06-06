@@ -27,6 +27,7 @@ import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_BOTTOM_CENTER
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,6 +44,17 @@ internal fun resolveDanmakuClickUserHash(rawUserHash: String): String = rawUserH
 internal fun resolveDanmakuClickIsSelf(userHash: String, currentMid: Long): Boolean {
     if (currentMid <= 0L) return false
     return userHash.toLongOrNull() == currentMid
+}
+
+internal fun shouldApplyDanmakuLoadResult(
+    expectedCid: Long,
+    expectedGeneration: Long,
+    currentCid: Long,
+    currentGeneration: Long
+): Boolean {
+    return expectedCid > 0L &&
+        expectedCid == currentCid &&
+        expectedGeneration == currentGeneration
 }
 
 /**
@@ -108,6 +120,7 @@ class DanmakuManager private constructor(
     private var player: ExoPlayer? = null
     private var playerListener: Player.Listener? = null
     private var loadJob: Job? = null
+    private var loadGeneration: Long = 0L
     private var syncJob: Job? = null  // ⚙️ [漂移修复] 定期检测漂移
     
     // 弹幕状态
@@ -327,7 +340,22 @@ class DanmakuManager private constructor(
         }
     }
 
-    private fun rebuildDanmakuCacheFromSource(reason: String): Boolean {
+    private fun rebuildDanmakuCacheFromSource(
+        reason: String,
+        expectedCid: Long? = null,
+        expectedGeneration: Long? = null
+    ): Boolean {
+        fun isCurrentLoadRequest(): Boolean {
+            if (expectedCid == null || expectedGeneration == null) return true
+            return shouldApplyDanmakuLoadResult(
+                expectedCid = expectedCid,
+                expectedGeneration = expectedGeneration,
+                currentCid = cachedCid,
+                currentGeneration = loadGeneration
+            )
+        }
+
+        if (!isCurrentLoadRequest()) return false
         val sourceStandard = sourceDanmakuList ?: return false
         val sourceAdvanced = sourceAdvancedDanmakuList ?: emptyList()
 
@@ -336,6 +364,8 @@ class DanmakuManager private constructor(
         val (filteredStandardList, filteredAdvancedList) =
             applyDanmakuTypeFilters(pluginFilteredStandardList, pluginFilteredAdvancedList)
         val projectedStandardList = projectStandardDanmakuForRender(filteredStandardList)
+
+        if (!isCurrentLoadRequest()) return false
 
         if (projectedStandardList.isEmpty() && filteredAdvancedList.isEmpty()) {
             cachedDanmakuList = emptyList()
@@ -1398,6 +1428,7 @@ class DanmakuManager private constructor(
         Log.w(TAG, " loadDanmaku: New cid=$cid, loading from network")
         isLoading = true
         cachedCid = cid
+        val requestGeneration = ++loadGeneration
         clearExplicitSeekResyncMarker()
         cachedDanmakuList = null
         sourceDanmakuList = null
@@ -1483,6 +1514,11 @@ class DanmakuManager private constructor(
                         else -> ParsedDanmaku(emptyList(), emptyList())
                     }
                 }
+
+                if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                    Log.w(TAG, " Drop stale danmaku parse result: cid=$cid generation=$requestGeneration currentCid=$cachedCid currentGeneration=$loadGeneration")
+                    return@launch
+                }
                 
                 sourceDanmakuList = parsedResult.standardList
                 sourceAdvancedDanmakuList = parsedResult.advancedList + commandDmList
@@ -1490,7 +1526,16 @@ class DanmakuManager private constructor(
                 _commandDanmakuFlow.value = sourceCommandDanmakuList
 
                 val rebuilt = withContext(Dispatchers.Default) {
-                    rebuildDanmakuCacheFromSource("load")
+                    rebuildDanmakuCacheFromSource(
+                        reason = "load",
+                        expectedCid = cid,
+                        expectedGeneration = requestGeneration
+                    )
+                }
+
+                if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                    Log.w(TAG, " Drop stale danmaku rebuild result: cid=$cid generation=$requestGeneration currentCid=$cachedCid currentGeneration=$loadGeneration")
+                    return@launch
                 }
 
                 if (!rebuilt) {
@@ -1502,6 +1547,10 @@ class DanmakuManager private constructor(
                 }
                 
                 withContext(Dispatchers.Main) {
+                    if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                        Log.w(TAG, " Drop stale danmaku controller apply: cid=$cid generation=$requestGeneration currentCid=$cachedCid currentGeneration=$loadGeneration")
+                        return@withContext
+                    }
                     isLoading = false
                     
                     //  [核心修复] 仿照 Seek 处理器的模式
@@ -1528,10 +1577,14 @@ class DanmakuManager private constructor(
                     )
                     Log.w(TAG, " controller synced to $currentPlayTime ms")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, " Failed to load danmaku for cid=$cid: ${e.message}", e)
                 withContext(Dispatchers.Main) {
-                    isLoading = false
+                    if (shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                        isLoading = false
+                    }
                 }
             }
         }
@@ -1545,6 +1598,7 @@ class DanmakuManager private constructor(
         loadJob?.cancel()
         isLoading = true
         cachedCid = cid
+        val requestGeneration = ++loadGeneration
         clearExplicitSeekResyncMarker()
         cachedDanmakuList = null
         sourceDanmakuList = null
@@ -1563,14 +1617,31 @@ class DanmakuManager private constructor(
                         ParsedDanmaku(emptyList(), emptyList())
                     }
                 }
+                if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                    Log.w(TAG, " Drop stale local danmaku parse result: cid=$cid generation=$requestGeneration currentCid=$cachedCid currentGeneration=$loadGeneration")
+                    return@launch
+                }
                 sourceDanmakuList = parsedResult.standardList
                 sourceAdvancedDanmakuList = parsedResult.advancedList
 
                 val rebuilt = withContext(Dispatchers.Default) {
-                    rebuildDanmakuCacheFromSource("offline_load")
+                    rebuildDanmakuCacheFromSource(
+                        reason = "offline_load",
+                        expectedCid = cid,
+                        expectedGeneration = requestGeneration
+                    )
+                }
+
+                if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                    Log.w(TAG, " Drop stale local danmaku rebuild result: cid=$cid generation=$requestGeneration currentCid=$cachedCid currentGeneration=$loadGeneration")
+                    return@launch
                 }
 
                 withContext(Dispatchers.Main) {
+                    if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                        Log.w(TAG, " Drop stale local danmaku controller apply: cid=$cid generation=$requestGeneration currentCid=$cachedCid currentGeneration=$loadGeneration")
+                        return@withContext
+                    }
                     isLoading = false
                     if (!rebuilt) {
                         controller?.clear()
@@ -1586,10 +1657,14 @@ class DanmakuManager private constructor(
                         reason = "offline_load"
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, " Failed to load local danmaku for cid=$cid: ${e.message}", e)
                 withContext(Dispatchers.Main) {
-                    isLoading = false
+                    if (shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) {
+                        isLoading = false
+                    }
                 }
             }
         }
@@ -1887,6 +1962,10 @@ class DanmakuManager private constructor(
     fun release() {
         Log.d(TAG, " release")
         clearViewReference()
+        loadJob?.cancel()
+        loadJob = null
+        loadGeneration++
+        isLoading = false
         pluginObserverJob?.cancel()
         pluginObserverJob = null
         

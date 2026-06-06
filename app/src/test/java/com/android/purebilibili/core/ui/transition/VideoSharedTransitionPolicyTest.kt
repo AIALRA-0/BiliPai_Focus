@@ -1,8 +1,10 @@
 package com.android.purebilibili.core.ui.transition
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class VideoSharedTransitionPolicyTest {
@@ -112,7 +114,40 @@ class VideoSharedTransitionPolicyTest {
         assertEquals(14, motion.contentSlideOffsetDp)
         assertEquals(0.985f, motion.contentInitialScale, 0.0001f)
         assertTrue(motion.easing.transform(0.35f) > 0.7f)
+        assertTrue(motion.easing.transform(0.35f) < 0.9f)
         assertTrue(motion.easing.transform(0.75f) > 0.96f)
+    }
+
+    @Test
+    fun videoMetadataSharedTransitionMotion_matchesCoverTimeline() {
+        val coverMotion = resolveVideoCardSharedTransitionMotionSpec(
+            sourceRoute = "home",
+            transitionEnabled = true
+        )
+        val metadataMotion = resolveVideoMetadataSharedTransitionMotionSpec(
+            transitionEnabled = true
+        )
+
+        assertTrue(metadataMotion.enabled)
+        assertEquals(coverMotion.durationMillis, metadataMotion.durationMillis)
+        assertEquals(0, metadataMotion.contentDelayMillis)
+        assertSame(coverMotion.easing, metadataMotion.easing)
+    }
+
+    @Test
+    fun videoMetadataSharedBounds_avoidGenericSpatialOrSpringSpecs() {
+        val homeCardSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"
+        ).readText()
+        val detailInfoSource = File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/section/VideoInfoSection.kt"
+        ).readText()
+
+        assertTrue(homeCardSource.contains("videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)"))
+        assertFalse(homeCardSource.contains("AppMotionTokens.spatialSpec()"))
+        assertTrue(detailInfoSource.contains("resolveVideoMetadataSharedTransitionMotionSpec("))
+        assertTrue(detailInfoSource.contains("videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)"))
+        assertFalse(detailInfoSource.contains("spring(dampingRatio = 0.8f, stiffness = 200f)"))
     }
 
     @Test

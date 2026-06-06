@@ -36,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -202,12 +201,6 @@ fun CinematicVideoCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(
-                    elevation = 8.dp, // 标准阴影
-                    shape = RoundedCornerShape(cardCornerRadius),
-                    ambientColor = Color.Black.copy(alpha = 0.1f),
-                    spotColor = Color.Black.copy(alpha = 0.2f)
-                )
                 .clip(RoundedCornerShape(cardCornerRadius))
                 .background(Color.Black) // 纯黑底色
                 .pointerInput(Unit) {

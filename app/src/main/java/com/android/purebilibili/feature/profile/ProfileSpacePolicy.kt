@@ -58,6 +58,7 @@ data class ProfileEditableAccountState(
     val birthday: String = "",
     val sex: String = "",
     val sign: String = "",
+    val ipLocation: String = "",
     val canEditName: Boolean = false,
     val canEditBirthday: Boolean = false,
     val canEditSex: Boolean = false
@@ -65,6 +66,13 @@ data class ProfileEditableAccountState(
     val normalizedSign: String = sign.trim()
     val canSubmitSign: Boolean = validateProfileSign(sign) == null
 }
+
+data class ProfileSpaceIdentityMeta(
+    val signText: String,
+    val signPlaceholder: Boolean,
+    val ipText: String?,
+    val sexText: String?
+)
 
 fun defaultProfileSpaceTabs(): List<ProfileSpaceTabItem> {
     return ProfileSpaceMainTab.entries.map { tab ->
@@ -93,16 +101,36 @@ fun validateProfileSign(sign: String): String? {
     return if (sign.length > 70) "签名最多支持 70 个字符" else null
 }
 
+fun resolveProfileSpaceIdentityMeta(
+    sign: String,
+    ipLocation: String?,
+    sex: String
+): ProfileSpaceIdentityMeta {
+    val normalizedSign = sign.trim()
+    val normalizedIp = ipLocation.orEmpty()
+        .replace("IP属地：", "")
+        .replace("IP 属地：", "")
+        .trim()
+    return ProfileSpaceIdentityMeta(
+        signText = normalizedSign.ifBlank { "这个人很神秘，什么都没有写" },
+        signPlaceholder = normalizedSign.isBlank(),
+        ipText = if (normalizedIp.isBlank()) "IP 属地 · 保密" else "IP 属地 · $normalizedIp",
+        sexText = sex.trim().takeIf { it.isNotBlank() && it != "保密" }
+    )
+}
+
 fun resolveProfileEditableAccountState(
     account: MemberAccountData?,
     user: UserState,
-    aggregateSign: String = ""
+    aggregateSign: String = "",
+    ipLocation: String? = null
 ): ProfileEditableAccountState {
     return ProfileEditableAccountState(
         name = account?.uname?.ifBlank { user.name } ?: user.name,
         birthday = account?.birthday.orEmpty(),
         sex = account?.sex.orEmpty(),
         sign = account?.sign?.ifBlank { aggregateSign }.orEmpty(),
+        ipLocation = ipLocation.orEmpty(),
         canEditName = false,
         canEditBirthday = false,
         canEditSex = false

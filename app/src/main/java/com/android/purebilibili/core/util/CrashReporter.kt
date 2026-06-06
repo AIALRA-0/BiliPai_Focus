@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.lifecycle.BackgroundManager
+import com.google.firebase.FirebaseApp
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -52,6 +53,11 @@ internal fun isSensitiveCrashCustomKey(key: String): Boolean {
 
 internal fun resolveCrashlyticsUserId(mid: Long?): String = ""
 
+internal fun shouldUseRemoteCrashlytics(
+    firebaseConfigured: Boolean,
+    crashTrackingEnabled: Boolean
+): Boolean = firebaseConfigured && crashTrackingEnabled
+
 /**
  * 崩溃报告工具类
  *
@@ -69,6 +75,9 @@ object CrashReporter {
 
     @Volatile
     private var isEnabled: Boolean = true
+
+    @Volatile
+    private var firebaseConfigured: Boolean = false
 
     @Volatile
     private var globalHandlerInstalled = false
@@ -98,6 +107,11 @@ object CrashReporter {
      * 基础初始化：写入稳定环境信息
      */
     fun init(context: Context) {
+        firebaseConfigured = hasConfiguredFirebaseApp(context)
+        if (!firebaseConfigured) {
+            Logger.d(TAG, " Firebase not configured; remote Crashlytics disabled")
+            return
+        }
         try {
             setCustomKey("app_version", BuildConfig.VERSION_NAME)
             setCustomKey("version_code", BuildConfig.VERSION_CODE)
@@ -125,6 +139,7 @@ object CrashReporter {
      */
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
+        if (!firebaseConfigured) return
         try {
             crashlytics.setCrashlyticsCollectionEnabled(enabled)
             Logger.d(TAG, " Crashlytics collection ${if (enabled) "enabled" else "disabled"}")
@@ -182,7 +197,7 @@ object CrashReporter {
      * 记录前后台状态，便于排查崩溃发生场景
      */
     fun setAppForegroundState(inForeground: Boolean) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         if (lastAppForegroundState == inForeground) return
         lastAppForegroundState = inForeground
         try {
@@ -197,7 +212,7 @@ object CrashReporter {
      * 标记当前页面
      */
     fun setLastScreen(screenName: String) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         try {
             setCustomKey("last_screen", screenName.take(100))
         } catch (e: Exception) {
@@ -209,7 +224,7 @@ object CrashReporter {
      * 标记最近一次业务事件
      */
     fun setLastEvent(eventName: String) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         try {
             setCustomKey("last_event", eventName.take(100))
         } catch (e: Exception) {
@@ -221,7 +236,7 @@ object CrashReporter {
      * 同步用户会话信息（匿名/已登录、VIP、无痕模式）
      */
     fun syncUserContext(mid: Long?, isVip: Boolean?, privacyModeEnabled: Boolean?) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         try {
             crashlytics.setUserId(resolveCrashlyticsUserId(mid))
             setCustomKey("is_logged_in", mid != null && mid > 0)
@@ -237,7 +252,7 @@ object CrashReporter {
      * 用于捕获的异常，不会导致崩溃但需要追踪
      */
     fun logException(e: Throwable, message: String? = null) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         val key = "exception:${e.javaClass.name}:${message ?: e.message.orEmpty().take(120)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -255,7 +270,7 @@ object CrashReporter {
      * 这些日志会在崩溃报告中显示，帮助定位问题
      */
     fun log(message: String) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         try {
             crashlytics.log(message)
             Logger.d(TAG, " Log: $message")
@@ -269,7 +284,7 @@ object CrashReporter {
      * 注意：请勿设置可识别个人身份的信息
      */
     fun setUserId(userId: String) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         try {
             crashlytics.setUserId("")
         } catch (e: Exception) {
@@ -281,7 +296,7 @@ object CrashReporter {
      * 设置自定义键值对（崩溃时会附带这些信息）
      */
     fun setCustomKey(key: String, value: String) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
@@ -295,7 +310,7 @@ object CrashReporter {
      * 设置 Boolean 类型的自定义键
      */
     fun setCustomKey(key: String, value: Boolean) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
@@ -309,7 +324,7 @@ object CrashReporter {
      * 设置 Int 类型的自定义键
      */
     fun setCustomKey(key: String, value: Int) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
@@ -323,7 +338,7 @@ object CrashReporter {
      * 设置 Long 类型的自定义键
      */
     fun setCustomKey(key: String, value: Long) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
@@ -348,7 +363,7 @@ object CrashReporter {
         errorMessage: String,
         exception: Throwable? = null
     ) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         val key = "video:$errorType:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -381,7 +396,7 @@ object CrashReporter {
         errorMessage: String,
         bvid: String? = null
     ) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         val safeEndpoint = endpoint.substringBefore("?").take(160)
         val key = "api:$httpCode:$safeEndpoint:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
@@ -401,7 +416,7 @@ object CrashReporter {
      * 上报弹幕加载错误
      */
     fun reportDanmakuError(cid: Long, errorMessage: String, exception: Throwable? = null) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         val key = "danmaku:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -430,7 +445,7 @@ object CrashReporter {
         errorMessage: String,
         exception: Throwable? = null
     ) {
-        if (!isEnabled) return
+        if (!canUseRemoteCrashlytics()) return
         val key = "live:$errorType:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
@@ -455,7 +470,7 @@ object CrashReporter {
      * 标记直播会话开始（仅在进入直播页时调用，无常驻开销）
      */
     fun markLiveSessionStart(roomId: Long, title: String, uname: String) {
-        if (!isEnabled || roomId <= 0) return
+        if (!canUseRemoteCrashlytics() || roomId <= 0) return
 
         val isSameSession = liveSessionActive && liveSessionRoomId == roomId
         liveSessionActive = true
@@ -480,7 +495,7 @@ object CrashReporter {
      * 标记直播会话阶段（去重后才写入，避免高频日志）
      */
     fun markLivePlaybackStage(stage: String) {
-        if (!isEnabled || !liveSessionActive) return
+        if (!canUseRemoteCrashlytics() || !liveSessionActive) return
         if (!shouldUpdateLiveTraceStage(lastStage = liveLastStage, nextStage = stage)) return
 
         val normalizedStage = sanitizeLiveTraceStage(stage)
@@ -504,7 +519,7 @@ object CrashReporter {
      * 标记直播会话结束
      */
     fun markLiveSessionEnd(reason: String) {
-        if (!isEnabled || !liveSessionActive) return
+        if (!canUseRemoteCrashlytics() || !liveSessionActive) return
 
         val normalizedReason = sanitizeLiveTraceStage(reason).ifBlank { "exit" }
         try {
@@ -546,6 +561,18 @@ object CrashReporter {
             nonFatalRateLimiter.entries.removeIf { it.value < expireBefore }
         }
         return false
+    }
+
+    private fun canUseRemoteCrashlytics(): Boolean {
+        return shouldUseRemoteCrashlytics(
+            firebaseConfigured = firebaseConfigured,
+            crashTrackingEnabled = isEnabled
+        )
+    }
+
+    private fun hasConfiguredFirebaseApp(context: Context): Boolean {
+        return runCatching { FirebaseApp.getApps(context).isNotEmpty() }
+            .getOrDefault(false)
     }
 
     private fun shouldCacheAndWriteCustomKey(key: String, value: Any): Boolean {

@@ -92,6 +92,18 @@
 -keep class com.android.purebilibili.navigation.AppNavigationKt { *; }
 -keep class com.android.purebilibili.navigation.AppNavigationKt$* { *; }
 
+# === 首页视频卡片（圆角/封面裁剪/R8 下曾出现直角回归） ===
+-keep class com.android.purebilibili.feature.home.components.cards.** { *; }
+-keep class com.android.purebilibili.feature.home.HomeGlassVisualPolicyKt { *; }
+
+# === 主题/圆角缩放（LocalCornerRadiusScale、UiPreset 枚举、resolveCornerRadiusScale） ===
+-keep class com.android.purebilibili.core.theme.**Kt { *; }
+-keep enum com.android.purebilibili.core.theme.UiPreset { *; }
+-keep enum com.android.purebilibili.core.theme.AndroidNativeVariant { *; }
+
+# === 共享元素过渡 data class（用作 remember key，R8 优化会破坏 equals）===
+-keep,allowobfuscation,allowshrinking class com.android.purebilibili.core.ui.transition.** { *; }
+
 # === Haze (毛玻璃效果) ===
 -keep class dev.chrisbanes.haze.** { *; }
 -dontwarn dev.chrisbanes.haze.**

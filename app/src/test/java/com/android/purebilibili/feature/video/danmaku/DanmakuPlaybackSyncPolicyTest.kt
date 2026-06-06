@@ -73,6 +73,34 @@ class DanmakuPlaybackSyncPolicyTest {
     }
 
     @Test
+    fun `danmaku load result applies only to current cid and generation`() {
+        assertTrue(
+            shouldApplyDanmakuLoadResult(
+                expectedCid = 1001L,
+                expectedGeneration = 3L,
+                currentCid = 1001L,
+                currentGeneration = 3L
+            )
+        )
+        assertFalse(
+            shouldApplyDanmakuLoadResult(
+                expectedCid = 1001L,
+                expectedGeneration = 3L,
+                currentCid = 2002L,
+                currentGeneration = 3L
+            )
+        )
+        assertFalse(
+            shouldApplyDanmakuLoadResult(
+                expectedCid = 1001L,
+                expectedGeneration = 3L,
+                currentCid = 1001L,
+                currentGeneration = 4L
+            )
+        )
+    }
+
+    @Test
     fun `follow-up hard resync should be suppressed right after explicit user seek to same position`() {
         assertTrue(
             shouldSuppressFollowupDanmakuHardResync(

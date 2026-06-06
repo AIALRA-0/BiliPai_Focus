@@ -63,6 +63,36 @@ class DynamicModulesFlexibleSerializerTest {
     }
 
     @Test
+    fun dynamicFeedResponse_acceptsNumericFollowingFlagInAuthorModule() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "items": [
+                  {
+                    "id_str": "1199344045210468386",
+                    "modules": {
+                      "module_author": {
+                        "mid": 123456,
+                        "name": "tester",
+                        "following": 1,
+                        "official": null,
+                        "more": null,
+                        "decorate_card": null
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<DynamicFeedResponse>(payload)
+
+        assertTrue(response.data?.items?.single()?.modules?.module_author?.following == true)
+    }
+
+    @Test
     fun dynamicDetailResponse_mergesModulesWhenModulesIsArrayFragments() {
         val payload = """
             {

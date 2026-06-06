@@ -195,7 +195,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     val editableAccount = resolveProfileEditableAccountState(
                         account = profileData.account,
                         user = userState,
-                        aggregateSign = profileData.spaceInfo?.sign ?: profileData.aggregate?.card?.sign.orEmpty()
+                        aggregateSign = profileData.spaceInfo?.sign ?: profileData.aggregate?.card?.sign.orEmpty(),
+                        ipLocation = profileData.spaceInfo?.ipLocation
                     )
                     _uiState.value = ProfileUiState.Success(
                         user = userState,

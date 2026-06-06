@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -294,13 +293,6 @@ fun StoryVideoCard(
         Box(
             modifier = cardModifier
                 .fillMaxWidth()
-                .shadow(
-                    elevation = scrollLitePolicy.coverShadowElevationDp.dp,
-                    shape = RoundedCornerShape(cardCornerRadius),
-                    ambientColor = Color.Black.copy(alpha = 0.1f),
-                    spotColor = Color.Black.copy(alpha = 0.15f),
-                    clip = true // [Optimization] Combine shadow and clip
-                )
                 .background(MaterialTheme.colorScheme.surfaceVariant) // 封面占位色
         ) {
             //  封面 - 16:10 统一共享比例

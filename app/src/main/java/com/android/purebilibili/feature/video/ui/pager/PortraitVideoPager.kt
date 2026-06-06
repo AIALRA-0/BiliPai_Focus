@@ -651,6 +651,7 @@ fun PortraitVideoPager(
                 val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
                 val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
 
+                commentViewModel.closeSubReply()
                 onVideoChange(bvid)
 
                 if (!isPortraitPlaybackAllowed) {
@@ -1241,6 +1242,14 @@ private fun VideoPageItem(
             viewportVerticalOffsetPx = portraitViewportVerticalOffsetPx,
             fillContainer = portraitPagerFillContainer
         )
+    }
+
+    LaunchedEffect(isCurrentPage, bvid) {
+        if (!isCurrentPage) {
+            showCommentSheet = false
+            showDetailSheet = false
+            commentSheetVisibilityProgress = 0f
+        }
     }
 
     // 进度状态 (从播放器获取)
@@ -2189,6 +2198,7 @@ private fun VideoPageItem(
 
         PortraitCommentSheet(
             visible = showCommentSheet,
+            active = isCurrentPage,
             onDismiss = {
                 showCommentSheet = false
                 commentSheetVisibilityProgress = 0f

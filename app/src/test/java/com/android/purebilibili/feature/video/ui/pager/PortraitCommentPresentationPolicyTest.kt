@@ -39,6 +39,42 @@ class PortraitCommentPresentationPolicyTest {
     }
 
     @Test
+    fun `inactive portrait page should not inherit shared comment visibility`() {
+        val visibility = resolvePortraitCommentSheetVisibility(
+            active = false,
+            commentSheetVisible = true,
+            subReplyVisible = true
+        )
+
+        assertFalse(visibility.commentSheetVisible)
+        assertFalse(visibility.subReplyVisible)
+        assertFalse(
+            resolvePortraitCommentHostMainSheetVisible(
+                commentSheetVisible = visibility.commentSheetVisible,
+                subReplyVisible = visibility.subReplyVisible
+            )
+        )
+    }
+
+    @Test
+    fun `active portrait page keeps local comment visibility`() {
+        val visibility = resolvePortraitCommentSheetVisibility(
+            active = true,
+            commentSheetVisible = false,
+            subReplyVisible = true
+        )
+
+        assertFalse(visibility.commentSheetVisible)
+        assertTrue(visibility.subReplyVisible)
+        assertTrue(
+            resolvePortraitCommentHostMainSheetVisible(
+                commentSheetVisible = visibility.commentSheetVisible,
+                subReplyVisible = visibility.subReplyVisible
+            )
+        )
+    }
+
+    @Test
     fun `portrait player shrinks while comment sheet is expanded`() {
         assertEquals(0.58f, resolvePortraitCommentExpandedPlayerScale(commentSheetVisible = true), 0.001f)
         assertEquals(1f, resolvePortraitCommentExpandedPlayerScale(commentSheetVisible = false))

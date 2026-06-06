@@ -16,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -65,10 +64,10 @@ import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
  * 
  * 特点：
  * - 彩虹渐变边框
- * - 轻量阴影
+ * - 无封面阴影，滚动时保持平面稳定
  * - 悬浮播放按钮
  * 
- *  性能优化：移除了昂贵的 blur() 和多层阴影
+ *  性能优化：移除了昂贵的 blur() 和阴影层
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -309,11 +308,6 @@ fun GlassVideoCard(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(coverCornerRadius))
-                            .shadow(
-                                elevation = 8.dp,
-                                shape = RoundedCornerShape(coverCornerRadius),
-                                ambientColor = Color.Black.copy(alpha = 0.3f)
-                            )
                     ) {
                         //  [性能优化] 降低图片尺寸
                         AsyncImage(

@@ -10,6 +10,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 @Composable
 fun PortraitCommentSheet(
     visible: Boolean,
+    active: Boolean = true,
     onDismiss: () -> Unit,
     onVisibilityProgressChange: (Float) -> Unit = {},
     commentViewModel: VideoCommentViewModel,
@@ -23,9 +24,14 @@ fun PortraitCommentSheet(
     onUserClick: (Long) -> Unit
 ) {
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
-    val hostMainSheetVisible = resolvePortraitCommentHostMainSheetVisible(
+    val effectiveVisibility = resolvePortraitCommentSheetVisibility(
+        active = active,
         commentSheetVisible = visible,
         subReplyVisible = subReplyState.visible
+    )
+    val hostMainSheetVisible = resolvePortraitCommentHostMainSheetVisible(
+        commentSheetVisible = effectiveVisibility.commentSheetVisible,
+        subReplyVisible = effectiveVisibility.subReplyVisible
     )
 
     VideoCommentSheetHost(

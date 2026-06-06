@@ -81,8 +81,9 @@ class BottomBarMiuixPolicyTest {
         assertTrue(source.contains("val tabsBackdrop = rememberMiuixLayerBackdrop()"))
         assertTrue(source.contains(".miuixLayerBackdrop(tabsBackdrop)"))
         assertTrue(source.contains("rememberMiuixCombinedBackdrop(miuixBackdrop, tabsBackdrop)"))
-        assertTrue(source.contains("refractionHeight = materialSpec.shellRefractionHeightDp.dp.toPx()"))
-        assertTrue(source.contains("refractionAmount = materialSpec.shellRefractionAmountDp.dp.toPx()"))
+        assertTrue(source.contains("miuixBlur(4.dp.toPx(), 4.dp.toPx())"))
+        assertTrue(source.contains("refractionHeight = 24.dp.toPx()"))
+        assertTrue(source.contains("refractionAmount = 24.dp.toPx()"))
     }
 
     @Test

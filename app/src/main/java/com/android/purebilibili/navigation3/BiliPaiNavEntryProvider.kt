@@ -8,6 +8,10 @@ import androidx.navigation3.ui.NavDisplay
 private const val BILI_PAI_NAV_ROUTE_BASE_METADATA_KEY = "biliPaiNavRouteBase"
 private const val VIDEO_ROUTE_BASE = "video"
 private const val SPACE_ROUTE_BASE = "space"
+private const val SETTINGS_ROUTE_BASE = "settings"
+private const val INBOX_ROUTE_BASE = "inbox"
+private const val LIVE_LIST_ROUTE_BASE = "live_list"
+private const val SEARCH_ROUTE_BASE = "search"
 // 必须与 [isCardReturnTargetNavKey] 保持同步覆盖。
 // 注意 "main_host" 必须在内——实际栈是 [MainHost, VideoDetail]（Home/Dynamic/... tab 渲染在
 // MainHost 的 bottom pager 里），pop 时 entry-level popTransitionSpec 的 targetState.routeBase
@@ -24,6 +28,35 @@ private val CARD_RETURN_TARGET_ROUTE_BASES = setOf(
     "dynamic_detail",
     "space",
     "category"
+)
+private val SETTINGS_LIGHT_SIBLING_ROUTE_BASES = setOf(
+    "appearance_settings",
+    "icon_settings",
+    "animation_settings",
+    "playback_settings",
+    "permission_settings",
+    "plugins_settings",
+    "bottom_bar_settings",
+    "settings_share",
+    "webdav_backup",
+    "tips_settings",
+    "open_source_licenses"
+)
+private val MESSAGE_LIGHT_SIBLING_ROUTE_BASES = setOf(
+    "message/reply_me",
+    "message/at_me",
+    "message/like_me",
+    "message/system_notice",
+    "chat"
+)
+private val LIVE_LIGHT_SIBLING_ROUTE_BASES = setOf(
+    "live_area",
+    "live_search",
+    "live_following"
+)
+private val SEARCH_LIGHT_SIBLING_ROUTE_BASES = setOf(
+    "search_trending",
+    "topic"
 )
 
 internal fun biliPaiNavEntryProvider(
@@ -173,6 +206,15 @@ internal fun resolveBiliPaiNavEntryForwardRouteTransition(
     ) {
         return BiliPaiNavRouteTransition.SPACE_FORWARD
     }
+    if (
+        defaultTransition == BiliPaiNavRouteTransition.FALLBACK &&
+        isLightSiblingForwardRoute(
+            fromRoute = normalizedFromRoute,
+            toRoute = normalizedToRoute
+        )
+    ) {
+        return BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD
+    }
     return defaultTransition
 }
 
@@ -200,6 +242,16 @@ internal fun resolveBiliPaiNavEntryPopRouteTransition(
     } else if (videoToCardReturnTarget) {
         // 关闭共享元素时：VideoDetail → 任意 card-return-target 一律走方向化横向过渡。
         return resolveCardDisabledVideoReturnTransition(sourceMetadata.cardSourceDirection)
+    }
+
+    if (
+        defaultTransition == BiliPaiNavRouteTransition.FALLBACK &&
+        isLightSiblingPopRoute(
+            fromRoute = normalizedFromRoute,
+            toRoute = normalizedToRoute
+        )
+    ) {
+        return BiliPaiNavRouteTransition.LIGHT_SIBLING_POP
     }
 
     return if (defaultTransition == BiliPaiNavRouteTransition.NO_OP_SHARED_ELEMENT) {
@@ -260,6 +312,39 @@ private fun isCardReturnTargetRouteBase(routeBase: String): Boolean {
 
 private fun isSpaceRouteBase(routeBase: String?): Boolean {
     return routeBase == SPACE_ROUTE_BASE || routeBase?.startsWith("$SPACE_ROUTE_BASE/") == true
+}
+
+private fun isLightSiblingForwardRoute(
+    fromRoute: String?,
+    toRoute: String?
+): Boolean {
+    return isLightSiblingRoute(
+        parentRoute = fromRoute,
+        childRoute = toRoute
+    )
+}
+
+private fun isLightSiblingPopRoute(
+    fromRoute: String?,
+    toRoute: String?
+): Boolean {
+    return isLightSiblingRoute(
+        parentRoute = toRoute,
+        childRoute = fromRoute
+    )
+}
+
+private fun isLightSiblingRoute(
+    parentRoute: String?,
+    childRoute: String?
+): Boolean {
+    return when (parentRoute) {
+        SETTINGS_ROUTE_BASE -> childRoute in SETTINGS_LIGHT_SIBLING_ROUTE_BASES
+        INBOX_ROUTE_BASE -> childRoute in MESSAGE_LIGHT_SIBLING_ROUTE_BASES
+        LIVE_LIST_ROUTE_BASE -> childRoute in LIVE_LIGHT_SIBLING_ROUTE_BASES
+        SEARCH_ROUTE_BASE -> childRoute in SEARCH_LIGHT_SIBLING_ROUTE_BASES
+        else -> false
+    }
 }
 
 private fun isMainHostOrVisibleBottomRoute(

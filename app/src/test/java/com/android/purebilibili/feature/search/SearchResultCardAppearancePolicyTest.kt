@@ -43,7 +43,6 @@ class SearchResultCardAppearancePolicyTest {
         assertTrue(appearance.blurEnabled)
         assertFalse(appearance.showCoverGlassBadges)
         assertFalse(appearance.showInfoGlassBadges)
-        assertFalse(appearance.coverShadowEnabled)
     }
 
     @Test

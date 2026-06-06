@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-    <sub>最后更新：2026-06-04 · 文档已同步至 v9.0.5 Focus.5（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+    <sub>最后更新：2026-06-06 · 文档已同步至 v9.1.1 Focus.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
   </p>
 
   <p align="center">
-    <img src="https://img.shields.io/badge/Version-9.0.5-focus.5-fb7299?style=flat-square" alt="Version">
+    <img src="https://img.shields.io/badge/Version-9.1.1-focus.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -578,8 +578,10 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v9.0.5 Focus.5 · 2026-06-04)
+### 最近更新 (v9.1.1 Focus.1 · 2026-06-06)
 
+- 合并上游 `9.0.6`、`9.0.7`、`9.1.0`、`9.1.1` 的稳定性更新，包含动态评论分页、下载前台服务、空间配色、视频返回和底栏视觉修复。
+- 修复首页推荐手动刷新卡在旧分页尾部的问题：下拉刷新重新从 fresh feed 请求，跳过启动预加载缓存，并在成功后重置推荐分页游标。
 - Focus 搜索设置改为正向“显示”语义：`显示大家都在搜`、`显示搜索发现`、`显示搜索历史`，开关打开即显示、关闭即完整隐藏。
 - 修复上游接口返回 `0/1` 布尔值时首页、动态、空间动态、热门、收藏与导航信息解析失败的问题。
 - 首页推荐在过滤后不足首屏数量时会继续补页，空过滤页不再把分页状态判死，冷启动空白会自动有限重试。

@@ -62,6 +62,30 @@ class DynamicCommentLoadPolicyTest {
     }
 
     @Test
+    fun `dynamic main comments continue when total count exceeds loaded replies`() {
+        val isEnd = resolveDynamicMainCommentPageEnd(
+            cursorIsEnd = true,
+            fetchedReplyCount = 20,
+            loadedReplyCount = 20,
+            totalCount = 138
+        )
+
+        assertEquals(false, isEnd)
+    }
+
+    @Test
+    fun `dynamic main comments end after empty page without larger total`() {
+        val isEnd = resolveDynamicMainCommentPageEnd(
+            cursorIsEnd = false,
+            fetchedReplyCount = 0,
+            loadedReplyCount = 20,
+            totalCount = 20
+        )
+
+        assertEquals(true, isEnd)
+    }
+
+    @Test
     fun `detail interaction model reuses feed primary action and comment targets`() {
         val item = DynamicItem(
             id_str = "966281785469042740",

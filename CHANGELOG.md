@@ -1,5 +1,77 @@
 # Changelog
 
+## v9.1.1-focus.1 (2026-06-06)
+
+### 版本信息
+- Focus 版本号从 `9.0.5-focus.5` 升级到 `9.1.1-focus.1`，`versionCode` 升级到 `223`。
+
+### 更新内容
+- **上游同步**：合并上游 `9.0.6`、`9.0.7`、`9.1.0`、`9.1.1` 全量更新，包含动态评论分页、Android 15 下载前台服务、视频返回、个人空间配色、底栏视觉和播放体验修复。
+- **首页刷新修复**：推荐流手动刷新重新从 fresh feed 请求，跳过启动预加载缓存，并在成功后重置推荐分页游标，避免刷新继续卡在旧分页尾部。
+- **Focus 特性保留**：继续保留 Focus 包名、Focus 更新源、Focus README、搜索显示开关、关注分组过滤、布尔字段兼容和过滤后补页策略。
+
+### 验证
+- `./gradlew :app:testDebugUnitTest --tests "*HomeFollowFocusPolicyTest" --tests "*HomeRefreshPolicyTest" --tests "*FeedMergeUtilsTest"`
+- `./gradlew :app:compileDebugKotlin`
+
+## v9.1.1 (2026-06-06)
+
+### 版本信息
+- 版本号从 `9.1.0` 升级到 `9.1.1`，`versionCode` 升级到 `222`。
+
+### 更新内容
+- **搜索召回修复**：视频分类搜索第一页返回空结果时自动回退到综合搜索，不再因登录状态不同而直接显示无结果。
+- **个人空间配色统一**：IP 属地改为随深浅色主题自动适配的低强调文字，移除突兀的胶囊底色与描边。
+- **评论入口修复**：从 UP 空间进入视频后，评论页优先展示评论输入栏，播放队列不再覆盖评论功能（#485）。
+- **视频返回修复**：首页被视频详情覆盖时禁用顶部分类横向手势，避免从“热门”退出播放后误切到相邻“关注”页（#486）。
+
+### 验证
+- 针对性单元测试与 Debug Kotlin 编译。
+
+## v9.1.0 (2026-06-05)
+
+### 版本信息
+- 版本号从 `9.0.7` 升级到 `9.1.0`，`versionCode` 升级到 `221`。
+
+### 更新内容
+- **底栏搜索入口稳定性**：修复液态玻璃指示器左右滑动时，旁边搜索框跟随指示器形变放大的问题，搜索入口保持独立尺寸。
+- **个人空间崩溃修复**：根据 `9.0.3 (216)` 崩溃日志定位到空间背景图绘制超大 bitmap，限制个人页沉浸背景、个人空间封面和公开空间封面的 Coil 解码尺寸，避免 `Canvas: trying to draw too large bitmap` 闪退。
+- **个人空间资料可读性优化**：个人空间签名和 IP 属地不再硬编码两行文案，改为使用真实签名、真实 IP 属地和隐私兜底；IP/性别信息改为深浅色都可读的小胶囊。
+- **Release 混淆保护**：补充首页视频卡片圆角、主题圆角缩放、共享元素过渡相关最小 keep 规则，降低 R8 优化后视觉状态回归风险。
+
+### 近期版本简述
+- `9.0.3`：稳定性与流畅度维护。
+- `9.0.4`：当前 `CHANGELOG.md` 未单列，内容已并入后续维护记录。
+- `9.0.5`：修复设置圆角、评论冻结条、播放器双击/后台播放、沉浸模式和首页布局问题。
+- `9.0.6`：解决已知问题，并通过 Debug Kotlin 编译验证。
+- `9.0.7`：继续解决已知问题，并通过 Debug Kotlin 编译验证。
+
+### 验证
+- `./gradlew :app:testDebugUnitTest --tests 'com.android.purebilibili.feature.home.components.BottomBarMiuixStructureTest' --tests 'com.android.purebilibili.feature.profile.ProfileSpacePolicyTest' --tests 'com.android.purebilibili.feature.profile.ProfileWallpaperActionLayoutPolicyTest'`
+- `./gradlew :app:compileDebugKotlin`
+
+## v9.0.7 (2026-06-05)
+
+### 版本信息
+- 版本号从 `9.0.6` 升级到 `9.0.7`，`versionCode` 升级到 `220`。
+
+### 更新内容
+- 解决了一些已知问题。
+
+### 验证
+- `./gradlew :app:compileDebugKotlin`
+
+## v9.0.6 (2026-06-04)
+
+### 版本信息
+- 版本号从 `9.0.5` 升级到 `9.0.6`，`versionCode` 升级到 `219`。
+
+### 更新内容
+- 解决了一些已知问题。
+
+### 验证
+- `./gradlew :app:compileDebugKotlin`
+
 ## v9.0.5-focus.5 (2026-06-04)
 
 ### 版本信息

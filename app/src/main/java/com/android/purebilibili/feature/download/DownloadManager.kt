@@ -175,6 +175,19 @@ object DownloadManager {
             }
         }
     }
+
+    fun pauseForSystemForegroundTimeout(taskId: String) {
+        updateTask(taskId) { task ->
+            when (task.status) {
+                DownloadStatus.COMPLETED,
+                DownloadStatus.PAUSED -> task
+                else -> task.copy(
+                    status = DownloadStatus.PAUSED,
+                    errorMessage = "下载已暂停：Android 15 后台前台服务接近系统时限，请稍后手动继续"
+                )
+            }
+        }
+    }
     
     /**
      * 暂停下载

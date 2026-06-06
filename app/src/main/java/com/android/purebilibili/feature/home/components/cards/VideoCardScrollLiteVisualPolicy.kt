@@ -32,6 +32,15 @@ internal fun resolveVideoCardScrollLiteVisualPolicy(
     )
 }
 
+internal fun shouldEnableVideoCardCoverCrossfade(
+    isReturningFromDetail: Boolean,
+    useCoverSharedBounds: Boolean,
+    isSharedReturnTarget: Boolean
+): Boolean {
+    // 返回目标封面由 sharedBounds 承接播放器画面，Coil 淡入会在落位后再次改变亮度导致闪烁。
+    return !(isReturningFromDetail && useCoverSharedBounds && isSharedReturnTarget)
+}
+
 internal data class StoryVideoCardScrollLiteVisualPolicy(
     val coverShadowElevationDp: Float,
     val showSecondaryStatsRow: Boolean

@@ -2,6 +2,8 @@ package com.android.purebilibili.core.ui.transition
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.tween
 
 internal enum class VideoSharedTransitionProfile {
     COVER_ONLY,
@@ -34,9 +36,7 @@ private const val DEFAULT_VIDEO_CARD_CORNER_DP = 12
 private const val DEFAULT_VIDEO_PLAYER_CORNER_DP = 12
 private const val DYNAMIC_VIDEO_CARD_CORNER_DP = 10
 private const val WATCH_LATER_VIDEO_CARD_CORNER_DP = 8
-private val VIDEO_CARD_IOS_LIKE_EASE_OUT = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
-internal val VIDEO_RETURN_CROSSFADE_EASING: Easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-internal val VIDEO_RETURN_FADE_OUT_EASING: Easing = CubicBezierEasing(0.32f, 0f, 0.67f, 0f)
+private val VIDEO_CARD_IOS_LIKE_EASE_OUT = CubicBezierEasing(0.22f, 0.8f, 0.24f, 1f)
 
 internal data class VideoSharedTransitionOwnership(
     val useCoverSharedBounds: Boolean,
@@ -209,6 +209,29 @@ internal fun resolveVideoCardSharedTransitionMotionSpec(
         contentSlideOffsetDp = HOME_DETAIL_REVEAL_SLIDE_OFFSET_DP,
         contentInitialScale = HOME_DETAIL_REVEAL_INITIAL_SCALE,
         easing = VIDEO_CARD_IOS_LIKE_EASE_OUT
+    )
+}
+
+internal fun resolveVideoMetadataSharedTransitionMotionSpec(
+    transitionEnabled: Boolean
+): VideoSharedTransitionMotionSpec {
+    return VideoSharedTransitionMotionSpec(
+        enabled = transitionEnabled,
+        durationMillis = if (transitionEnabled) HOME_SHARED_TRANSITION_DURATION_MILLIS else 0,
+        contentDelayMillis = 0,
+        contentDurationMillis = if (transitionEnabled) HOME_SHARED_TRANSITION_DURATION_MILLIS else 0,
+        contentSlideOffsetDp = 0,
+        contentInitialScale = 1f,
+        easing = VIDEO_CARD_IOS_LIKE_EASE_OUT
+    )
+}
+
+internal fun <T> videoSharedElementBoundsTransformSpec(
+    motion: VideoSharedTransitionMotionSpec
+): FiniteAnimationSpec<T> {
+    return tween(
+        durationMillis = motion.durationMillis,
+        easing = motion.easing
     )
 }
 

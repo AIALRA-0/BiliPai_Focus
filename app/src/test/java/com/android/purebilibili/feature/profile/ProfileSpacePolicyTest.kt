@@ -99,6 +99,34 @@ class ProfileSpacePolicyTest {
     }
 
     @Test
+    fun `identity meta keeps real sign and normalizes ip location`() {
+        val meta = resolveProfileSpaceIdentityMeta(
+            sign = "  好  ",
+            ipLocation = "IP属地：广东",
+            sex = "男"
+        )
+
+        assertEquals("好", meta.signText)
+        assertFalse(meta.signPlaceholder)
+        assertEquals("IP 属地 · 广东", meta.ipText)
+        assertEquals("男", meta.sexText)
+    }
+
+    @Test
+    fun `identity meta uses readable private fallback and hides private sex`() {
+        val meta = resolveProfileSpaceIdentityMeta(
+            sign = " ",
+            ipLocation = null,
+            sex = "保密"
+        )
+
+        assertEquals("这个人很神秘，什么都没有写", meta.signText)
+        assertTrue(meta.signPlaceholder)
+        assertEquals("IP 属地 · 保密", meta.ipText)
+        assertEquals(null, meta.sexText)
+    }
+
+    @Test
     fun `space favorite folders keep cover from aggregate response`() {
         val state = resolveProfileSpaceStateFromAggregate(
             aggregate = SpaceAggregateData(

@@ -1213,6 +1213,8 @@ fun AppNavigation(
                                     pushNavigation3Route(ScreenRoutes.Space.createRoute(mid))
                                 },
                                 globalHazeState = mainHazeState,
+                                isTopLevelActive = currentNavigation3Key == BiliPaiNavKey.MainHost &&
+                                    currentBottomNavItem == BottomNavItem.HOME,
                                 isReturningFromVideoDetail = navigation3ReturnSession.isReturningFromDetail,
                                 isQuickReturningFromVideoDetail = navigation3ReturnSession.isQuickReturnFromDetail,
                                 onVideoDetailReturnAnimationConsumed = {
@@ -2143,29 +2145,33 @@ fun AppNavigation(
                             }
                         BiliPaiNavEntryContentRole.DYNAMIC_DETAIL -> {
                                 val dynamicKey = key as BiliPaiNavKey.DynamicDetail
-                                com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
-                                    dynamicId = dynamicKey.dynamicId,
-                                    openCommentRootRpid = dynamicKey.commentRootRpid,
-                                    openCommentTargetRpid = dynamicKey.commentTargetRpid,
-                                    onBack = { performSystemBackAction() },
-                                    onVideoClick = { bvid -> navigateToVideoInNavigation3(bvid, 0L, "") },
-                                    onBangumiClick = { seasonId, epId ->
-                                        pushNavigation3Key(
-                                            BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId)
-                                        )
-                                    },
-                                    onUserClick = { mid -> pushNavigation3Key(BiliPaiNavKey.Space(mid)) },
-                                    onArticleClick = { articleId, title ->
-                                        pushNavigation3Key(
-                                            BiliPaiNavKey.ArticleDetail(articleId = articleId, title = title)
-                                        )
-                                    },
-                                    onLiveClick = { roomId, title, uname ->
-                                        pushNavigation3Key(
-                                            BiliPaiNavKey.Live(roomId = roomId, title = title, uname = uname)
-                                        )
-                                    }
-                                )
+                                CompositionLocalProvider(
+                                    LocalVideoCardSharedElementSourceRoute provides dynamicKey.toLegacyRoute()
+                                ) {
+                                    com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
+                                        dynamicId = dynamicKey.dynamicId,
+                                        openCommentRootRpid = dynamicKey.commentRootRpid,
+                                        openCommentTargetRpid = dynamicKey.commentTargetRpid,
+                                        onBack = { performSystemBackAction() },
+                                        onVideoClick = { bvid -> navigateToVideoInNavigation3(bvid, 0L, "") },
+                                        onBangumiClick = { seasonId, epId ->
+                                            pushNavigation3Key(
+                                                BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId)
+                                            )
+                                        },
+                                        onUserClick = { mid -> pushNavigation3Key(BiliPaiNavKey.Space(mid)) },
+                                        onArticleClick = { articleId, title ->
+                                            pushNavigation3Key(
+                                                BiliPaiNavKey.ArticleDetail(articleId = articleId, title = title)
+                                            )
+                                        },
+                                        onLiveClick = { roomId, title, uname ->
+                                            pushNavigation3Key(
+                                                BiliPaiNavKey.Live(roomId = roomId, title = title, uname = uname)
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         BiliPaiNavEntryContentRole.ARTICLE_DETAIL -> {
                                 val articleKey = key as BiliPaiNavKey.ArticleDetail

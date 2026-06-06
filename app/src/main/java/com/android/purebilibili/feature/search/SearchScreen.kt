@@ -783,7 +783,6 @@ fun SearchScreen(
                                             blurEnabled = videoCardAppearance.blurEnabled,
                                             showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
                                             showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
-                                            coverShadowEnabled = videoCardAppearance.coverShadowEnabled,
                                             showOnlineCount = showOnlineCount,
                                             modifier = Modifier,
                                             //  [交互优化] 传递 onWatchLater 用于显示菜单选项

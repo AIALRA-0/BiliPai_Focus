@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.components
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.UgcEpisode
 import com.android.purebilibili.data.model.response.UgcSeason
+import com.android.purebilibili.data.model.response.UgcSection
 
 enum class CollectionSortMode(val label: String) {
     ASCENDING("正序"),
@@ -23,6 +24,25 @@ internal fun resolveCurrentUgcEpisodeIndex(
         if (exactIndex >= 0) return exactIndex
     }
     return episodes.indexOfFirst { episode -> episode.bvid == currentBvid }
+}
+
+internal fun resolveCurrentUgcEpisodeLazyListIndex(
+    sections: List<UgcSection>,
+    currentBvid: String,
+    currentCid: Long
+): Int {
+    if (currentBvid.isBlank()) return -1
+    var lazyIndex = 0
+    sections.forEach { section ->
+        lazyIndex += 1 // 分区标题
+        section.episodes.forEach { episode ->
+            if (isCurrentUgcEpisode(currentBvid, currentCid, episode)) {
+                return lazyIndex
+            }
+            lazyIndex += 1
+        }
+    }
+    return -1
 }
 
 internal fun isCurrentUgcEpisode(

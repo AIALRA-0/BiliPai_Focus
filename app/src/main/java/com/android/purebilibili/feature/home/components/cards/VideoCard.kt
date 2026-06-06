@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -51,7 +50,6 @@ import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
@@ -71,6 +69,7 @@ import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransit
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionOwnership
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionVisualSpec
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
+import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import com.android.purebilibili.feature.home.resolveHomeCardInfoSurfaceAppearance
@@ -249,7 +248,6 @@ fun ElegantVideoCard(
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
-    coverShadowEnabled: Boolean = true,
     wallpaperTintEnabled: Boolean = false,
     wallpaperEffectMode: HomeWallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
     showUpBadge: Boolean = true,
@@ -323,7 +321,6 @@ fun ElegantVideoCard(
             compactStatsOnCover = compactStatsOnCover
         )
     }
-    val coverShadowElevation = if (coverShadowEnabled) scrollLitePolicy.coverShadowElevationDp.dp else 0.dp
     val badgeStylePolicy = remember(showCoverGlassBadges, showInfoGlassBadges) {
         resolveHomeVideoGlassBadgeStylePolicy(
             showCoverGlassBadges = showCoverGlassBadges,
@@ -518,26 +515,25 @@ fun ElegantVideoCard(
         val homeSharedTransitionMotionSpec = homeSharedTransitionSpecs.motion
         val homeSharedTransitionVisualSpec = homeSharedTransitionSpecs.visual
         val useCoverOnlySharedBounds = coverSharedEnabled && !effectiveSharedElementSourceRoute.isNullOrBlank()
-        val connectedCardShape = remember(cardCornerRadius) { RoundedCornerShape(cardCornerRadius) }
-        val cardContainerModifier = remember(
-            infoSurfaceAppearance.useTintedSurface,
-            coverShadowElevation,
-            connectedCardShape
-        ) {
-            if (infoSurfaceAppearance.useTintedSurface) {
-                Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = coverShadowElevation,
-                        shape = connectedCardShape,
-                        ambientColor = Color.Black.copy(alpha = 0.08f),
-                        spotColor = Color.Black.copy(alpha = 0.10f),
-                        clip = false
-                    )
+        val thisCardVideoSourceKey = remember(video.bvid, effectiveSharedElementSourceRoute) {
+            val normalizedBvid = video.bvid.trim()
+            val normalizedRoute = effectiveSharedElementSourceRoute
+                ?.substringBefore("?")
+                ?.takeIf { it.isNotBlank() }
+            if (normalizedBvid.isNotEmpty() && normalizedRoute != null) {
+                "$normalizedRoute:$normalizedBvid"
             } else {
-                Modifier.fillMaxWidth()
+                null
             }
         }
+        val isCoverSharedReturnTarget = thisCardVideoSourceKey != null &&
+            thisCardVideoSourceKey == CardPositionManager.lastClickedVideoSourceKey
+        val coverCrossfadeEnabled = shouldEnableVideoCardCoverCrossfade(
+            isReturningFromDetail = isReturningFromVideoDetail,
+            useCoverSharedBounds = useCoverOnlySharedBounds,
+            isSharedReturnTarget = isCoverSharedReturnTarget
+        )
+        val cardContainerModifier = Modifier.fillMaxWidth()
         Column(
             modifier = cardContainerModifier
         ) {
@@ -561,28 +557,6 @@ fun ElegantVideoCard(
                 RoundedCornerShape(homeSharedTransitionVisualSpec.sourceCornerDp.dp)
             }
         }
-
-        //  返回时让封面阴影随共享转场平滑淡入：阴影已移出 sharedBounds 由静态目标位置绘制，
-        //  若直接以满高度落笔，会在封面尚未落位时突兀地出现一块阴影。仅对正在返回的目标卡片，
-        //  在共享转场进行期间把阴影压到 0，转场结束后再补间到满高度，消除突兀阴影。
-        val thisCardVideoSourceKey = remember(video.bvid, effectiveSharedElementSourceRoute) {
-            val normalizedBvid = video.bvid.trim()
-            val normalizedRoute = effectiveSharedElementSourceRoute?.substringBefore("?")?.takeIf { it.isNotBlank() }
-            if (normalizedBvid.isNotEmpty() && normalizedRoute != null) "$normalizedRoute:$normalizedBvid" else null
-        }
-        val isCoverSharedReturnTarget = useCoverOnlySharedBounds &&
-            thisCardVideoSourceKey != null &&
-            thisCardVideoSourceKey == CardPositionManager.lastClickedVideoSourceKey
-        val suppressCoverShadowForReturn = isCoverSharedReturnTarget &&
-            (isReturningFromVideoDetail || sharedTransitionScope?.isTransitionActive == true)
-        val animatedCoverShadowElevation by animateDpAsState(
-            targetValue = if (suppressCoverShadowForReturn) 0.dp else coverShadowElevation,
-            animationSpec = tween(
-                durationMillis = homeSharedTransitionMotionSpec.durationMillis,
-                easing = homeSharedTransitionMotionSpec.easing
-            ),
-            label = "coverShadowElevation"
-        )
 
         val coverModifier = if (useCoverOnlySharedBounds) {
             with(requireNotNull(sharedTransitionScope)) {
@@ -611,15 +585,7 @@ fun ElegantVideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(VIDEO_SHARED_COVER_ASPECT_RATIO)
-                //  [修复] 阴影从 sharedBounds 内部移出，避免返回动画时 GraphicsLayer 延迟创建导致阴影滞后
-                //  返回时改用补间高度，封面落位前不绘制突兀阴影
-                .shadow(
-                    elevation = if (infoSurfaceAppearance.useTintedSurface) 0.dp else animatedCoverShadowElevation,
-                    shape = coverShape,
-                    ambientColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.08f),
-                    spotColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.10f),
-                    clip = true
-                )
+                .clip(coverShape)
                 .onGloballyPositioned { coordinates ->
                     coverCoordsRef.value = coordinates
                 }
@@ -660,7 +626,7 @@ fun ElegantVideoCard(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(coverUrl)
                         .size(imageWidth, imageHeight)  // 省流量时使用更小尺寸
-                        .crossfade(100)  //  缩短淡入时间
+                        .crossfade(coverCrossfadeEnabled)
                         .memoryCacheKey(coverCacheKey)
                         .diskCacheKey(coverCacheKey)
                         .build(),
@@ -774,7 +740,7 @@ fun ElegantVideoCard(
                                     sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(video.bvid)),
                                     animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                     boundsTransform = { _, _ ->
-                                        com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                                        videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                                     }
                                 )
                             }
@@ -1006,7 +972,7 @@ fun ElegantVideoCard(
                         sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey(video.bvid)),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
-                            com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                            videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                         }
                     )
                 }
@@ -1129,7 +1095,7 @@ fun ElegantVideoCard(
                         sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoUpNameSharedElementKey(video.bvid)),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
-                            com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                            videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                         }
                     )
                 }
@@ -1141,7 +1107,7 @@ fun ElegantVideoCard(
                         sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoUpActionSharedElementKey(video.bvid)),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
-                            com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                            videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                         }
                     )
                 }
@@ -1194,7 +1160,7 @@ fun ElegantVideoCard(
                                     sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoAvatarSharedElementKey(video.bvid)),
                                     animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                     boundsTransform = { _, _ ->
-                                        com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                                        videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                                     },
                                     clipInOverlayDuringTransition = OverlayClip(CircleShape)
                                 )
@@ -1270,7 +1236,7 @@ fun ElegantVideoCard(
                             sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(video.bvid)),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
-                                com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                                videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                             }
                         )
                     }

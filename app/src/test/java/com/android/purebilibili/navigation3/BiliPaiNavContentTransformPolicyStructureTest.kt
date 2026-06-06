@@ -55,6 +55,34 @@ class BiliPaiNavContentTransformPolicyStructureTest {
         assertTrue(source.contains("fadeIn(animationSpec = tween(NAV3_SPACE_FORWARD_MILLIS))"))
     }
 
+    @Test
+    fun lightSiblingForwardUsesSmallSlideAndFade() {
+        val source = contentTransformPolicySource()
+        val functionStart = source.indexOf("private fun lightSiblingForwardTransform")
+        val functionEnd = source.indexOf("private fun lightSiblingPopTransform")
+        val function = source.substring(functionStart, functionEnd)
+
+        assertTrue(source.contains("BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD"))
+        assertTrue(function.contains("slideInHorizontally("))
+        assertTrue(function.contains("initialOffsetX = { width -> width / 8 }"))
+        assertTrue(function.contains("fadeIn(animationSpec = tween(NAV3_LIGHT_SIBLING_MILLIS"))
+        assertTrue(function.contains("fadeOut(animationSpec = tween(NAV3_FALLBACK_FADE_MILLIS))"))
+    }
+
+    @Test
+    fun lightSiblingPopMovesOnlyOutgoingPageSlightly() {
+        val source = contentTransformPolicySource()
+        val functionStart = source.indexOf("private fun lightSiblingPopTransform")
+        val functionEnd = source.indexOf("private fun disabledVideoDirectionReturnTransform")
+        val function = source.substring(functionStart, functionEnd)
+
+        assertTrue(source.contains("BiliPaiNavRouteTransition.LIGHT_SIBLING_POP"))
+        assertTrue(function.contains("EnterTransition.None togetherWith"))
+        assertTrue(function.contains("slideOutHorizontally("))
+        assertTrue(function.contains("targetOffsetX = { width -> width / 8 }"))
+        assertTrue(function.contains("fadeOut(animationSpec = tween(NAV3_LIGHT_SIBLING_MILLIS"))
+    }
+
     private fun contentTransformPolicySource(): String {
         return listOf(
             File("app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavContentTransformPolicy.kt"),

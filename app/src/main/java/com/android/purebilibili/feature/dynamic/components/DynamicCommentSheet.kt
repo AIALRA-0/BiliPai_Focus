@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -16,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +36,9 @@ import com.android.purebilibili.feature.video.ui.components.shouldShowInlineSubR
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 
 @Composable
 fun DynamicCommentOverlayHost(
@@ -47,6 +50,7 @@ fun DynamicCommentOverlayHost(
     val selectedDynamicId by viewModel.selectedDynamicId.collectAsStateWithLifecycle()
     val comments by viewModel.comments.collectAsStateWithLifecycle()
     val commentsLoading by viewModel.commentsLoading.collectAsStateWithLifecycle()
+    val commentsLoadingMore by viewModel.commentsLoadingMore.collectAsStateWithLifecycle()
     val subReplyState by viewModel.subReplyState.collectAsStateWithLifecycle()
     val liveCommentCount by viewModel.commentTotalCount.collectAsStateWithLifecycle()
     val inspectionMode = LocalInspectionMode.current
@@ -69,6 +73,7 @@ fun DynamicCommentOverlayHost(
             comments = comments,
             totalCount = totalCount,
             isLoading = commentsLoading,
+            isLoadingMore = commentsLoadingMore,
             onDismiss = { viewModel.closeCommentSheet() },
             onPostComment = { message ->
                 viewModel.postComment(dynamicId, message) { _, msg ->
@@ -77,7 +82,8 @@ fun DynamicCommentOverlayHost(
                     }
                 }
             },
-            onViewReplies = { reply -> viewModel.openSubReply(reply) }
+            onViewReplies = { reply -> viewModel.openSubReply(reply) },
+            onLoadMore = { viewModel.loadMoreComments() }
         )
     }
 
@@ -97,13 +103,29 @@ fun DynamicCommentSheet(
     comments: List<ReplyItem>,
     totalCount: Int,  //  [新增] 总评论数
     isLoading: Boolean,
+    isLoadingMore: Boolean,
     onDismiss: () -> Unit,
     onPostComment: (String) -> Unit,
-    onViewReplies: (ReplyItem) -> Unit = {}
+    onViewReplies: (ReplyItem) -> Unit = {},
+    onLoadMore: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var commentText by remember { mutableStateOf("") }
-    val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val canLoadMore = comments.size < totalCount && !isLoading && !isLoadingMore
+
+    LaunchedEffect(listState, comments.size, totalCount, isLoading, isLoadingMore) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .map { lastVisibleIndex ->
+                val itemCount = listState.layoutInfo.totalItemsCount
+                itemCount > 0 && lastVisibleIndex >= itemCount - 4
+            }
+            .distinctUntilChanged()
+            .filter { it }
+            .collect {
+                if (canLoadMore) onLoadMore()
+            }
+    }
     
     com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -172,6 +194,7 @@ fun DynamicCommentSheet(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
@@ -183,6 +206,18 @@ fun DynamicCommentSheet(
                             reply = reply,
                             onViewReplies = onViewReplies
                         )
+                    }
+                    if (isLoadingMore) {
+                        item(key = "dynamic_comment_loading_more") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        }
                     }
                 }
             }

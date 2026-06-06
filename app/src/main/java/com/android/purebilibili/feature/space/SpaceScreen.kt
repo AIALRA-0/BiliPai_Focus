@@ -91,6 +91,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
+import coil.size.Scale
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
@@ -1758,6 +1759,8 @@ private fun SpaceHeader(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(topPhotoUrl)
+                        .size(1440, 900)
+                        .scale(Scale.FILL)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -2008,17 +2011,28 @@ private fun SpaceHeader(
                 )
             }
 
-            val metaLine = listOfNotNull(
-                "UID: ${userInfo.mid}",
-                userInfo.ipLocation?.takeIf { it.isNotBlank() }?.let { "IP属地：$it" }
-            ).joinToString("   ")
-            if (metaLine.isNotBlank()) {
+            val ipLocation = userInfo.ipLocation?.takeIf { it.isNotBlank() }
+            if (userInfo.mid > 0L || ipLocation != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = metaLine,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (userInfo.mid > 0L) {
+                        Text(
+                            text = "UID: ${userInfo.mid}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    ipLocation?.let { location ->
+                        Text(
+                            text = "IP 属地 · $location",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
+                        )
+                    }
+                }
             }
         }
     }

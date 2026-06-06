@@ -281,7 +281,6 @@ fun VideoContentSection(
     onUpClick: (Long) -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     onSubReplyClick: (ReplyItem) -> Unit,
-    onRootCommentClick: () -> Unit = {},
     onCommentReplyClick: (ReplyItem) -> Unit = {},
     onLoadMoreReplies: () -> Unit,
     onDownloadClick: () -> Unit = {},
@@ -555,7 +554,6 @@ fun VideoContentSection(
                         onUpOnlyToggle = onUpOnlyToggle,
                         onUpClick = onUpClick,
                         onSubReplyClick = onSubReplyClick,
-                        onRootCommentClick = onRootCommentClick,
                         onCommentReplyClick = onCommentReplyClick,
                         onLoadMoreReplies = onLoadMoreReplies,
                         onImagePreview = { images, index, rect, textContent ->
@@ -827,7 +825,6 @@ private fun VideoCommentTab(
     onUpOnlyToggle: () -> Unit,
     onUpClick: (Long) -> Unit,
     onSubReplyClick: (ReplyItem) -> Unit,
-    onRootCommentClick: () -> Unit,
     onCommentReplyClick: (ReplyItem) -> Unit,
     onLoadMoreReplies: () -> Unit,
     onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit,
@@ -875,24 +872,6 @@ private fun VideoCommentTab(
                     onUpOnlyToggle = onUpOnlyToggle
                 )
             }
-            item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    color = commentAppearance.composerHintBackgroundColor,
-                    shape = RoundedCornerShape(16.dp),
-                    onClick = onRootCommentClick
-                ) {
-                    Text(
-                        text = "说点什么，直接评论 UP 主和大家",
-                        color = commentAppearance.secondaryTextColor,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                    )
-                }
-            }
-
             if (isRepliesLoading && replies.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {

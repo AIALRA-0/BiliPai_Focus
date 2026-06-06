@@ -110,14 +110,10 @@ object SearchRepository {
             val videoList = response.data?.result
                 ?.map { it.toVideoItem() }
                 ?: emptyList()
-            val isLoggedIn = resolveVideoPlaybackAuthState(
-                hasSessionCookie = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty(),
-                hasAccessToken = !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty()
-            )
-            if (shouldFallbackGuestVideoSearch(isLoggedIn = isLoggedIn, page = page, primaryResultCount = videoList.size)) {
+            if (shouldFallbackEmptyFirstPageVideoSearch(page = page, primaryResultCount = videoList.size)) {
                 com.android.purebilibili.core.util.Logger.d(
                     "SearchRepo",
-                    " search(video) guest primary result empty, fallback=all/v2"
+                    " search(video) primary first page empty, fallback=all/v2"
                 )
                 return@withContext searchVideoFallback(keyword = keyword, page = page)
             }

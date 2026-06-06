@@ -51,7 +51,7 @@ object LottieUrls {
     const val CONFETTI = "https://assets10.lottiefiles.com/packages/lf20_u4yrau.json"
     const val SUCCESS = "https://assets4.lottiefiles.com/packages/lf20_jbrw3hcz.json"
     const val ERROR = "https://assets1.lottiefiles.com/packages/lf20_cr9slsdh.json"
-    const val EMPTY = "https://assets9.lottiefiles.com/packages/lf20_wnqlfojb.json"
+    const val EMPTY = "https://raw.githubusercontent.com/DrKLO/Telegram/master/TMessagesProj/src/main/res/raw/utyan_empty2.json"
     const val REFRESH = "https://assets3.lottiefiles.com/packages/lf20_ykzaax7v.json"
     
     //  新手引导页面动画

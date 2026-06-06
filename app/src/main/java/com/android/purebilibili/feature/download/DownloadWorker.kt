@@ -5,6 +5,8 @@ import android.os.Build
 import androidx.work.*
 import com.android.purebilibili.app.DOWNLOAD_NOTIFICATION_CHANNEL_ID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 
 /**
@@ -80,12 +82,23 @@ class DownloadWorker(
         setForeground(getForegroundInfo())
         
         try {
-            // 执行下载
-            DownloadManager.executeDownload(taskId)
+            val foregroundWorkTimeoutMs = resolveDownloadForegroundWorkTimeoutMs(Build.VERSION.SDK_INT)
+            if (foregroundWorkTimeoutMs != null) {
+                withTimeout(foregroundWorkTimeoutMs) {
+                    DownloadManager.executeDownload(taskId)
+                }
+            } else {
+                DownloadManager.executeDownload(taskId)
+            }
             
             com.android.purebilibili.core.util.Logger.d("DownloadWorker", "✅ Download completed: $taskId")
             Result.success()
             
+        } catch (e: TimeoutCancellationException) {
+            com.android.purebilibili.core.util.Logger.w("DownloadWorker", "⏱️ Download paused before Android foreground-service timeout: $taskId", e)
+            DownloadManager.pauseForSystemForegroundTimeout(taskId)
+            Result.success()
+
         } catch (e: kotlinx.coroutines.CancellationException) {
             if (DownloadManager.shouldTreatWorkerCancellationAsFinished(taskId)) {
                 com.android.purebilibili.core.util.Logger.d("DownloadWorker", "⏸️ Download paused: $taskId")

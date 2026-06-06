@@ -3,12 +3,11 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.model.response.VideoItem
 
-internal fun shouldFallbackGuestVideoSearch(
-    isLoggedIn: Boolean,
+internal fun shouldFallbackEmptyFirstPageVideoSearch(
     page: Int,
     primaryResultCount: Int
 ): Boolean {
-    return !isLoggedIn && page == 1 && primaryResultCount == 0
+    return page == 1 && primaryResultCount == 0
 }
 
 internal fun resolveSearchLoadedPage(

@@ -106,6 +106,7 @@ import com.android.purebilibili.core.theme.LocalUiPreset
 
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.ViewPoint
@@ -160,7 +161,6 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -172,6 +172,7 @@ import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransit
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionSourceCornerDp
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionVisualSpec
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
+import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
 import com.android.purebilibili.core.ui.rememberAppDownloadIcon
@@ -255,7 +256,7 @@ internal fun shouldClearStaleReturningStateOnVideoDetailEnter(
 }
 
 private const val COVER_TAKEOVER_PRE_BACK_DELAY_MILLIS = 16L
-private const val VIDEO_CONTENT_COMMENT_TAB_INDEX = 1
+internal const val VIDEO_CONTENT_COMMENT_TAB_INDEX = 1
 
 internal fun resolveForceCoverOnlyForReturn(
     forceCoverOnlyOnReturn: Boolean,
@@ -471,6 +472,13 @@ internal fun shouldShowExternalPlaylistQueueBarByPolicy(
     return isExternalPlaylist &&
         sourceCanShowQueue &&
         playlistSize > 0
+}
+
+internal fun shouldShowExternalPlaylistQueueBarOnContentTab(
+    queueAvailable: Boolean,
+    selectedTabIndex: Int
+): Boolean {
+    return queueAvailable && selectedTabIndex != VIDEO_CONTENT_COMMENT_TAB_INDEX
 }
 
 internal fun resolveExternalPlaylistQueueTitle(
@@ -907,6 +915,22 @@ internal fun resolveAutoPlayOverrideForInternalBvidSync(
     return if (forceAutoPlay) true else null
 }
 
+internal fun shouldSwitchCollectionVideoInsideCurrentDetailPage(
+    targetBvid: String,
+    currentBvid: String,
+    ugcSeason: UgcSeason?
+): Boolean {
+    val normalizedTargetBvid = targetBvid.trim()
+    if (normalizedTargetBvid.isBlank() || normalizedTargetBvid == currentBvid.trim()) {
+        return false
+    }
+    return ugcSeason
+        ?.sections
+        .orEmpty()
+        .flatMap { section -> section.episodes }
+        .any { episode -> episode.bvid == normalizedTargetBvid } == true
+}
+
 internal data class VideoPlayerSectionTarget(
     val bvid: String,
     val entryCoverUrl: String
@@ -1154,6 +1178,7 @@ fun VideoDetailScreen(
     ) { mutableStateOf(false) }
     // 🔄 [Seamless Playback] Internal BVID state to support seamless switching in portrait mode
     var currentBvid by rememberSaveable(bvid) { mutableStateOf(bvid) }
+    var currentBvidCid by rememberSaveable { mutableLongStateOf(0L) }
 
     fun markSecondaryNavigationLeave(expectedBvid: String = currentBvid) {
         miniPlayerManager?.markLeavingByNavigation(expectedBvid = expectedBvid)
@@ -1174,12 +1199,30 @@ fun VideoDetailScreen(
         onSearchKeywordClick(keyword)
     }
 
+    fun switchVideoInCurrentDetailPage(
+        targetBvid: String,
+        targetCid: Long,
+        autoPlay: Boolean = true
+    ) {
+        val normalizedBvid = targetBvid.trim()
+        if (normalizedBvid.isBlank()) return
+        val safeCid = targetCid.coerceAtLeast(0L)
+        val success = uiState as? PlayerUiState.Success
+        if (success?.info?.bvid == normalizedBvid && (safeCid <= 0L || success.info.cid == safeCid)) {
+            return
+        }
+        currentBvid = normalizedBvid
+        currentBvidCid = safeCid
+        viewModel.loadVideo(
+            bvid = normalizedBvid,
+            cid = safeCid,
+            autoPlay = autoPlay
+        )
+    }
+
     val navigateToRelatedVideo = remember(onVideoClick, miniPlayerManager, uiState, currentBvid) {
         { targetBvid: String, options: android.os.Bundle? ->
-            isNavigatingToVideo = true
-            miniPlayerManager?.isNavigatingToVideo = true
             val success = uiState as? PlayerUiState.Success
-            markSecondaryNavigationLeave(expectedBvid = success?.info?.bvid ?: currentBvid)
             val explicitCid = options?.getLong(VIDEO_NAV_TARGET_CID_KEY) ?: 0L
             val resolvedCid = resolveNavigationTargetCid(
                 targetBvid = targetBvid,
@@ -1191,11 +1234,29 @@ fun VideoDetailScreen(
                 "VideoDetailScreen",
                 "navigateToRelatedVideo: current=${success?.info?.bvid ?: "unknown"} target=$targetBvid explicitCid=$explicitCid resolvedCid=$resolvedCid"
             )
-            val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
-            if (resolvedCid > 0L) {
-                navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, resolvedCid)
+            if (
+                shouldSwitchCollectionVideoInsideCurrentDetailPage(
+                    targetBvid = targetBvid,
+                    currentBvid = success?.info?.bvid ?: currentBvid,
+                    ugcSeason = success?.info?.ugc_season
+                )
+            ) {
+                miniPlayerManager?.isNavigatingToVideo = false
+                switchVideoInCurrentDetailPage(
+                    targetBvid = targetBvid,
+                    targetCid = resolvedCid,
+                    autoPlay = true
+                )
+            } else {
+                isNavigatingToVideo = true
+                miniPlayerManager?.isNavigatingToVideo = true
+                markSecondaryNavigationLeave(expectedBvid = success?.info?.bvid ?: currentBvid)
+                val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                if (resolvedCid > 0L) {
+                    navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, resolvedCid)
+                }
+                onVideoClick(targetBvid, navOptions)
             }
-            onVideoClick(targetBvid, navOptions)
         }
     }
 
@@ -2068,8 +2129,6 @@ fun VideoDetailScreen(
     var hasDeferredPortraitRestoreAfterExternalNavigation by rememberSaveable { mutableStateOf(false) }
     var pendingMainReloadBvidAfterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
     var portraitPendingSelectionBvid by rememberSaveable { mutableStateOf<String?>(null) }
-    var currentBvidCid by rememberSaveable { mutableLongStateOf(0L) }
-
     // 初始化播放器状态
     val playerState = rememberVideoPlayerState(
         context = context,
@@ -2730,26 +2789,21 @@ fun VideoDetailScreen(
             if (miniPlayerManager != null && shouldCacheMiniPlayer) {
                 lastCachedMiniPlayerBvid = currentBvid
 
+                // PiP 判断依赖 MiniPlayerManager 的 active/player/playing/bvid 状态。
+                // 这一步必须先于后台缓存完成，避免竖屏全屏快速进入 PiP 时拿到旧状态而暂停。
+                miniPlayerManager.setVideoInfo(
+                    bvid = currentBvid,
+                    title = info.title,
+                    cover = info.pic,
+                    owner = info.owner.name,
+                    cid = info.cid,  //  传递 cid 用于弹幕加载
+                    aid = info.aid,
+                    externalPlayer = playerState.player,
+                    fromLeft = com.android.purebilibili.core.util.CardPositionManager.isCardOnLeft  //  传递入场方向
+                )
+
                 launch(Dispatchers.Default) {
-                    com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🔄 [Background] Preparing MiniPlayer info...")
-
-                    // 准备数据
-                    // 注意：这里访问外部变量需要确保线程安全，但在 Compose 中读取 State 是安全的
-                    // setVideoInfo 只是设置数据，通常是线程安全的或者内部做了处理
-                    // cacheUiState 涉及序列化，必须在后台
-
-                    withContext(Dispatchers.Main) {
-                        miniPlayerManager.setVideoInfo(
-                            bvid = currentBvid,
-                            title = info.title,
-                            cover = info.pic,
-                            owner = info.owner.name,
-                            cid = info.cid,  //  传递 cid 用于弹幕加载
-                            aid = info.aid,
-                            externalPlayer = playerState.player,
-                            fromLeft = com.android.purebilibili.core.util.CardPositionManager.isCardOnLeft  //  传递入场方向
-                        )
-                    }
+                    com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🔄 [Background] Caching MiniPlayer UI state...")
 
                     // 序列化缓存 (Heavy Operation)
                     miniPlayerManager.cacheUiState(success)
@@ -3303,7 +3357,7 @@ fun VideoDetailScreen(
                                                 easing = homeSharedTransitionMotionSpec.easing
                                             )
                                         } else {
-                                            com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
+                                            videoSharedElementBoundsTransformSpec(homeSharedTransitionMotionSpec)
                                         }
                                     },
                                     clipInOverlayDuringTransition = OverlayClip(
@@ -3316,21 +3370,24 @@ fun VideoDetailScreen(
                     }
 
                     val isLeaving = isReturningFromDetail || isExitTransitionInProgress
+                    val returnAlphaDurationMillis = if (homeSharedTransitionMotionSpec.enabled) {
+                        homeSharedTransitionMotionSpec.durationMillis
+                    } else {
+                        0
+                    }
                     val coverCrossfadeAlpha by animateFloatAsState(
                         targetValue = if (isLeaving) 1f else 0f,
                         animationSpec = tween(
-                            durationMillis = 240,
-                            delayMillis = if (isLeaving) 40 else 0,
-                            easing = com.android.purebilibili.core.ui.transition.VIDEO_RETURN_CROSSFADE_EASING
+                            durationMillis = returnAlphaDurationMillis,
+                            easing = homeSharedTransitionMotionSpec.easing
                         ),
                         label = "coverCrossfade"
                     )
                     val playerFadeAlpha by animateFloatAsState(
                         targetValue = if (isLeaving) 0f else 1f,
                         animationSpec = tween(
-                            durationMillis = 200,
-                            delayMillis = if (isLeaving) 20 else 0,
-                            easing = com.android.purebilibili.core.ui.transition.VIDEO_RETURN_FADE_OUT_EASING
+                            durationMillis = returnAlphaDurationMillis,
+                            easing = homeSharedTransitionMotionSpec.easing
                         ),
                         label = "playerFade"
                     )
@@ -3544,6 +3601,11 @@ fun VideoDetailScreen(
                                                 exit = detailContentExitFade
                                             ) {
                                                 Box(modifier = Modifier.fillMaxSize()) {
+                                                    val showExternalPlaylistQueueBarOnCurrentTab =
+                                                        shouldShowExternalPlaylistQueueBarOnContentTab(
+                                                            queueAvailable = shouldShowExternalPlaylistQueueBar,
+                                                            selectedTabIndex = selectedVideoContentTabIndex
+                                                        )
                                                     val showFrozenCommentBar = shouldShowVideoDetailBottomInteractionBar(
                                                         isLiquidGlassEnabled = videoDetailLiquidGlassEnabled,
                                                         useTabletLayout = useTabletLayout,
@@ -3553,7 +3615,8 @@ fun VideoDetailScreen(
                                                         isCommentInputVisible = showCommentInput,
                                                         isCommentThreadVisible = subReplyState.visible,
                                                         isFavoriteFolderDialogVisible = showFavoriteFolderDialog,
-                                                        isExternalPlaylistQueueBarVisible = shouldShowExternalPlaylistQueueBar
+                                                        isExternalPlaylistQueueBarVisible =
+                                                            showExternalPlaylistQueueBarOnCurrentTab
                                                     )
                                                     val videoContentBottomPadding = if (showFrozenCommentBar) {
                                                         96.dp
@@ -3617,9 +3680,6 @@ fun VideoDetailScreen(
                                                         onUpClick = navigateToUserSpaceFromVideo,
                                                         onRelatedVideoClick = navigateToRelatedVideo,
                                                         onSubReplyClick = { commentViewModel.openSubReply(it) },
-                                                        onRootCommentClick = {
-                                                            viewModel.openRootCommentComposer()
-                                                        },
                                                         onCommentReplyClick = { replyItem ->
                                                             viewModel.setReplyingTo(replyItem)
                                                             viewModel.showCommentInputDialog()
@@ -3744,7 +3804,7 @@ fun VideoDetailScreen(
                                                         )
                                                     }
 
-                                                    if (shouldShowExternalPlaylistQueueBar) {
+                                                    if (showExternalPlaylistQueueBarOnCurrentTab) {
                                                         ExternalPlaylistQueueCollapsedBar(
                                                             title = externalPlaylistQueueTitle,
                                                             videoCount = playlistItems.size,
@@ -4068,10 +4128,11 @@ fun VideoDetailScreen(
             onVideoSelected = { index, item ->
                 PlaylistManager.playAt(index)
                 showExternalPlaylistQueueSheet = false
-                val currentSuccess = uiState as? PlayerUiState.Success
-                if (currentSuccess?.info?.bvid != item.bvid) {
-                    viewModel.loadVideo(item.bvid, autoPlay = true)
-                }
+                switchVideoInCurrentDetailPage(
+                    targetBvid = item.bvid,
+                    targetCid = 0L,
+                    autoPlay = true
+                )
             }
         )
 

@@ -10,14 +10,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.calculateContrastRatio
 import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
 import com.android.purebilibili.core.ui.rememberAppCoinIcon
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.core.ui.rememberAppShareIcon
+
+internal const val BOTTOM_INPUT_BAR_PLACEHOLDER_MIN_CONTRAST = 4.5f
+
+internal fun resolveBottomInputBarPlaceholderTextColor(
+    inputContainerColor: Color,
+    onSurfaceColor: Color,
+    onSurfaceVariantColor: Color
+): Color {
+    return listOf(
+        onSurfaceColor,
+        onSurfaceVariantColor,
+        if (inputContainerColor.luminance() < 0.5f) Color.White else Color.Black
+    ).firstOrNull { candidate ->
+        calculateContrastRatio(candidate, inputContainerColor) >= BOTTOM_INPUT_BAR_PLACEHOLDER_MIN_CONTRAST
+    } ?: onSurfaceColor
+}
 
 @Composable
 fun BottomInputBar(
@@ -36,6 +54,12 @@ fun BottomInputBar(
     val likeIcon = rememberAppLikeIcon()
     val likeFilledIcon = rememberAppLikeFilledIcon()
     val shareIcon = rememberAppShareIcon()
+    val inputContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val inputTextColor = resolveBottomInputBarPlaceholderTextColor(
+        inputContainerColor = inputContainerColor,
+        onSurfaceColor = MaterialTheme.colorScheme.onSurface,
+        onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -56,14 +80,14 @@ fun BottomInputBar(
                     .weight(1f)
                     .height(36.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+                    .background(inputContainerColor)
                     .clickable { onCommentClick() }
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Text(
                     text = "评论 UP 主和大家...",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = inputTextColor,
                     fontSize = 14.sp
                 )
             }

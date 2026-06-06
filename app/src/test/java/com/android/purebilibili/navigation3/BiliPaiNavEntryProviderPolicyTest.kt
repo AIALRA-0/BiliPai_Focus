@@ -151,6 +151,114 @@ class BiliPaiNavEntryProviderPolicyTest {
     }
 
     @Test
+    fun settingsInnerPagesUseLightSiblingForwardTransition() {
+        val settingsChildren = listOf(
+            "appearance_settings",
+            "animation_settings",
+            "playback_settings",
+            "bottom_bar_settings"
+        )
+
+        settingsChildren.forEach { childRoute ->
+            assertEquals(
+                BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD,
+                resolveBiliPaiNavEntryForwardRouteTransition(
+                    defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                    fromRoute = ScreenRoutes.Settings.route,
+                    toRoute = childRoute,
+                    visibleBottomBarRoutes = emptySet()
+                )
+            )
+        }
+    }
+
+    @Test
+    fun messageInnerPagesUseLightSiblingForwardTransition() {
+        val messageChildren = listOf(
+            "message/reply_me",
+            "message/at_me",
+            "message/like_me",
+            "message/system_notice",
+            "chat"
+        )
+
+        messageChildren.forEach { childRoute ->
+            assertEquals(
+                BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD,
+                resolveBiliPaiNavEntryForwardRouteTransition(
+                    defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                    fromRoute = ScreenRoutes.Inbox.route,
+                    toRoute = childRoute,
+                    visibleBottomBarRoutes = emptySet()
+                )
+            )
+        }
+    }
+
+    @Test
+    fun liveInnerPagesUseLightSiblingForwardTransition() {
+        val liveChildren = listOf(
+            "live_area",
+            "live_search",
+            "live_following"
+        )
+
+        liveChildren.forEach { childRoute ->
+            assertEquals(
+                BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD,
+                resolveBiliPaiNavEntryForwardRouteTransition(
+                    defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                    fromRoute = ScreenRoutes.LiveList.route,
+                    toRoute = childRoute,
+                    visibleBottomBarRoutes = emptySet()
+                )
+            )
+        }
+    }
+
+    @Test
+    fun searchInnerPagesUseLightSiblingForwardTransition() {
+        val searchChildren = listOf(
+            "search_trending",
+            "topic"
+        )
+
+        searchChildren.forEach { childRoute ->
+            assertEquals(
+                BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD,
+                resolveBiliPaiNavEntryForwardRouteTransition(
+                    defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                    fromRoute = ScreenRoutes.Search.route,
+                    toRoute = childRoute,
+                    visibleBottomBarRoutes = emptySet()
+                )
+            )
+        }
+    }
+
+    @Test
+    fun lightSiblingPopReturnsFromChildToDomainRoot() {
+        val cases = listOf(
+            "appearance_settings" to ScreenRoutes.Settings.route,
+            "message/reply_me" to ScreenRoutes.Inbox.route,
+            "live_area" to ScreenRoutes.LiveList.route,
+            "topic" to ScreenRoutes.Search.route
+        )
+
+        cases.forEach { (fromRoute, toRoute) ->
+            assertEquals(
+                BiliPaiNavRouteTransition.LIGHT_SIBLING_POP,
+                resolveBiliPaiNavEntryPopRouteTransition(
+                    defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                    fromRoute = fromRoute,
+                    toRoute = toRoute,
+                    sourceMetadata = BiliPaiNavSourceMetadata()
+                )
+            )
+        }
+    }
+
+    @Test
     fun homeVideoPushWithoutRecordedBoundsKeepsForwardFallback() {
         val transitions = resolveBiliPaiNavEntryRouteTransitions(
             key = BiliPaiNavKey.VideoDetail(bvid = "BV1", sourceRoute = "home"),

@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components.cards
 
 import androidx.compose.ui.graphics.Color
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -80,6 +81,64 @@ class VideoCardScrollLiteVisualPolicyTest {
 
         assertEquals(0f, policy.coverShadowElevationDp, 0.0001f)
         assertTrue(policy.showSecondaryStatsRow)
+    }
+
+    @Test
+    fun `home video card variants do not attach shadow modifiers`() {
+        listOf(
+            "VideoCard.kt",
+            "StoryVideoCard.kt",
+            "GlassVideoCard.kt",
+            "CinematicVideoCard.kt"
+        ).forEach { fileName ->
+            val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/$fileName")
+                .readText()
+
+            assertFalse("$fileName should not draw video cover shadows", source.contains(".shadow("))
+        }
+    }
+
+    @Test
+    fun `elegant video card clips static cover container to cover shape`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
+            .readText()
+
+        assertTrue(
+            "首页视频封面本体必须裁剪 coverShape，不能只依赖 sharedBounds 的 overlay 裁剪。",
+            source.contains(
+                ".aspectRatio(VIDEO_SHARED_COVER_ASPECT_RATIO)\n" +
+                    "                .clip(coverShape)"
+            )
+        )
+    }
+
+    @Test
+    fun `return target cover disables crossfade during shared transition`() {
+        assertFalse(
+            shouldEnableVideoCardCoverCrossfade(
+                isReturningFromDetail = true,
+                useCoverSharedBounds = true,
+                isSharedReturnTarget = true
+            )
+        )
+    }
+
+    @Test
+    fun `non return target cover keeps crossfade`() {
+        assertTrue(
+            shouldEnableVideoCardCoverCrossfade(
+                isReturningFromDetail = true,
+                useCoverSharedBounds = true,
+                isSharedReturnTarget = false
+            )
+        )
+        assertTrue(
+            shouldEnableVideoCardCoverCrossfade(
+                isReturningFromDetail = false,
+                useCoverSharedBounds = true,
+                isSharedReturnTarget = true
+            )
+        )
     }
 
     @Test

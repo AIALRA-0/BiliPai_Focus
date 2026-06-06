@@ -48,6 +48,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +59,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.size.Scale
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
@@ -170,6 +172,13 @@ internal fun resolveProfileWallpaperActionTitleLines(
 
 internal fun resolveProfileWallpaperBlendBandDp(topBannerHeightDp: Float): Float {
     return 196f
+}
+
+internal fun resolveProfileWallpaperDecodeSizePx(screenWidthDp: Int, density: Float): Pair<Int, Int> {
+    val widthPx = (screenWidthDp.coerceAtLeast(320) * density)
+        .toInt()
+        .coerceIn(720, 1440)
+    return widthPx to (widthPx * 16 / 9).coerceAtLeast(1280)
 }
 
 internal fun resolveProfileWallpaperActionBlurEnabled(
@@ -606,6 +615,15 @@ private fun BoxScope.ProfileBackground(
     val profileWallpaperLayout = remember(windowSizeClass.widthSizeClass) {
         resolveProfileWallpaperLayout(windowSizeClass.widthSizeClass)
     }
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val wallpaperDecodeSize = remember(configuration.screenWidthDp, density.density) {
+        resolveProfileWallpaperDecodeSizePx(
+            screenWidthDp = configuration.screenWidthDp,
+            density = density.density
+        )
+    }
 
     if (shouldRenderProfileImmersiveBackground(isImmersive, deferImmersiveRenderBudget)) {
         when (profileWallpaperLayout) {
@@ -618,8 +636,10 @@ private fun BoxScope.ProfileBackground(
                 val clearImageHeight = bannerHeight + 144.dp
                 // 1. 底层：高斯模糊填充 (填补图片不够长的区域)
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(context)
                         .data(user.topPhoto)
+                        .size(wallpaperDecodeSize.first, wallpaperDecodeSize.second)
+                        .scale(Scale.FILL)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -639,8 +659,10 @@ private fun BoxScope.ProfileBackground(
 
                 // 2. 中层：保留模糊前提下，增加轻量清晰细节覆盖，补充更多壁纸信息
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(context)
                         .data(user.topPhoto)
+                        .size(wallpaperDecodeSize.first, wallpaperDecodeSize.second)
+                        .scale(Scale.FILL)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -660,8 +682,10 @@ private fun BoxScope.ProfileBackground(
 
                 // 3. 顶层：清晰头部图 (Header Banner)
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(context)
                         .data(user.topPhoto)
+                        .size(wallpaperDecodeSize.first, wallpaperDecodeSize.second)
+                        .scale(Scale.FILL)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -729,8 +753,10 @@ private fun BoxScope.ProfileBackground(
 
             ProfileWallpaperLayout.POSTER_CARD_BLUR_BG -> {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(context)
                         .data(user.topPhoto)
+                        .size(wallpaperDecodeSize.first, wallpaperDecodeSize.second)
+                        .scale(Scale.FILL)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -763,8 +789,10 @@ private fun BoxScope.ProfileBackground(
                         .aspectRatio(9f / 16f)
                 ) {
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
+                        model = ImageRequest.Builder(context)
                             .data(user.topPhoto)
+                            .size(wallpaperDecodeSize.first, wallpaperDecodeSize.second)
+                            .scale(Scale.FILL)
                             .crossfade(true)
                             .build(),
                         contentDescription = null,
@@ -1137,9 +1165,15 @@ private fun ProfileSpaceCoverHeader(
     onEditClick: () -> Unit,
     onFollowingClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Box(modifier = Modifier.fillMaxWidth()) {
         AsyncImage(
-            model = user.topPhoto.ifBlank { user.face },
+            model = ImageRequest.Builder(context)
+                .data(user.topPhoto.ifBlank { user.face })
+                .size(1440, 960)
+                .scale(Scale.FILL)
+                .crossfade(true)
+                .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -1180,6 +1214,23 @@ private fun ProfileSpaceHeader(
 ) {
     val textColor = if (compact) MaterialTheme.colorScheme.onSurface else Color.White
     val secondaryColor = textColor.copy(alpha = 0.72f)
+    val meta = remember(editableAccount.sign, editableAccount.ipLocation, editableAccount.sex) {
+        resolveProfileSpaceIdentityMeta(
+            sign = editableAccount.sign,
+            ipLocation = editableAccount.ipLocation,
+            sex = editableAccount.sex
+        )
+    }
+    val metaChipContainer = if (compact) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+    } else {
+        Color.Black.copy(alpha = 0.22f)
+    }
+    val metaChipBorder = if (compact) {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
+    } else {
+        Color.White.copy(alpha = 0.22f)
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1236,26 +1287,55 @@ private fun ProfileSpaceHeader(
             Text("编辑资料")
         }
         Text(
-            text = editableAccount.sign.ifBlank { "这个人很神秘，什么都没有写" },
+            text = meta.signText,
             style = MaterialTheme.typography.bodyMedium,
-            color = secondaryColor,
+            color = if (meta.signPlaceholder) secondaryColor else textColor.copy(alpha = 0.86f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = "IP 属地 · 未展示",
-                style = MaterialTheme.typography.labelMedium,
-                color = secondaryColor
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProfileSpaceMetaChip(
+                text = meta.ipText.orEmpty(),
+                contentColor = textColor.copy(alpha = 0.78f),
+                containerColor = metaChipContainer,
+                borderColor = metaChipBorder
             )
-            if (editableAccount.sex.isNotBlank()) {
-                Text(
-                    text = editableAccount.sex,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = secondaryColor
+            meta.sexText?.let { sexText ->
+                ProfileSpaceMetaChip(
+                    text = sexText,
+                    contentColor = textColor.copy(alpha = 0.78f),
+                    containerColor = metaChipContainer,
+                    borderColor = metaChipBorder
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProfileSpaceMetaChip(
+    text: String,
+    contentColor: Color,
+    containerColor: Color,
+    borderColor: Color
+) {
+    if (text.isBlank()) return
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = containerColor,
+        border = BorderStroke(0.6.dp, borderColor)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+        )
     }
 }
 

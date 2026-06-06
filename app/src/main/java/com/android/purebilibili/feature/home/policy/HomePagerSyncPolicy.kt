@@ -8,6 +8,10 @@ internal enum class HomePagerSettledAction {
     SWITCH_CATEGORY
 }
 
+internal fun shouldEnableHomeTopPagerUserScroll(isTopLevelActive: Boolean): Boolean {
+    return isTopLevelActive
+}
+
 internal fun shouldDisplayHomeTopCategoryInline(category: HomeCategory?): Boolean {
     return category != null
 }

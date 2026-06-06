@@ -16,4 +16,14 @@ class DynamicVideoCardSharedTransitionStructureTest {
         assertTrue(source.contains("VideoCardLargeCover("))
         assertTrue(source.contains("titleModifier = titleModifier"))
     }
+
+    @Test
+    fun dynamicVideoCard_recordsCoverBoundsForReturnTarget() {
+        val source = File("src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt")
+            .readText()
+
+        assertTrue(source.contains("val coverBoundsRef = remember"))
+        assertTrue(source.contains("coverBoundsRef.value?.let { bounds ->"))
+        assertTrue(source.contains("modifier = coverModifier.onGloballyPositioned"))
+    }
 }

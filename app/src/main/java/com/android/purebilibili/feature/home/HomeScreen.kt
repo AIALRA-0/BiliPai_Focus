@@ -98,6 +98,7 @@ import com.android.purebilibili.feature.home.policy.resolveHomePagerSettledActio
 import com.android.purebilibili.feature.home.policy.shouldAnimateHomePagerToCategory
 import com.android.purebilibili.feature.home.policy.HomePagerSettledAction
 import com.android.purebilibili.feature.home.policy.resolveHomeInitialTopTabPage
+import com.android.purebilibili.feature.home.policy.shouldEnableHomeTopPagerUserScroll
 import com.android.purebilibili.feature.home.policy.shouldSkipHomePagerStateDrive
 import com.android.purebilibili.feature.home.policy.shouldTreatInitialHomePagerPageAsSyncedWithState
 import com.android.purebilibili.feature.home.policy.shouldUseInitialHomePagerSnap
@@ -198,6 +199,7 @@ fun HomeScreen(
     onStoryClick: () -> Unit = {},  //  [新增] 竖屏短视频
     onSpaceClick: (Long) -> Unit = {},
     globalHazeState: dev.chrisbanes.haze.HazeState? = null,  //  [新增] 全局底栏模糊状态
+    isTopLevelActive: Boolean = true,
     isReturningFromVideoDetail: Boolean = false,
     isQuickReturningFromVideoDetail: Boolean = false,
     onVideoDetailReturnAnimationConsumed: () -> Unit = {}
@@ -1335,6 +1337,7 @@ fun HomeScreen(
                         HorizontalPager(
                             state = pagerState,
                             beyondViewportPageCount = 0,
+                            userScrollEnabled = shouldEnableHomeTopPagerUserScroll(isTopLevelActive),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .homeFeedTopVideoFadeMask(listTopPadding + 36.dp),

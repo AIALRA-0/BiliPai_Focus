@@ -44,6 +44,28 @@ class CrashReporterLiveTracePolicyTest {
     }
 
     @Test
+    fun remoteCrashlyticsRequiresFirebaseAndCrashTrackingConsent() {
+        assertTrue(
+            shouldUseRemoteCrashlytics(
+                firebaseConfigured = true,
+                crashTrackingEnabled = true
+            )
+        )
+        assertFalse(
+            shouldUseRemoteCrashlytics(
+                firebaseConfigured = false,
+                crashTrackingEnabled = true
+            )
+        )
+        assertFalse(
+            shouldUseRemoteCrashlytics(
+                firebaseConfigured = true,
+                crashTrackingEnabled = false
+            )
+        )
+    }
+
+    @Test
     fun sensitiveCrashFieldsAndUserIdAreBlocked() {
         assertTrue(isSensitiveCrashCustomKey("video_bvid"))
         assertTrue(isSensitiveCrashCustomKey("danmaku_cid"))

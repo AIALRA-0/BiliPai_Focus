@@ -95,6 +95,50 @@ class CollectionEpisodePolicyTest {
     }
 
     @Test
+    fun `landscape collection lazy index includes section headers`() {
+        val result = resolveCurrentUgcEpisodeLazyListIndex(
+            sections = listOf(
+                UgcSection(
+                    title = "上",
+                    episodes = listOf(
+                        UgcEpisode(id = 1L, bvid = "BV1", cid = 11L),
+                        UgcEpisode(id = 2L, bvid = "BV2", cid = 22L)
+                    )
+                ),
+                UgcSection(
+                    title = "下",
+                    episodes = listOf(
+                        UgcEpisode(id = 3L, bvid = "BV3", cid = 33L)
+                    )
+                )
+            ),
+            currentBvid = "BV3",
+            currentCid = 33L
+        )
+
+        assertEquals(4, result)
+    }
+
+    @Test
+    fun `landscape collection lazy index falls back to bvid when cid is absent`() {
+        val result = resolveCurrentUgcEpisodeLazyListIndex(
+            sections = listOf(
+                UgcSection(
+                    title = "合集",
+                    episodes = listOf(
+                        UgcEpisode(id = 1L, bvid = "BV1", cid = 11L),
+                        UgcEpisode(id = 2L, bvid = "BV2", cid = 22L)
+                    )
+                )
+            ),
+            currentBvid = "BV2",
+            currentCid = 0L
+        )
+
+        assertEquals(2, result)
+    }
+
+    @Test
     fun `publish time text uses arc pubdate`() {
         val result = resolveCollectionEpisodePublishTimeText(
             episode = UgcEpisode(arc = UgcEpisodeArc(pubdate = 1_715_427_472L)),

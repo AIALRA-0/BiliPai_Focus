@@ -21,6 +21,22 @@ internal fun resolvePortraitCommentHostMainSheetVisible(
     subReplyVisible: Boolean
 ): Boolean = commentSheetVisible || subReplyVisible
 
+internal data class PortraitCommentSheetVisibility(
+    val commentSheetVisible: Boolean,
+    val subReplyVisible: Boolean
+)
+
+internal fun resolvePortraitCommentSheetVisibility(
+    active: Boolean,
+    commentSheetVisible: Boolean,
+    subReplyVisible: Boolean
+): PortraitCommentSheetVisibility {
+    return PortraitCommentSheetVisibility(
+        commentSheetVisible = active && commentSheetVisible,
+        subReplyVisible = active && subReplyVisible
+    )
+}
+
 internal data class PortraitCommentPlayerTransform(
     val progress: Float,
     val scale: Float,

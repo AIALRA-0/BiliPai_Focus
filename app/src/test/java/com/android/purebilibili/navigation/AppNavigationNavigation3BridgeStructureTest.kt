@@ -100,6 +100,17 @@ class AppNavigationNavigation3BridgeStructureTest {
     }
 
     @Test
+    fun dynamicDetailProvidesVideoCardSourceRouteForSharedElementReturn() {
+        val source = appNavigationSource()
+        val dynamicDetailBranch = source
+            .substringAfter("BiliPaiNavEntryContentRole.DYNAMIC_DETAIL ->")
+            .substringBefore("BiliPaiNavEntryContentRole.ARTICLE_DETAIL ->")
+
+        assertTrue(dynamicDetailBranch.contains("LocalVideoCardSharedElementSourceRoute provides dynamicKey.toLegacyRoute()"))
+        assertTrue(dynamicDetailBranch.contains("DynamicDetailScreen("))
+    }
+
+    @Test
     fun classicBackMarksVideoReturnBeforePoppingNavigation3Stack() {
         val source = appNavigationSource()
 

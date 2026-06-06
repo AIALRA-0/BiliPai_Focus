@@ -48,6 +48,7 @@ import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.ChapterListPanel
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
+import com.android.purebilibili.feature.video.ui.components.resolveCurrentUgcEpisodeLazyListIndex
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.data.repository.VideoRepository
@@ -79,6 +80,7 @@ import com.android.purebilibili.core.util.Logger
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -578,6 +580,7 @@ fun VideoPlayerOverlay(
     var showRatioMenu by remember { mutableStateOf(false) }
     // [新增] 侧边栏显示状态
     var showEndDrawer by remember { mutableStateOf(false) }
+    var endDrawerInitialTab by remember { mutableIntStateOf(0) }
     var showDanmakuSettings by remember { mutableStateOf(false) }
     var showVideoSettings by remember { mutableStateOf(false) }  //  新增
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
@@ -1181,7 +1184,10 @@ fun VideoPlayerOverlay(
                             }
                         },
                         onCastClick = onCastClickAction,
-                        onMoreClick = { showEndDrawer = true },
+                        onMoreClick = {
+                            endDrawerInitialTab = 0
+                            showEndDrawer = true
+                        },
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 } else {
@@ -1236,6 +1242,7 @@ fun VideoPlayerOverlay(
                         if (pages.size > 1) {
                             showPageSelectorSheet = true
                         } else {
+                            endDrawerInitialTab = if (ugcSeason?.sections?.any { it.episodes.isNotEmpty() } == true) 1 else 0
                             showEndDrawer = true
                         }
                     },
@@ -1887,6 +1894,7 @@ fun VideoPlayerOverlay(
             ugcSeason = ugcSeason,
             currentBvid = bvid,
             currentCid = cid,
+            initialSelectedTab = endDrawerInitialTab,
             ownerName = videoOwnerName,
             ownerFace = videoOwnerFace,
             isFollowed = isFollowed,
@@ -2150,6 +2158,7 @@ fun LandscapeEndDrawer(
     ugcSeason: com.android.purebilibili.data.model.response.UgcSeason?,
     currentBvid: String,
     currentCid: Long,
+    initialSelectedTab: Int = 0,
     // UP Info
     ownerName: String,
     ownerFace: String,
@@ -2302,8 +2311,13 @@ fun LandscapeEndDrawer(
                     HorizontalDivider(color = dividerColor)
                     
                     // 2. Tab Row
-                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集
                     val hasSeason = ugcSeason != null && ugcSeason.sections.isNotEmpty()
+                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集
+                    LaunchedEffect(visible, initialSelectedTab, hasSeason) {
+                        if (visible) {
+                            selectedTab = if (hasSeason) initialSelectedTab.coerceIn(0, 1) else 0
+                        }
+                    }
                     
                     if (hasSeason) {
                         PrimaryTabRow(
@@ -2365,12 +2379,27 @@ fun LandscapeEndDrawer(
                             }
                         } else if (hasSeason) {
                             // 合集列表
+                            val seasonSections = ugcSeason.sections
+                            val collectionListState = rememberLazyListState()
+                            val currentLazyIndex = remember(seasonSections, currentBvid, currentCid) {
+                                resolveCurrentUgcEpisodeLazyListIndex(
+                                    sections = seasonSections,
+                                    currentBvid = currentBvid,
+                                    currentCid = currentCid
+                                )
+                            }
+                            LaunchedEffect(visible, selectedTab, currentLazyIndex) {
+                                if (visible && selectedTab == 1 && currentLazyIndex >= 0) {
+                                    collectionListState.scrollToItem(currentLazyIndex)
+                                }
+                            }
                             LazyColumn(
+                                state = collectionListState,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(layoutPolicy.listContentPaddingDp.dp),
                                 verticalArrangement = Arrangement.spacedBy(layoutPolicy.listItemSpacingDp.dp)
                             ) {
-                                ugcSeason.sections.forEach { section ->
+                                seasonSections.forEach { section ->
                                     item {
                                         Text(
                                             text = section.title,

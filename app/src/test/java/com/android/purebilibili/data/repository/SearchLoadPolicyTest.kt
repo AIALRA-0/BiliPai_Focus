@@ -11,10 +11,9 @@ import kotlin.test.assertTrue
 class SearchLoadPolicyTest {
 
     @Test
-    fun `guest first page video search retries fallback when primary result is empty`() {
+    fun `first page video search retries fallback when primary result is empty`() {
         assertTrue(
-            shouldFallbackGuestVideoSearch(
-                isLoggedIn = false,
+            shouldFallbackEmptyFirstPageVideoSearch(
                 page = 1,
                 primaryResultCount = 0
             )
@@ -22,23 +21,21 @@ class SearchLoadPolicyTest {
     }
 
     @Test
-    fun `logged in users keep primary result even when empty`() {
+    fun `later pages do not retry fallback when primary result is empty`() {
         assertFalse(
-            shouldFallbackGuestVideoSearch(
-                isLoggedIn = true,
-                page = 1,
-                primaryResultCount = 0
-            )
-        )
-    }
-
-    @Test
-    fun `guest later pages do not trigger fallback on empty result`() {
-        assertFalse(
-            shouldFallbackGuestVideoSearch(
-                isLoggedIn = false,
+            shouldFallbackEmptyFirstPageVideoSearch(
                 page = 2,
                 primaryResultCount = 0
+            )
+        )
+    }
+
+    @Test
+    fun `non empty first page keeps primary result`() {
+        assertFalse(
+            shouldFallbackEmptyFirstPageVideoSearch(
+                page = 1,
+                primaryResultCount = 1
             )
         )
     }

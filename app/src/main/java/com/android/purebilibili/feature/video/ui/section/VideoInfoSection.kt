@@ -58,8 +58,10 @@ import com.android.purebilibili.core.ui.OfficialVerifyBadge
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.components.UserUpBadge
 import com.android.purebilibili.core.ui.resolveOfficialVerifyBadgeFromRole
+import com.android.purebilibili.core.ui.transition.resolveVideoMetadataSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
+import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.data.model.response.BgmDetailData
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.AiSummaryData
@@ -328,6 +330,11 @@ fun VideoTitleWithDesc(
         coverSharedEnabled = coverSharedEnabled,
         isQuickReturnLimited = isQuickReturnLimitedForSharedElements
     )
+    val metadataSharedTransitionMotionSpec = remember(metadataSharedEnabled) {
+        resolveVideoMetadataSharedTransitionMotionSpec(
+            transitionEnabled = metadataSharedEnabled
+        )
+    }
     
     Column(
         modifier = Modifier
@@ -351,7 +358,7 @@ fun VideoTitleWithDesc(
                         sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey(info.bvid)),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
-                            androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                            videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
                         }
                     )
                 }
@@ -402,7 +409,7 @@ fun VideoTitleWithDesc(
                             sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(info.bvid)),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
-                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                                videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
                             }
                         )
                     }
@@ -428,7 +435,7 @@ fun VideoTitleWithDesc(
                             sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoDanmakuSharedElementKey(info.bvid)),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
-                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                                videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
                             }
                         )
                     }
@@ -676,6 +683,11 @@ fun UpInfoSection(
         coverSharedEnabled = coverSharedEnabled,
         isQuickReturnLimited = isQuickReturnLimitedForSharedElements
     )
+    val metadataSharedTransitionMotionSpec = remember(metadataSharedEnabled) {
+        resolveVideoMetadataSharedTransitionMotionSpec(
+            transitionEnabled = metadataSharedEnabled
+        )
+    }
     val upStatsText = resolveUpStatsText(
         followerCount = followerCount,
         videoCount = videoCount
@@ -703,7 +715,7 @@ fun UpInfoSection(
                             sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoAvatarSharedElementKey(info.bvid)),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
-                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                                videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
                             },
                             clipInOverlayDuringTransition = OverlayClip(CircleShape)
                         )
@@ -752,7 +764,7 @@ fun UpInfoSection(
                                 sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoUpNameSharedElementKey(info.bvid)),
                                 animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                 boundsTransform = { _, _ ->
-                                    androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                                    videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
                                 }
                             )
                         }
@@ -810,7 +822,7 @@ fun UpInfoSection(
                         sharedContentState = rememberSharedContentState(key = com.android.purebilibili.core.ui.transition.videoUpActionSharedElementKey(info.bvid)),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
-                            androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                            videoSharedElementBoundsTransformSpec(metadataSharedTransitionMotionSpec)
                         },
                         clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(16.dp))
                     )

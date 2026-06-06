@@ -78,9 +78,9 @@ fun VideoCardLarge(
         with(density) { configuration.screenHeightDp.dp.toPx() }
     }
     val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
-    val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val coverBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
     val triggerClick = {
-        cardBoundsRef.value?.let { bounds ->
+        coverBoundsRef.value?.let { bounds ->
             CardPositionManager.recordVideoCardPosition(
                 bvid = archive.bvid,
                 sourceRoute = sourceRoute,
@@ -96,9 +96,6 @@ fun VideoCardLarge(
 
     var modifier = Modifier
         .fillMaxWidth()
-        .onGloballyPositioned { coordinates ->
-            cardBoundsRef.value = coordinates.boundsInRoot()
-        }
         .clickable(onClick = triggerClick)
 
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -166,7 +163,9 @@ fun VideoCardLarge(
             isCollection = isCollection,
             cornerBadgeText = cornerBadgeText,
             coverShape = coverShape,
-            modifier = coverModifier
+            modifier = coverModifier.onGloballyPositioned { coordinates ->
+                coverBoundsRef.value = coordinates.boundsInRoot()
+            }
         )
         Spacer(modifier = Modifier.height(6.dp))
         VideoCardLargeInfo(

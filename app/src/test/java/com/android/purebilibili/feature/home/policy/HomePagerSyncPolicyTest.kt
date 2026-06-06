@@ -10,6 +10,12 @@ import kotlin.test.assertTrue
 class HomePagerSyncPolicyTest {
 
     @Test
+    fun topPagerIgnoresBackGestureWhileVideoDetailCoversHome() {
+        assertFalse(shouldEnableHomeTopPagerUserScroll(isTopLevelActive = false))
+        assertTrue(shouldEnableHomeTopPagerUserScroll(isTopLevelActive = true))
+    }
+
+    @Test
     fun pagerToCategorySync_waitsUntilScrollingStops() {
         val shouldSwitch = shouldSwitchHomeCategoryFromPager(
             hasSyncedPagerWithState = true,

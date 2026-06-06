@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-    <sub>Last updated: 2026-06-04 · Synced to v9.0.5 Focus.5 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+    <sub>Last updated: 2026-06-06 · Synced to v9.1.1 Focus.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
   </p>
 
   <p align="center">
-  <img src="https://img.shields.io/badge/Version-9.0.5-focus.5-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-9.1.1-focus.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/AIALRA-0/BiliPai_Focus?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/AIALRA-0/BiliPai_Focus?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/AIALRA-0/BiliPai_Focus?style=flat-square&color=purple" alt="Last Commit">
@@ -436,8 +436,10 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v9.0.5 Focus.5 · 2026-06-04)
+### Latest (v9.1.1 Focus.1 · 2026-06-06)
 
+- Merged upstream `9.0.6`, `9.0.7`, `9.1.0`, and `9.1.1` stability updates, including dynamic comment pagination, Android 15 download service handling, profile color fixes, video return behavior, and bottom bar visual fixes.
+- Fixed home recommendation manual refresh being stuck at the old pagination tail: pull-to-refresh now requests the fresh feed, bypasses startup preload cache, and resets the recommendation cursor after success.
 - Focus search settings now use positive "show" semantics: `Show hot searches`, `Show search discovery`, and `Show search history`; switching them on shows the full section, switching them off fully hides it.
 - Fixed feed parsing when upstream APIs return numeric boolean values (`0/1`) in home, dynamic, space dynamic, popular, favorite, and navigation responses.
 - Home recommendations now continue fetching after filters leave the first screen sparse, and empty filtered pages no longer kill pagination.

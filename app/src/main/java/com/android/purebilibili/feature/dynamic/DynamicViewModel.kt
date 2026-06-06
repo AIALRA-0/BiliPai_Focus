@@ -1024,6 +1024,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     
     private val _commentsLoading = MutableStateFlow(false)
     val commentsLoading: StateFlow<Boolean> = _commentsLoading.asStateFlow()
+
+    private val _commentsLoadingMore = MutableStateFlow(false)
+    val commentsLoadingMore: StateFlow<Boolean> = _commentsLoadingMore.asStateFlow()
+
+    private var commentNextPage = 1
+    private var commentsEnd = true
+    private var commentGrpcNextOffset: String? = null
     
     // 点赞状态缓存 (dynamicId -> isLiked)
     private val _likedDynamics = MutableStateFlow<Set<String>>(emptySet())
@@ -1072,6 +1079,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         _selectedCommentTarget.value = null
         _comments.value = emptyList()
         _subReplyState.value = SubReplyUiState()
+        _commentsLoadingMore.value = false
+        commentNextPage = 1
+        commentsEnd = true
+        commentGrpcNextOffset = null
         // [新增] 清空计数
         _commentTotalCount.value = 0
     }
@@ -1086,7 +1097,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     ) {
         viewModelScope.launch {
             _commentsLoading.value = true
+            _commentsLoadingMore.value = false
             _selectedCommentTarget.value = null
+            commentNextPage = 1
+            commentsEnd = true
+            commentGrpcNextOffset = null
             val fallbackCount = item.modules.module_stat?.comment?.count ?: 0
             _commentTotalCount.value = fallbackCount
             
@@ -1123,7 +1138,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                             target = target,
                             replies = payload.replies,
                             totalCount = payload.totalCount,
-                            candidateIndex = index
+                            candidateIndex = index,
+                            nextPage = 2,
+                            isEnd = resolveDynamicMainCommentPageEnd(
+                                cursorIsEnd = data.cursor.isEnd,
+                                fetchedReplyCount = data.replies.orEmpty().size,
+                                loadedReplyCount = payload.replies.size,
+                                totalCount = payload.totalCount
+                            ),
+                            grpcNextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() }
                         )
                     }.onFailure { error ->
                         com.android.purebilibili.core.util.Logger.w(
@@ -1135,7 +1158,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                                 target = target,
                                 replies = emptyList(),
                                 totalCount = exactCount ?: 0,
-                                candidateIndex = index
+                                candidateIndex = index,
+                                nextPage = 2,
+                                isEnd = true,
+                                grpcNextOffset = null
                             )
                         }
                     }
@@ -1149,6 +1175,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     _selectedCommentTarget.value = selected.target
                     _comments.value = selected.replies
                     _commentTotalCount.value = selected.totalCount
+                    commentNextPage = selected.nextPage
+                    commentsEnd = selected.isEnd
+                    commentGrpcNextOffset = selected.grpcNextOffset
                     if (routedRootReplyId > 0L) {
                         openSubReplyFromRoute(
                             rootReplyId = routedRootReplyId,
@@ -1158,6 +1187,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     _comments.value = emptyList()
                     _commentTotalCount.value = fallbackCount
+                    commentNextPage = 1
+                    commentsEnd = true
+                    commentGrpcNextOffset = null
                 }
             } catch (e: Exception) {
                 com.android.purebilibili.core.util.Logger.e("DynamicVM", "加载评论异常: ${e.message}")
@@ -1165,6 +1197,51 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             } finally {
                 _commentsLoading.value = false
             }
+        }
+    }
+
+    fun loadMoreComments() {
+        val target = _selectedCommentTarget.value ?: return
+        if (_commentsLoading.value || _commentsLoadingMore.value || commentsEnd) return
+
+        val pageToLoad = commentNextPage
+        _commentsLoadingMore.value = true
+        viewModelScope.launch {
+            CommentRepository.getCommentsForSubject(
+                oid = target.oid,
+                type = target.type,
+                page = pageToLoad,
+                ps = 20,
+                mode = 3,
+                paginationOffset = commentGrpcNextOffset
+            ).onSuccess { data ->
+                if (_selectedCommentTarget.value != target) return@onSuccess
+
+                val currentReplies = _comments.value
+                val newReplies = data.replies.orEmpty()
+                val mergedReplies = (currentReplies + newReplies).distinctBy { it.rpid }
+                val totalCount = maxOf(
+                    data.getAllCount(),
+                    _commentTotalCount.value,
+                    mergedReplies.size
+                )
+                _comments.value = mergedReplies
+                _commentTotalCount.value = totalCount
+                commentNextPage = pageToLoad + 1
+                commentGrpcNextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() }
+                commentsEnd = resolveDynamicMainCommentPageEnd(
+                    cursorIsEnd = data.cursor.isEnd,
+                    fetchedReplyCount = newReplies.size,
+                    loadedReplyCount = mergedReplies.size,
+                    totalCount = totalCount
+                )
+            }.onFailure { error ->
+                com.android.purebilibili.core.util.Logger.w(
+                    "DynamicVM",
+                    "动态评论加载更多失败: oid=${target.oid}, type=${target.type}, page=$pageToLoad, error=${error.message}"
+                )
+            }
+            _commentsLoadingMore.value = false
         }
     }
     
