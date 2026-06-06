@@ -9,6 +9,7 @@ import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.BangumiRepository
 import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.FavoriteRepository
+import com.android.purebilibili.data.repository.hasDynamicPaginationProgress
 import com.android.purebilibili.data.repository.shouldContinueDynamicFetchAfterFilter
 import com.android.purebilibili.feature.bangumi.MY_FOLLOW_TYPE_BANGUMI
 import kotlinx.coroutines.CancellationException
@@ -1172,7 +1173,10 @@ class SpaceViewModel(
                     pagesFetched += 1
                     val previousOffset = offset
                     offset = responseData.offset
-                    hasMore = responseData.has_more
+                    hasMore = responseData.has_more && hasDynamicPaginationProgress(
+                        previousOffset = previousOffset,
+                        nextOffset = offset
+                    )
                     val newlyAccumulatedVisibleCount = if (refresh) {
                         accumulated.size
                     } else {

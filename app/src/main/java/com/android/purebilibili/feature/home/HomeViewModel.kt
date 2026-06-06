@@ -1733,7 +1733,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     type = "video"
                 )
                 val extraItems = extraResult.getOrElse { break }
-                if (extraItems.isEmpty()) break
+                if (extraItems.isEmpty()) {
+                    continuationFetches += 1
+                    if (!com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
+                            scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW,
+                            type = "video"
+                        )
+                    ) {
+                        break
+                    }
+                    continue
+                }
                 val extraVideos = mapHomeFollowDynamicItemsToVideos(
                     items = extraItems,
                     blockedMids = requestBlockedMids

@@ -21,14 +21,30 @@ class DynamicFeedFetchPolicyTest {
     }
 
     @Test
-    fun `stop loading when visible items already found`() {
-        assertFalse(
+    fun `continue loading when visible items are still below target`() {
+        assertTrue(
             shouldContinueDynamicFetchAfterFilter(
                 accumulatedVisibleCount = 2,
                 hasMore = true,
                 previousOffset = "100",
                 nextOffset = "200",
                 pagesFetched = 1,
+                targetVisibleCount = 16,
+                maxPages = 3
+            )
+        )
+    }
+
+    @Test
+    fun `stop loading when target visible count is reached`() {
+        assertFalse(
+            shouldContinueDynamicFetchAfterFilter(
+                accumulatedVisibleCount = 16,
+                hasMore = true,
+                previousOffset = "100",
+                nextOffset = "200",
+                pagesFetched = 1,
+                targetVisibleCount = 16,
                 maxPages = 3
             )
         )
@@ -74,5 +90,13 @@ class DynamicFeedFetchPolicyTest {
                 maxPages = 3
             )
         )
+    }
+
+    @Test
+    fun `pagination progress requires a non blank changed offset`() {
+        assertTrue(hasDynamicPaginationProgress(previousOffset = "", nextOffset = "next"))
+        assertTrue(hasDynamicPaginationProgress(previousOffset = "100", nextOffset = "200"))
+        assertFalse(hasDynamicPaginationProgress(previousOffset = "100", nextOffset = "100"))
+        assertFalse(hasDynamicPaginationProgress(previousOffset = "100", nextOffset = " "))
     }
 }

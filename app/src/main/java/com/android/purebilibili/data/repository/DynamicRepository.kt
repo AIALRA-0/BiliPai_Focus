@@ -63,6 +63,11 @@ object DynamicRepository {
                     break
                 }
 
+                val pageHasMore = data.has_more && hasDynamicPaginationProgress(
+                    previousOffset = previousOffset,
+                    nextOffset = data.offset
+                )
+
                 // 更新分页状态
                 requestOffset = data.offset
                 feedPagination.update(
@@ -70,7 +75,7 @@ object DynamicRepository {
                     type = type,
                     offset = data.offset,
                     updateBaseline = data.update_baseline.ifBlank { refreshUpdateBaseline },
-                    hasMore = data.has_more
+                    hasMore = pageHasMore
                 )
 
                 // 过滤不可见的动态
@@ -79,7 +84,7 @@ object DynamicRepository {
 
                 if (!shouldContinueDynamicFetchAfterFilter(
                         accumulatedVisibleCount = visibleItems.size,
-                        hasMore = data.has_more,
+                        hasMore = pageHasMore,
                         previousOffset = previousOffset,
                         nextOffset = data.offset,
                         pagesFetched = pagesFetched
@@ -136,11 +141,16 @@ object DynamicRepository {
                     break
                 }
 
+                val pageHasMore = data.has_more && hasDynamicPaginationProgress(
+                    previousOffset = previousOffset,
+                    nextOffset = data.offset
+                )
+
                 // 更新分页状态
                 userFeedPagination.update(
                     hostMid = hostMid,
                     offset = data.offset,
-                    hasMore = data.has_more
+                    hasMore = pageHasMore
                 )
 
                 // 过滤不可见的动态
@@ -149,7 +159,7 @@ object DynamicRepository {
 
                 if (!shouldContinueDynamicFetchAfterFilter(
                         accumulatedVisibleCount = visibleItems.size,
-                        hasMore = data.has_more,
+                        hasMore = pageHasMore,
                         previousOffset = previousOffset,
                         nextOffset = data.offset,
                         pagesFetched = pagesFetched

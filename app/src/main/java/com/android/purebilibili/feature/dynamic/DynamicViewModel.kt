@@ -64,14 +64,14 @@ internal fun resolveDynamicStartupLoadPlan(): DynamicStartupLoadPlan {
     return DynamicStartupLoadPlan(
         refreshFeedImmediately = true,
         loadLiveStatusImmediately = true,
-        loadFollowingsImmediately = false,
-        followingsHydrationDelayMs = 1_200L,
-        initialFollowingsPageLimit = 1
+        loadFollowingsImmediately = true,
+        followingsHydrationDelayMs = 0L,
+        initialFollowingsPageLimit = resolveDynamicFollowingsPageLimit(isStartupHydration = true)
     )
 }
 
 internal fun resolveDynamicFollowingsPageLimit(isStartupHydration: Boolean): Int {
-    return if (isStartupHydration) 1 else 3
+    return if (isStartupHydration) 6 else 20
 }
 
 private const val DYNAMIC_STARTUP_MAX_RETRIES = 2
@@ -283,8 +283,24 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         startupPlan: DynamicStartupLoadPlan = resolveDynamicStartupLoadPlan()
     ) {
         viewModelScope.launch {
-            refreshDataWithStartupRecovery()
-            scheduleStartupFollowingsHydration(startupPlan)
+            coroutineScope {
+                val timelineJob = async { refreshDataWithStartupRecovery() }
+                val followingsJob = if (startupPlan.loadFollowingsImmediately) {
+                    async {
+                        loadAllFollowings(
+                            force = false,
+                            pageLimit = startupPlan.initialFollowingsPageLimit
+                        )
+                    }
+                } else {
+                    null
+                }
+                timelineJob.await()
+                followingsJob?.await()
+            }
+            if (!startupPlan.loadFollowingsImmediately) {
+                scheduleStartupFollowingsHydration(startupPlan)
+            }
         }
     }
 
@@ -900,7 +916,17 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 type = requestType
             )
             val extraItems = extraResult.getOrElse { break }
-            if (extraItems.isEmpty()) break
+            if (extraItems.isEmpty()) {
+                extraPagesFetched += 1
+                if (!DynamicRepository.hasMoreData(
+                        scope = DynamicFeedScope.DYNAMIC_SCREEN,
+                        type = requestType
+                    )
+                ) {
+                    break
+                }
+                continue
+            }
             accumulatedItems = appendDistinctByKey(
                 accumulatedItems,
                 extraItems,
