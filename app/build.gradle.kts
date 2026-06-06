@@ -173,8 +173,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：官方主版本 + Focus 子版本
         // 更新日志：CHANGELOG.md
-        versionCode = 223
-        versionName = "9.1.1-focus.1"
+        versionCode = 224
+        versionName = "9.1.1-focus.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

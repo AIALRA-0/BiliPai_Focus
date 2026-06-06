@@ -51,7 +51,7 @@ class CaptchaManager(private val activity: Activity) {
         onCancel: () -> Unit = {}
     ) {
         try {
-            Logger.d(TAG, "Starting WebView captcha with gt=$gt, challenge=$challenge")
+            Logger.d(TAG, "Starting WebView captcha")
             val isDarkMode = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             hideKeyboard()
             
@@ -82,7 +82,7 @@ class CaptchaManager(private val activity: Activity) {
                 addJavascriptInterface(object {
                     @JavascriptInterface
                     fun onCaptchaSuccess(validate: String, seccode: String, newChallenge: String) {
-                        Logger.d(TAG, "Captcha success via JS: validate=$validate, challenge=$newChallenge")
+                        Logger.d(TAG, "Captcha success via JS")
                         activity.runOnUiThread {
                             dialog?.dismiss()
                             //  使用验证后返回的新 challenge
@@ -92,7 +92,7 @@ class CaptchaManager(private val activity: Activity) {
                     
                     @JavascriptInterface
                     fun onCaptchaFailed(error: String) {
-                        com.android.purebilibili.core.util.Logger.e(TAG, "Captcha failed via JS: $error")
+                        com.android.purebilibili.core.util.Logger.e(TAG, "Captcha failed via JS")
                         activity.runOnUiThread {
                             dialog?.dismiss()
                             onFailed(error)

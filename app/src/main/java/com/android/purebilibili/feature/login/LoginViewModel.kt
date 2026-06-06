@@ -69,7 +69,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 //  这里使用 ?: 抛出异常，解决了 Type mismatch 问题
                 qrcodeKey = data.qrcode_key ?: throw Exception("二维码 Key 为空")
 
-                Logger.d("LoginDebug", "2. Web 二维码获取成功 Key: $qrcodeKey")
+                Logger.d("LoginDebug", "2. Web 二维码获取成功")
                 val bitmap = generateQrBitmap(url)
                 currentBitmap = bitmap //  保存以便在 Scanned 状态使用
                 _state.value = LoginState.QrCode(bitmap)
@@ -133,7 +133,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
                             if (sessData.isNotEmpty()) {
                                 Logger.d("LoginDebug", " 成功提取 SESSDATA")
-                                Logger.d("LoginDebug", " 成功提取 bili_jct=${biliJct.isNotEmpty()}")
+                                Logger.d("LoginDebug", " 成功提取 bili_jct")
 
                                 // 保存并更新缓存
                                 TokenManager.saveCookies(getApplication(), sessData)
@@ -213,7 +213,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 val response = NetworkModule.passportApi.getCaptcha()
                 if (response.code == 0 && response.data != null) {
                     currentCaptchaData = response.data
-                    Logger.d("LoginDebug", "极验参数获取成功: gt=${response.data.geetest?.gt}")
+                    Logger.d("LoginDebug", "极验参数获取成功")
                     _state.value = LoginState.CaptchaReady(response.data)
                 } else {
                     _state.value = LoginState.Error("获取验证参数失败: ${response.message}")
@@ -232,7 +232,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         currentValidate = validate
         currentSeccode = seccode
         currentChallenge = challenge
-        Logger.d("LoginDebug", "极验验证成功: validate=$validate")
+        Logger.d("LoginDebug", "极验验证成功")
     }
     
     /**
@@ -250,7 +250,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 
-                Logger.d("LoginDebug", "发送短信验证码到: +$countryCode $phone")
+                Logger.d("LoginDebug", "发送短信验证码")
                 
                 val response = NetworkModule.passportApi.sendSmsCode(
                     cid = countryCode,
@@ -263,7 +263,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 
                 if (response.code == 0 && response.data != null) {
                     currentCaptchaKey = response.data.captchaKey
-                    Logger.d("LoginDebug", "短信发送成功: captchaKey=${currentCaptchaKey}")
+                    Logger.d("LoginDebug", "短信发送成功")
                     _state.value = LoginState.SmsSent(currentCaptchaKey)
                 } else {
                     _state.value = LoginState.Error("短信发送失败: ${response.message}")
@@ -282,10 +282,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Logger.d(
-                    "LoginDebug",
-                    "短信验证码登录: cid=$currentCountryCode, phone=$currentPhone, code=$code"
-                )
+                Logger.d("LoginDebug", "短信验证码登录")
                 
                 val response = NetworkModule.passportApi.loginBySms(
                     cid = currentCountryCode,
@@ -316,7 +313,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Logger.d("LoginDebug", "密码登录: phone=$phone")
+                Logger.d("LoginDebug", "密码登录")
                 
                 // 1. 获取 RSA 公钥
                 val keyResponse = NetworkModule.passportApi.getWebKey()
@@ -384,7 +381,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         if (sessData.isNotEmpty()) {
-            Logger.d("LoginDebug", " 登录成功: SESSDATA=$sessData")
+            Logger.d("LoginDebug", " 登录成功: SESSDATA 已提取")
             TokenManager.saveCookies(getApplication(), sessData)
             if (biliJct.isNotEmpty()) {
                 TokenManager.saveCsrf(getApplication(), biliJct)
@@ -469,7 +466,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     tvAuthCode = data.authCode ?: throw Exception("TV auth_code 为空")
                     val qrUrl = data.url ?: throw Exception("TV 二维码 URL 为空")
                     
-                    Logger.d("TvLogin", "2. TV 二维码获取成功: authCode=${tvAuthCode.take(10)}...")
+                    Logger.d("TvLogin", "2. TV 二维码获取成功")
                     
                     val bitmap = generateQrBitmap(qrUrl)
                     currentBitmap = bitmap
@@ -477,7 +474,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     
                     startTvPolling()
                 } else {
-                    Logger.d("TvLogin", "获取 TV 二维码失败: code=${response.code}, msg=${response.message}")
+                    Logger.d("TvLogin", "获取 TV 二维码失败")
                     _state.value = LoginState.Error("获取二维码失败: ${response.message}")
                 }
             } catch (e: Exception) {
@@ -506,7 +503,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     
                     val response = NetworkModule.passportApi.pollTvQrCode(signedParams)
                     
-                    Logger.d("TvLogin", "TV 轮询状态: code=${response.code}")
+                    Logger.d("TvLogin", "TV 轮询状态已更新")
                     
                     when (response.code) {
                         0 -> {
