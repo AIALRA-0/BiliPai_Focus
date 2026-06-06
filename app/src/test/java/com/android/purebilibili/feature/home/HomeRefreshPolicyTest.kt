@@ -47,7 +47,7 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
-    fun resolveRecommendFeedRequestIndex_advancesForManualRefreshAndLoadMore() {
+    fun resolveRecommendFeedRequestIndex_refreshesFromFreshIndexAndOnlyLoadMoreAdvances() {
         assertEquals(
             0,
             resolveRecommendFeedRequestIndex(
@@ -57,7 +57,7 @@ class HomeRefreshPolicyTest {
             )
         )
         assertEquals(
-            4,
+            0,
             resolveRecommendFeedRequestIndex(
                 isLoadMore = false,
                 isManualRefresh = true,
@@ -75,36 +75,44 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
-    fun shouldAdvanceRecommendFeedRequestIndex_whenRecommendRequestReturnedAnyValidVideo() {
-        assertTrue(
-            shouldAdvanceRecommendFeedRequestIndex(
+    fun resolveRecommendFeedCursorAfterSuccess_resetsOnRefreshAndAdvancesOnLoadMore() {
+        assertEquals(
+            2,
+            resolveRecommendFeedCursorAfterSuccess(
                 category = HomeCategory.RECOMMEND,
                 isLoadMore = false,
-                isManualRefresh = true,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 2,
                 validVideoCount = 8
             )
         )
-        assertTrue(
-            shouldAdvanceRecommendFeedRequestIndex(
+        assertEquals(
+            10,
+            resolveRecommendFeedCursorAfterSuccess(
                 category = HomeCategory.RECOMMEND,
                 isLoadMore = true,
-                isManualRefresh = false,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 10,
                 validVideoCount = 8
             )
         )
-        assertFalse(
-            shouldAdvanceRecommendFeedRequestIndex(
+        assertEquals(
+            9,
+            resolveRecommendFeedCursorAfterSuccess(
                 category = HomeCategory.RECOMMEND,
                 isLoadMore = false,
-                isManualRefresh = true,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 2,
                 validVideoCount = 0
             )
         )
-        assertFalse(
-            shouldAdvanceRecommendFeedRequestIndex(
+        assertEquals(
+            9,
+            resolveRecommendFeedCursorAfterSuccess(
                 category = HomeCategory.POPULAR,
                 isLoadMore = false,
-                isManualRefresh = true,
+                currentRefreshIndex = 9,
+                lastSuccessfulRequestIndex = 2,
                 validVideoCount = 8
             )
         )

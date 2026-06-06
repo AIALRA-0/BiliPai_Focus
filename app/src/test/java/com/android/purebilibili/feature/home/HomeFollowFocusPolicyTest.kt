@@ -12,6 +12,70 @@ import kotlin.test.assertTrue
 class HomeFollowFocusPolicyTest {
 
     @Test
+    fun `recommend manual refresh starts from fresh feed index instead of old pagination tail`() {
+        assertEquals(
+            0,
+            resolveRecommendFeedRequestIndex(
+                isLoadMore = false,
+                isManualRefresh = true,
+                currentRefreshIndex = 12
+            )
+        )
+        assertEquals(
+            13,
+            resolveRecommendFeedRequestIndex(
+                isLoadMore = true,
+                isManualRefresh = false,
+                currentRefreshIndex = 12
+            )
+        )
+    }
+
+    @Test
+    fun `recommend cursor resets after manual refresh and advances after load more`() {
+        assertEquals(
+            2,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = false,
+                currentRefreshIndex = 12,
+                lastSuccessfulRequestIndex = 2,
+                validVideoCount = 24
+            )
+        )
+        assertEquals(
+            13,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = true,
+                currentRefreshIndex = 12,
+                lastSuccessfulRequestIndex = 13,
+                validVideoCount = 24
+            )
+        )
+        assertEquals(
+            12,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.RECOMMEND,
+                isLoadMore = false,
+                currentRefreshIndex = 12,
+                lastSuccessfulRequestIndex = 0,
+                validVideoCount = 0
+            )
+        )
+        assertEquals(
+            12,
+            resolveRecommendFeedCursorAfterSuccess(
+                category = HomeCategory.FOLLOW,
+                isLoadMore = false,
+                currentRefreshIndex = 12,
+                lastSuccessfulRequestIndex = 0,
+                validVideoCount = 24
+            )
+        )
+    }
+
+    @Test
     fun `startup load retries empty non auth results with bounded backoff`() {
         assertTrue(
             shouldRetryHomeStartupLoad(

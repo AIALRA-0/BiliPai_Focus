@@ -393,9 +393,9 @@ object VideoRepository {
     }
 
     // 1. 首页推荐 (修改为优先使用预加载数据)
-    suspend fun getHomeVideos(idx: Int = 0): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
+    suspend fun getHomeVideos(idx: Int = 0, allowPreload: Boolean = true): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
         // 如果是首次加载 (idx=0) 且有预加载数据，直接使用
-        if (idx == 0) {
+        if (idx == 0 && allowPreload) {
             val cached = consumePreloadedHomeVideos()
             if (cached != null) {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Using preloaded home data!")

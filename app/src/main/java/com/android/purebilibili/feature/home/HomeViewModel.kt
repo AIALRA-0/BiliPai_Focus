@@ -62,22 +62,26 @@ internal fun resolveRecommendFeedRequestIndex(
     isManualRefresh: Boolean,
     currentRefreshIndex: Int
 ): Int {
-    return if (isLoadMore || isManualRefresh) {
+    return if (isLoadMore) {
         currentRefreshIndex + 1
     } else {
         0
     }
 }
 
-internal fun shouldAdvanceRecommendFeedRequestIndex(
+internal fun resolveRecommendFeedCursorAfterSuccess(
     category: HomeCategory,
     isLoadMore: Boolean,
-    isManualRefresh: Boolean,
+    currentRefreshIndex: Int,
+    lastSuccessfulRequestIndex: Int,
     validVideoCount: Int
-): Boolean {
-    return category == HomeCategory.RECOMMEND &&
-        (isLoadMore || isManualRefresh) &&
-        validVideoCount > 0
+): Int {
+    if (category != HomeCategory.RECOMMEND || validVideoCount <= 0) return currentRefreshIndex
+    return if (isLoadMore) {
+        maxOf(currentRefreshIndex, lastSuccessfulRequestIndex)
+    } else {
+        lastSuccessfulRequestIndex.coerceAtLeast(0)
+    }
 }
 
 internal data class HomeRefreshUndoSnapshot(
@@ -1262,7 +1266,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         //  视频类分类处理
         val videoResult = when (currentCategory) {
-            HomeCategory.RECOMMEND -> VideoRepository.getHomeVideos(recommendRequestIndex) // Recommend uses idx, slightly different
+            HomeCategory.RECOMMEND -> VideoRepository.getHomeVideos(
+                idx = recommendRequestIndex,
+                allowPreload = !isManualRefresh
+            ) // Recommend uses idx, slightly different
             HomeCategory.POPULAR -> {
                 when (popularSubCategory) {
                     PopularSubCategory.COMPREHENSIVE -> VideoRepository.getPopularVideos(pageToFetch)
@@ -1339,15 +1346,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            if (shouldAdvanceRecommendFeedRequestIndex(
-                    category = currentCategory,
-                    isLoadMore = isLoadMore,
-                    isManualRefresh = isManualRefresh,
-                    validVideoCount = validVideoCount
-                )
-            ) {
-                refreshIdx = maxOf(refreshIdx, lastSuccessfulRecommendRequestIndex)
-            }
+            refreshIdx = resolveRecommendFeedCursorAfterSuccess(
+                category = currentCategory,
+                isLoadMore = isLoadMore,
+                currentRefreshIndex = refreshIdx,
+                lastSuccessfulRequestIndex = lastSuccessfulRecommendRequestIndex,
+                validVideoCount = validVideoCount
+            )
 
             val uniqueNewVideos = filteredVideos
 
