@@ -30,10 +30,11 @@ class VideoDetailSkeletonStructureTest {
         assertTrue(source.contains("VideoDetailUpInfoSkeleton()"))
         assertTrue(source.contains("VideoDetailActionButtonsSkeleton()"))
         assertTrue(source.contains("HorizontalVideoCardFrame("))
-        assertTrue(source.contains("HORIZONTAL_VIDEO_CARD_COVER_ASPECT_RATIO"))
+        assertTrue(source.contains("RELATED_VIDEO_CARD_COVER_ASPECT_RATIO"))
         assertTrue(source.contains("coverAspectRatio = cardLayout.coverAspectRatio"))
         assertTrue(source.contains("cardLayout.outerPaddingDp.dp"))
-        assertTrue(source.contains("RoundedCornerShape(12.dp)"))
+        assertTrue(source.contains(".clip(VideoDetailShapes.contentCard())"))
+        assertTrue(source.contains("shape = VideoDetailShapes.media()"))
     }
 
     private fun loadSource(path: String): String {

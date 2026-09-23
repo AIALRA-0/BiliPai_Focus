@@ -93,6 +93,21 @@ internal fun resolveWindowWidthSizeClass(
     else -> WindowWidthSizeClass.Compact
 }
 
+/**
+ * Reconciles WindowManager's adaptive class with the width from the current Activity
+ * Configuration. On API 31, the adaptive class can briefly describe the previous activity/window
+ * after returning from video playback; the current configuration is the source of truth when the
+ * two classifications disagree.
+ */
+internal fun resolveWindowWidthSizeClass(
+    adaptiveSizeClass: androidx.window.core.layout.WindowSizeClass,
+    currentWindowWidthDp: Dp,
+): WindowWidthSizeClass {
+    val adaptiveClass = resolveWindowWidthSizeClass(adaptiveSizeClass)
+    val configurationClass = resolveWindowWidthSizeClass(currentWindowWidthDp)
+    return if (adaptiveClass == configurationClass) adaptiveClass else configurationClass
+}
+
 internal fun resolveWindowHeightSizeClass(
     adaptiveSizeClass: androidx.window.core.layout.WindowSizeClass,
 ): WindowHeightSizeClass = when {
@@ -377,10 +392,10 @@ fun calculateWindowSizeClass(
         min(currentDisplayMaximumMetrics.widthDp, currentDisplayMaximumMetrics.heightDp).toInt()
     )
     
-    val widthSizeClass = resolveWindowWidthSizeClass(adaptiveWindowSizeClass)
+    val widthSizeClass = resolveWindowWidthSizeClass(adaptiveWindowSizeClass, widthDp)
     val heightSizeClass = resolveWindowHeightSizeClass(adaptiveWindowSizeClass)
     
-    return remember(widthDp, heightDp, deviceWidthSizeClass) {
+    return remember(widthDp, heightDp, widthSizeClass, heightSizeClass, deviceWidthSizeClass) {
         WindowSizeClass(
             widthSizeClass = widthSizeClass,
             heightSizeClass = heightSizeClass,

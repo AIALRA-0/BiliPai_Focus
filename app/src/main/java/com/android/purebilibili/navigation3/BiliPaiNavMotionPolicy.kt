@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation3
 
+import com.android.purebilibili.core.ui.transition.VideoCardTransitionSettleState
 import com.android.purebilibili.feature.settings.resolveSettingsNavPopTransition
 import com.android.purebilibili.navigation.AppSystemBackAction
 import com.android.purebilibili.navigation.shouldInterceptSystemBackForAppAction
@@ -140,10 +141,13 @@ internal fun shouldActivateVideoDetailPlaybackSession(
 }
 
 internal fun shouldRecoverVideoPlayerAfterBackCancellation(
+    settleState: VideoCardTransitionSettleState?,
     currentKey: BiliPaiNavKey?,
     targetKey: BiliPaiNavKey?
 ): Boolean {
-    return currentKey is BiliPaiNavKey.VideoDetail && targetKey is BiliPaiNavKey.VideoDetail
+    return settleState == VideoCardTransitionSettleState.CancelRestore &&
+        currentKey is BiliPaiNavKey.VideoDetail &&
+        targetKey is BiliPaiNavKey.VideoDetail
 }
 
 /**

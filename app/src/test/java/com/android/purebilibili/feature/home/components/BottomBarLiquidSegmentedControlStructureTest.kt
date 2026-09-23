@@ -20,7 +20,11 @@ class BottomBarLiquidSegmentedControlStructureTest {
 
         assertTrue(popularControl.contains("contentSizedMiuixNonGlassItems = true"))
         assertTrue(popularControl.contains("contentAlignment = Alignment.Center"))
-        assertTrue(popularControl.contains(".widthIn(max = 400.dp)"))
+        assertTrue(popularControl.contains(".widthIn(max = HomeCategoryLayoutSpec.PopularCategoryControlMaxWidth)"))
+        val categoryLayoutSpec = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryLayoutSpec.kt"
+        )
+        assertTrue(categoryLayoutSpec.contains("PopularCategoryControlMaxWidth = 400.dp"))
     }
 
     @Test
@@ -439,7 +443,7 @@ class BottomBarLiquidSegmentedControlStructureTest {
 
         assertTrue(source.contains("BottomBarMotionProfile.ANDROID_NATIVE_FLOATING"))
         assertFalse(source.contains("BottomBarMotionProfile.IOS_FLOATING"))
-        assertTrue(source.contains("!homeSettings.androidNativeLiquidGlassEnabled"))
+        assertTrue(source.contains("!resolvedHomeSettings.androidNativeLiquidGlassEnabled"))
         assertTrue(source.contains("AppNativeTabRow("))
         assertTrue(source.contains("allowLabelOverflow = allowNativeLabelOverflow"))
         assertTrue(source.contains("drawMiuixNonGlassTrack = drawMiuixNonGlassTrack"))
@@ -503,8 +507,10 @@ class BottomBarLiquidSegmentedControlStructureTest {
         )
 
         assertTrue(dynamicTopBar.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(dynamicTopBar.contains("contentAlignment = Alignment.Center"))
-        assertTrue(dynamicTopBar.contains("itemWidth = resolveDynamicTopBarTabItemWidthDp().dp"))
+        assertTrue(dynamicTopBar.contains("contentAlignment = Alignment.CenterStart"))
+        assertTrue(dynamicTopBar.contains("val tabItemWidth = ("))
+        assertTrue(dynamicTopBar.contains("itemWidth = tabItemWidth"))
+        assertTrue(dynamicTopBar.contains("resolveDynamicTopBarTabItemWidthDp().dp"))
         assertFalse(dynamicTopBar.contains("fillMaxHeight()"))
         assertFalse(dynamicTopBar.contains("AppNativeTabRow("))
         assertFalse(dynamicTopBar.contains("forceLiquidChrome"))
@@ -515,8 +521,9 @@ class BottomBarLiquidSegmentedControlStructureTest {
         assertTrue(dynamicScreen.contains("BottomBarMatchedDockVisibility("))
         assertTrue(dynamicScreen.contains("edge = BottomBarMatchedDockEdge.TOP"))
         assertTrue(dynamicScreen.contains("animateScale = false"))
-        assertTrue(dynamicScreen.contains("activeListState?.isScrollInProgress == true"))
-        assertTrue(dynamicScreen.contains("pagerState.isScrollInProgress"))
+        assertTrue(dynamicScreen.contains("val dynamicTabScrollInProgressProvider = remember(pagerState)"))
+        assertTrue(dynamicScreen.contains("{ pagerState.isScrollInProgress }"))
+        assertTrue(dynamicTopBar.contains("isScrollInProgressProvider = isScrollInProgressProvider"))
     }
 
     @Test
@@ -532,13 +539,17 @@ class BottomBarLiquidSegmentedControlStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt"
         )
 
-        assertTrue(commonList.contains("val commonListChromeBackdrop = rememberLayerBackdrop()"))
-        assertTrue(commonList.contains(".layerBackdrop(commonListChromeBackdrop)"))
+        assertTrue(commonList.contains("rememberChromeBackdropSource()"))
+        assertTrue(commonList.contains("commonListChromeSource?.takeIf"))
+        assertTrue(commonList.contains("!loadingChromeContent && it.isReady"))
+        assertTrue(commonList.contains("commonListChromeSource?.modifier ?: Modifier"))
         assertTrue(commonList.contains("miuixBackdrop = commonListChromeBackdrop"))
         assertTrue(videoContent.contains("val videoContentMiuixBackdrop = rememberMiuixLayerBackdrop()"))
-        assertTrue(videoContent.contains("chromeBackdrop = videoContentMiuixBackdrop"))
         assertTrue(videoContent.contains("miuixBackdrop = videoContentMiuixBackdrop"))
-        assertTrue(videoContent.contains("Column(modifier = modifier.fillMaxSize())"))
+        assertTrue(videoContent.contains("miuixBackdrop = videoContentMiuixBackdrop"))
+        assertTrue(videoContent.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(videoContent.contains("miuixBackdrop = miuixBackdrop"))
+        assertTrue(videoContent.contains("Column(\n        modifier = modifier"))
         assertTrue(commentSortBar.contains("miuixBackdrop = miuixBackdrop"))
         assertTrue(commentSheetHost.contains("val commentChromeBackdrop = rememberLayerBackdrop()"))
         assertTrue(commentSheetHost.contains(".layerBackdrop(commentChromeBackdrop)"))
@@ -582,9 +593,6 @@ class BottomBarLiquidSegmentedControlStructureTest {
     fun `global video dynamic and live segmented surfaces share android native fallback`() {
         val paths = listOf(
             "app/src/main/java/com/android/purebilibili/feature/video/ui/components/CommentSortFilterBar.kt",
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt",
-            "app/src/main/java/com/android/purebilibili/feature/live/LivePlayerScreen.kt",
-            "app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt",
             "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt",
             "app/src/main/java/com/android/purebilibili/feature/plugin/TodayWatchPlugin.kt",
             "app/src/main/java/com/android/purebilibili/feature/bangumi/BangumiReviewScreen.kt",
@@ -597,8 +605,31 @@ class BottomBarLiquidSegmentedControlStructureTest {
             )
         }
 
-        // 上游合流后直播首页分区行/全部分区行改用 LiveHomeSelectableChip（按 preset 原生分发），
-        // 不再走 BottomBarLiquidSegmentedControl；原生 fallback 约束只对仍在用共享控件的面成立。
+        val dynamicComments = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt"
+        )
+        assertTrue(dynamicComments.contains("DynamicAdaptiveSegmentedControl("))
+
+        val videoContent = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
+        )
+        val adaptiveTabRow = loadSource(
+            "app/src/main/java/com/android/purebilibili/core/ui/components/AppLiquidAwareTabRow.kt"
+        )
+        assertTrue(videoContent.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(videoContent.contains("miuixBackdrop = miuixBackdrop"))
+        // The adaptive wrapper routes glass to the shared bottom-bar renderer and its disabled
+        // path to the active platform-native tab row.
+        assertTrue(adaptiveTabRow.contains("BottomBarLiquidSegmentedControl("))
+        assertTrue(adaptiveTabRow.contains("AppNativeTabRow("))
+
+        val livePlayer = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/live/LivePlayerScreen.kt"
+        )
+        assertTrue(livePlayer.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(livePlayer.contains("miuixBackdrop ="))
+
+        // Live list child filters retain their chips; area category tabs use the shared adaptive row.
         val liveList = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/live/LiveListScreen.kt"
         )
@@ -606,7 +637,7 @@ class BottomBarLiquidSegmentedControlStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/live/LiveAreaScreen.kt"
         )
         assertTrue(liveList.contains("LiveHomeSelectableChip("))
-        assertTrue(liveArea.contains("LiveHomeSelectableChip("))
+        assertTrue(liveArea.contains("AppThemeAdaptiveTabRow("))
     }
 
     private fun loadSource(path: String): String {

@@ -11,6 +11,7 @@ import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 
 import com.android.purebilibili.core.ui.MediaContrastPalette
 
@@ -1067,7 +1068,7 @@ private fun ImagePreviewOverlayContent(
                     ) {
                         AppText(
                             text = "${pagerState.currentPage + 1}/${images.size}",
-                            color = Color.White,
+                            color = MediaContrastPalette.Foreground,
                             fontSize = MaterialTheme.typography.bodyMedium.fontSize
                         )
                     }
@@ -1354,47 +1355,53 @@ private fun ImagePreviewOverlayContent(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(
-                                start = maxOf(12.dp, safeDrawingPadding.calculateStartPadding(layoutDirection) + 4.dp),
+                                start = maxOf(
+                                    AppSpacingTokens.Medium,
+                                    safeDrawingPadding.calculateStartPadding(layoutDirection) + AppSpacingTokens.ExtraSmall,
+                                ),
                                 top = overlayPadding.top
                             )
                     ) {
                         Column {
                             Row(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(RoundedCornerShape(IMAGE_PREVIEW_LIVE_PHOTO_CONTROL_CORNER_RADIUS_DP.dp))
                                     .background(MediaContrastPalette.Scrim.copy(alpha = 0.65f))
                                     .clickable { showLivePhotoMenu = !showLivePhotoMenu }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    .padding(
+                                        horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                                        vertical = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
+                                    ),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 if (isLivePhotoEnabled) {
-                                    LivePhotoIcon(tint = Color.White)
+                                    LivePhotoIcon(tint = MediaContrastPalette.Foreground)
                                 } else {
-                                    LivePhotoOffIcon(tint = Color.White.copy(alpha = 0.8f))
+                                    LivePhotoOffIcon(tint = MediaContrastPalette.Foreground.copy(alpha = 0.8f))
                                 }
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
                                 AppText(
                                     text = if (isLivePhotoEnabled) "实况" else "实况已关",
-                                    color = Color.White,
+                                    color = MediaContrastPalette.Foreground,
                                     fontSize = MaterialTheme.typography.labelMedium.fontSize,
                                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
                                 AppIcon(
                                     imageVector = if (showLivePhotoMenu) rememberAppChevronUpIcon() else rememberAppChevronDownIcon(),
                                     contentDescription = "实况菜单",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
+                                    tint = MediaContrastPalette.Foreground,
+                                    modifier = Modifier.size(AppSpacingTokens.Large)
                                 )
                             }
 
                             if (showLivePhotoMenu) {
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(14.dp))
+                                        .clip(RoundedCornerShape(IMAGE_PREVIEW_LIVE_PHOTO_MENU_CORNER_RADIUS_DP.dp))
                                         .background(MediaContrastPalette.Scrim.copy(alpha = 0.88f))
-                                        .padding(vertical = 4.dp)
+                                        .padding(vertical = AppSpacingTokens.ExtraSmall)
                                         .width(IntrinsicSize.Max)
                                 ) {
                                     Column {
@@ -1408,18 +1415,21 @@ private fun ImagePreviewOverlayContent(
                                                     }
                                                     showLivePhotoMenu = false
                                                 }
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                .padding(
+                                                    horizontal = AppSpacingTokens.Large - AppSpacingTokens.Micro,
+                                                    vertical = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                                                ),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (isLivePhotoEnabled) {
-                                                LivePhotoOffIcon(tint = Color.White)
+                                                LivePhotoOffIcon(tint = MediaContrastPalette.Foreground)
                                             } else {
-                                                LivePhotoIcon(tint = Color.White)
+                                                LivePhotoIcon(tint = MediaContrastPalette.Foreground)
                                             }
-                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
                                             AppText(
                                                 text = if (isLivePhotoEnabled) "关闭实况" else "开启实况",
-                                                color = Color.White,
+                                                color = MediaContrastPalette.Foreground,
                                                 fontSize = MaterialTheme.typography.bodyMedium.fontSize
                                             )
                                         }
@@ -1427,8 +1437,8 @@ private fun ImagePreviewOverlayContent(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(0.5.dp)
-                                                .background(Color.White.copy(alpha = 0.15f))
+                                                .height(AppSurfaceTokens.OutlineWidth / 2f)
+                                                .background(MediaContrastPalette.Foreground.copy(alpha = 0.15f))
                                         )
 
                                         Row(
@@ -1441,19 +1451,22 @@ private fun ImagePreviewOverlayContent(
                                                     livePhotoPlayer?.play()
                                                     showLivePhotoMenu = false
                                                 }
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                .padding(
+                                                    horizontal = AppSpacingTokens.Large - AppSpacingTokens.Micro,
+                                                    vertical = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                                                ),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             AppIcon(
                                                 imageVector = rememberAppRefreshIcon(),
                                                 contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
+                                                tint = MediaContrastPalette.Foreground,
+                                                modifier = Modifier.size(AppSpacingTokens.Large)
                                             )
-                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
                                             AppText(
                                                 text = "重新播放",
-                                                color = Color.White,
+                                                color = MediaContrastPalette.Foreground,
                                                 fontSize = MaterialTheme.typography.bodyMedium.fontSize
                                             )
                                         }
@@ -1470,13 +1483,16 @@ private fun ImagePreviewOverlayContent(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(
-                                end = maxOf(12.dp, safeDrawingPadding.calculateEndPadding(layoutDirection) + 4.dp),
+                                end = maxOf(
+                                    AppSpacingTokens.Medium,
+                                    safeDrawingPadding.calculateEndPadding(layoutDirection) + AppSpacingTokens.ExtraSmall,
+                                ),
                                 bottom = overlayPadding.bottom
                             )
                             .clip(CircleShape)
                             .background(MediaContrastPalette.Scrim.copy(alpha = 0.65f))
                             .clickable { isLivePhotoMuted = !isLivePhotoMuted }
-                            .padding(8.dp)
+                            .padding(AppSpacingTokens.Small)
                     ) {
                         AppIcon(
                             imageVector = if (isLivePhotoMuted) {
@@ -1485,8 +1501,8 @@ private fun ImagePreviewOverlayContent(
                                 Icons.AutoMirrored.Filled.VolumeUp
                             },
                             contentDescription = if (isLivePhotoMuted) "开启声音" else "静音",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            tint = MediaContrastPalette.Foreground,
+                            modifier = Modifier.size(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall)
                         )
                     }
                 }
@@ -2469,9 +2485,9 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
 @Composable
 private fun LivePhotoIcon(
     modifier: Modifier = Modifier,
-    tint: Color = Color.White
+    tint: Color = MediaContrastPalette.Foreground
 ) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
+    androidx.compose.foundation.Canvas(modifier = modifier.size(AppSpacingTokens.Large)) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outerRadius = size.minDimension / 2f - 1.5f
         val innerRadius = outerRadius * 0.46f
@@ -2492,9 +2508,9 @@ private fun LivePhotoIcon(
 @Composable
 private fun LivePhotoOffIcon(
     modifier: Modifier = Modifier,
-    tint: Color = Color.White
+    tint: Color = MediaContrastPalette.Foreground
 ) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
+    androidx.compose.foundation.Canvas(modifier = modifier.size(AppSpacingTokens.Large)) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outerRadius = size.minDimension / 2f - 1.5f
         val innerRadius = outerRadius * 0.46f

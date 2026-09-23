@@ -35,6 +35,23 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `local build suffix does not make an older Focus release look newer`() {
+        for (suffix in listOf("debug", "dev", "smooth")) {
+            val local = "9.1.1-focus.5-$suffix"
+            assertFalse(AppUpdateChecker.isRemoteNewer(local, "9.1.1-focus.4"))
+            assertFalse(AppUpdateChecker.isRemoteNewer(local, "9.1.1-focus.5"))
+            assertFalse(
+                AppUpdateChecker.shouldOfferUpdate(
+                    currentVersion = local,
+                    currentVersionCode = 385,
+                    latestVersion = "9.1.1-focus.4",
+                    buildMetadata = null,
+                )
+            )
+        }
+    }
+
+    @Test
     fun `update endpoints stay on Focus and retain a Focus fallback`() {
         val endpoints = AppUpdateChecker.resolveEndpointCandidates(
             primary = AppUpdateEndpointSet(

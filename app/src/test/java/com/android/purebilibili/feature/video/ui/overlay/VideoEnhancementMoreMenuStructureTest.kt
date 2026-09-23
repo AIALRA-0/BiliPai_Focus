@@ -10,17 +10,16 @@ class VideoEnhancementMoreMenuStructureTest {
     @Test
     fun `一级更多菜单只保留紧凑画质增强入口`() {
         val source = bottomControlBarSource()
-        val primaryMenu = source.substring(
-            startIndex = source.indexOf("if (showMoreActionsPanel"),
-            endIndex = source.indexOf("if (showVideoEnhancementPanel")
-        )
+        val primaryMenu = source
+            .substringAfter("AppWindowActionMenu(")
+            .substringBefore("onExpandedChange =")
 
         assertTrue(source.contains("label = \"画质增强\""))
         assertTrue(source.contains("showVideoEnhancementPanel = true"))
-        assertTrue(source.contains("highlighted = anime4kEnabled"))
+        assertTrue(source.contains("selected = anime4kEnabled"))
         assertFalse(source.contains("Anime4KMoreAction("))
-        assertTrue(primaryMenu.contains("FlowRow("))
-        assertTrue(primaryMenu.contains("maxItemsInEachRow = 2"))
+        assertTrue(source.contains("AppWindowActionMenu("))
+        assertTrue(primaryMenu.contains("AppWindowAction(label = \"画质增强\""))
         assertFalse(primaryMenu.contains("verticalScroll"))
     }
 

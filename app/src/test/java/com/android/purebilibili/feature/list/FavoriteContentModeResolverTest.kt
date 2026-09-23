@@ -69,7 +69,9 @@ class FavoriteContentModeResolverTest {
             "Shared segmented control should forward drag-selection policy to its liquid implementation"
         )
         assertFalse(bottomBarSource.contains("forceLiquidChrome"))
-        assertTrue(bottomBarSource.contains("homeSettings.androidNativeLiquidGlassEnabled"))
+        assertTrue(segmentedSource.contains("LocalAppThemeConfig.current.liquidGlassEnabled"))
+        assertTrue(segmentedSource.contains("resolveAppSegmentedChrome("))
+        assertTrue(segmentedSource.contains("liquidGlassEffectsEnabled = spec.liquidGlassEffectsEnabled"))
     }
 
     private fun loadSource(path: String): String {

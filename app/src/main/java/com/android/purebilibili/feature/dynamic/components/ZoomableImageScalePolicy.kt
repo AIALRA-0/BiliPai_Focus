@@ -29,6 +29,12 @@ internal fun resolveZoomableImageScaleLimits(
             maxScale = DEFAULT_MAX_SCALE
         )
     }
+    if (!isExtremeAspectRatio(imageWidth, imageHeight)) {
+        return ZoomableImageScaleLimits(
+            doubleTapScale = DEFAULT_DOUBLE_TAP_SCALE,
+            maxScale = DEFAULT_MAX_SCALE
+        )
+    }
 
     val fitScale = min(
         containerWidth.toFloat() / imageWidth,

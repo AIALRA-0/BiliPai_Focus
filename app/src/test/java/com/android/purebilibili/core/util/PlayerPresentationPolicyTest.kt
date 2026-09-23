@@ -15,7 +15,7 @@ class PlayerPresentationPolicyTest {
         listOf(
             puraCover(widthDp = 616, heightDp = 421, orientation = Configuration.ORIENTATION_LANDSCAPE, rotation = Surface.ROTATION_0),
             puraCover(widthDp = 421, heightDp = 616, orientation = Configuration.ORIENTATION_PORTRAIT, rotation = Surface.ROTATION_90),
-            puraCover(widthDp = 421, heightDp = 616, orientation = Configuration.ORIENTATION_PORTRAIT, rotation = Surface.ROTATION_0),
+            puraCover(widthDp = 421, heightDp = 616, orientation = Configuration.ORIENTATION_PORTRAIT, rotation = Surface.ROTATION_0, orientationConstrained = true),
         ).forEach { displayContext ->
             val presentation = resolvePlayerPresentationPolicy(
                 displayContext = displayContext,
@@ -283,6 +283,7 @@ class PlayerPresentationPolicyTest {
         heightDp: Int,
         orientation: Int,
         rotation: Int,
+        orientationConstrained: Boolean = false,
     ): AppDisplayContext = resolveAppDisplayContext(
         AppDisplayContextInput(
             currentWindowWidthDp = widthDp,
@@ -294,6 +295,7 @@ class PlayerPresentationPolicyTest {
             displayModeWidthPx = 1848,
             displayModeHeightPx = 1264,
             hasHingeAngleSensor = true,
+            hasOrientationConstrainedWindow = orientationConstrained,
         )
     )
 }

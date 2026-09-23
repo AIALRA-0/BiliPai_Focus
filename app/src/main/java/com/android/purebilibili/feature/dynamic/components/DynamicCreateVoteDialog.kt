@@ -14,7 +14,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppDialogAction
@@ -24,6 +23,7 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextField
 import com.android.purebilibili.data.model.response.DynamicCreatedVote
 import com.android.purebilibili.data.repository.DynamicCreateRepository
+import com.android.purebilibili.feature.dynamic.DynamicTypographyPolicy
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
@@ -84,7 +84,7 @@ fun DynamicCreateVoteDialog(
                         itemWidth = 66.dp,
                         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
                         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-                        labelFontSize = 13.sp,
+                        labelFontSize = DynamicTypographyPolicy.segmentedControlLabelFontSize,
                         backdrop = voteChromeBackdrop,
                     )
                     AppText("有效期")
@@ -95,7 +95,7 @@ fun DynamicCreateVoteDialog(
                         itemWidth = 66.dp,
                         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
                         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-                        labelFontSize = 13.sp,
+                        labelFontSize = DynamicTypographyPolicy.segmentedControlLabelFontSize,
                         backdrop = voteChromeBackdrop,
                     )
                     errorMessage?.let { AppText(it) }

@@ -16,7 +16,7 @@ class FavoriteSubscribedFolderSharedTransitionStructureTest {
         assertTrue(source.contains(".aspectRatio(16f / 9f)"))
         assertTrue(source.contains(".favoriteCollectionSharedBounds("))
         assertTrue(source.contains("shape = AppShapes.container(ContainerLevel.Card)"))
-        assertTrue(source.contains("val shape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(source.contains("val shape = AppShapes.mediaCover()"))
         assertTrue(source.contains("OverlayClip(AppShapes.container(ContainerLevel.Card))"))
         assertTrue(source.contains("namespace = \"favorite_collection\""))
         assertTrue(source.contains("modifier = Modifier.favoriteCollectionSharedBounds("))

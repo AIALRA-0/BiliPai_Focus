@@ -34,10 +34,11 @@ class MiuixV2MigrationStructureTest {
         // 2B 迁移：MIUIX 经两值模型路由到窗口级 LOCAL_DIALOG，不再按旧 variant 分支。
         val source = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/AdaptiveDialogComponents.kt")
         assertTrue(source.contains("AppUiStyle.MIUIX ->"))
+        assertTrue(source.contains("nativeMiuixPopupsEnabled = themeConfig.nativeMiuixPopupsEnabled"))
         assertTrue(source.contains("AppAlertDialogRenderer.LOCAL_DIALOG"))
+        assertTrue(source.contains("AppAlertDialogRenderer.MATERIAL_ALERT"))
         assertTrue(source.contains("Dialog("))
         assertTrue(source.contains("WindowDialog("))
-        assertTrue(source.contains("isMiuixNonGlassEnabled()"))
     }
 
     @Test
@@ -56,8 +57,10 @@ class MiuixV2MigrationStructureTest {
 
     @Test
     fun buildGradle_includesMiuixShaderArtifact() {
-        val source = loadSource("app/build.gradle.kts")
-        assertTrue(source.contains("miuix-shader-android"))
+        val build = loadSource("app/build.gradle.kts")
+        val catalog = loadSource("gradle/libs.versions.toml")
+        assertTrue(build.contains("implementation(libs.miuix.shader)"))
+        assertTrue(catalog.contains("miuix-shader-android"))
     }
 
     @Test
@@ -90,20 +93,25 @@ class MiuixV2MigrationStructureTest {
 
     @Test
     fun buildGradle_includesMiuixSquircleArtifact() {
-        val source = loadSource("app/build.gradle.kts")
-        assertTrue(source.contains("miuix-squircle-android"))
+        val build = loadSource("app/build.gradle.kts")
+        val catalog = loadSource("gradle/libs.versions.toml")
+        assertTrue(build.contains("implementation(libs.miuix.squircle)"))
+        assertTrue(catalog.contains("miuix-squircle-android"))
     }
 
     @Test
     fun buildGradle_includesMiuixIconsArtifact() {
-        val source = loadSource("app/build.gradle.kts")
-        assertTrue(source.contains("miuix-icons-android"))
+        val build = loadSource("app/build.gradle.kts")
+        val catalog = loadSource("gradle/libs.versions.toml")
+        assertTrue(build.contains("implementation(libs.miuix.icons)"))
+        assertTrue(catalog.contains("miuix-icons-android"))
     }
 
     @Test
     fun md3SegmentedControl_routesMiuixVariantToTabRow() {
         val source = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/renderer/miuix/AppMiuixSegmentedControl.kt")
         val componentSource = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/components/AppSegmentedControl.kt")
+        val listItemPolicySource = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptiveListItemPolicy.kt")
         val policySource = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/AppSegmentedControlPolicy.kt")
         // 双值 AppUiStyle 政策：MIUIX 用原生 TabRow，MATERIAL3 用 Material fallback。
         assertTrue(policySource.contains("AppUiStyle.MIUIX"))
@@ -113,8 +121,12 @@ class MiuixV2MigrationStructureTest {
         assertTrue(componentSource.contains("AppMiuixSegmentedControl("))
         assertTrue(source.contains("TabRow("))
         assertTrue(source.contains("rememberLazyListState()"))
-        assertTrue(source.contains("selectedIndex == 0 || selectedIndex == options.lastIndex"))
-        assertTrue(source.contains("scrollState.scrollToItem(selectedIndex)"))
+        assertTrue(source.contains("listState = if (scrollable) scrollState else null"))
+        assertTrue(source.contains("listState.animateScrollToItem(selectedIndex.coerceIn(0, options.lastIndex))"))
+        val clickableItemSource = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt")
+        assertTrue(clickableItemSource.contains("resolveAppClickableItemRenderer("))
+        assertTrue(listItemPolicySource.contains("fun resolveAppClickableItemRenderer("))
+        assertTrue(listItemPolicySource.contains("fun shouldRouteSliderPreferenceToMiuixSliderPreference("))
     }
 
     @Test
@@ -144,12 +156,16 @@ class MiuixV2MigrationStructureTest {
     @Test
     fun iosClickableItem_routesThroughAdaptiveListItemPolicy() {
         val source = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt")
+        val policySource = loadSource("design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptiveListItemPolicy.kt")
         assertTrue(source.contains("resolveAppClickableItemRenderer("))
         assertTrue(source.contains("AppClickableItemRenderer.MIUIX_ARROW"))
-        assertTrue(source.contains("AppClickableItemRenderer.MIUIX_BASIC"))
         assertTrue(source.contains("shouldRouteSwitchItemToMiuixSwitchPreference("))
         assertTrue(source.contains("shouldRouteSliderPreferenceToMiuixSliderPreference("))
         assertTrue(source.contains("MiuixSliderPreference("))
+        assertTrue(policySource.contains("fun resolveAppClickableItemRenderer("))
+        assertTrue(policySource.contains("AppClickableItemRenderer.MIUIX_BASIC"))
+        assertTrue(policySource.contains("fun shouldRouteSwitchItemToMiuixSwitchPreference("))
+        assertTrue(policySource.contains("fun shouldRouteSliderPreferenceToMiuixSliderPreference("))
     }
 
     @Test

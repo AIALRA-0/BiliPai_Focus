@@ -2066,7 +2066,10 @@ private fun VideoPlayerSectionContent(
         )
     }
     val resolvedSharedElementBvid = sharedElementBvid.trim().ifBlank { bvid }
-    if (resolvedSharedElementBvid.isNotEmpty() && livePlayerSharedElementEnabled) {
+    if (resolvedSharedElementBvid.isNotEmpty() &&
+        livePlayerSharedElementEnabled &&
+        livePlayerSharedTransitionMotionSpec.enabled
+    ) {
          with(requireNotNull(sharedTransitionScope)) {
              rootModifier = rootModifier.sharedElement(
                  sharedContentState = rememberSharedContentState(
@@ -2076,16 +2079,12 @@ private fun VideoPlayerSectionContent(
                  ),
                  animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                  boundsTransform = { initialBounds, targetBounds ->
-                     if (livePlayerSharedTransitionMotionSpec.enabled) {
-                         videoSharedElementBoundsTransformSpec(
-                             motion = livePlayerSharedTransitionMotionSpec,
-                             initialBounds = initialBounds,
-                             targetBounds = targetBounds,
-                             durationMillis = livePlayerSharedTransitionMotionSpec.durationMillis,
-                         )
-                     } else {
-                         com.android.purebilibili.core.ui.motion.AppMotionTokens.spatialSpec()
-                     }
+                     videoSharedElementBoundsTransformSpec(
+                         motion = livePlayerSharedTransitionMotionSpec,
+                         initialBounds = initialBounds,
+                         targetBounds = targetBounds,
+                         durationMillis = livePlayerSharedTransitionMotionSpec.durationMillis,
+                     )
                  }
              )
          }

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.audio.screen
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MusicPlayerContentStructureTest {
@@ -45,7 +46,8 @@ class MusicPlayerContentStructureTest {
         assertTrue(compactLandscape.contains("progressSeekRevision += 1"))
         assertTrue(compactLandscape.contains("if (landscapeLyrics)"))
         assertTrue(compactLandscape.contains("val landscapeHeaderHeight = 48.dp"))
-        assertTrue(compactLandscape.contains("contentAlignment = Alignment.TopCenter"))
+        assertTrue(compactLandscape.contains("contentAlignment = if (landscapeLyrics)"))
+        assertTrue(compactLandscape.contains("Alignment.TopCenter"))
         assertTrue(compactLandscape.contains("Alignment.Center"))
     }
 
@@ -81,7 +83,13 @@ class MusicPlayerContentStructureTest {
             .substringBefore("private fun MusicArtwork(")
 
         assertTrue(playerPage.contains("MusicSecondaryControls("))
-        assertTrue(playerPage.contains("CircleShape"))
+        val secondaryControls = source
+            .substringAfter("private fun MusicSecondaryControls(")
+            .substringBefore("@Composable\nprivate fun MusicArtwork(")
+        assertTrue(secondaryControls.contains("modifier = Modifier.size(48.dp)"))
+        assertTrue(secondaryControls.windowed("modifier = Modifier.size(48.dp)".length).count {
+            it == "modifier = Modifier.size(48.dp)"
+        } >= 4)
         assertTrue(playerPage.contains("shouldRotateMusicArtwork("))
         assertTrue(source.contains("rememberMusicArtworkRotationDegrees("))
         assertTrue(source.contains("playbackSpeed = state.playbackSpeed"))
@@ -90,11 +98,10 @@ class MusicPlayerContentStructureTest {
         assertTrue(source.contains("Icons.Outlined.Repeat"))
         assertTrue(source.contains("Icons.AutoMirrored.Outlined.Comment"))
         assertTrue(source.contains("Icons.Outlined.QueueMusic"))
-        assertTrue(source.contains("AppFilledIconButton("))
+        assertTrue(source.contains("AppIconButton("))
         assertTrue(source.contains("MusicWavySlider("))
-        assertTrue(source.contains("AppSlider("))
-        assertTrue(source.contains("shouldUseNativeThemeMusicProgress("))
-        assertTrue(source.contains("shouldUseMusicWavyProgress("))
+        assertFalse(source.contains("AppSlider("))
+        assertTrue(source.contains("wavy = false"))
         assertTrue(source.contains("resolveMusicPlayerChromeSpec("))
         assertTrue(source.contains("onShuffleEnabledChange"))
         assertTrue(source.contains("usePaletteImmersiveBackdrop"))
@@ -143,7 +150,9 @@ class MusicPlayerContentStructureTest {
         assertTrue(lyricsPage.contains("歌词加载失败"))
         assertTrue(lyricsPage.contains("未找到匹配歌词"))
         assertTrue(!lyricsControls.contains("AppSurfaceTokens.surfaceContainer()"))
-        assertTrue(lyricsControls.contains("resolveMusicImmersivePanelColor(glassTintColor, MaterialTheme.colorScheme.surface)"))
+        assertTrue(lyricsControls.contains("val panelColor = resolveMusicImmersivePanelColor("))
+        assertTrue(lyricsControls.contains("glassTintColor,"))
+        assertTrue(lyricsControls.contains("MaterialTheme.colorScheme.surface"))
         assertTrue(lyricsControls.contains("if (miuixBackdrop != null) Color.Transparent else panelColor"))
         assertTrue(lyricsControls.contains("val panelShape = AppShapes.borderedContainer(ContainerLevel.Card)"))
         assertTrue(lyricsControls.contains(".biliPaiFloatingDockShell("))
@@ -205,8 +214,10 @@ class MusicPlayerContentStructureTest {
 
         assertTrue(source.contains("Music3DCoverFlow("))
         assertTrue(source.contains("3D 唱片架"))
-        assertTrue(coverFlowSource.contains("cameraDistance = (cardSizeDp * 0.075f).coerceIn(8f, 14f) * density"))
-        assertTrue(coverFlowSource.contains("rotationY = (pageOffset * -32f).coerceIn(-52f, 52f)"))
+        assertTrue(coverFlowSource.contains("cameraDistance = (fittedCardSizeDp * 0.075f).coerceIn(8f, 14f) * density"))
+        assertTrue(coverFlowSource.contains("rotationY = (pageOffset * -32f).coerceIn(-52f, 52f) *"))
+        assertTrue(coverFlowSource.contains("(if (reduceMotion) 1f else itemEntrance)"))
+        assertTrue(coverFlowSource.contains("translationY = if (reduceMotion) 0f else"))
         assertTrue(coverFlowSource.contains("scaleY = -1f"))
         assertTrue(coverFlowSource.contains("BlendMode.DstIn"))
         assertTrue(coverFlowSource.contains("rememberSaveable { mutableStateOf(false) }"))

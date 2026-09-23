@@ -23,9 +23,14 @@ class FeedContentTokenAdoptionTest {
 
         sources.forEach { (name, source) ->
             assertTrue(source.contains("feedContentTypography("), "$name 未读取共享信息流排版")
-            val requiredRoles = if (name == "HorizontalVideoCardStats.kt") {
-                listOf("statistic")
-            } else if (name == "HomeStyleSingleColumnVideoCard.kt") {
+            if (name == "HorizontalVideoCardStats.kt") {
+                assertTrue(
+                    source.contains("feedContentTypography().statistic"),
+                    "$name 应通过共享行默认值读取统计文字排版",
+                )
+                return@forEach
+            }
+            val requiredRoles = if (name == "HomeStyleSingleColumnVideoCard.kt") {
                 listOf("title", "author", "coverBadge")
             } else {
                 listOf("title", "author", "statistic", "coverBadge")

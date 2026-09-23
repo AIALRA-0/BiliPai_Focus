@@ -2,6 +2,7 @@ package com.android.purebilibili.core.util
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -66,6 +67,7 @@ internal data class AppDisplayContextInput(
     val hasCurrentFoldingFeature: Boolean = false,
     val hasHingeAngleSensor: Boolean = false,
     val isInMultiWindowMode: Boolean = false,
+    val hasOrientationConstrainedWindow: Boolean = false,
 )
 
 internal fun resolveAppDisplayContext(input: AppDisplayContextInput): AppDisplayContext {
@@ -124,6 +126,13 @@ internal fun resolveAppDisplayContext(input: AppDisplayContextInput): AppDisplay
             displayRotation = input.displayRotation,
             displayModeWidthPx = input.displayModeWidthPx,
             displayModeHeightPx = input.displayModeHeightPx,
+            // A maximum window as large as the inner panel is evidence that Display.Mode may
+            // describe that panel. When maximum metrics instead match the cover, keep its
+            // physical mode authoritative even if the activity is portrait-letterboxed.
+            preferWindowOrientation = role == AppFoldableDisplayRole.Cover &&
+                !input.hasOrientationConstrainedWindow &&
+                maximumShortSideDp != null &&
+                maximumShortSideDp >= LARGE_SCREEN_SMALLEST_WIDTH_DP,
         ),
         detectionBasis = basis,
         isInMultiWindowMode = input.isInMultiWindowMode,
@@ -135,23 +144,8 @@ internal fun resolveDisplayNaturalOrientation(
     displayRotation: Int?,
     displayModeWidthPx: Int? = null,
     displayModeHeightPx: Int? = null,
+    preferWindowOrientation: Boolean = false,
 ): AppDisplayNaturalOrientation {
-    // Physical mode dimensions describe the panel, while Configuration can describe a
-    // letterboxed activity window on a foldable cover display.
-    if (
-        displayModeWidthPx != null &&
-        displayModeHeightPx != null &&
-        displayModeWidthPx > 0 &&
-        displayModeHeightPx > 0 &&
-        displayModeWidthPx != displayModeHeightPx
-    ) {
-        return if (displayModeWidthPx > displayModeHeightPx) {
-            AppDisplayNaturalOrientation.Landscape
-        } else {
-            AppDisplayNaturalOrientation.Portrait
-        }
-    }
-
     val fromRotation = when (displayRotation) {
         Surface.ROTATION_0,
         Surface.ROTATION_180 -> when (configurationOrientation) {
@@ -168,6 +162,28 @@ internal fun resolveDisplayNaturalOrientation(
         }
 
         else -> AppDisplayNaturalOrientation.Unknown
+    }
+
+    // On some foldables Display.Mode reports the inner panel even while this activity is on
+    // the cover. Rotation and the current cover window then identify its natural orientation.
+    if (preferWindowOrientation && fromRotation != AppDisplayNaturalOrientation.Unknown) {
+        return fromRotation
+    }
+
+    // For ordinary windows the physical mode remains the stronger signal, since the activity
+    // may be letterboxed or resized independently of the panel.
+    if (
+        displayModeWidthPx != null &&
+        displayModeHeightPx != null &&
+        displayModeWidthPx > 0 &&
+        displayModeHeightPx > 0 &&
+        displayModeWidthPx != displayModeHeightPx
+    ) {
+        return if (displayModeWidthPx > displayModeHeightPx) {
+            AppDisplayNaturalOrientation.Landscape
+        } else {
+            AppDisplayNaturalOrientation.Portrait
+        }
     }
 
     if (fromRotation != AppDisplayNaturalOrientation.Unknown) {
@@ -218,6 +234,17 @@ internal fun Activity.resolveAppDisplayContext(
             hasCurrentFoldingFeature = hasCurrentFoldingFeature,
             hasHingeAngleSensor = hasHingeAngleSensor,
             isInMultiWindowMode = isInMultiWindowMode,
+            hasOrientationConstrainedWindow = requestedOrientation in setOf(
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT,
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT,
+                ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT,
+                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE,
+                ActivityInfo.SCREEN_ORIENTATION_LOCKED,
+            ),
         )
     )
 }

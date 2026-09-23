@@ -68,15 +68,16 @@ class RelatedVideoItemPolicyTest {
         assertTrue(source.contains(".size(48.dp)"))
         assertTrue(source.contains("resolveHomeFeedCardLayout(homeFeedCardStyle)"))
         assertTrue(source.contains("RELATED_VIDEO_GRID_COLUMNS = 1"))
-        assertTrue(source.contains("coverAspectRatio = cardLayout.coverAspectRatio"))
+        assertTrue(source.contains("coverAspectRatio = RELATED_VIDEO_CARD_COVER_ASPECT_RATIO"))
         assertTrue(source.contains("modifier = Modifier.fillMaxWidth()"))
         assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
         assertTrue(source.contains("crossfadeSourceContent = true"))
         assertFalse(source.contains("videoCoverSharedBoundsOrEmpty("))
-        assertTrue(source.contains("sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE"))
+        assertTrue(source.contains("sourceLayout = if (stacked)"))
+        assertTrue(source.contains("VideoCardSourceLayout.SIDE_BY_SIDE"))
         assertTrue(source.contains("sourceChromeSnapshot = VideoCardSourceChromeSnapshot("))
         assertTrue(source.contains("coverPresentation = VideoCardSourceCoverPresentation("))
-        assertTrue(source.contains(".then(nativeCardSnapshot.coverOverlayModifier)"))
+        assertTrue(source.contains("coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier"))
         assertTrue(source.contains("coverBounds = sourceCoverBounds"))
         assertTrue(source.contains(".withMeasuredCoverDecodeSize(sourceCoverBounds)"))
         assertFalse(source.contains(".videoCardShellReturnChromeAlpha("))
@@ -139,9 +140,9 @@ class RelatedVideoItemPolicyTest {
             "src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt"
         ).readText()
 
-        assertTrue(source.contains("val returnMediaClipShape = AppShapes.mediaCover()"))
+        assertTrue(source.contains("val returnMediaClipCornerDp = AppShapes.mediaCoverCornerDp()"))
         assertTrue(
-            Regex("videoDetailReturnMediaLayout\\([\\s\\S]*?clipShape = returnMediaClipShape")
+            Regex("videoDetailReturnMediaLayout\\([\\s\\S]*?clipCornerDp = returnMediaClipCornerDp")
                 .findAll(source)
                 .count() >= 2
         )

@@ -98,6 +98,7 @@ import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.AppSemanticIconFamily
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -681,7 +682,7 @@ private fun PartitionSideRail(
                 animateToValue(targetIndex.toFloat(), animatePress = false)
                 holder.offsetJob?.cancel()
                 holder.offsetJob = animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                    offsetAnimation.animateTo(0f, AppMotionTokens.floatingDockOffsetSpring())
                 }
             },
             onDrag = { _, dragAmount ->

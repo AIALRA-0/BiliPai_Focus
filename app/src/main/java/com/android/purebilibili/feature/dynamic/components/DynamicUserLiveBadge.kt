@@ -1,10 +1,8 @@
 package com.android.purebilibili.feature.dynamic.components
 
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -20,7 +18,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.feature.dynamic.resolveDynamicUserLiveBadgeLabel
 import kotlin.math.PI
@@ -33,7 +31,7 @@ fun DynamicUserLiveBadge(
     val color = MaterialTheme.colorScheme.primary
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(DynamicUserLiveBadgeVisualSpec.HorizontalSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DynamicLivePulseIndicator(color = color)
@@ -60,7 +58,7 @@ private fun DynamicLivePulseIndicator(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1_200, easing = LinearEasing),
+                animation = AppMotionTokens.livePulseSpec<Float>(),
             ),
             label = "dynamicLivePulseProgress",
         )
@@ -68,7 +66,12 @@ private fun DynamicLivePulseIndicator(
         null
     }
 
-    Canvas(modifier = modifier.size(width = 11.dp, height = 12.dp)) {
+    Canvas(
+        modifier = modifier.size(
+            width = DynamicUserLiveBadgeVisualSpec.IndicatorWidth,
+            height = DynamicUserLiveBadgeVisualSpec.IndicatorHeight,
+        )
+    ) {
         drawDynamicLivePulseBars(
             progress = progress?.value,
             color = color,

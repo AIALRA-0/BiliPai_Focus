@@ -802,7 +802,7 @@ class VideoSharedTransitionPolicyTest {
         )
         assertTrue(
             singleColumnCardSource.indexOf(".videoCardShellSharedBoundsOrEmpty(") <
-                singleColumnCardSource.indexOf(".padding(AppSpacingTokens.Small)")
+                singleColumnCardSource.indexOf(".clip(cardShape)")
         )
         assertTrue(singleColumnCardSource.contains("clipShape = cardShape"))
         assertTrue(singleColumnCardSource.contains("crossfadeSourceContent = true"))
@@ -812,7 +812,8 @@ class VideoSharedTransitionPolicyTest {
         assertFalse(singleColumnCardSource.contains(".height(coverHeight)"))
         assertTrue(relatedCardSource.contains("videoCardShellSharedBoundsOrEmpty("))
         assertTrue(relatedCardSource.contains("crossfadeSourceContent = true"))
-        assertTrue(relatedCardSource.contains("sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE"))
+        assertTrue(relatedCardSource.contains("sourceLayout = if (stacked)"))
+        assertTrue(relatedCardSource.contains("VideoCardSourceLayout.SIDE_BY_SIDE"))
         assertTrue(relatedCardSource.contains("sourceChromeSnapshot = VideoCardSourceChromeSnapshot("))
         assertFalse(relatedCardSource.contains("videoCardShellReturnChromeAlpha("))
         assertFalse(relatedCardSource.contains("videoCardShellReturnCoverAlpha("))
@@ -1029,9 +1030,14 @@ class VideoSharedTransitionPolicyTest {
         val cardSource = File(
             "src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt"
         ).readText()
+        val hostSource = File(
+            "src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt"
+        ).readText()
 
         assertTrue(cardSource.contains("resolveVideoSharedTransitionPlaybackIntent("))
-        assertTrue(cardSource.contains("SettingsManager.getClickToPlaySync(context)"))
+        assertTrue(cardSource.contains("LocalClickToPlayEnabled.current"))
+        assertTrue(hostSource.contains("LocalClickToPlayEnabled provides clickToPlayEnabled"))
+        assertTrue(hostSource.contains(".getClickToPlay(LocalContext.current)"))
         assertTrue(cardSource.contains("playbackIntent = videoSharedPlaybackIntent"))
     }
 

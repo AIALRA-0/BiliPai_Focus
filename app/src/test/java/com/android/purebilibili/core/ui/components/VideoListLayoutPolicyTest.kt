@@ -21,7 +21,6 @@ class VideoListLayoutPolicyTest {
         listOf(
             "feature/list/CommonListScreen.kt",
             "feature/watchlater/WatchLaterScreen.kt",
-            "feature/search/SearchScreen.kt",
             "feature/profile/ProfileScreen.kt",
             "feature/download/DownloadListScreen.kt",
         ).forEach { path ->
@@ -29,6 +28,13 @@ class VideoListLayoutPolicyTest {
             assertTrue(source.contains("VideoListLayoutToggle("), path)
             assertTrue(source.contains("videoListItemModifier(") || source.contains("videoListBoundsAnimation("), path)
         }
+        val searchScreen = source("feature/search/SearchScreen.kt")
+        val searchFilterBar = source("feature/search/SearchVideoFilterSheet.kt")
+        assertTrue(searchScreen.contains("SearchVideoFilterBar("))
+        assertTrue(searchScreen.contains("onLayoutToggle = listLayout.toggle"))
+        assertTrue(searchFilterBar.contains("VideoListLayoutToggle("))
+        assertTrue(searchFilterBar.contains("onClick = onLayoutToggle"))
+        assertTrue(searchScreen.contains("videoListItemModifier(") || searchScreen.contains("videoListBoundsAnimation("))
         listOf(
             "feature/home/HomeScreen.kt",
             "feature/partition/PartitionScreen.kt",

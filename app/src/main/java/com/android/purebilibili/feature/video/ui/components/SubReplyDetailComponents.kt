@@ -91,6 +91,7 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextConte
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
+import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
@@ -1397,6 +1398,7 @@ private fun SubReplyDetailItem(
                     }
 
                     val likeFilledIcon = rememberAppLikeFilledIcon()
+                    val likeIcon = rememberAppLikeIcon()
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1405,7 +1407,7 @@ private fun SubReplyDetailItem(
                             .padding(4.dp)
                     ) {
                         AppIcon(
-                            imageVector = likeFilledIcon,
+                            imageVector = if (isLiked) likeFilledIcon else likeIcon,
                             contentDescription = "Like",
                             tint = if (isLiked) appearance.accentColor else appearance.actionTint,
                             modifier = Modifier.size(16.dp)

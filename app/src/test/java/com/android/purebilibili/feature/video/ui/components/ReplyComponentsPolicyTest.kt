@@ -349,6 +349,7 @@ class ReplyComponentsPolicyTest {
                 ReplyActionSheetAction.REPLY,
                 ReplyActionSheetAction.BLOCK_USER,
                 ReplyActionSheetAction.REPORT,
+                ReplyActionSheetAction.CHECK_FRAUD,
                 ReplyActionSheetAction.TOGGLE_TOP,
                 ReplyActionSheetAction.DELETE
             ),

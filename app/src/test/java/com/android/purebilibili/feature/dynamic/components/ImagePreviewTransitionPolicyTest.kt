@@ -10,6 +10,12 @@ import kotlin.test.assertTrue
 class ImagePreviewTransitionPolicyTest {
 
     @Test
+    fun `live photo overlay controls retain their original corner radii`() {
+        assertEquals(16, IMAGE_PREVIEW_LIVE_PHOTO_CONTROL_CORNER_RADIUS_DP)
+        assertEquals(14, IMAGE_PREVIEW_LIVE_PHOTO_MENU_CORNER_RADIUS_DP)
+    }
+
+    @Test
     fun shouldHandleImagePreviewLongPressSave_respectsUserSwitchAndBusyState() {
         assertTrue(
             shouldHandleImagePreviewLongPressSave(

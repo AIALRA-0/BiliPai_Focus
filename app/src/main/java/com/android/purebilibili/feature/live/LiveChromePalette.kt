@@ -16,6 +16,7 @@ internal object LiveStatusPalette {
     val AdminName = Color(0xFFFF7B92)
     val Reply = Color(0xFF8FD5FF)
     val GuardGold = Color(0xFFE6A23C)
+    val SuperChatBadgeAccent = Color(0xFFFFD54F)
     val SuperChatFallback = Color(0xFFDD5B6A)
     val LevelHigh = Color(0xFFFF3333)
     val LevelMedium = Color(0xFFFFAA33)

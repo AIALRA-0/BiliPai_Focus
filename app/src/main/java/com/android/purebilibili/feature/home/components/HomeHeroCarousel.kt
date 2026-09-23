@@ -7,6 +7,7 @@ import coil3.request.crossfade
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import com.android.purebilibili.core.ui.MediaContrastPalette
+import com.android.purebilibili.feature.home.HomeVisualPalette
 
 import android.net.Uri
 import androidx.compose.animation.core.Spring
@@ -525,7 +526,7 @@ private fun HomeHeroCarouselCard(
                         // 背景图亮暗变化较大，给标题加柔和阴影保持可读性。
                         style = MaterialTheme.typography.titleMedium.copy(
                             shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.72f),
+                                color = HomeVisualPalette.GlassDark.copy(alpha = 0.72f),
                                 offset = androidx.compose.ui.geometry.Offset(0f, 2f),
                                 blurRadius = 5f,
                             )
@@ -542,7 +543,7 @@ private fun HomeHeroCarouselCard(
                         color = MediaContrastPalette.Foreground.copy(alpha = 0.78f),
                         style = MaterialTheme.typography.labelMedium.copy(
                             shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.62f),
+                                color = HomeVisualPalette.GlassDark.copy(alpha = 0.62f),
                                 offset = androidx.compose.ui.geometry.Offset(0f, 1.5f),
                                 blurRadius = 4f,
                             )
@@ -567,7 +568,7 @@ private fun HomeHeroCarouselCard(
                             color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
                             fontSize = MaterialTheme.typography.labelSmall.fontSize,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                shadow = Shadow(Color.Black.copy(alpha = 0.58f), blurRadius = 3f)
+                                shadow = Shadow(HomeVisualPalette.GlassDark.copy(alpha = 0.58f), blurRadius = 3f)
                             ),
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,

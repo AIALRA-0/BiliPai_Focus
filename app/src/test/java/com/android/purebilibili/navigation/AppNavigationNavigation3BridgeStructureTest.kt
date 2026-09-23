@@ -72,7 +72,7 @@ class AppNavigationNavigation3BridgeStructureTest {
             .substringBefore("onHomeClick = {")
 
         assertTrue(
-            onBackBlock.contains("navigation3ProgrammaticBackDispatcher.dispatch()")
+            onBackBlock.contains("navigation3ProgrammaticBackDispatcher.dispatch(")
         )
         assertTrue(onBackBlock.contains("performSystemBackAction()"))
         assertFalse(onBackBlock.contains("popVideoDetailWithSharedReturnState("))
@@ -150,9 +150,9 @@ class AppNavigationNavigation3BridgeStructureTest {
 
         assertTrue(videoDetailBranch.contains("keepLoadedContentForBackPreview ="))
         assertTrue(
-            videoDetailBranch.contains(
-                "navigation3BackStack.getOrNull(navigation3BackStack.lastIndex - 1) == videoKey"
-            )
+            Regex(
+                """navigation3BackStack\.getOrNull\(\s*navigation3BackStack\.lastIndex - 1\s*\)\s*==\s*videoKey""",
+            ).containsMatchIn(videoDetailBranch),
         )
     }
 
@@ -163,8 +163,9 @@ class AppNavigationNavigation3BridgeStructureTest {
             .substringAfter("BiliPaiNavDisplayHost(")
             .substringBefore(") { key ->")
 
-        assertTrue(navHostCall.contains("onNativeVideoBackCancelled ="))
+        assertTrue(navHostCall.contains("onPredictiveBackCancelled ="))
         assertTrue(source.contains("predictiveBackCancelRecoveryGeneration ="))
+        assertTrue(source.contains("predictiveBackCancelRecoveryGeneration += 1"))
         assertTrue(source.contains("shouldBindVideoDetailBackPreviewPlayer("))
     }
 
@@ -416,7 +417,9 @@ class AppNavigationNavigation3BridgeStructureTest {
         val buildFile = appBuildGradleSource()
 
         assertTrue(source.contains("BiliPaiNavDisplayHost("))
-        assertTrue(source.contains("sharedTransitionScope = LocalSharedTransitionScope.current"))
+        assertTrue(source.contains("SharedTransitionLayout(modifier = Modifier.fillMaxSize())"))
+        assertTrue(source.contains("LocalSharedTransitionScope provides"))
+        assertTrue(source.contains("LocalOfficialVideoSharedTransition provides realVideoSharedTransition"))
         assertTrue(source.contains("resolveBiliPaiNavEntryContentRole"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.HOME ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.DYNAMIC ->"))
@@ -425,6 +428,7 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertTrue(source.contains("BiliPaiNavEntryContentRole.VIDEO_DETAIL ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.HISTORY ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.SETTINGS ->"))
+        assertTrue(source.contains("BiliPaiNavEntryContentRole.FOCUS_SETTINGS ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.WATCH_LATER ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.FAVORITE ->"))
         assertTrue(source.contains("BiliPaiNavEntryContentRole.LOGIN ->"))
@@ -525,7 +529,8 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertTrue(source.contains("videoCardTransitionChromeReveal("))
         assertTrue(source.contains("resolveVideoCardTransitionChromeBottomBarRoute("))
         assertTrue(source.contains("videoCardSourceChromeVisible"))
-        assertTrue(source.contains("!isVideoDetailDestination"))
+        assertTrue(source.contains("isVideoDetailDestination = isVideoDetailDestination"))
+        assertTrue(source.contains("(driveBottomBarByProgress || videoCardSourceChromeVisible)"))
         assertTrue(source.contains("bottomBarMountGate ||"))
         assertTrue(source.contains("bottomBarVisibilityState.currentState ||"))
         assertTrue(source.contains("val sideBarRouteGate = shouldShowBottomBarForNavigation("))

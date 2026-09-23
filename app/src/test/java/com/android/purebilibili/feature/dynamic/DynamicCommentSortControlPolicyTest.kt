@@ -29,11 +29,15 @@ class DynamicCommentSortControlPolicyTest {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt"
         )
+        val rendererSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicAdaptiveSegmentedControl.kt"
+        )
 
-        assertTrue(source.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(source.contains("tapPressRefractionEnabled = true"))
-        assertTrue(source.contains("liquidGlassEffectsEnabled = true"))
-        assertTrue(!source.contains("forceLiquidChrome"))
+        assertTrue(source.contains("DynamicAdaptiveSegmentedControl("))
+        assertTrue(rendererSource.contains("BottomBarLiquidSegmentedControl("))
+        assertTrue(rendererSource.contains("tapPressRefractionEnabled = true"))
+        assertTrue(rendererSource.contains("liquidGlassEffectsEnabled = true"))
+        assertTrue(!rendererSource.contains("forceLiquidChrome"))
         assertTrue(source.contains("itemWidth = spec.itemWidthDp.dp"))
         assertTrue(source.contains("requiredWidth((spec.itemWidthDp * items.size).dp)"))
         assertTrue(source.contains("contentAlignment = Alignment.CenterEnd"))
@@ -53,10 +57,11 @@ class DynamicCommentSortControlPolicyTest {
         assertTrue(voteSource.contains("DynamicAdaptiveSegmentedControl("))
         assertTrue(voteSource.contains("listOf(\"单选\", \"多选\")"))
         assertTrue(voteSource.contains("backdrop = voteChromeBackdrop"))
-        assertTrue(voteSource.contains(".matchParentSize()\n                        .layerBackdrop(voteChromeBackdrop)"))
+        assertTrue(voteSource.contains("if (voteChromeBackdrop != null)"))
+        assertTrue(voteSource.contains(".layerBackdrop(voteChromeBackdrop)"))
         assertTrue(
             voteSource.indexOf(".layerBackdrop(voteChromeBackdrop)") <
-                voteSource.indexOf("backdrop = voteChromeBackdrop")
+                voteSource.indexOf("DynamicAdaptiveSegmentedControl(")
         )
         assertTrue(publishSource.contains("BottomBarLiquidSegmentedControl("))
         assertTrue(publishSource.contains("listOf(\"公开\", \"仅自己可见\")"))
@@ -73,8 +78,7 @@ class DynamicCommentSortControlPolicyTest {
 
         assertTrue(source.contains("val commentChromeBackdrop = rememberLayerBackdrop()"))
         assertTrue(source.contains(".layerBackdrop(commentChromeBackdrop)"))
-        assertTrue(source.contains("backdrop = commentChromeBackdrop"))
-        assertTrue(source.contains(".matchParentSize()\n                    .layerBackdrop(commentChromeBackdrop)"))
+        assertTrue(source.contains("miuixBackdrop = commentChromeBackdrop"))
         assertTrue(
             source.indexOf(".layerBackdrop(commentChromeBackdrop)") <
                 source.indexOf("miuixBackdrop = commentChromeBackdrop")

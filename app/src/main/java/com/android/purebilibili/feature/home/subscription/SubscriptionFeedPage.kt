@@ -11,10 +11,8 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SharedTransitionScope.OverlayClip
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -77,8 +75,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.plugin.feed.FeedBlock
 import com.android.purebilibili.core.plugin.feed.FeedInline
 import com.android.purebilibili.core.plugin.feed.ParsedFeedItem
@@ -91,7 +92,6 @@ import com.android.purebilibili.core.plugin.feed.loadFeedSources
 import com.android.purebilibili.core.plugin.feed.parseFeedHtml
 import com.android.purebilibili.core.plugin.feed.stabilizeFeedOrder
 import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold
@@ -154,7 +154,7 @@ fun SubscriptionFeedPage(
             val remainingMs = ((1f - lastFraction) * 360).toInt().coerceIn(100, 360)
             transitionState.animateTo(
                 targetState = null,
-                animationSpec = tween(remainingMs, easing = LinearEasing)
+                animationSpec = AppMotionTokens.linearTweenSpec(remainingMs)
             )
             opened = null
         } catch (cancelled: CancellationException) {
@@ -212,7 +212,8 @@ fun SubscriptionFeedPage(
         val transition = rememberTransition(transitionState, label = "subscription-article")
         transition.AnimatedContent(
             transitionSpec = {
-                fadeIn(tween(360, easing = LinearEasing)) togetherWith fadeOut(tween(360, easing = LinearEasing))
+                fadeIn(AppMotionTokens.linearTweenSpec(360)) togetherWith
+                    fadeOut(AppMotionTokens.linearTweenSpec(360))
             },
             contentKey = { it?.let { "${it.sourceId}:${it.id}" } ?: "grid" },
             modifier = Modifier.fillMaxSize(),
@@ -225,7 +226,7 @@ fun SubscriptionFeedPage(
                         scope.launch {
                             transitionState.animateTo(
                                 targetState = null,
-                                animationSpec = tween(360, easing = LinearEasing)
+                                animationSpec = AppMotionTokens.linearTweenSpec(360)
                             )
                             opened = null
                         }
@@ -250,7 +251,7 @@ fun SubscriptionFeedPage(
                         scope.launch {
                             transitionState.animateTo(
                                 targetState = item,
-                                animationSpec = tween(360, easing = LinearEasing)
+                                animationSpec = AppMotionTokens.linearTweenSpec(360)
                             )
                         }
                     },
@@ -309,15 +310,15 @@ private fun SubscriptionFeedGrid(
                 onGestureEnd = onPinchEnd,
             ),
         contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalItemSpacing = 8.dp,
+        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+        verticalItemSpacing = AppSpacingTokens.Small,
     ) {
         item(span = StaggeredGridItemSpan.FullLine) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppAssistChip(onClick = { onSelectSource(null) }, label = { AppText("全部") })
@@ -345,7 +346,9 @@ private fun SubscriptionFeedGrid(
                 animatedVisibilityScope = animatedVisibilityScope,
             )
         }
-        item(span = StaggeredGridItemSpan.FullLine) { Spacer(Modifier.height(28.dp)) }
+        item(span = StaggeredGridItemSpan.FullLine) {
+            Spacer(Modifier.height(AppSpacingTokens.ExtraLarge + AppSpacingTokens.ExtraSmall))
+        }
     }
 }
 
@@ -364,14 +367,13 @@ private fun SubscriptionFeedCard(
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(subscriptionSharedKey(item)),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = { _, _ -> tween(360, easing = LinearEasing) },
+                    boundsTransform = { _, _ -> AppMotionTokens.linearTweenSpec(360) },
                     clipInOverlayDuringTransition = OverlayClip(AppShapes.container(ContainerLevel.Card)),
                 )
                 .clip(AppShapes.container(ContainerLevel.Card))
                 .clickable(onClick = onClick)
         },
         color = AppSurfaceTokens.cardContainer(),
-        tonalElevation = 0.dp,
     ) {
         Column {
             if (!item.imageUrl.isNullOrBlank()) {
@@ -381,8 +383,11 @@ private fun SubscriptionFeedCard(
                 )
             }
             Column(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(
+                    horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                    vertical = AppSpacingTokens.Small,
+                ),
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
             ) {
                 AppText(
                     text = item.title.ifBlank { item.link },
@@ -460,16 +465,15 @@ private fun SubscriptionArticleScreen(
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(subscriptionSharedKey(item)),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = { _, _ -> tween(360, easing = LinearEasing) },
+                    boundsTransform = { _, _ -> AppMotionTokens.linearTweenSpec(360) },
                     clipInOverlayDuringTransition = OverlayClip(AppShapes.container(ContainerLevel.Card)),
                 )
         },
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
+        color = AppSurfaceTokens.surface(),
     ) {
         ImmersiveAppScaffold(
-            containerColor = MaterialTheme.colorScheme.surface,
-            topBarSurfaceColor = MaterialTheme.colorScheme.surface,
+            containerColor = AppSurfaceTokens.surface(),
+            topBarSurfaceColor = AppSurfaceTokens.surface(),
             topBar = {
                 AppTopBar(
                     title = "文章",
@@ -483,7 +487,7 @@ private fun SubscriptionArticleScreen(
                             onClick = {
                                 copyFeedText(context, feedBlocksPlainText(blocks).ifBlank { item.title })
                             },
-                            modifier = Modifier.heightIn(min = 48.dp),
+                            modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                         ) {
                             AppText("复制")
                         }
@@ -494,7 +498,7 @@ private fun SubscriptionArticleScreen(
                                         context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(item.link)))
                                     }
                                 },
-                                modifier = Modifier.heightIn(min = 48.dp),
+                                modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
                             ) {
                                 AppText("原文")
                             }
@@ -507,11 +511,11 @@ private fun SubscriptionArticleScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = contentPadding.calculateStartPadding(layoutDirection),
-                    top = scaffoldPadding.calculateTopPadding() + 8.dp,
+                    top = scaffoldPadding.calculateTopPadding() + AppSpacingTokens.Small,
                     end = contentPadding.calculateEndPadding(layoutDirection),
                     bottom = contentPadding.calculateBottomPadding(),
                 ),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Large),
             ) {
                 item {
                     AppText(item.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -542,7 +546,7 @@ private fun SubscriptionArticleScreen(
                         is FeedBlock.Quote -> SelectionContainer {
                             FeedInlineText(
                                 block.inlines,
-                                modifier = Modifier.padding(start = 12.dp),
+                                modifier = Modifier.padding(start = AppSpacingTokens.Medium),
                                 italic = true,
                             )
                         }
@@ -557,7 +561,9 @@ private fun SubscriptionArticleScreen(
                                 onOpenImages(imageUrls, index)
                             },
                         )
-                        is FeedBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        is FeedBlock.BulletList -> Column(
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
+                        ) {
                             block.items.forEach { line ->
                                 Row {
                                     AppText("• ")
@@ -565,7 +571,9 @@ private fun SubscriptionArticleScreen(
                                 }
                             }
                         }
-                        is FeedBlock.NumberedList -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        is FeedBlock.NumberedList -> Column(
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
+                        ) {
                             block.items.forEachIndexed { index, line ->
                                 Row {
                                     AppText("${index + 1}. ")
@@ -575,7 +583,9 @@ private fun SubscriptionArticleScreen(
                         }
                     }
                 }
-                item { Spacer(Modifier.height(28.dp)) }
+                item {
+                    Spacer(Modifier.height(AppSpacingTokens.ExtraLarge + AppSpacingTokens.ExtraSmall))
+                }
             }
         }
     }
@@ -630,7 +640,7 @@ private fun FeedArticleImage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp)
+                .height(SubscriptionFeedLayoutSpec.ImageErrorPlaceholderHeight)
                 .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium),
             contentAlignment = Alignment.Center,
         ) {
@@ -642,7 +652,7 @@ private fun FeedArticleImage(
             contentDescription = alt.ifBlank { "查看图片" },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 420.dp)
+                .heightIn(max = SubscriptionFeedLayoutSpec.ArticleImageMaxHeight)
                 .clip(MaterialTheme.shapes.medium)
                 .clickable(onClick = onClick),
             contentScale = ContentScale.Fit,

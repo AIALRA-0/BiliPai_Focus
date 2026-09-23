@@ -7,30 +7,35 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.components.AppTextButton
 
 @Composable
 internal fun HomeNoTitleEmptyState(
     modifier: Modifier = Modifier,
-    topPadding: Dp = 0.dp,
+    topPadding: Dp = AppSpacingTokens.None,
     onSettingsClick: () -> Unit
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(top = topPadding, start = 24.dp, end = 24.dp, bottom = 24.dp),
+            .padding(
+                top = topPadding,
+                start = AppSpacingTokens.ExtraLarge,
+                end = AppSpacingTokens.ExtraLarge,
+                bottom = AppSpacingTokens.ExtraLarge,
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
         ) {
             Text(
                 text = "首页栏目已全部关闭",
@@ -45,7 +50,7 @@ internal fun HomeNoTitleEmptyState(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            TextButton(onClick = onSettingsClick) {
+            AppTextButton(onClick = onSettingsClick) {
                 Text(text = "打开 Focus 设置")
             }
         }

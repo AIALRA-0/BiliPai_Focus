@@ -24,7 +24,7 @@ class AudioNowPlayingBarStructureTest {
         assertTrue(source.contains("artistAvatarUrl"))
         assertTrue(source.contains("state.artistAvatarUrl"))
         assertTrue(source.contains("basicMarquee(iterations = Int.MAX_VALUE)"))
-        assertTrue(source.contains("modifier = if (state.isPlaying)"))
+        assertTrue(source.contains("modifier = if (state.isPlaying && isLayoutStable)"))
         assertTrue(source.contains("overflow = TextOverflow.Clip"))
         assertTrue(source.contains("iconOnlyProgress: () -> Float"))
         assertTrue(source.contains("resolveAudioNowPlayingSupplementalProgress"))

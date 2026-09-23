@@ -884,7 +884,7 @@ class MainActivityAppCompatContractTest {
         val theme: String,
         val launcherIcon: String,
         val splashActivityIcon: String = "@mipmap/$launcherIcon",
-        val splashActivityRoundIcon: String = splashActivityIcon
+        val splashActivityRoundIcon: String = "@mipmap/${launcherIcon}_round"
     )
 
     private fun readPngHeader(file: File): PngHeader {

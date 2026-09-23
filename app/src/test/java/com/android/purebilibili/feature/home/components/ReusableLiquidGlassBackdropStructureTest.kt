@@ -52,11 +52,11 @@ class ReusableLiquidGlassBackdropStructureTest {
         )
 
         assertTrue(source.contains("val selectionBackdrop = rememberLayerBackdrop()"))
-        assertTrue(source.contains("miuixBackdrop = selectionBackdrop"))
+        assertTrue(source.contains("miuixBackdrop = if (liquidGlassEnabled) selectionBackdrop else null"))
         assertTrue(source.contains(".layerBackdrop(selectionBackdrop)"))
         assertTrue(
             source.indexOf(".layerBackdrop(selectionBackdrop)") <
-                source.indexOf("miuixBackdrop = selectionBackdrop")
+                source.indexOf("miuixBackdrop = if (liquidGlassEnabled) selectionBackdrop")
         )
     }
 
@@ -99,9 +99,9 @@ class ReusableLiquidGlassBackdropStructureTest {
         )
 
         assertTrue(source.contains("val commentChromeBackdrop = rememberLayerBackdrop()"))
-        assertTrue(source.contains("backdrop = commentChromeBackdrop"))
+        assertTrue(source.contains("miuixBackdrop = commentChromeBackdrop"))
         assertTrue(source.contains(".layerBackdrop(commentChromeBackdrop)"))
-        assertTrue(source.contains(".matchParentSize()\n                    .layerBackdrop(commentChromeBackdrop)"))
+        assertTrue(Regex("""\.matchParentSize\(\)\s*\.layerBackdrop\(commentChromeBackdrop\)""").containsMatchIn(source))
         assertTrue(
             source.indexOf(".layerBackdrop(commentChromeBackdrop)") <
                 source.indexOf("miuixBackdrop = commentChromeBackdrop")
@@ -135,9 +135,11 @@ class ReusableLiquidGlassBackdropStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/audio/screen/MusicPlayerContent.kt"
         )
 
-        assertTrue(source.contains("val musicBackdrop = rememberMiuixLayerBackdrop()"))
+        assertTrue(source.contains("val musicBackdropSource = rememberChromeBackdropSource()"))
+        assertTrue(source.contains("val musicBackdrop = musicBackdropSource.backdrop"))
         assertTrue(source.contains("miuixBackdrop = musicBackdrop"))
-        assertTrue(source.contains(".miuixLayerBackdrop(musicBackdrop)"))
+        assertTrue(source.contains(".then(musicBackdropSource.modifier)"))
+        assertTrue(source.indexOf(".then(musicBackdropSource.modifier)") < source.indexOf("miuixBackdrop = musicBackdrop"))
     }
 
     private fun loadSource(path: String): String {

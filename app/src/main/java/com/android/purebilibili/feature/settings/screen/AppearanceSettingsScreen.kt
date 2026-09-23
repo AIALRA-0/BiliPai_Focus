@@ -1759,7 +1759,7 @@ fun AppearanceSettingsContent(
                         if (backToTopButtonEnabled && hasCustomBackToTopOffset) {
                             AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                             AppPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.BACK_TO_TOP),
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_COUNT),
                                 title = "重置回顶按钮位置",
                                 subtitle = "恢复回到默认右下角悬浮位置",
                                 onClick = {

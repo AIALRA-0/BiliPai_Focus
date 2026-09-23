@@ -25,7 +25,7 @@ class PureApplicationTrimPolicyTest {
     }
 
     @Test
-    fun `low memory levels should forward trim pressure to image cache`() {
+    fun `low memory levels retain pressure while complete trim uses clear threshold`() {
         assertEquals(
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
             PureApplicationRuntimeConfig.resolveImageMemoryCacheTrimLevel(
@@ -39,7 +39,7 @@ class PureApplicationTrimPolicyTest {
             )
         )
         assertEquals(
-            ComponentCallbacks2.TRIM_MEMORY_COMPLETE,
+            ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
             PureApplicationRuntimeConfig.resolveImageMemoryCacheTrimLevel(
                 ComponentCallbacks2.TRIM_MEMORY_COMPLETE
             )
@@ -55,7 +55,7 @@ class PureApplicationTrimPolicyTest {
             )
         )
         assertEquals(
-            ComponentCallbacks2.TRIM_MEMORY_MODERATE,
+            ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
             PureApplicationRuntimeConfig.resolveImageMemoryCacheTrimLevel(
                 ComponentCallbacks2.TRIM_MEMORY_MODERATE
             )

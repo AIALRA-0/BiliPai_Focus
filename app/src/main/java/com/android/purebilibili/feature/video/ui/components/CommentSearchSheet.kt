@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -64,6 +63,9 @@ import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -389,6 +391,24 @@ private fun CommentSearchResultRow(
     val context = LocalContext.current
     val item = entry.reply
     val primaryColor = MaterialTheme.colorScheme.primary
+    val replyBadgeContainer = AppSurfaceTokens.secondaryContainer().copy(alpha = 0.4f)
+    val replyBadgeContent = AppSurfaceTokens.onSecondaryContainer()
+    val sheetContainer = when (LocalAppUiStyle.current) {
+        AppUiStyle.MIUIX -> AppSurfaceTokens.surfaceContainer()
+        AppUiStyle.MATERIAL3 -> MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val replyBadgeFallbacks = listOf(
+        AppSurfaceTokens.onSurface(),
+        MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val replyBadgeColors = remember(replyBadgeContainer, replyBadgeContent, sheetContainer, replyBadgeFallbacks) {
+        resolveAccessibleContainerColors(
+            containerColor = replyBadgeContainer,
+            contentColor = replyBadgeContent,
+            backgroundColor = sheetContainer,
+            fallbackContentColors = replyBadgeFallbacks,
+        )
+    }
 
     AppSurface(
         modifier = Modifier
@@ -459,7 +479,7 @@ private fun CommentSearchResultRow(
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
+                                .clip(AppShapes.container(ContainerLevel.Tag))
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
@@ -475,14 +495,14 @@ private fun CommentSearchResultRow(
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
+                                .clip(AppShapes.container(ContainerLevel.Tag))
+                                .background(replyBadgeColors.containerColor)
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             AppText(
                                 text = "楼中楼回复",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = replyBadgeColors.contentColor,
                             )
                         }
                     }

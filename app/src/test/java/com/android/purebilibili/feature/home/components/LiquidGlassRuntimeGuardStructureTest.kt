@@ -24,7 +24,11 @@ class LiquidGlassRuntimeGuardStructureTest {
         assertTrue(homeHeader.contains("!isLowBlurBudgetForced(forceLowBlurBudget)"))
         assertFalse(homeHeader.contains("val isLiquidGlassMode = false"))
         assertTrue(homeHeader.contains("renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP"))
-        assertTrue(homeHeader.contains("if (isLiquidGlassMode && !useProgressiveTopBlur)"))
+        assertTrue(
+            homeHeader.contains(
+                "if (isLiquidGlassMode && !useProgressiveTopBlur && !useProgressiveTopFade)"
+            )
+        )
         assertTrue(videoCard.contains("!isLowBlurBudgetForced()"))
     }
 

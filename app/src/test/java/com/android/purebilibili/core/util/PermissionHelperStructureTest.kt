@@ -17,6 +17,6 @@ class PermissionHelperStructureTest {
         assertTrue(source.contains("AppTextButton("))
         assertTrue(source.contains("MaterialTheme.colorScheme.primary"))
         assertFalse(source.contains("BiliPink"))
-        assertFalse(source.contains("AlertDialog("))
+        assertFalse(Regex("""(?<![A-Za-z])AlertDialog\(""").containsMatchIn(source))
     }
 }

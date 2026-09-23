@@ -13,7 +13,8 @@ class ChatScreenStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/message/ChatScreen.kt"
         )
         assertTrue(source.contains("messageGlassContainer("))
-        assertTrue(source.contains("shape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(source.contains("val bubbleShape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(source.contains("shape = bubbleShape"))
         assertTrue(source.contains("contentColor = fallbackContentColor"))
         assertTrue(source.contains("linkColor = textColor"))
         assertTrue(source.contains("BoxWithConstraints("))
@@ -21,7 +22,7 @@ class ChatScreenStructureTest {
         assertTrue(source.contains("contentAlignment = if (isOwnMessage) Alignment.TopEnd else Alignment.TopStart"))
         assertTrue(source.contains("AppSpacingTokens.Medium"))
         assertTrue(source.contains("AppSpacingTokens.Small"))
-        assertTrue(source.contains("modifier = Modifier.imePadding()"))
+        assertTrue(source.contains(".imePadding()"))
         assertTrue(source.contains("rememberMessageGlassContentColors("))
         assertTrue(source.contains("HorizontalVideoCardFrame("))
         assertTrue(source.contains("MessageHorizontalVideoCard("))

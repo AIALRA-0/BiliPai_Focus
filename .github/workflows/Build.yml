@@ -289,11 +289,13 @@ jobs:
 
           cert_digest() {
             "$APKSIGNER" verify --print-certs "$1" 2>&1 \
-              | awk -F ': ' '/certificate SHA-256 digest/ { print tolower($2); exit }'
+              | awk -F ': ' '/certificate SHA-256 digest/ { print tolower($NF); exit }'
           }
           OLD_CERT="$(cert_digest "$BASELINE_APK")"
           NEW_CERT="$(cert_digest "$NEW_APK")"
-          if [ -z "$OLD_CERT" ] || [ "$OLD_CERT" != "$NEW_CERT" ]; then
+          if [[ ! "$OLD_CERT" =~ ^[[:xdigit:]]{64}$ ]] ||
+             [[ ! "$NEW_CERT" =~ ^[[:xdigit:]]{64}$ ]] ||
+             [ "$OLD_CERT" != "$NEW_CERT" ]; then
             echo "Release signing certificate does not match the latest published Focus APK."
             exit 1
           fi

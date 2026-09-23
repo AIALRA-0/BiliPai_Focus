@@ -23,7 +23,9 @@ class SettingsPageBlurPreferenceStructureTest {
         assertFalse(source.contains("TopReadabilityChrome"))
         assertTrue(source.contains("top = padding.calculateTopPadding()"))
         assertTrue(source.contains("if (progressiveBlurEnabled) rememberLayerBackdrop()"))
-        assertTrue(source.contains("Column(modifier = scrollModifier)"))
+        assertTrue(source.contains("Box(\n                        modifier = scrollModifier,"))
+        assertTrue(source.contains("LazyColumn("))
+        assertTrue(source.contains("contentPadding = PaddingValues("))
         assertTrue(source.contains("fun settingsScrollContentPadding("))
         assertFalse(source.contains("scrollModifier.padding(padding)"))
         assertFalse(source.contains(".fillMaxSize()\n                .hazeSourceCompat(state = hazeState)"))
@@ -58,7 +60,7 @@ class SettingsPageBlurPreferenceStructureTest {
         ).readText()
 
         assertTrue(scaffold.contains("AppUiStyle.MIUIX -> AppSurfaceTokens.chromeBackground()"))
-        assertTrue(scaffold.contains("containerColor = if (!topBarBlurActive)"))
+        assertTrue(scaffold.contains("containerColor = if (!topBarBlurActive || nonGlassMiuix)"))
         assertTrue(scaffold.contains("Color.Transparent"))
     }
 

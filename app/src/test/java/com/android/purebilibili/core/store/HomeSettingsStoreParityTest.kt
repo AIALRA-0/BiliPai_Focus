@@ -45,8 +45,9 @@ class HomeSettingsStoreParityTest {
         assertEquals(HomeCardInfoGlassMode.OFF, result.homeCardInfoGlassMode)
         assertEquals(HomeWallpaperEffectMode.SOFT_BLUR, result.homeWallpaperEffectMode)
         assertEquals(HomeWallpaperEffectScope.HOME_ONLY, result.homeWallpaperEffectScope)
-        assertTrue(result.showHomeUpBadges)
-        assertTrue(result.showHomeUpAvatars)
+        // Focus keeps creator badges and avatars hidden until the user enables them.
+        assertFalse(result.showHomeUpBadges)
+        assertFalse(result.showHomeUpAvatars)
         assertTrue(result.showHomePublishTime)
         assertEquals(HomeDurationStyle.OUTSIDE_COVER, result.homeDurationStyle)
     }

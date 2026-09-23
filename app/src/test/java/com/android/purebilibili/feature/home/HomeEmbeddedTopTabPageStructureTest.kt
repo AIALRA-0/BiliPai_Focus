@@ -26,8 +26,8 @@ class HomeEmbeddedTopTabPageStructureTest {
         val source = File("src/main/java/com/android/purebilibili/feature/live/LiveListScreen.kt").readText()
         assertTrue(source.contains("embeddedInHome: Boolean = false"))
         assertTrue(source.contains("if (!embeddedInHome)"))
-        assertTrue(source.contains("label = \"已关注\""))
-        assertTrue(source.contains("onAreaSelected(LIVE_HOME_FOLLOWED_INDEX)"))
+        assertTrue(source.contains("AppSegmentOption(LIVE_HOME_FOLLOWED_INDEX, \"已关注\")"))
+        assertTrue(source.contains("onAreaSelected = onAreaSelected"))
     }
 
     @Test
@@ -51,7 +51,9 @@ class HomeEmbeddedTopTabPageStructureTest {
         assertTrue(source.contains(".globalWallpaperAwareBackground(MaterialTheme.colorScheme.background)"))
         assertTrue(!source.contains("tabBackdrop = channelBackdrop"))
         assertTrue(source.contains("listTopPadding = channelHeight"))
-        assertTrue(source.contains("chromeSource?.takeIf { it.isReady }?.backdrop"))
-        assertTrue(source.indexOf("BangumiHubContent(") < source.indexOf("AppLiquidAwareTabRow("))
+        assertTrue(source.contains("chromeSource?.takeIf {"))
+        assertTrue(source.contains("shouldCaptureBangumiHubChrome(state) && it.isReady"))
+        assertTrue(source.contains("tabBackdrop = null"))
+        assertTrue(source.indexOf("chromeSource?.modifier") < source.indexOf("miuixBackdrop = channelBackdrop"))
     }
 }

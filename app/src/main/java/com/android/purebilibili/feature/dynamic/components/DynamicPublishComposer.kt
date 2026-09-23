@@ -26,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -50,6 +49,7 @@ import com.android.purebilibili.core.ui.rememberAppDeleteIcon
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale
+import com.android.purebilibili.feature.dynamic.DynamicTypographyPolicy
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import com.android.purebilibili.data.model.response.DynamicCreatedReserve
@@ -238,7 +238,7 @@ fun DynamicPublishComposer(
                             itemWidth = 88.dp,
                             height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
                             indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-                            labelFontSize = 13.sp,
+                            labelFontSize = DynamicTypographyPolicy.segmentedControlLabelFontSize,
                             miuixBackdrop = publishChromeBackdrop,
                             liquidGlassEffectsEnabled = true,
                             dragSelectionEnabled = visibilityLabels.size > 1,

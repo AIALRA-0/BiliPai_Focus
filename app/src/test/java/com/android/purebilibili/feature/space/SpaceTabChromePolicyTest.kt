@@ -26,7 +26,7 @@ class SpaceTabChromePolicyTest {
         assertFalse(spec.scrollable)
         assertEquals(40, spec.heightDp)
         assertTrue(spec.indicatorHeightDp < spec.heightDp)
-        assertFalse(spec.liquidGlassEffectsEnabled)
+        assertTrue(spec.liquidGlassEffectsEnabled)
         assertTrue(spec.dragSelectionEnabled)
     }
 
@@ -86,7 +86,7 @@ class SpaceTabChromePolicyTest {
         assertTrue((spec.itemWidthDp ?: 0) > 104)
         assertTrue(spec.indicatorHeightDp < spec.heightDp)
         assertEquals(mainSpec.horizontalPaddingDp, spec.horizontalPaddingDp)
-        assertTrue(spec.liquidGlassEffectsEnabled)
+        assertFalse(spec.liquidGlassEffectsEnabled)
         assertFalse(spec.dragSelectionEnabled)
     }
 
@@ -124,7 +124,7 @@ class SpaceTabChromePolicyTest {
     }
 
     @Test
-    fun `contribution tab chrome keeps drag selection for three contribution entries`() {
+    fun `native contribution tab chrome keeps drag selection disabled for three entries`() {
         val tabs = listOf(
             SpaceContributionTab(
                 id = "video",
@@ -155,7 +155,7 @@ class SpaceTabChromePolicyTest {
 
         assertFalse(spec.scrollable)
         assertTrue((spec.itemWidthDp ?: 0) > 104)
-        assertTrue(spec.dragSelectionEnabled)
+        assertFalse(spec.dragSelectionEnabled)
     }
 
     @Test
@@ -172,7 +172,7 @@ class SpaceTabChromePolicyTest {
         val spec = resolveSpaceSecondarySwitchChromeSpec(items, selectedId = "season")
 
         assertEquals(1, spec.selectedIndex)
-        assertEquals(48, spec.heightDp)
+        assertEquals(40, spec.heightDp)
         assertEquals(30, spec.indicatorHeightDp)
         assertEquals(315, spec.itemWidthDp)
         // A single outlier title must not propagate its estimated width to every
@@ -234,7 +234,7 @@ class SpaceTabChromePolicyTest {
         )
 
         assertEquals(40, spec.tabHeightDp)
-        assertEquals(34, spec.tabIndicatorHeightDp)
+        assertEquals(35, spec.tabIndicatorHeightDp)
         assertEquals(40, spec.expandedTabRailHeightDp)
         assertEquals(88, spec.collapsedTabWidthDp)
         assertTrue(spec.showVideoActions)

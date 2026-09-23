@@ -87,9 +87,10 @@ class DynamicCommentStructureTest {
         assertTrue(composer.contains("liquidGlassEnabled = liquidGlassEnabled"))
         assertTrue(source.contains("shouldUseFloatingLiquidBottomInputBar("))
         assertTrue(source.contains("resolveBottomInputBarContentBottomPadding("))
-        assertTrue(source.contains("val detailCommentBackdrop = rememberLayerBackdrop()"))
+        assertTrue(source.contains("val detailCommentBackdrop = if (liquidGlassEnabled) rememberLayerBackdrop() else null"))
         assertTrue(source.contains(".layerBackdrop(detailCommentBackdrop)"))
-        assertTrue(source.contains("contentPadding = PaddingValues(bottom = commentContentBottomPadding)"))
+        assertTrue(source.contains("bottom = commentContentBottomPadding"))
+        assertTrue(source.contains("top = paddingValues.calculateTopPadding()"))
         assertTrue(source.contains("widthIn(max = 360.dp)"))
         assertTrue(!source.contains(".weight(1f)"))
 
@@ -99,7 +100,7 @@ class DynamicCommentStructureTest {
         val inputComposer = componentSource
             .substringAfter("private fun DynamicCommentComposer(")
             .substringBefore("/**\n *  单条评论项")
-        assertTrue(inputComposer.split("BottomBarMatchedReusableLiquidDock(").size - 1 == 2)
+        assertTrue(inputComposer.split("BottomBarMatchedReusableLiquidDock(").size - 1 == 1)
         assertTrue(inputComposer.contains("reuseEnabled = liquidGlassEnabled"))
         assertTrue(inputComposer.contains("backdrop = backdrop"))
         assertTrue(inputComposer.contains("drawShellLens = true"))

@@ -2,14 +2,13 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.components.*
 
 @Composable
@@ -47,7 +46,7 @@ internal fun SettingsSearchHistorySection(
                         AppText(query, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     AppIconButton(onClick = { onDelete(query) }, modifier = Modifier.size(48.dp)) {
-                        AppIcon(Icons.Rounded.Close, contentDescription = "删除搜索历史：$query")
+                        AppIcon(rememberMaterialSymbol(R.drawable.ms_close_24), contentDescription = "删除搜索历史：$query")
                     }
                 }
                 if (index != history.lastIndex) AppPreferenceDivider()

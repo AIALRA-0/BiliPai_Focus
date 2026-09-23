@@ -232,7 +232,9 @@ class SettingsRootCategoryContentStructureTest {
         assertTrue(source.contains("NavigationDrawerItem("))
         assertTrue(source.contains("text = category.subtitle"))
         assertTrue(source.contains("rightPane()"))
-        assertTrue(source.contains("if (selectedCategory == null) emptyDetailPane() else detailPane()"))
+        assertTrue(source.contains("val isDetailActive = shouldRenderSettingsTabletDetailPane("))
+        assertTrue(source.contains("selectedCategory = selectedCategory,"))
+        assertTrue(source.contains("if (!isDetailActive) emptyDetailPane() else detailPane()"))
         assertTrue(source.contains("text = \"选择设置分类\""))
         assertTrue(source.contains("AppTopBar("))
         assertTrue(source.contains(".padding(horizontal = layoutPolicy.detailPanePaddingDp.dp)"))
@@ -317,7 +319,9 @@ class SettingsRootCategoryContentStructureTest {
             .substringAfter("fun AboutSection(")
             .substringBefore("@Composable\nprivate fun AboutProjectOverviewCard(")
 
-        assertTrue(aboutSectionBlock.contains("AboutProjectOverviewCard(versionName = versionName)"))
+        assertTrue(aboutSectionBlock.contains("AboutProjectOverviewCard("))
+        assertTrue(aboutSectionBlock.contains("versionName = versionName,"))
+        assertTrue(aboutSectionBlock.contains("appIconRes = appIconRes,"))
         assertTrue(aboutSectionBlock.indexOf("AboutProjectOverviewCard(") < aboutSectionBlock.indexOf("SettingsCardGroup {"))
         assertTrue(source.contains("internal val AboutContributors = listOf("))
         assertTrue(source.contains("AboutContributor(\"jay3-yy\", \"jay3-yy\", R.drawable.avatar_jay3_yy)"))
@@ -421,8 +425,9 @@ class SettingsRootCategoryContentStructureTest {
             .substringAfter("private fun AboutProjectOverviewCard(")
             .substringBefore("@Composable\nprivate fun ContributorAvatarRow(")
 
-        assertFalse(overviewBlock.contains("R.mipmap.ic_launcher_bilipai)"))
-        assertTrue(overviewBlock.contains("R.mipmap.ic_launcher_bilipai_foreground"))
+        assertTrue(overviewBlock.contains("appIconRes: Int"))
+        assertTrue(overviewBlock.contains("model = appIconRes"))
+        assertTrue(source.contains("resolveIconOptionPreviewRes(appIconKey, appIconAppearance)"))
     }
 
     @Test

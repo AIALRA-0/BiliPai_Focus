@@ -38,7 +38,7 @@ class AdaptivePullToRefreshIntegrationTest {
     }
 
     @Test
-    fun `scaffolded screens pin indicator top inset at zero`() {
+    fun `scaffolded list screens align indicator with their content top inset`() {
         val screens = listOf(
             "app/src/main/java/com/android/purebilibili/feature/message/InboxScreen.kt",
             "app/src/main/java/com/android/purebilibili/feature/message/feed/LikeMeScreen.kt",
@@ -51,11 +51,20 @@ class AdaptivePullToRefreshIntegrationTest {
         )
         screens.forEach { path ->
             val source = loadSource(path)
-            // 已迁移到设计 Token 的页面写 AppSpacingTokens.None（= 0.dp），语义等价。
+            // Full-height scaffold bodies keep the viewport edge-to-edge and apply the same
+            // scaffold inset to their scroll content, so the refresh indicator uses that inset too.
+            // A page that applies scaffold padding to an outer parent instead correctly uses zero.
+            val alignedWithPaddedList = when {
+                source.contains("indicatorTopInset = paddingValues.calculateTopPadding()") ->
+                    source.contains("top = paddingValues.calculateTopPadding()")
+                source.contains("indicatorTopInset = padding.calculateTopPadding()") ->
+                    source.contains("top = padding.calculateTopPadding()")
+                else -> false
+            }
             assertTrue(
-                "$path must pin indicatorTopInset to zero (0.dp 或 AppSpacingTokens.None) " +
-                    "for scaffolded/list-region boxes",
-                source.contains("indicatorTopInset = 0.dp") ||
+                "$path must align the refresh indicator with its list content or use zero when " +
+                    "an outer parent already applies scaffold padding",
+                alignedWithPaddedList || source.contains("indicatorTopInset = 0.dp") ||
                     source.contains("indicatorTopInset = AppSpacingTokens.None")
             )
         }

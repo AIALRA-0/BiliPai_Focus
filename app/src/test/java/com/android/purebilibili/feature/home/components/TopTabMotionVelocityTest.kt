@@ -304,7 +304,7 @@ class TopTabMotionVelocityTest {
             .substringBefore("LazyRow(")
 
         assertTrue(exportSource.contains("listState.firstVisibleItemScrollOffset"))
-        assertEquals(3, exportSource.split("topTabListScrollOffsetPxProvider()").size - 1)
+        assertEquals(2, exportSource.split("topTabListScrollOffsetPxProvider()").size - 1)
     }
 
     @Test
@@ -313,11 +313,14 @@ class TopTabMotionVelocityTest {
         val stableContentGroup = source
             .substringAfter("val topTabIndicatorPanelOffsetPx =")
             .substringBefore("// stable export + visible content with indicator-only motion")
+        val indicatorRenderers = source
+            .substringAfter("// Inner moving indicator")
+            .substringBefore("if (indicatorGestureVisible)")
 
         assertFalse(stableContentGroup.contains("translationX = topTabIndicatorPanelOffsetPx"))
         assertEquals(
             3,
-            stableContentGroup.split("indicatorPanelOffsetPx = topTabIndicatorPanelOffsetPx").size - 1
+            indicatorRenderers.split("panelOffsetPx = topTabIndicatorPanelOffsetPx").size - 1
         )
     }
 

@@ -14,6 +14,8 @@ private const val IMAGE_PREVIEW_OPEN_DURATION_MS = 320
 private const val IMAGE_PREVIEW_DISMISS_DURATION_MS = 300
 private const val IMAGE_PREVIEW_CANCEL_RECOVER_DURATION_MS = 180
 private const val IMAGE_PREVIEW_BLUR_QUANTUM_PX = 2f
+internal const val IMAGE_PREVIEW_LIVE_PHOTO_CONTROL_CORNER_RADIUS_DP = 16
+internal const val IMAGE_PREVIEW_LIVE_PHOTO_MENU_CORNER_RADIUS_DP = 14
 
 internal data class ImagePreviewTransitionFrame(
     val layoutProgress: Float,

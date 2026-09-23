@@ -1061,14 +1061,6 @@ internal fun VideoContentSection(
                 onDanmakuSendClick = onDanmakuSendClick,
                 danmakuEnabled = danmakuEnabled,
                 onDanmakuToggle = onDanmakuToggle,
-                tabSwipeModifier = Modifier.verticalPriorityHorizontalPagerSwipe(
-                    state = pagerState,
-                    enabled = shouldEnableVideoContentHorizontalPagerSwipe(
-                        currentPage = pagerState.currentPage,
-                        commentPageIndex = 1,
-                        isPagerScrollInProgress = pagerState.isScrollInProgress,
-                    ),
-                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .wrapContentHeight(unbounded = tabBarMaxHeightPx > 0f)
@@ -1358,8 +1350,10 @@ private fun VideoIntroTab(
                 animateVideoDetailLayout = animateVideoDetailLayout
             )
         }
-        item {
-            VideoRecommendationHeader()
+        if (visibleRelatedVideos.isNotEmpty()) {
+            item {
+                VideoRecommendationHeader()
+            }
         }
 
         val relatedRows = chunkRelatedVideosForHomeStyleGrid(visibleRelatedVideos)
@@ -1974,7 +1968,6 @@ private fun VideoContentTabBar(
     danmakuEnabled: Boolean,
     onDanmakuToggle: () -> Unit,
     modifier: Modifier = Modifier,
-    tabSwipeModifier: Modifier = Modifier,
     isPlayerCollapsed: Boolean = false,
     miuixBackdrop: MiuixBackdrop? = null,
     indicatorPositionProvider: (() -> Float)? = null,

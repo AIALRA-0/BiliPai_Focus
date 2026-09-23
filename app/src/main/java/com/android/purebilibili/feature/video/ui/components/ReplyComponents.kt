@@ -88,6 +88,7 @@ import com.android.purebilibili.core.ui.OfficialVerifyBadgeSpec
 import com.android.purebilibili.core.ui.OfficialVerifyBadgeTone
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
+import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
 import com.android.purebilibili.core.ui.resolveOfficialVerifyBadge
 import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
@@ -1603,6 +1604,7 @@ fun ReplyItemView(
                     Spacer(modifier = Modifier.weight(1f))
 
                     val likeFilledIcon = rememberAppLikeFilledIcon()
+                    val likeIcon = rememberAppLikeIcon()
 
                     // Like
                     Row(
@@ -1612,7 +1614,7 @@ fun ReplyItemView(
                             .padding(4.dp)
                     ) {
                         AppIcon(
-                            imageVector = likeFilledIcon,
+                            imageVector = if (isLiked) likeFilledIcon else likeIcon,
                             contentDescription = "Like",
                             tint = if (isLiked) appearance.accentColor else appearance.actionTint,
                             modifier = Modifier.size(16.dp)

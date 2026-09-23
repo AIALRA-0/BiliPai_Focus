@@ -128,13 +128,17 @@ class VideoCardScrollLiteVisualPolicyTest {
         val cardShellBlock = source
             .substringAfter("val cardShellShape = AppShapes.container(ContainerLevel.Card)")
             .substringBefore("//  [性能优化] 封面圆角形状缓存")
-        assertTrue(cardShellBlock.contains("Box(modifier = Modifier.fillMaxWidth())"))
+        assertTrue(cardShellBlock.contains(".recordNativeVideoCardLayer("))
+        assertTrue(cardShellBlock.contains("Column(\n                modifier = Modifier\n                    .fillMaxWidth()\n                    .videoCardShellSharedBoundsOrEmpty("))
         assertTrue(cardShellBlock.contains(".matchParentSize()"))
         assertTrue(cardShellBlock.contains(".clip(cardShellShape)"))
-        assertTrue(cardShellBlock.contains(".background(AppSurfaceTokens.cardContainer())"))
+        assertTrue(cardShellBlock.contains("val cardShellBaseColor = if (shouldUseFrostedGlass)"))
+        assertTrue(cardShellBlock.contains("Color.Transparent"))
+        assertTrue(cardShellBlock.contains("AppSurfaceTokens.cardContainer()"))
+        assertTrue(cardShellBlock.contains(".background(cardShellBaseColor)"))
         assertTrue(
             "surface 底色必须画在 sharedBounds 之外：background 挂外层 Box，sharedBounds 只在内层 Column 上。",
-            cardShellBlock.indexOf(".background(AppSurfaceTokens.cardContainer())") <
+            cardShellBlock.indexOf(".background(cardShellBaseColor)") <
                 cardShellBlock.indexOf("videoCardShellSharedBoundsOrEmpty("),
         )
 
@@ -171,7 +175,8 @@ class VideoCardScrollLiteVisualPolicyTest {
             .substringAfter("if (scrollLitePolicy.showCompactStatsOnCover) {")
             .substringBefore("//  时长标签")
 
-        assertTrue(coverStatsBlock.contains("BoxWithConstraints("))
+        assertTrue(coverStatsBlock.contains("resolveVideoCardCompactCoverStatsLayout("))
+        assertTrue(coverStatsBlock.contains("availableWidthDp = compactStatsAvailableWidthDp"))
         assertFalse(coverStatsBlock.contains("videoViewsSharedElementKey"))
         assertFalse(coverStatsBlock.contains("sharedBounds("))
         assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
@@ -498,6 +503,7 @@ class VideoCardScrollLiteVisualPolicyTest {
                 useCardContainerSharedBounds = true,
                 isSharedMorphSourceCard = true,
                 isReturningFromDetail = true,
+                transitionBackgroundPhase = VideoCardTransitionBackgroundPhase.RETURNING,
                 isSharedTransitionActive = true,
                 transitionBackgroundProgress = 1f,
             ),

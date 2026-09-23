@@ -23,12 +23,14 @@ class LocalNavigationBackHandlerStructureTest {
     }
 
     @Test
-    fun localNavigationBackHandlerRespectsGlobalPredictivePreference() {
+    fun localNavigationBackHandlerUsesMiuixCompletionOnlyApi() {
         val source = File(
             "src/main/java/com/android/purebilibili/core/ui/LocalNavigationBackHandler.kt"
         ).readText()
 
-        assertTrue(source.contains("LocalPredictiveBackGestureEnabled.current"))
-        assertTrue(source.contains("reportPredictiveProgress = predictiveBackGestureEnabled"))
+        assertTrue(source.contains("rememberNavigationEventState(NavigationEventInfo.None)"))
+        assertTrue(source.contains("isBackEnabled = enabled"))
+        assertTrue(source.contains("onBackCompleted = onBackCompleted"))
+        assertFalse(source.contains("reportPredictiveProgress"))
     }
 }

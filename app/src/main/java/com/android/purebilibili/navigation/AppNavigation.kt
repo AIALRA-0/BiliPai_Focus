@@ -232,7 +232,6 @@ import com.android.purebilibili.navigation3.resolveBiliPaiNavSourceMetadata
 import com.android.purebilibili.navigation3.relativeToHost
 import com.android.purebilibili.navigation3.shouldBindVideoDetailBackPreviewPlayer
 import com.android.purebilibili.navigation3.shouldActivateVideoDetailPlaybackSession
-import com.android.purebilibili.navigation3.shouldRecoverVideoPlayerAfterBackCancellation
 import com.android.purebilibili.navigation3.resolveBiliPaiVideoSource
 import com.android.purebilibili.navigation3.resolveVideoCardTransitionEnabledForSource
 import com.android.purebilibili.navigation3.shouldUseMiuixVideoCardMorph
@@ -2984,7 +2983,12 @@ fun AppNavigation(
                                     officialVideoSharedBoundsController.targetEntryKey == videoKey),
                                 transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
                                 onBack = {
-                                    if (!navigation3ProgrammaticBackDispatcher.dispatch()) {
+                                    if (!navigation3ProgrammaticBackDispatcher.dispatch(
+                                            nowUptimeMs = android.os.SystemClock.uptimeMillis(),
+                                            debounceWindowMs =
+                                                effectiveVideoCardTransitionDurationMillis.toLong(),
+                                        )
+                                    ) {
                                         performSystemBackAction()
                                     }
                                 },
@@ -4244,6 +4248,11 @@ fun AppNavigation(
                     // List cover waits for the live handoff window; list info is native throughout return.
                     preferWholeCardReturn = false,
                     onBack = { performSystemBackAction() },
+                    onNativeVideoBackProgress = { _, _, progress ->
+                        if (progress > 0f) {
+                            maybePrefetchHomeCoversForVideoReturn()
+                        }
+                    },
                     onPrepareVideoCardSharedReturn = {
                         // 普通返回(顶部按钮/系统手势提交)兜底预热。
                         maybePrefetchHomeCoversForVideoReturn()
@@ -4251,6 +4260,9 @@ fun AppNavigation(
                             navigation3BackStack.getOrNull(navigation3BackStack.lastIndex - 1)
                         markNavigation3VideoReturnBeforeBackAction(targetKey = previousKey)
                         navigation3ReturnSession.isQuickReturnFromDetail
+                    },
+                    onPredictiveBackCancelled = { _, _ ->
+                        predictiveBackCancelRecoveryGeneration += 1
                     },
                     onRelatedVideoDetailReturned = {
                         navigation3ReturnSession =

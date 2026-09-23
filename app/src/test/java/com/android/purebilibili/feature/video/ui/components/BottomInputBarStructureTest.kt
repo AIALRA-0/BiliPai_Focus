@@ -31,7 +31,7 @@ class BottomInputBarStructureTest {
         assertTrue(source.contains("shouldUseFloatingLiquidBottomInputBar("))
         assertTrue(source.contains("resolveGlobalLiquidGlassReuseEnabled"))
         assertTrue(source.contains("FloatingLiquidBottomInputBar("))
-        assertTrue(source.contains("text = \"写评论\""))
+        assertTrue(source.contains("text = if (showActionButtons) \"写评论\" else \"发一条友善的评论…\""))
         assertTrue(source.contains("BottomBarMatchedReusableLiquidDock("))
         assertTrue(source.contains("reuseEnabled = true"))
         // 输入区和操作区保持两个独立液态 Dock，并分别进行安全缩放后的 lens 渲染。

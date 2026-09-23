@@ -8,16 +8,15 @@ import kotlin.test.assertTrue
 class MainHostTabBackHandlerStructureTest {
 
     @Test
-    fun mainHostTabBackHandler_copiesBiliPaiMainScreenBackHandler() {
+    fun mainHostTabBackHandlerUsesMiuixCompletionOnlyApi() {
         val source = mainHostTabBackHandlerSource()
 
-        // BiliPai MainScreenBackHandler: NavigationBackHandler + onBackCompleted only.
+        // The Miuix handler completes the route action directly; it has no commit callback.
         assertTrue(source.contains("NavigationBackHandler("))
         assertTrue(source.contains("rememberNavigationEventState(NavigationEventInfo.None)"))
         assertTrue(source.contains("isBackEnabled = enabled"))
-        assertTrue(source.contains("onBackCompleted = { commitTransition ->"))
-        assertTrue(source.contains("onReturnToHomeTab()"))
-        assertTrue(source.contains("commitTransition()"))
+        assertTrue(source.contains("onBackCompleted = onReturnToHomeTab"))
+        assertFalse(source.contains("commitTransition"))
 
         // No self-invented predictive progress seek path.
         assertFalse(source.contains("snapshotFlow"))

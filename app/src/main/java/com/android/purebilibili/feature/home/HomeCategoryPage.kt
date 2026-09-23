@@ -663,7 +663,7 @@ private fun PopularSubCategorySegmentedControl(
                 subCategories.getOrNull(index)?.let(onSubCategoryChange)
             },
             modifier = Modifier
-                .widthIn(max = 400.dp)
+                .widthIn(max = HomeCategoryLayoutSpec.PopularCategoryControlMaxWidth)
                 .fillMaxWidth(),
             height = AppSpacingTokens.TripleExtraLarge,
             indicatorHeight = com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(
@@ -702,7 +702,7 @@ private fun TodayWatchModeSegmentedControl(
             modes.getOrNull(index)?.takeIf { it != selectedMode }?.let(onModeChange)
         },
         modifier = modifier.wrapContentWidth(Alignment.CenterHorizontally),
-        itemWidth = 120.dp,
+        itemWidth = HomeCategoryLayoutSpec.TodayWatchModeItemWidth,
         enabled = enabled,
         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,

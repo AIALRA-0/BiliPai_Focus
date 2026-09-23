@@ -8,19 +8,22 @@ import kotlin.test.assertTrue
 class AnimationSettingsScreenStructureTest {
 
     @Test
-    fun animationSettingsScreen_controlsGlobalPredictivePreviewIndependently() {
+    fun animationSettingsScreen_controlsGlobalNavigationAnimationIndependently() {
         val source = animationSettingsSource()
 
-        assertTrue(source.contains("title = \"预测性返回手势\""))
-        assertTrue(source.contains("SettingsManager.setPredictiveBackEnabled(context, enabled)"))
+        assertTrue(source.contains("title = \"全局导航动画\""))
+        assertTrue(source.contains("options = predictiveBackStyleOptions"))
+        assertTrue(source.contains("selectedValue = predictiveBackStyle"))
+        assertTrue(source.contains("SettingsManager.setPredictiveBackEnabled(context, true)"))
+        assertTrue(source.contains("SettingsManager.setPredictiveBackAnimationStyle("))
+        assertTrue(source.contains("style.storageValue"))
         val predictiveItem = source
-            .substringAfter("title = \"预测性返回手势\"")
-            .substringBefore("AppPreferenceDivider()")
+            .substringAfter("title = \"全局导航动画\"")
+            .substringBefore("if (predictiveBackStyle ==")
         assertFalse(predictiveItem.contains("enabled = state.cardTransitionEnabled"))
-        assertFalse(source.contains("setPredictiveBackAnimationStyle"))
-        assertFalse(source.contains("setPredictiveBackExitDirection"))
-        assertFalse(source.contains("resolvePredictiveBackStyleOptions"))
-        assertFalse(source.contains("resolvePredictiveBackExitDirectionOptions"))
+        assertTrue(source.contains("if (predictiveBackStyle == BiliPaiPredictiveBackAnimationStyle.SCALE)"))
+        assertTrue(source.contains("options = predictiveBackExitDirectionOptions"))
+        assertTrue(source.contains("SettingsManager.setPredictiveBackExitDirection("))
     }
 
     @Test
@@ -70,7 +73,7 @@ class AnimationSettingsScreenStructureTest {
 
         assertTrue(source.contains("ActivityResultContracts.OpenDocument()"))
         assertTrue(source.contains("readLiquidGlassImportSession(uri)"))
-        assertTrue(source.contains("title = \"导入液态玻璃设置？\""))
+        assertTrue(source.contains("text = \"导入液态玻璃设置？\""))
         assertTrue(source.contains("预览图片和其他应用设置不会改变"))
         assertTrue(source.contains("applyLiquidGlassImport(importSession)"))
     }

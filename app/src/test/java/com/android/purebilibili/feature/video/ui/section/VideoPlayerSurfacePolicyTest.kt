@@ -122,8 +122,8 @@ class VideoPlayerSurfacePolicyTest {
         val source = java.io.File(
             "src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt"
         ).readText()
-        assertTrue(source.contains("isOpaque = false"))
-        assertTrue(source.contains("videoSurfaceView as? TextureView"))
+        assertTrue(source.contains("(videoSurfaceView as? TextureView)?.isOpaque = !isTransitionActive"))
+        assertTrue(source.contains("(playerView.videoSurfaceView as? TextureView)?.isOpaque = !isTransitionActive"))
     }
 
     @Test

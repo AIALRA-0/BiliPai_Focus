@@ -10,13 +10,15 @@ import kotlin.test.assertTrue
 class HomeTopTabGesturePolicyTest {
 
     @Test
-    fun topTabDragUsesSharedHorizontalDominanceGuard() {
+    fun topTabDragUsesIndicatorOnlyHorizontalGestureAndSharedViewportFollow() {
         val source = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt"),
             File("src/main/java/com/android/purebilibili/feature/home/components/TopBar.kt"),
         ).first { it.exists() }.readText()
 
-        assertTrue(source.contains("shouldEngageHorizontalDrag"))
+        assertTrue(source.contains("Modifier.draggable("))
+        assertTrue(source.contains("orientation = Orientation.Horizontal"))
+        assertTrue(source.contains(".then(indicatorDragModifier)"))
         assertTrue(source.contains("resolveScrollableTabIndicatorFollowDeltaPx("))
         assertTrue(source.contains("listState.dispatchRawDelta("))
     }

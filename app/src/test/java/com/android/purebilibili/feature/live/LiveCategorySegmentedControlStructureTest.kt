@@ -39,7 +39,7 @@ class LiveCategorySegmentedControlStructureTest {
 
         assertTrue(source.contains("rememberPagerState"))
         assertTrue(source.contains("HorizontalPager("))
-        assertTrue(source.contains("pagerState.animateScrollToPage"))
+        assertTrue(source.contains("animatePagerSelection(pagerState, target)"))
         assertTrue(source.contains("selectedTab = pagerState.currentPage"))
         assertTrue(source.contains("AppThemeAdaptiveTabRow("))
         assertTrue(source.contains("effectiveHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) 0.dp else horizontalPadding"))
@@ -67,7 +67,7 @@ class LiveCategorySegmentedControlStructureTest {
 
         assertTrue(source.contains("rememberPagerState"))
         assertTrue(source.contains("HorizontalPager("))
-        assertTrue(source.contains("pagerState.animateScrollToPage"))
+        assertTrue(source.contains("animatePagerSelection(pagerState, target)"))
         assertTrue(source.contains("AppThemeAdaptiveTabRow("))
         assertTrue(source.contains("selectedValue = pagerState.currentPage"))
     }

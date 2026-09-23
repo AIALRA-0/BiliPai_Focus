@@ -84,7 +84,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope.OverlayClip
-import androidx.compose.animation.core.tween
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
@@ -97,9 +96,11 @@ import com.android.purebilibili.feature.home.LocalHomeWallpaperBackdrop
 import com.android.purebilibili.feature.home.LocalHomeWallpaperBackdropReady
 import com.android.purebilibili.feature.home.LocalHomeWallpaperIsStatic
 import com.android.purebilibili.feature.home.HomeCoverRequestSpec
+import com.android.purebilibili.feature.home.HomeVisualPalette
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import com.android.purebilibili.core.ui.adaptive.MotionTier
@@ -775,7 +776,7 @@ internal fun ElegantVideoCard(
     val activeCoverCacheKey by rememberUpdatedState(coverCacheKey)
     val animatedCoverTint by animateColorAsState(
         targetValue = coverTint ?: Color.Transparent,
-        animationSpec = tween(durationMillis = 350),
+        animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(350),
         label = "video_card_cover_tint"
     )
     val defaultOnSurface = MaterialTheme.colorScheme.onSurface
@@ -1644,7 +1645,7 @@ internal fun ElegantVideoCard(
                     width = 0.5.dp,
                     color = if (homeCardDynamicTintEnabled && !useRealtimeWallpaperBackdrop) {
                         val borderAlpha = if (isDarkCardTheme) 0.30f else 0.45f
-                        val baseBorder = Color.White.copy(alpha = borderAlpha)
+                        val baseBorder = HomeVisualPalette.GlassLight.copy(alpha = borderAlpha)
                         if (
                             shouldUseCoverTintForCard(wallpaperTintEnabled, coverTint) &&
                             animatedCoverTint.alpha > 0f

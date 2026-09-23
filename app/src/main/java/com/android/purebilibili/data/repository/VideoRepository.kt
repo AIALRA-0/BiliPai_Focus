@@ -1352,14 +1352,13 @@ object VideoRepository {
 
     // [新增] 获取 AI 视频总结
     suspend fun getAiSummary(bvid: String, cid: Long, upMid: Long): Result<AiSummaryResponse> = withContext(Dispatchers.IO) {
-        ensureBuvid3FromSpi()
-        logAiSummaryPreflight(
-            bvid = bvid,
-            cid = cid,
-            upMid = upMid
-        )
-
         try {
+            ensureBuvid3FromSpi()
+            logAiSummaryPreflight(
+                bvid = bvid,
+                cid = cid,
+                upMid = upMid
+            )
             val (imgKey, subKey) = getWbiKeys()
             val params = buildAiSummaryParams(
                 bvid = bvid,

@@ -40,6 +40,11 @@ internal data class LiveSheetVisualSpec(
     val emoticonListMaxHeightDp: Int,
     val emoticonImageHeightDp: Int,
     val contributionListMaxHeightDp: Int,
+    val emoticonTabLabelFontSizeSp: Int,
+)
+
+internal data class LiveSuperChatVisualSpec(
+    val cardCornerRadiusDp: Int,
 )
 
 internal data class LivePlayerControlVisualSpec(
@@ -158,6 +163,11 @@ internal fun resolveLiveSheetVisualSpec(): LiveSheetVisualSpec = LiveSheetVisual
     emoticonListMaxHeightDp = 420,
     emoticonImageHeightDp = 34,
     contributionListMaxHeightDp = 360,
+    emoticonTabLabelFontSizeSp = 13,
+)
+
+internal fun resolveLiveSuperChatVisualSpec(): LiveSuperChatVisualSpec = LiveSuperChatVisualSpec(
+    cardCornerRadiusDp = 12,
 )
 
 internal fun resolveLivePlayerControlVisualSpec(): LivePlayerControlVisualSpec =

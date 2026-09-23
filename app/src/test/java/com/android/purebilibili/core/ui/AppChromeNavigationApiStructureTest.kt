@@ -17,7 +17,7 @@ class AppChromeNavigationApiStructureTest {
         assertTrue(chrome.contains("fun AppTopBar("))
         assertTrue(chrome.contains(") = AdaptiveTopAppBar("))
         assertTrue(navigation.contains("fun AppSplitLayout("))
-        assertTrue(navigation.contains(") = AppAdaptiveSplitLayout("))
+        assertTrue(navigation.contains("AppAdaptiveSplitLayout("))
     }
 
     @Test

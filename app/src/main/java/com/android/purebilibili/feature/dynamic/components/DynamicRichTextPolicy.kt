@@ -218,7 +218,6 @@ internal fun mergeDynamicRichTextMetadataIntoText(
         }
         result += node.copy(
             text = token,
-            orig_text = node.orig_text.ifBlank { token },
         )
         cursor = start + token.length
     }

@@ -595,8 +595,8 @@ class BottomBarIndicatorPolicyTest {
         // Blur mode uses pure blur without lens/vibrancy; LiquidGlass uses vibrancy+blur+lens.
         assertTrue(floating.contains("isBlurMode = mode == FloatingBottomBarMode.Blur"))
         assertTrue(floating.contains("blur(25.dp.toPx(), 25.dp.toPx())"))
-        assertTrue(floating.contains("vibrancy()"))
-        assertTrue(floating.contains("blur(4.dp.toPx(), 4.dp.toPx())"))
+        assertTrue(floating.contains("vibrancy(liquidGlassTuning.saturation)"))
+        assertTrue(floating.contains("liquidGlassTuning.backdropBlurRadius.dp.toPx()"))
     }
 
     @Test
@@ -653,12 +653,13 @@ class BottomBarIndicatorPolicyTest {
         ).first { it.exists() }.readText()
 
         // BiliPai: indicator lens height/amount scale with pressProgress.
-        assertTrue(floating.contains("val progress = dampedDragState.pressProgress"))
-        assertTrue(floating.contains("refractionHeight = 10.dp.toPx() * progress"))
-        assertTrue(floating.contains("refractionAmount = 14.dp.toPx() * progress"))
-        assertTrue(floating.contains("pillHighlight.copy(alpha = dampedDragState.pressProgress)"))
+        assertTrue(floating.contains("pressProgress = dampedDragAnimation.pressProgress"))
+        assertTrue(floating.contains("val progress = resolveFloatingDockRefractionProgress("))
+        assertTrue(floating.contains("refractionHeight = indicatorLensHeightPx * progress"))
+        assertTrue(floating.contains("refractionAmount = indicatorLensAmountPx * progress"))
+        assertTrue(floating.contains("pillHighlight?.value?.copy(alpha = dampedDragAnimation.pressProgress)"))
         assertTrue(floating.contains("depthEffect = true"))
-        assertTrue(floating.contains("chromaticAberration = 0.5f"))
+        assertTrue(floating.contains("resolveLiquidGlassIndicatorChromaticAberration("))
     }
 
     @Test

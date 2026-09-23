@@ -69,6 +69,8 @@ import com.android.purebilibili.core.ui.transition.shouldReleaseHostOwnedDepthLa
 import com.android.purebilibili.core.ui.transition.shouldShowVideoCardTransitionNavBackdrop
 import com.android.purebilibili.core.ui.transition.shouldUseHostOwnedVideoCardTransitionSnapshot
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.performance.TrackJankStateValue
+import com.android.purebilibili.core.ui.performance.VIDEO_CARD_TRANSITION_JANK_STATE
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.navigation3.predictiveback.BiliPaiPredictiveBackAnimationStyle
 import com.android.purebilibili.navigation3.predictiveback.BiliPaiPredictiveBackExitDirection
@@ -91,6 +93,7 @@ import top.yukonga.miuix.kmp.nav.transition.navGraphicsTransition
 
 internal class BiliPaiProgrammaticBackDispatcher {
     private var callback: (() -> Unit)? = null
+    private var lastDispatchUptimeMs: Long? = null
 
     fun register(callback: () -> Unit) {
         this.callback = callback
@@ -100,11 +103,30 @@ internal class BiliPaiProgrammaticBackDispatcher {
         if (this.callback === callback) this.callback = null
     }
 
-    fun dispatch(): Boolean {
+    fun dispatch(
+        nowUptimeMs: Long,
+        debounceWindowMs: Long = PROGRAMMATIC_BACK_DEBOUNCE_MS,
+    ): Boolean {
         val action = callback ?: return false
-        action()
+        if (shouldDispatchProgrammaticBack(lastDispatchUptimeMs, nowUptimeMs, debounceWindowMs)) {
+            lastDispatchUptimeMs = nowUptimeMs
+            action()
+        }
         return true
     }
+}
+
+internal const val PROGRAMMATIC_BACK_DEBOUNCE_MS = 300L
+
+internal fun shouldDispatchProgrammaticBack(
+    lastDispatchUptimeMs: Long?,
+    nowUptimeMs: Long,
+    debounceWindowMs: Long = PROGRAMMATIC_BACK_DEBOUNCE_MS,
+): Boolean {
+    if (lastDispatchUptimeMs == null) return true
+    val elapsedMs = nowUptimeMs - lastDispatchUptimeMs
+    val minimumIntervalMs = maxOf(PROGRAMMATIC_BACK_DEBOUNCE_MS, debounceWindowMs)
+    return elapsedMs < 0L || elapsedMs >= minimumIntervalMs
 }
 
 @Composable
@@ -130,6 +152,8 @@ internal fun BiliPaiNavDisplayHost(
     preferWholeCardReturn: Boolean = false,
     onBack: () -> Unit,
     onPrepareVideoCardSharedReturn: () -> Boolean = { false },
+    onNativeVideoBackProgress: (currentKey: BiliPaiNavKey?, targetKey: BiliPaiNavKey?, progress: Float) -> Unit = { _, _, _ -> },
+    onPredictiveBackCancelled: (currentKey: BiliPaiNavKey?, targetKey: BiliPaiNavKey?) -> Unit = { _, _ -> },
     onRelatedVideoDetailReturned: () -> Unit = {},
     restorePreviousVideoSourceOnDetailReturn: Boolean = false,
     modifier: Modifier = Modifier,
@@ -154,8 +178,11 @@ internal fun BiliPaiNavDisplayHost(
     )
     val stackSnapshot = backStack.toList()
     val currentKey = stackSnapshot.lastOrNull()
+    val currentBackTarget = stackSnapshot.getOrNull(stackSnapshot.lastIndex - 1)
     val latestOnBack by rememberUpdatedState(onBack)
     val latestPrepareReturn by rememberUpdatedState(onPrepareVideoCardSharedReturn)
+    val latestNativeVideoBackProgress by rememberUpdatedState(onNativeVideoBackProgress)
+    val latestPredictiveBackCancelled by rememberUpdatedState(onPredictiveBackCancelled)
     val latestRelatedReturn by rememberUpdatedState(onRelatedVideoDetailReturned)
     val latestPreferWholeCardReturn by rememberUpdatedState(preferWholeCardReturn)
     val cardMorphMode = resolveBiliPaiVideoCardMorphMode(
@@ -257,6 +284,34 @@ internal fun BiliPaiNavDisplayHost(
     }
     // A restored parent session must not keep the departed child's scope at depth -1.
     val videoCardTransitionProgress = remember(sourceMetadata.sourceKey) { MiuixVideoCardTransitionProgress() }
+    // Miuix owns predictive progress after the AndroidX Navigation3 bridge was removed. Observe
+    // the live gesture scope here and keep the callback out of composition/frame rendering.
+    LaunchedEffect(videoCardTransitionProgress, currentKey, currentBackTarget) {
+        snapshotFlow {
+            if (currentKey is BiliPaiNavKey.VideoDetail &&
+                videoCardTransitionProgress.isGestureInProgress()
+            ) {
+                videoCardTransitionProgress.gestureBackProgress()
+            } else {
+                null
+            }
+        }.collect { progress ->
+            if (progress != null) {
+                latestNativeVideoBackProgress(currentKey, currentBackTarget, progress)
+            }
+        }
+    }
+    val videoCardTransitionJankState = when (videoCardTransitionProgress.settleStateOrNull()) {
+        VideoCardTransitionSettleState.AutoEnter -> "Opening"
+        VideoCardTransitionSettleState.AutoReturn -> "Returning"
+        VideoCardTransitionSettleState.InteractiveSeek -> "PredictiveReturn"
+        VideoCardTransitionSettleState.CancelRestore -> "GestureRestore"
+        else -> null
+    }
+    TrackJankStateValue(
+        stateName = VIDEO_CARD_TRANSITION_JANK_STATE,
+        stateValue = videoCardTransitionJankState,
+    )
     val videoFallbackTransition = if (cardTransitionEnabled) {
         // 卡片形变开启时，fallback 只负责接住源卡片不可用等降级场景，避免再接管
         // Miuix 预测返回进度。
@@ -371,12 +426,16 @@ internal fun BiliPaiNavDisplayHost(
         onDispose { videoCardClock.bindNavigationDriver(null) }
     }
     LaunchedEffect(
+        cardMorphAvailable,
         officialSharedBoundsController,
         videoCardTransitionProgress,
         currentKey,
+        stackSnapshot.getOrNull(stackSnapshot.lastIndex - 1),
         sourceMetadata.sourceKey,
     ) {
-        val controller = officialSharedBoundsController ?: return@LaunchedEffect
+        val controller = officialSharedBoundsController
+        val currentBackTarget = stackSnapshot.getOrNull(stackSnapshot.lastIndex - 1)
+        var previousSettleState: VideoCardTransitionSettleState? = null
         snapshotFlow {
             Triple(
                 videoCardTransitionProgress.depthOrNull(),
@@ -384,9 +443,23 @@ internal fun BiliPaiNavDisplayHost(
                 videoCardTransitionProgress.isGestureInProgress(),
             )
         }.collect { (depth, settle, gesture) ->
+            if (
+                settle == VideoCardTransitionSettleState.CancelRestore &&
+                previousSettleState != VideoCardTransitionSettleState.CancelRestore &&
+                shouldRecoverVideoPlayerAfterBackCancellation(
+                    settleState = settle,
+                    currentKey = currentKey,
+                    targetKey = currentBackTarget,
+                )
+            ) {
+                latestPredictiveBackCancelled(currentKey, currentBackTarget)
+            }
+            previousSettleState = settle
+
+            if (!cardMorphAvailable) return@collect
             val ownsVideoEntry = currentKey is BiliPaiNavKey.VideoDetail &&
-                controller.session?.sourceKey == sourceMetadata.sourceKey
-            if (depth != null && (ownsVideoEntry || controller.phase ==
+                controller?.session?.sourceKey == sourceMetadata.sourceKey
+            if (depth != null && controller != null && (ownsVideoEntry || controller.phase ==
                     OfficialVideoSharedBoundsController.Phase.Returning)
             ) {
                 controller.onNavigationFrame(depth, settle, gesture)
@@ -525,7 +598,6 @@ internal fun BiliPaiNavDisplayHost(
             videoCardSnapshotHandle.releaseSession()
         }
     }
-    val currentBackTarget = stackSnapshot.getOrNull(stackSnapshot.lastIndex - 1)
     val showVideoCardNavBackdrop = shouldShowVideoCardTransitionNavBackdrop(
         cardTransitionEnabled = cardMorphAvailable,
         exposure = effectiveVideoCardExposure,

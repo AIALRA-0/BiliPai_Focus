@@ -31,6 +31,43 @@ class WindowSizeUtilsTest {
     }
 
     @Test
+    fun `current configuration width overrides a stale adaptive class after activity return`() {
+        val staleLargeClass = androidx.window.core.layout.WindowSizeClass(1200, 900)
+        val resolvedWidthClass = resolveWindowWidthSizeClass(staleLargeClass, 411.dp)
+        val currentWindow = WindowSizeClass(
+            widthSizeClass = resolvedWidthClass,
+            heightSizeClass = WindowHeightSizeClass.Medium,
+            widthDp = 411.dp,
+            heightDp = 800.dp,
+            deviceWidthSizeClass = WindowWidthSizeClass.Large,
+        )
+
+        assertEquals(WindowWidthSizeClass.Compact, resolvedWidthClass)
+        assertFalse(currentWindow.isTablet)
+        assertFalse(currentWindow.shouldUseSideNavigation)
+        assertFalse(currentWindow.shouldUseExpandedNavigationRail)
+        assertTrue(currentWindow.isTabletDevice)
+    }
+
+    @Test
+    fun `current configuration width preserves app breakpoints when adaptive class is stale`() {
+        assertEquals(
+            WindowWidthSizeClass.Expanded,
+            resolveWindowWidthSizeClass(
+                adaptiveSizeClass = androidx.window.core.layout.WindowSizeClass(411, 800),
+                currentWindowWidthDp = 840.dp,
+            ),
+        )
+        assertEquals(
+            WindowWidthSizeClass.Large,
+            resolveWindowWidthSizeClass(
+                adaptiveSizeClass = androidx.window.core.layout.WindowSizeClass(411, 800),
+                currentWindowWidthDp = 1200.dp,
+            ),
+        )
+    }
+
+    @Test
     fun `responsive text scaling keeps unspecified units`() {
         val scaled = TextUnit.Unspecified.scaledIfSpecified(1.2f)
 
@@ -71,6 +108,24 @@ class WindowSizeUtilsTest {
         assertFalse(windowSizeClass.isTablet)
         assertFalse(windowSizeClass.isCompactDevice)
         assertTrue(windowSizeClass.isTabletDevice)
+    }
+
+    @Test
+    fun `window size class cache tracks adaptive classes after rotation`() {
+        val source = locateSource().readText()
+        val calculation = source.substringAfter("fun calculateWindowSizeClass(")
+            .substringBefore("fun <T> rememberResponsiveValue(")
+
+        assertTrue(
+            calculation.contains(
+                "remember(widthDp, heightDp, widthSizeClass, heightSizeClass, deviceWidthSizeClass)"
+            ),
+            "Adaptive size classes can update after LocalConfiguration; both must invalidate the cache",
+        )
+        assertTrue(
+            calculation.contains("resolveWindowWidthSizeClass(adaptiveWindowSizeClass, widthDp)"),
+            "When the adaptive class is stale across an Activity return, the current window width must win",
+        )
     }
 
     @Test

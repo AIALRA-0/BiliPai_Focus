@@ -73,16 +73,22 @@ class BottomBarMatchedLiquidChromeStructureTest {
         val floating = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarFloatingSegmentedControl.kt"
         )
+        val floatingDock = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt"
+        )
         val sharedChrome = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarMatchedLiquidChrome.kt"
         )
 
-        listOf(bottomBar, topBar).forEach { source ->
-            assertTrue(source.contains("rememberBottomBarMatchedLiquidChromeState("))
-            assertTrue(source.contains("BottomBarMatchedLiquidIndicator("))
-        }
-        assertTrue(bottomBar.contains("BottomBarMatchedLiquidDock("))
+        // The home dock keeps its own BiliPai interaction and sizing policy while sharing the
+        // renderer; the reusable matched state belongs to segmented controls in their wrapper.
+        assertTrue(bottomBar.contains("BiliPaiFloatingBottomBar("))
+        assertTrue(bottomBar.contains("FloatingBottomBar("))
+        assertTrue(bottomBar.contains("biliPaiMiuixFloatingDockSurface("))
+        // Home top tabs share the chrome surface extension and keep their pager-specific
+        // indicator policy in TopBar rather than adopting the bottom-dock selection state.
         assertTrue(topBar.contains(".bottomBarMatchedLiquidDockSurface("))
+        assertTrue(topBar.contains("HomeTopTabMotionLayer {"))
         assertFalse(topBar.contains(".biliPaiFloatingDockSurface("))
         assertFalse(topBar.contains(".biliPaiMiuixFloatingDockSurface("))
         assertTrue(segmented.contains("BottomBarFloatingSegmentedControl("))
@@ -93,9 +99,7 @@ class BottomBarMatchedLiquidChromeStructureTest {
         assertTrue(
             bottomBar.contains("resolveLiquidGlassIndicatorChromaticAberration(")
         )
-        assertTrue(
-            floating.contains("resolveLiquidGlassIndicatorChromaticAberration(")
-        )
+        assertTrue(floatingDock.contains("resolveLiquidGlassIndicatorChromaticAberration("))
         assertFalse(bottomBar.contains("chromaticAberration = 0.5f"))
         assertFalse(segmented.contains(".biliPaiFloatingDockSurface("))
         assertFalse(segmented.contains(".biliPaiMiuixFloatingDockSurface("))
@@ -129,8 +133,9 @@ class BottomBarMatchedLiquidChromeStructureTest {
         assertTrue(dynamicTopBar.contains("isScrollInProgressProvider = isScrollInProgressProvider"))
         assertTrue(dynamicScreen.contains("BottomBarMatchedDockVisibility("))
         assertTrue(dynamicScreen.contains("edge = BottomBarMatchedDockEdge.TOP"))
-        assertFalse(search.contains("BottomBarMatchedReusableLiquidDock("))
-        assertTrue(search.contains("drawShellLens = false"))
+        assertTrue(search.contains("homeTopBottomBarMatchedSurface("))
+        assertTrue(search.contains("drawShellLens = true"))
+        assertTrue(search.contains("shellLensIntensity = resolveFloatingDockGeometryScale(controlHeightDp.toFloat())"))
         assertTrue(bottomInput.contains("BottomBarMatchedReusableLiquidDock("))
         // 独立评论胶囊保留 lens，并按实际高度缩放折射几何。
         assertTrue(bottomInput.contains("drawShellLens = true"))

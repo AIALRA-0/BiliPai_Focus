@@ -398,28 +398,30 @@ fun HomeScreen(
     suspend fun withHomeScrollToTopLock(block: suspend () -> Unit) {
         homeHeaderRevealLock = true
         headerSettleAnimationJob?.cancel()
-        topTabsAutoCollapsedByScroll = false
-        globalScrollOffset.floatValue = 0f
-        val headerAnimJob = coroutineScope.launch {
-            if (headerOffsetHeightPx < -0.5f) {
-                animate(
-                    initialValue = headerOffsetHeightPx,
-                    targetValue = 0f,
-                    animationSpec = headerSettleMotionSpec
-                ) { value, _ ->
-                    headerOffsetHeightPx = value
-                }
-            } else {
-                headerOffsetHeightPx = 0f
-            }
-        }
-        headerSettleAnimationJob = headerAnimJob
+        headerSettleAnimationJob = null
         try {
             block()
         } finally {
-            headerAnimJob.join()
-            revealHomeHeaderNow()
-            homeHeaderRevealLock = false
+            val headerAnimJob = coroutineScope.launch {
+                if (headerOffsetHeightPx < -0.5f) {
+                    animate(
+                        initialValue = headerOffsetHeightPx,
+                        targetValue = 0f,
+                        animationSpec = headerSettleMotionSpec
+                    ) { value, _ ->
+                        headerOffsetHeightPx = value
+                    }
+                } else {
+                    headerOffsetHeightPx = 0f
+                }
+            }
+            headerSettleAnimationJob = headerAnimJob
+            try {
+                headerAnimJob.join()
+            } finally {
+                revealHomeHeaderNow()
+                homeHeaderRevealLock = false
+            }
         }
     }
 

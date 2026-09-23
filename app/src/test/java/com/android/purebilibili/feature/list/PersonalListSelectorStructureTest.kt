@@ -87,7 +87,7 @@ class PersonalListSelectorStructureTest {
         val profileTabs = profileSource
             .substringAfter("private fun ProfileSpaceTabs(")
             .substringBefore("private fun ProfileSpaceTabBody(")
-        assertTrue(profileTabs.contains("AppNativeTabRow("))
+        assertTrue(profileTabs.contains("AppThemeAdaptiveTabRow("))
         assertFalse(profileTabs.contains("BottomBarLiquidSegmentedControl("))
     }
 

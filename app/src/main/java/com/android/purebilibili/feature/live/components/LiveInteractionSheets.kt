@@ -160,7 +160,7 @@ fun LiveEmoticonSheet(
                         onSelectionChange = { selectedPkgIndex = it },
                         modifier = Modifier.fillMaxWidth(),
                         scrollable = true,
-                        labelFontSize = 13.sp,
+                        labelFontSize = visualSpec.emoticonTabLabelFontSizeSp.sp,
                     )
                     AppHorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),

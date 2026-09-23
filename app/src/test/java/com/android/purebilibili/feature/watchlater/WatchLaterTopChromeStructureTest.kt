@@ -16,7 +16,7 @@ class WatchLaterTopChromeStructureTest {
         assertTrue(source.contains("TopAppBarDefaults.enterAlwaysScrollBehavior()"))
         assertTrue(source.contains("TopAppBarDefaults.pinnedScrollBehavior()"))
         assertTrue(source.contains("BiliPaiImmersiveTopBar("))
-        assertTrue(source.contains("layerBackdrop(watchLaterChromeBackdrop)"))
+        assertTrue(source.contains(".then(watchLaterChromeSource?.modifier ?: Modifier)"))
         assertTrue(source.contains("AppLiquidAwareSearchField("))
         assertTrue(source.contains("AppThemeAdaptiveTabRow("))
         assertTrue(source.contains("dragSelectionEnabled = watchLaterFilterChrome.dragSelectionEnabled"))

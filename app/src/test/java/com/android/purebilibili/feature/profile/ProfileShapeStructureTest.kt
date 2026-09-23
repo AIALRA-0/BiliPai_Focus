@@ -11,14 +11,14 @@ class ProfileShapeStructureTest {
         val screenSource = loadSource("ProfileScreen.kt")
         val skeletonSource = loadSource("ProfileLoadingSkeleton.kt")
 
-        assertTrue(screenSource.contains("AppShapes.borderedContainer(ContainerLevel.Sheet)"))
+        assertTrue(screenSource.contains("AppShapes.container(ContainerLevel.Sheet)"))
         assertTrue(screenSource.contains("AppShapes.container(ContainerLevel.Pill)"))
         assertTrue(screenSource.contains("AppShapes.borderedContainer(ContainerLevel.Card)"))
         assertTrue(screenSource.contains("AppThemeAdaptiveTabRow("))
         assertTrue(screenSource.contains("scrollable = true"))
         assertTrue(screenSource.contains("minTabWidth = 72.dp"))
         assertTrue(!screenSource.contains("forceLiquidChrome = true"))
-        assertTrue(skeletonSource.contains("AppShapes.container(ContainerLevel.Sheet)"))
+        assertTrue(skeletonSource.contains("AppShapes.container(ContainerLevel.Card)"))
         assertTrue(!screenSource.contains("RoundedCornerShape("))
         assertTrue(!skeletonSource.contains("RoundedCornerShape("))
     }

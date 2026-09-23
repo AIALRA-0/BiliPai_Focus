@@ -553,7 +553,7 @@ class VideoCardReturnTimelineTest {
             isReturnGestureInProgress = false,
             motionTier = MotionTier.Reduced,
         )
-        assertEquals(0.5f, reduced.alpha, 0.001f)
+        assertEquals(0.1f, reduced.alpha, 0.001f)
         assertEquals(0f, reduced.translationYDp, 0.001f)
         assertEquals(1f, reduced.scale, 0.001f)
         assertEquals(140, VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS)
@@ -776,13 +776,13 @@ class VideoCardReturnTimelineTest {
             resolveVideoCardReturnSettleProgress(transitionProgress = 0.8f),
             0.001f,
         )
-        // 两路 settle 都进入整卡 chrome 窗口时，景深更靠后应更早让位。
+        // Depth crossing the late live-to-cover window yields content before transition-only progress.
         val withDepth = resolveVideoCardLiveMorphSecondaryContentAlpha(
-            transitionProgress = 0.6f,
-            depthBlurProgress = 0.45f,
+            transitionProgress = 0.2f,
+            depthBlurProgress = 0.1f,
         )
         val withoutDepth = resolveVideoCardLiveMorphSecondaryContentAlpha(
-            transitionProgress = 0.6f,
+            transitionProgress = 0.2f,
         )
         assertTrue(withDepth < withoutDepth)
     }

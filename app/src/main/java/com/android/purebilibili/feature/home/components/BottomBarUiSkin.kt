@@ -14,7 +14,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -346,7 +346,7 @@ internal fun BottomBarSkinIcon(
             initialValue = 0.96f,
             targetValue = 1.04f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 720),
+                animation = AppMotionTokens.fastOutSlowInTweenSpec(720),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "skinIconLoopScale",
@@ -359,8 +359,9 @@ internal fun BottomBarSkinIcon(
             AnimatedContent(
                 targetState = iconPath,
                 transitionSpec = {
-                    (fadeIn(tween(160)) + scaleIn(tween(220), initialScale = 0.86f)) togetherWith
-                        fadeOut(tween(120))
+                    (fadeIn(AppMotionTokens.fastOutSlowInTweenSpec(160)) +
+                        scaleIn(AppMotionTokens.fastOutSlowInTweenSpec(220), initialScale = 0.86f)) togetherWith
+                        fadeOut(AppMotionTokens.fastOutSlowInTweenSpec(120))
                 },
                 // Selection may change scale/loop motion, but it must not replace the image
                 // subtree when the destination still resolves to the same fixed asset.

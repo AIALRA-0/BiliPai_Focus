@@ -84,7 +84,7 @@ class FloatingBottomBarStructureTest {
         assertTrue(body.contains("LocalFloatingBottomBarContentColor provides resolvedContentColor"))
         assertTrue(body.contains("LocalFloatingBottomBarContentColor provides colors.activeContentColor"))
         assertTrue(body.contains("LocalFloatingBottomBarItemAlignmentOffset provides itemAlignmentOffsetProvider"))
-        assertTrue(body.contains("translationX = itemIndex?.let(alignmentOffset) ?: 0f"))
+        assertTrue(source.contains("translationX = itemIndex?.let(alignmentOffset) ?: 0f"))
         assertFalse(body.contains("translationX = panelOffset + if (isLtr) alignmentPx"))
         assertFalse(body.contains("resolvedActiveContentColor"))
         assertTrue(body.contains(".innerShadow(shape = pillShape)"))
@@ -157,7 +157,7 @@ class FloatingBottomBarStructureTest {
         assertFalse(dragPort.contains("isInside && wasInside"))
         assertTrue(body.contains("resolveFloatingDockIndicatorLayerScaleX("))
         assertTrue(body.contains("LocalFloatingBottomBarIndicatorStretchX provides indicatorStretchXProvider"))
-        assertTrue(body.contains("resolveFloatingDockCapturedContentHorizontalScale("))
+        assertTrue(source.contains("resolveFloatingDockCapturedContentHorizontalScale("))
         // Must not fall back to BiliPai self-developed drag stack.
         assertFalse(source.contains("rememberDampedDragAnimationState"))
         assertFalse(source.contains("horizontalDragGesture"))

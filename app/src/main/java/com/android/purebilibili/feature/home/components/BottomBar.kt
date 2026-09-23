@@ -3317,7 +3317,7 @@ private fun RowScope.MiuixDockedBottomBarItem(
                     if (showIndicator) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(50))
+                                .clip(AppShapes.container(ContainerLevel.Pill))
                                 .background(indicatorColor)
                                 .padding(
                                     horizontal = AppSpacingTokens.Large,

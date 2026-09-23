@@ -288,7 +288,7 @@ fun DynamicTopBarWithTabs(
                                 AppIcon(
                                     imageVector = if (displayMode.isHorizontalUserList())
                                         rememberAppGridLayoutIcon() else rememberAppListLayoutIcon(),
-                                    contentDescription = "关注列表位置",
+                                    contentDescription = "切换布局模式",
                                     tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
                                 )

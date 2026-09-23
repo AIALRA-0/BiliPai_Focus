@@ -2,8 +2,11 @@ package com.android.purebilibili.feature.space
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.ACCESSIBLE_UI_MIN_CONTRAST
+import com.android.purebilibili.core.theme.calculateContrastRatio
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SpaceSelectionChipColorPolicyTest {
 
@@ -29,7 +32,7 @@ class SpaceSelectionChipColorPolicyTest {
     }
 
     @Test
-    fun `selected chip keeps primary when contrast is healthy`() {
+    fun `selected chip uses the tonal primary container pair`() {
         val scheme = darkColorScheme(
             primary = Color(0xFF0057D8),
             onPrimary = Color.White,
@@ -45,8 +48,8 @@ class SpaceSelectionChipColorPolicyTest {
             colorScheme = scheme
         )
 
-        assertEquals(scheme.primary, colors.backgroundColor)
-        assertEquals(scheme.onPrimary, colors.textColor)
+        assertEquals(scheme.primaryContainer, colors.backgroundColor)
+        assertEquals(scheme.onPrimaryContainer, colors.textColor)
     }
 
     @Test
@@ -79,8 +82,11 @@ class SpaceSelectionChipColorPolicyTest {
 
         assertEquals(scheme.surfaceVariant, followed.backgroundColor)
         assertEquals(scheme.onSurfaceVariant, followed.textColor)
-        assertEquals(scheme.primary, unfollowed.backgroundColor)
-        assertEquals(scheme.onPrimary, unfollowed.textColor)
+        assertTrue(unfollowed.backgroundColor != followed.backgroundColor)
+        assertTrue(
+            calculateContrastRatio(unfollowed.textColor, unfollowed.backgroundColor) >=
+                ACCESSIBLE_UI_MIN_CONTRAST
+        )
     }
 
 }

@@ -410,92 +410,36 @@ fun PlaybackSettingsContent(
                                 (LONG_PRESS_SPEED_HINT_SCALE_MAX - LONG_PRESS_SPEED_HINT_SCALE_MIN) /
                                     LONG_PRESS_SPEED_HINT_STEP
                                 ).roundToInt() - 1
-                            var hintScale by remember { mutableFloatStateOf(longPressSpeedHintScale) }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "倍速提示大小",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "长按倍速浮层与提示文字的整体缩放",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Surface(
-                                    shape = AppShapes.container(ContainerLevel.Pill),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Text(
-                                        text = "${(hintScale * 100f).roundToInt()}%",
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                            AppSlider(
-                                value = hintScale,
-                                onValueChange = { hintScale = it },
-                                onValueChangeFinished = {
+                            AppSliderDialogPreference(
+                                title = "倍速提示大小",
+                                subtitle = "长按倍速浮层与提示文字的整体缩放",
+                                value = longPressSpeedHintScale,
+                                onValueChange = { value ->
                                     scope.launch {
-                                        SettingsManager.setLongPressSpeedHintScale(context, hintScale)
+                                        SettingsManager.setLongPressSpeedHintScale(context, value)
                                     }
                                 },
                                 valueRange = LONG_PRESS_SPEED_HINT_SCALE_MIN..LONG_PRESS_SPEED_HINT_SCALE_MAX,
-                                steps = hintScaleSteps
+                                steps = hintScaleSteps,
+                                valueFormatter = { "${(it * 100f).roundToInt()}%" },
                             )
 
                             val hintAlphaSteps = (
                                 (LONG_PRESS_SPEED_HINT_ALPHA_MAX - LONG_PRESS_SPEED_HINT_ALPHA_MIN) /
                                     LONG_PRESS_SPEED_HINT_STEP
                                 ).roundToInt() - 1
-                            var hintAlpha by remember { mutableFloatStateOf(longPressSpeedHintAlpha) }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "倍速提示透明度",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "长按倍速浮层与全局提示的背景不透明度",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Surface(
-                                    shape = AppShapes.container(ContainerLevel.Pill),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Text(
-                                        text = "${(hintAlpha * 100f).roundToInt()}%",
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                            AppSlider(
-                                value = hintAlpha,
-                                onValueChange = { hintAlpha = it },
-                                onValueChangeFinished = {
+                            AppSliderDialogPreference(
+                                title = "倍速提示透明度",
+                                subtitle = "长按倍速浮层与全局提示的背景不透明度",
+                                value = longPressSpeedHintAlpha,
+                                onValueChange = { value ->
                                     scope.launch {
-                                        SettingsManager.setLongPressSpeedHintAlpha(context, hintAlpha)
+                                        SettingsManager.setLongPressSpeedHintAlpha(context, value)
                                     }
                                 },
                                 valueRange = LONG_PRESS_SPEED_HINT_ALPHA_MIN..LONG_PRESS_SPEED_HINT_ALPHA_MAX,
-                                steps = hintAlphaSteps
+                                steps = hintAlphaSteps,
+                                valueFormatter = { "${(it * 100f).roundToInt()}%" },
                             )
                         }
                         AppPreferenceDivider()
@@ -647,7 +591,7 @@ fun PlaybackSettingsContent(
                         )
                         AppPreferenceDivider()
                         AppSwitchPreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYBACK),
                             title = "点击小横条进入听视频",
                             subtitle = if (audioNowPlayingBarOpensAudioMode) {
                                 "点击视频小横条时跳转到听视频"
@@ -1964,7 +1908,7 @@ private fun PlaybackFullscreenGestureSettingsSection(
 
         AppPreferenceDivider()
         AppSwitchPreference(
-            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_STORY_ENTRY),
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_RECOMMENDATION_FILTER),
             title = "竖屏刷视频仅推荐真竖屏（Beta）",
             subtitle = if (portraitOnlyVerticalRecommendations) {
                 "开启后过滤横屏视频，仅保留实际画面为竖屏的推荐"

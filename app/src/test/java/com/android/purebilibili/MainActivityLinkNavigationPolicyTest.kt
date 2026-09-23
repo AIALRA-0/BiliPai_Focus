@@ -1,6 +1,7 @@
 package com.android.purebilibili
 
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import com.android.purebilibili.navigation.ScreenRoutes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -42,7 +43,7 @@ class MainActivityLinkNavigationPolicyTest {
             BilibiliNavigationTarget.BangumiSeason(39708L)
         )
 
-        assertEquals("bangumi/39708?epId=0", navigation?.pendingNavigationRoute)
+        assertEquals(ScreenRoutes.BangumiDetail.createRoute(39708L), navigation?.pendingNavigationRoute)
     }
 
     @Test

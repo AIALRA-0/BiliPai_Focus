@@ -8,14 +8,14 @@ import kotlin.test.assertTrue
 class NavigationUiPolicyTabletTest {
 
     @Test
-    fun sidebarDisabledOnBookPosture() {
+    fun sidebarRemainsOnFarLeftEdgeOnBookPosture() {
         val windowSizeClass = WindowSizeClass(
             widthSizeClass = WindowWidthSizeClass.Expanded,
             heightSizeClass = WindowHeightSizeClass.Medium,
             widthDp = 900.dp,
             heightDp = 800.dp
         )
-        assertFalse(
+        assertTrue(
             shouldUseSidebarNavigationForLayout(
                 windowSizeClass = windowSizeClass,
                 tabletUseSidebar = true,

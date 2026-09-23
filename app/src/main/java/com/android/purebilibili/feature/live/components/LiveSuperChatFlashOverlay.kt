@@ -49,6 +49,7 @@ import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.live.formatLiveSuperChatCountdown
 import com.android.purebilibili.feature.live.resolveLiveSuperChatColor
 import com.android.purebilibili.feature.live.resolveLiveSuperChatDurationSec
+import com.android.purebilibili.feature.live.resolveLiveSuperChatVisualSpec
 import com.android.purebilibili.feature.live.shouldExpireLiveSuperChat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
@@ -107,7 +108,8 @@ fun LiveSuperChatFlashOverlay(
         ) {
             val item = current ?: return@AnimatedVisibility
             val accent = resolveLiveSuperChatColor(item.superChatBackgroundColor)
-            val shape = RoundedCornerShape(12.dp)
+            val visualSpec = resolveLiveSuperChatVisualSpec()
+            val shape = RoundedCornerShape(visualSpec.cardCornerRadiusDp.dp)
 
             AppSurface(
                 shape = shape,

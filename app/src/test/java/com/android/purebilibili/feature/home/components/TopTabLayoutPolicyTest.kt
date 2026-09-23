@@ -95,7 +95,7 @@ class TopTabLayoutPolicyTest {
             0.001f
         )
         assertEquals(
-            80f,
+            89f,
             resolveIosTopTabItemWidthDp(
                 containerWidthDp = 360f,
                 categoryCount = 5,

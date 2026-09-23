@@ -23,7 +23,6 @@ class OpenSourceLicensesPolicyTest {
             // （全仓 0 处 import，骨架屏用的是自研实现），不再随包分发，
             // 因此也不应继续出现在致谢列表里。
             "Cupertino",
-            "Backdrop",
             "BBPlayer",
             "DanmakuRenderEngine",
             // "Cling" 已移除：193325e7「refactor: simplify dlna casting stack」删掉了
@@ -35,6 +34,14 @@ class OpenSourceLicensesPolicyTest {
         ).forEach { name ->
             assertTrue(name in names, "$name 应出现在开源致谢列表中")
         }
+
+        val miuix = openSourceLibraries.first { it.name == "Miuix" }
+        assertTrue(miuix.description.contains("模糊能力"))
+        val settingsChrome = listOf(
+            java.io.File("app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsPageScaffold.kt"),
+            java.io.File("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsPageScaffold.kt")
+        ).first { it.exists() }.readText()
+        assertTrue(settingsChrome.contains("top.yukonga.miuix.kmp.blur"))
     }
 
     @Test

@@ -308,7 +308,7 @@ object AppUpdateChecker {
     private fun parseComparableVersion(version: String): ParsedVersion {
         val normalized = normalizeVersion(version)
         val match = Regex(
-            pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc|focus)[\s._-]*(\d+)?)?$""",
+            pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc|focus)[\s._-]*(\d+)?)?(?:-(?:debug|dev|smooth))?$""",
             option = RegexOption.IGNORE_CASE
         ).matchEntire(normalized)
         if (match != null) {

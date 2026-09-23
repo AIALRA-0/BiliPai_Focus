@@ -56,7 +56,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.store.DEFAULT_FOCUS_FOLLOW_GROUP_ID
 import com.android.purebilibili.core.store.FocusFollowGroup
@@ -69,6 +68,7 @@ import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.feature.dynamic.FocusFollowAssignmentSection
+import com.android.purebilibili.feature.dynamic.DynamicTypographyPolicy
 import com.android.purebilibili.feature.dynamic.buildFocusFollowAssignmentSections
 import com.android.purebilibili.feature.dynamic.filterFocusFollowAssignmentSections
 
@@ -140,7 +140,7 @@ fun FocusFollowGroupSheet(
                         text = "这里的可见性会影响首页关注分组和动态页",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 20.sp
+                        lineHeight = DynamicTypographyPolicy.followGroupIntroLineHeight
                     )
                 }
             }
@@ -551,7 +551,7 @@ private fun FocusFollowGroupManagementCard(
                         text = "${section.members.size} 位关注对象 · ${if (section.group.visible) "动态与首页可见" else "动态与首页隐藏"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp
+                        lineHeight = DynamicTypographyPolicy.followGroupSummaryLineHeight
                     )
                 }
                 Icon(

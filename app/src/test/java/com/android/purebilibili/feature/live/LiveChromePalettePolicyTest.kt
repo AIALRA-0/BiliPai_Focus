@@ -7,6 +7,11 @@ import kotlin.test.assertEquals
 class LiveChromePalettePolicyTest {
 
     @Test
+    fun `super chat badge retains its branded accent`() {
+        assertEquals(Color(0xFFFFD54F), LiveStatusPalette.SuperChatBadgeAccent)
+    }
+
+    @Test
     fun `live chrome palette follows material theme colors`() {
         val palette = resolveLiveChromePalette(
             isDark = false,

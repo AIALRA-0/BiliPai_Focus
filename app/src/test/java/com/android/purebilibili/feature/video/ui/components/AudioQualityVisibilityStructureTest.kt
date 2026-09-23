@@ -43,19 +43,24 @@ class AudioQualityVisibilityStructureTest {
     }
 
     @Test
-    fun `portrait video player opens audio quality menu in a full screen dialog`() {
+    fun `portrait video player opens audio quality through the shared native popup`() {
         val overlaySource = loadSource(
             "src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt"
         )
         val menuSource = loadSource(
             "src/main/java/com/android/purebilibili/feature/video/ui/components/AudioQualitySelectionMenu.kt"
         )
+        val popupSource = loadSource(
+            "src/main/java/com/android/purebilibili/feature/video/ui/components/PlayerMiuixListPopup.kt"
+        )
         val audioMenuHost = overlaySource
             .substringAfter("if (showAudioQualityMenu)")
             .substringBefore("// --- 7.")
 
         assertTrue(audioMenuHost.contains("AudioQualitySelectionMenuDialog("))
-        assertTrue(menuSource.contains("DialogProperties(usePlatformDefaultWidth = false)"))
+        assertTrue(menuSource.contains("PlayerMiuixListPopup("))
+        assertTrue(popupSource.contains("WindowListPopup("))
+        assertTrue(popupSource.contains("DialogProperties(usePlatformDefaultWidth = false)"))
     }
 
     private fun loadSource(relativePath: String): String {

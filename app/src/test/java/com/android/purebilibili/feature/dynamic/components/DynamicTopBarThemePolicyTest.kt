@@ -34,11 +34,12 @@ class DynamicTopBarThemePolicyTest {
         ).readText()
 
         assertTrue(source.contains("if (liquidGlassEnabled)"))
-        assertTrue(source.contains(".clip(RectangleShape)"))
         assertTrue(source.contains(".clip(dockShape)"))
-        assertTrue(source.contains(".background(dockColor)"))
-        assertTrue(source.contains("drawMiuixNonGlassTrack = liquidGlassEnabled"))
+        assertTrue(source.contains("containerColorOverride = dockColor"))
+        assertTrue(source.contains("drawMiuixNonGlassTrack = liquidGlassEnabled ||"))
         assertTrue(source.contains("LocalAppUiStyle.current != AppUiStyle.MIUIX"))
+        assertTrue(source.contains("isProgressiveBlurActive ||"))
+        assertTrue(source.contains("headerBlurEnabled"))
     }
 
     @Test

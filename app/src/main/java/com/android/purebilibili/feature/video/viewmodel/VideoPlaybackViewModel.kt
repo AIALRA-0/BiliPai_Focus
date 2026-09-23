@@ -3518,15 +3518,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             isLoggedIn = result.isLoggedIn,
                             requestToken = requestToken
                         )
-                        val videoNoteEnabled = appContext?.let {
-                            com.android.purebilibili.core.store.SettingsManager.getVideoNoteEnabledSync(it)
-                        } ?: true
-                        if (shouldLoadVideoNote(videoNoteEnabled, result.info.aid)) {
-                            loadVideoNote(
-                                loadedBvid = result.info.bvid,
-                                loadedAid = result.info.aid
-                            )
-                        }
+                        loadVideoNote(
+                            loadedBvid = result.info.bvid,
+                            loadedAid = result.info.aid
+                        )
 
                         //  [新增] 更新播放列表
                         updatePlaylist(result.info, result.related)
@@ -4402,7 +4397,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     onResult?.invoke(liked)
                     if (liked) _likeBurstVisible.value = true
                     //  彩蛋：使用趣味消息（如果设置开启）
-                    val message = if (liked && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
+                    val message = if (liked && appContext?.let { ctx -> SettingsManager.getEasterEggEnabled(ctx).first() } == true) {
                         com.android.purebilibili.core.util.EasterEggs.getLikeMessage()
                     } else {
                         if (liked) "已点赞" else "已取消点赞"
@@ -6457,7 +6452,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Logger.d("PlayerVM", "🤖 Failed to load AI Summary: ${e.message}")
+                    val prompt = resolveAiSummaryPromptState(
+                        com.android.purebilibili.data.repository.diagnoseAiSummaryFailure(e)
+                    )
+                    _uiState.update { current ->
+                        if (current is VideoPlaybackUiState.Success && current.info.bvid == bvid) {
+                            current.copy(aiSummaryPrompt = prompt)
+                        } else current
+                    }
+                    Logger.w("PlayerVM", "🤖 Failed to load AI Summary: ${e.message}")
                     return@launch
                 }
             }
@@ -6468,12 +6471,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         loadedBvid: String,
         loadedAid: Long
     ) {
-        val videoNoteEnabled = appContext?.let {
-            com.android.purebilibili.core.store.SettingsManager.getVideoNoteEnabledSync(it)
-        } ?: true
-        if (!shouldLoadVideoNote(videoNoteEnabled, loadedAid)) return
         videoNoteJob?.cancel()
         videoNoteJob = viewModelScope.launch {
+            val videoNoteEnabled = appContext?.let { SettingsManager.getVideoNoteEnabled(it).first() } ?: true
+            if (!shouldLoadVideoNote(videoNoteEnabled, loadedAid)) return@launch
             _uiState.update { state ->
                 val success = state as? VideoPlaybackUiState.Success ?: return@update state
                 if (success.info.bvid != loadedBvid) return@update state
@@ -6538,10 +6539,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     fun retryVideoNote() {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
-        val videoNoteEnabled = appContext?.let {
-            com.android.purebilibili.core.store.SettingsManager.getVideoNoteEnabledSync(it)
-        } ?: true
-        if (!shouldLoadVideoNote(videoNoteEnabled, current.info.aid)) return
         loadVideoNote(loadedBvid = current.info.bvid, loadedAid = current.info.aid)
     }
 
@@ -6747,7 +6744,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     if (alsoLike && !current.isLiked) newState = newState.copy(isLiked = true)
                     _uiState.value = newState
                     //  彩蛋：使用趣味消息（如果设置开启）
-                    val message = if (appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
+                    val message = if (appContext?.let { ctx -> SettingsManager.getEasterEggEnabled(ctx).first() } == true) {
                         com.android.purebilibili.core.util.EasterEggs.getCoinMessage()
                     } else {
                         "投币成功"

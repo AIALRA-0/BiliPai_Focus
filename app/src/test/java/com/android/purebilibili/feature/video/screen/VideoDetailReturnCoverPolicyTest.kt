@@ -251,8 +251,8 @@ class VideoDetailReturnCoverPolicyTest {
         assertTrue(chrome.contains("shouldDrawNativeCoverOverlay("))
         val coverChromeGuard = holder
             .substringBefore("VideoDetailReturnCoverChrome(")
-            .takeLast(500)
-        assertTrue(coverChromeGuard.contains("if (miuixVisualAssetsActive)"))
+            .takeLast(1_500)
+        assertTrue(coverChromeGuard.contains("miuixVisualAssetsActive &&"))
         assertTrue(coverChromeGuard.contains("shouldDrawFlyingReconstructedSourceChrome("))
         assertFalse(coverChromeGuard.contains("lastClickedNativeCardLayer == null"))
         val sourceChromeGuard = holder
@@ -776,8 +776,8 @@ class VideoDetailReturnCoverPolicyTest {
             0.0001f,
         )
         // 后段详情信息开始变换为来源卡标题/统计，但飞行卡壳保持不透明。
-        val lateContent = resolveVideoDetailReturnContentAlpha(0.2f, true, liveReturnMorph = true)
-        assertEquals(0.6666667f, lateContent, 0.0001f)
+        val lateContent = resolveVideoDetailReturnContentAlpha(0.1f, true, liveReturnMorph = true)
+        assertEquals(0.5f, lateContent, 0.0001f)
     }
 
     @Test
@@ -873,9 +873,9 @@ class VideoDetailReturnCoverPolicyTest {
             0.0001f,
         )
         assertEquals(
-            0.6666667f,
+            0.5f,
             resolveVideoDetailReturnContentAlpha(
-                transitionProgress = 0.2f,
+                transitionProgress = 0.1f,
                 isCommittedCardReturn = true,
                 liveReturnMorph = true,
                 isQuickReturn = true,
@@ -902,15 +902,15 @@ class VideoDetailReturnCoverPolicyTest {
             isCommittedCardReturn = true,
             liveReturnMorph = true,
             depthBlurProgress = 0.95f,
-            morphDepthProgress = 0.2f,
+            morphDepthProgress = 0.1f,
         )
-        assertEquals(0.6666667f, content, 0.0001f)
+        assertEquals(0.5f, content, 0.0001f)
         assertEquals(
             resolveVideoDetailReturnContentAlpha(
-                transitionProgress = 0.2f,
+                transitionProgress = 0.1f,
                 isCommittedCardReturn = true,
                 liveReturnMorph = true,
-                morphDepthProgress = 0.2f,
+                morphDepthProgress = 0.1f,
             ),
             content,
             0.0001f,
@@ -1370,9 +1370,10 @@ class VideoDetailReturnCoverPolicyTest {
             .readText()
 
         assertTrue(source.contains("val detailTransitionProgress ="))
-        assertTrue(source.contains("alpha = resolveVideoDetailReturnMediaFrame("))
-        assertTrue(source.contains(").coverAlpha"))
-        assertTrue(source.contains(").playerAlpha"))
+        assertTrue(source.contains("val returnMediaFrameProvider: () -> VideoDetailReturnMediaFrame"))
+        assertTrue(source.contains("resolveVideoDetailReturnMediaFrame("))
+        assertTrue(source.contains("alpha = returnMediaFrameProvider().coverAlpha"))
+        assertTrue(source.contains("alpha = returnMediaFrameProvider().playerAlpha"))
         assertTrue(source.contains(".zIndex(1f)"))
         assertTrue(source.contains("alpha = resolveVideoDetailReturnContentAlpha("))
         assertFalse(source.contains("val coverCrossfadeAlpha ="))
@@ -1439,7 +1440,7 @@ class VideoDetailReturnCoverPolicyTest {
             .substringBefore("val handleTopBarAction")
         assertTrue(call.contains("isCardReturnExitInProgress = isCardReturnExitInProgress"))
         // session 先算 isSessionReturningToCard（含 transition/shared 门闩），再传入
-        assertTrue(source.contains("val isSessionReturningToCard = isReturningFromDetail &&"))
+        assertTrue(source.contains("val isSessionReturningToCard = shouldConsumeMiuixReturnSessionForVideoDetailEntry("))
         assertTrue(call.contains("isSessionReturningToCard = isSessionReturningToCard"))
         assertTrue(source.contains("shouldTreatVideoDetailCardReturnAsCommitted("))
         assertTrue(transitionHostSource.contains("video-detail-shared-morph-clock"))
@@ -1459,9 +1460,9 @@ class VideoDetailReturnCoverPolicyTest {
             .substringBefore("//  播放器容器按当前顶部避让高度计算")
 
         assertTrue(requestBlock.contains(".crossfade(false)"))
-        assertTrue(requestBlock.contains(".placeholderMemoryCacheKey(sharedCoverCacheKey)"))
-        assertTrue(requestBlock.contains(".memoryCacheKey(sharedCoverCacheKey)"))
-        assertTrue(requestBlock.contains(".diskCacheKey(sharedCoverCacheKey)"))
+        assertTrue(requestBlock.contains(".placeholderMemoryCacheKey(source.cacheKey)"))
+        assertTrue(requestBlock.contains(".memoryCacheKey(source.cacheKey)"))
+        assertTrue(requestBlock.contains(".diskCacheKey(source.cacheKey)"))
     }
 
     @Test

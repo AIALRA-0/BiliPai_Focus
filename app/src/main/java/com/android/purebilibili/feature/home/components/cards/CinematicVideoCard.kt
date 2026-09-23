@@ -423,6 +423,7 @@ fun CinematicVideoCard(
                         playText = FormatUtils.formatStat(video.stat.view.toLong()),
                         danmakuText = FormatUtils.formatStat(video.stat.danmaku.toLong()),
                         contentColor = MediaContrastPalette.Foreground.copy(alpha = 0.8f),
+                        textStyle = contentTypography.statistic,
                     )
 
                     // 时长

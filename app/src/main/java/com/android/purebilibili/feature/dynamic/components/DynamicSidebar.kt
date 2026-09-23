@@ -48,8 +48,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.android.purebilibili.feature.dynamic.DynamicTypographyPolicy
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -327,9 +327,9 @@ fun DynamicSidebar(
                                     text = "Live(${liveUsers.size})",
                                     modifier = Modifier.fillMaxWidth(),
                                     autoSize = TextAutoSize.StepBased(
-                                        minFontSize = 8.sp,
+                                        minFontSize = DynamicTypographyPolicy.sidebarLiveBadgeMinFontSize,
                                         maxFontSize = MaterialTheme.typography.labelSmall.fontSize,
-                                        stepSize = 0.5.sp,
+                                        stepSize = DynamicTypographyPolicy.sidebarLiveBadgeFontSizeStep,
                                     ),
                                     fontSize = MaterialTheme.typography.labelSmall.fontSize,
                                     color = MaterialTheme.colorScheme.primary,

@@ -10,7 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -21,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.feature.home.HomeVisualPalette
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -162,8 +163,8 @@ internal fun rememberLiquidGlassAdaptiveContentColor(
 ): Color {
     val sampledColor = if (enabled) {
         when (state.foregroundTone) {
-            LiquidGlassAdaptiveForegroundTone.DARK -> Color.Black.copy(alpha = 0.90f)
-            LiquidGlassAdaptiveForegroundTone.LIGHT -> Color.White.copy(alpha = 0.96f)
+            LiquidGlassAdaptiveForegroundTone.DARK -> HomeVisualPalette.GlassDark.copy(alpha = 0.90f)
+            LiquidGlassAdaptiveForegroundTone.LIGHT -> HomeVisualPalette.GlassLight.copy(alpha = 0.96f)
             null -> stableColor
         }
     } else {
@@ -176,7 +177,7 @@ internal fun rememberLiquidGlassAdaptiveContentColor(
     )
     val animatedColor by animateColorAsState(
         targetValue = targetColor,
-        animationSpec = tween(durationMillis = 240),
+        animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(240),
         label = "liquidGlassAdaptiveContentColor",
     )
     return animatedColor
@@ -195,7 +196,7 @@ internal fun resolveLiquidGlassContrastGuardedForeground(
     if (liquidGlassContrastRatio(stableColor, background) >= minimumContrastRatio) {
         return stableColor
     }
-    return listOf(Color.Black, Color.White)
+    return listOf(HomeVisualPalette.GlassDark, HomeVisualPalette.GlassLight)
         .maxBy { candidate -> liquidGlassContrastRatio(candidate, background) }
 }
 

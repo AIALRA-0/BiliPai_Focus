@@ -14,4 +14,9 @@ class FollowingLayoutPolicyTest {
     fun batchGroupDialogHeight_isOwnedByFollowingLayoutPolicy() {
         assertEquals(320.dp, resolveFollowingBatchGroupDialogMaxHeight())
     }
+
+    @Test
+    fun userAvatarBadgeSize_isOwnedByFollowingLayoutPolicy() {
+        assertEquals(14.dp, resolveFollowingUserAvatarBadgeSize())
+    }
 }

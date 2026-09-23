@@ -1799,6 +1799,7 @@ private fun SpaceContent(
                                     },
                                     onArticleClick = onArticleClick,
                                     onDynamicDetailClick = onDynamicDetailClick,
+                                    onPrimaryClickOverride = { dynamic -> onSpaceDynamicCommentClick(dynamic) },
                                 ),
                                 interaction = DynamicCardInteractionActions(
                                     onCommentClick = { onDynamicDetailClick(dynamic.id_str) },

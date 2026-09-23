@@ -368,7 +368,10 @@ class VideoContentTabBarPolicyTest {
         assertTrue(pinnedCommentHeader.contains("CommentListHeader("))
         val primaryTabChrome = source.substringAfter("contentAlignment = Alignment.TopStart,")
             .substringBefore("pagerState.currentPage == 1 &&")
-        assertTrue(primaryTabChrome.contains(".biliPaiProgressiveTopBlur("))
+        val topChrome = source
+            .substringAfter("val commentChromeHeight = if (pagerState.currentPage == 1) 46.dp else 0.dp")
+            .substringBefore("contentAlignment = Alignment.TopStart,")
+        assertTrue(topChrome.contains(".biliPaiProgressiveTopBlur("))
         assertTrue(pinnedCommentHeader.contains("visible = commentListAtTop"))
         assertTrue(pinnedCommentHeader.contains("CommentSortFilterBar("))
         assertTrue(source.contains("backdrop = videoContentMiuixBackdrop"))
@@ -489,12 +492,12 @@ class VideoContentTabBarPolicyTest {
         assertTrue(spec.liquidGlassEffectsEnabled)
         assertEquals(layoutSpec.segmentedControlHeightDp, spec.segmentedControlHeightDp)
         assertEquals(layoutSpec.segmentedControlIndicatorHeightDp, spec.segmentedControlIndicatorHeightDp)
-        assertEquals(68, spec.itemWidthDp)
+        assertEquals(70, spec.itemWidthDp)
         assertEquals(70, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 15))
         assertEquals(72, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 16))
         assertEquals(66, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 13))
         assertEquals(
-            136,
+            140,
             resolveVideoContentTabBarDockItemWidthDp(spec.labelFontSizeSp) * 2,
         )
         assertEquals(

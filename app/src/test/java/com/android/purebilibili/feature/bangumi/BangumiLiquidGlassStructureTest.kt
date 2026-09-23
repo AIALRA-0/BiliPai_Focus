@@ -14,6 +14,9 @@ class BangumiLiquidGlassStructureTest {
         val tabRowSource = File(
             "src/main/java/com/android/purebilibili/core/ui/components/AppLiquidAwareTabRow.kt",
         ).readText()
+        val segmentedControlSource = File(
+            "src/main/java/com/android/purebilibili/feature/home/components/BottomBarLiquidSegmentedControl.kt",
+        ).readText()
         val floatingDockSource = File(
             "src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt",
         ).readText()
@@ -54,8 +57,10 @@ class BangumiLiquidGlassStructureTest {
         assertTrue(tabRowSource.contains("BottomBarLiquidSegmentedControl("))
         assertTrue(tabRowSource.contains("AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp"))
         assertTrue(tabRowSource.contains("AppNativeTabRow("))
-        assertTrue(tabRowSource.contains("Modifier.horizontalScroll(scrollState)"))
-        assertTrue(tabRowSource.contains("itemWidth = minTabWidth"))
+        assertTrue(tabRowSource.contains("modifier = Modifier.liquidDockViewport()"))
+        assertTrue(segmentedControlSource.contains("modifier.horizontalScroll(scrollState)"))
+        assertTrue(tabRowSource.contains("val readableTabWidth = resolveReadableNativeTabMinWidth("))
+        assertTrue(tabRowSource.contains("itemWidth = readableTabWidth"))
         assertTrue(tabRowSource.contains("dragSelectionEnabled = resolvedDragSelectionEnabled"))
         assertTrue(floatingDockSource.contains("resolveSharedBottomBarCapsuleShape()"))
         assertTrue(!floatingDockSource.contains("remember { CircleShape }"))

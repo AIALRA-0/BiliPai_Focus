@@ -35,7 +35,9 @@ class DynamicPublishComposerPolicyTest {
             .substringBefore("verticalArrangement")
 
         assertTrue(dialogText.contains("layerBackdrop(publishChromeBackdrop)"))
-        assertTrue(dialogText.contains(".matchParentSize()\n                            .layerBackdrop(publishChromeBackdrop)"))
+        assertTrue(dialogText.contains(".matchParentSize()"))
+        assertTrue(dialogText.contains("if (publishChromeBackdrop != null)"))
+        assertTrue(dialogText.contains("Modifier.layerBackdrop(publishChromeBackdrop)"))
         assertTrue(outerColumnHeader.contains("verticalScroll(rememberScrollState())"))
         assertTrue(!outerColumnHeader.contains("layerBackdrop"))
         assertTrue(dialogText.contains("backdrop = publishChromeBackdrop"))

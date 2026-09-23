@@ -613,7 +613,11 @@ class HomeGlassVisualPolicyTest {
     fun homeWallpaperBackdropUsesOneImageLayer() {
         val source = File("src/main/java/com/android/purebilibili/feature/home/HomeWallpaperBackdrop.kt")
             .readText()
+        val mediaRenderer = File("src/main/java/com/android/purebilibili/core/ui/wallpaper/WallpaperMedia.kt")
+            .readText()
 
-        assertEquals(1, Regex("""\bAsyncImage\(""").findAll(source).count())
+        assertEquals(1, Regex("""\bWallpaperMedia\(""").findAll(source).count())
+        assertTrue(source.contains("imageModel = imageRequest"))
+        assertEquals(1, Regex("""\bAsyncImage\(""").findAll(mediaRenderer).count())
     }
 }

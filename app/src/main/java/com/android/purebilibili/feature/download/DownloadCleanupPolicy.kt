@@ -39,5 +39,5 @@ internal fun resolveDownloadCleanupTargets(
 
 private fun stableDownloadCleanupPath(directoryPath: String, fileName: String): String {
     if (directoryPath.isBlank()) return fileName
-    return "$directoryPath/$fileName"
+    return File(directoryPath, fileName).absolutePath
 }

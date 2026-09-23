@@ -57,6 +57,6 @@ class SettingsSemanticIconPolicyTest {
         val source = projectSourceFile("app/src/main/java/com/android/purebilibili/feature/settings")
             .walkTopDown().filter { it.isFile && it.extension == "kt" }.joinToString("\n") { it.readText() }
         assertTrue("androidx.compose.material.icons" !in source)
-        assertTrue(Regex("""(?<!App)(?<!Miuix)Icons\.""").find(source) == null)
+        assertTrue(Regex("""(?<![A-Za-z0-9_])Icons\.""").find(source) == null)
     }
 }

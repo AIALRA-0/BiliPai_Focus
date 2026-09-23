@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Pause
@@ -58,6 +57,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -229,11 +230,11 @@ internal fun Music3DCoverFlow(
                                             .size(fittedCardSizeDp.dp)
                                             .shadow(
                                                 elevation = if (isCenter) 20.dp else 8.dp,
-                                                shape = RoundedCornerShape(6.dp),
+                                                shape = AppShapes.container(ContainerLevel.Chip),
                                                 ambientColor = shelfShadowColor.copy(alpha = if (isCenter) 0.42f else 0.22f),
                                                 spotColor = shelfShadowColor.copy(alpha = if (isCenter) 0.58f else 0.30f)
                                             )
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(AppShapes.container(ContainerLevel.Chip))
                                             .border(
                                                 width = 1.dp,
                                                 brush = Brush.linearGradient(
@@ -244,7 +245,7 @@ internal fun Music3DCoverFlow(
                                                         MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)
                                                     )
                                                 ),
-                                                shape = RoundedCornerShape(6.dp)
+                                                shape = AppShapes.container(ContainerLevel.Chip)
                                             )
                                     ) {
                                         // 唱片封面大图
@@ -277,7 +278,10 @@ internal fun Music3DCoverFlow(
                                                     .align(Alignment.TopStart)
                                                     .padding(top = 4.dp, start = 1.dp)
                                                     .size(width = 3.dp, height = 7.dp)
-                                                    .background(MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.45f), RoundedCornerShape(1.dp))
+                                                    .background(
+                                                        MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.45f),
+                                                        AppShapes.container(ContainerLevel.Micro),
+                                                    )
                                             )
                                             // 底部透明铰链卡扣
                                             Box(
@@ -285,7 +289,10 @@ internal fun Music3DCoverFlow(
                                                     .align(Alignment.BottomStart)
                                                     .padding(bottom = 4.dp, start = 1.dp)
                                                     .size(width = 3.dp, height = 7.dp)
-                                                    .background(MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.45f), RoundedCornerShape(1.dp))
+                                                    .background(
+                                                        MaterialTheme.colorScheme.surfaceBright.copy(alpha = 0.45f),
+                                                        AppShapes.container(ContainerLevel.Micro),
+                                                    )
                                             )
                                         }
 
@@ -331,7 +338,11 @@ internal fun Music3DCoverFlow(
                                                 alpha = resolveMusicCoverFlowShadowEntranceProgress(entranceProgress.value)
                                                 compositingStrategy = CompositingStrategy.Offscreen
                                             }
-                                            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                            .clip(
+                                                AppShapes.topRounded(
+                                                    AppShapes.containerCornerDp(ContainerLevel.Chip)
+                                                )
+                                            )
                                             .drawWithContent {
                                                 drawContent()
                                                 drawRect(

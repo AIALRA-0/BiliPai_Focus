@@ -26,7 +26,7 @@ class DynamicVideoCardSharedTransitionStructureTest {
             .readText()
 
         assertTrue(source.contains("val coverBoundsRef = remember"))
-        assertTrue(source.contains("coverBoundsRef.value?.let { bounds ->"))
+        assertTrue(source.contains("coverBounds = coverBoundsRef.value"))
         assertTrue(source.contains(".onGloballyPositioned { coordinates ->"))
     }
 

@@ -1981,7 +1981,8 @@ private fun ProfileSpaceTabs(
         options = tabs.map { AppSegmentOption(it.tab, it.title) },
         selectedValue = tabs[selectedIndex].tab,
         onSelectionChange = onTabSelected,
-        scrollable = false,
+        scrollable = true,
+        minTabWidth = 72.dp,
         dragSelectionEnabled = tabs.size > 1,
         tapPressRefractionEnabled = true,
         modifier = Modifier

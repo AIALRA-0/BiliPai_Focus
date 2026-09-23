@@ -142,6 +142,7 @@ internal enum class SettingsIconRole {
     HOME_HERO_CAROUSEL,
     HOME_ONLINE_COUNT,
     PORTRAIT_STORY_ENTRY,
+    PORTRAIT_RECOMMENDATION_FILTER,
     DISPLAY_SCALE,
     UI_ENTRANCE_ANIMATION,
     FULLSCREEN_SWIPE_BACK,
@@ -289,7 +290,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.FLOATING_BOTTOM_BAR -> R.drawable.ms_view_agenda_24
     SettingsIconRole.HARDWARE_DECODER -> R.drawable.ms_memory_24
     SettingsIconRole.PLAYBACK_SPEED -> R.drawable.ms_speed_24
-    SettingsIconRole.NATIVE_MIUIX_DIALOG -> R.drawable.ms_chat_bubble_outline_24
+    SettingsIconRole.NATIVE_MIUIX_DIALOG -> R.drawable.ms_list_alt_24
     SettingsIconRole.LONG_PRESS_SPEED_HINT -> R.drawable.ms_visibility_off_24
     SettingsIconRole.RESUME_PLAYBACK_PROMPT -> R.drawable.ms_restore_24
     SettingsIconRole.STOP_ON_EXIT -> R.drawable.ms_stop_circle_24
@@ -340,6 +341,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.HOME_HERO_CAROUSEL -> R.drawable.ms_view_day_24
     SettingsIconRole.HOME_ONLINE_COUNT -> R.drawable.ms_groups_24
     SettingsIconRole.PORTRAIT_STORY_ENTRY -> R.drawable.ms_stay_current_portrait_24
+    SettingsIconRole.PORTRAIT_RECOMMENDATION_FILTER -> R.drawable.ms_portrait_filter_24
     SettingsIconRole.DISPLAY_SCALE -> R.drawable.ms_zoom_out_map_24
     SettingsIconRole.UI_ENTRANCE_ANIMATION -> R.drawable.ms_motion_photos_on_24
     SettingsIconRole.FULLSCREEN_SWIPE_BACK -> R.drawable.ms_swipe_right_24
@@ -609,6 +611,7 @@ internal fun resolveMiuixSettingsSemanticIcon(role: SettingsIconRole): ImageVect
     SettingsIconRole.HOME_HERO_CAROUSEL -> MiuixIcons.Album
     SettingsIconRole.HOME_ONLINE_COUNT -> MiuixIcons.ContactsBook
     SettingsIconRole.PORTRAIT_STORY_ENTRY -> MiuixIcons.Phone
+    SettingsIconRole.PORTRAIT_RECOMMENDATION_FILTER -> MiuixIcons.Filter
     SettingsIconRole.DISPLAY_SCALE -> MiuixIcons.ZoomOut
     SettingsIconRole.UI_ENTRANCE_ANIMATION -> MiuixIcons.Forward
     SettingsIconRole.FULLSCREEN_SWIPE_BACK -> MiuixIcons.ChevronBackward

@@ -9,10 +9,13 @@ class ChromeBackdropReadinessStructureTest {
     @Test
     fun scaffoldWarmsDuringSkeletonsWithoutExposingAnUnrecordedSource() {
         val source = source("core/ui/ImmersiveAppScaffold.kt")
-        assertTrue(source.contains("if (progressive) rememberChromeBackdropSource()"))
+        assertTrue(source.contains("chromeBackdropSource ?: if (progressive)"))
+        assertTrue(source.contains("rememberChromeBackdropSource()"))
         assertTrue(source.contains("source?.takeIf { blurContentReady && it.isReady }?.backdrop"))
-        assertTrue(source.contains("if (blurActive) Color.Transparent else globalWallpaperAwareChromeColor(containerColor)"))
-        assertTrue(source.indexOf(".then(source?.modifier ?: Modifier)") <
+        assertTrue(source.contains("if (chromeBackdropSource == null) source?.modifier ?: Modifier else Modifier"))
+        assertTrue(source.contains(".globalWallpaperAwareBackground(containerColor)"))
+        assertFalse(source.contains("if (blurActive) Color.Transparent"))
+        assertTrue(source.indexOf("if (chromeBackdropSource == null) source?.modifier ?: Modifier") <
             source.indexOf(".globalWallpaperAwareBackground(containerColor)"))
     }
 

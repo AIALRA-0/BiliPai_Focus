@@ -39,17 +39,20 @@ class HomeFeedScrollStatePersistenceStructureTest {
     @Test
     fun `bottom bar reselect scrolls the latest visible home category`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val scrollCollectorSource = source
+        val scrollStateSource = source
             .substringAfter("// [新增] 监听全局回顶事件")
             .substringBefore("val homeTopTabSettings")
+        val scrollCollectorSource = source
+            .substringAfter("LaunchedEffect(scrollChannel)")
+            .substringBefore("TrackJankStateFlag(")
 
         assertTrue(
-            scrollCollectorSource.contains(
+            scrollStateSource.contains(
                 "latestHomeScrollCategory by rememberUpdatedState(currentCategory)"
             )
         )
         assertTrue(
-            scrollCollectorSource.contains(
+            scrollStateSource.contains(
                 "latestHomeScrollPopularSubCategory by rememberUpdatedState(popularSubCategory)"
             )
         )
@@ -67,6 +70,8 @@ class HomeFeedScrollStatePersistenceStructureTest {
         assertTrue(lockSource.indexOf("block()") < lockSource.indexOf("revealHomeHeaderNow()"))
         assertFalse(lockSource.substringBefore("try {").contains("topTabsAutoCollapsedByScroll = false"))
         assertFalse(lockSource.substringBefore("try {").contains("globalScrollOffset.floatValue = 0f"))
+        assertTrue(lockSource.indexOf("block()") < lockSource.indexOf("animate("))
+        assertTrue(lockSource.contains("homeHeaderRevealLock = false"))
     }
 
     @Test
@@ -116,7 +121,11 @@ class HomeFeedScrollStatePersistenceStructureTest {
         // 关闭后不创建头像节点，也不创建兜底头像节点；Row 的 spacedBy 只作用于实际子项。
         assertTrue(pageSource.contains("if (showUpAvatars && video.owner.face.isNotBlank())"))
         assertTrue(pageSource.contains("} else if (showUpAvatars) {"))
-        assertTrue(storySource.contains("leadingContent = if (showUpAvatar && video.owner.face.isNotEmpty())"))
+        assertTrue(
+            storySource.contains(
+                "leadingContent = if ((showUpAvatar ?: com.android.purebilibili.core.ui.LocalUpBadgeVisibility.current.showAvatars) && video.owner.face.isNotEmpty())"
+            )
+        )
         assertTrue(standardCardSource.contains("leadingContent = if (showUpAvatar && video.owner.face.isNotEmpty())"))
     }
 
@@ -168,14 +177,14 @@ class HomeFeedScrollStatePersistenceStructureTest {
 
     @Test
     fun `home feed samples scroll state without observing every scroll transition`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt")
-        val pageFunctionSource = source
-            .substringAfter("internal fun HomeCategoryPageContent(")
-            .substringBefore("@Composable\nprivate fun PopularSubCategorySegmentedControl")
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
+        val scrollSamplingSource = source
+            .substringAfter("val isFeedScrollInProgress by remember(activeGridState)")
+            .substringBefore("val homeInteractionMotionBudget")
 
-        assertTrue(pageFunctionSource.contains("Snapshot.withoutReadObservation"))
-        assertTrue(pageFunctionSource.contains("gridState.isScrollInProgress"))
-        assertFalse(pageFunctionSource.contains("derivedStateOf { gridState.isScrollInProgress }"))
+        assertTrue(scrollSamplingSource.contains("derivedStateOf { activeGridState?.isScrollInProgress == true }"))
+        assertTrue(scrollSamplingSource.contains("globalFeedScrollInProgress.value = isFeedScrollInProgress"))
+        assertFalse(scrollSamplingSource.contains("snapshotFlow"))
     }
 
     @Test
@@ -188,7 +197,8 @@ class HomeFeedScrollStatePersistenceStructureTest {
 
         assertTrue(tabsSource.contains("val currentPositionProvider = remember(pagerState, selectedIndex)"))
         assertTrue(tabsSource.contains("val pagerScrollingProvider = remember(pagerState)"))
-        assertTrue(motionSource.contains("val currentPosition = currentPositionProvider()"))
+        assertTrue(motionSource.contains("val currentPositionFromPager = currentPositionProvider()"))
+        assertTrue(motionSource.contains("val selectedContentPositionFromPager = selectedContentPositionProvider()"))
         assertTrue(motionSource.contains("val pagerIsScrolling = pagerScrollingProvider()"))
     }
 
@@ -243,7 +253,7 @@ class HomeFeedScrollStatePersistenceStructureTest {
         assertTrue(followFeedSource.contains("probeWithBaseline"))
         assertTrue(followFeedSource.contains("resolveHomeFollowRefreshNewItemsCount("))
         assertTrue(followFeedSource.contains("currentUpdateBaseline("))
-        assertTrue(followFeedSource.contains("return tipCount"))
+        assertTrue(followFeedSource.contains("return refreshTipCount"))
     }
 
     @Test

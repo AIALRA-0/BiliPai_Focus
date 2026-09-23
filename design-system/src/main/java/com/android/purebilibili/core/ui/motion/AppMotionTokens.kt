@@ -3,6 +3,8 @@ package com.android.purebilibili.core.ui.motion
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
@@ -147,6 +149,28 @@ object AppMotionTokens {
         dampingRatio = 0.82f,
         stiffness = 380f
     )
+
+    /** Constant-speed interpolation for caller-controlled and shared-bound transitions. */
+    fun <T> linearTweenSpec(durationMillis: Int): TweenSpec<T> = tween(
+        durationMillis = durationMillis,
+        easing = LinearEasing,
+    )
+
+    /** Fast-out-slow-in tween that preserves Compose's default easing at a named call site. */
+    fun <T> fastOutSlowInTweenSpec(durationMillis: Int): TweenSpec<T> = tween(
+        durationMillis = durationMillis,
+        easing = FastOutSlowInEasing,
+    )
+
+    /** Settles a dragged floating indicator without visible rebound. */
+    fun floatingDockOffsetSpring(): SpringSpec<Float> = spring(
+        dampingRatio = 1f,
+        stiffness = 300f,
+        visibilityThreshold = 0.5f,
+    )
+
+    /** Constant-speed pulse used for live-status indicators. */
+    fun <T> livePulseSpec(): TweenSpec<T> = linearTweenSpec(durationMillis = 1_200)
 
     // ═══ Miuix / Xiaomi HyperOS 官方 Folme 物理弹簧阻尼体系 ═══
 

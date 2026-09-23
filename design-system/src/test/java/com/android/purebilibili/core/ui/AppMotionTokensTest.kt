@@ -1,5 +1,7 @@
 package com.android.purebilibili.core.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.ui.unit.IntOffset
@@ -16,6 +18,38 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AppMotionTokensTest {
+    @Test
+    fun livePulseSpecPreservesConstantSpeedAndPeriod() {
+        val spec = AppMotionTokens.livePulseSpec<Float>()
+
+        assertEquals(1_200, spec.durationMillis)
+        assertEquals(LinearEasing, spec.easing)
+    }
+
+    @Test
+    fun linearTweenSpecKeepsRequestedDurationAndConstantSpeed() {
+        val spec = AppMotionTokens.linearTweenSpec<Float>(360)
+
+        assertEquals(360, spec.durationMillis)
+        assertEquals(LinearEasing, spec.easing)
+    }
+
+    @Test
+    fun fastOutSlowInTweenSpecPreservesComposeDefaultEasing() {
+        val spec = AppMotionTokens.fastOutSlowInTweenSpec<Float>(240)
+
+        assertEquals(240, spec.durationMillis)
+        assertEquals(FastOutSlowInEasing, spec.easing)
+    }
+
+    @Test
+    fun floatingDockOffsetSpringPreservesSettledDragParameters() {
+        val spring = AppMotionTokens.floatingDockOffsetSpring()
+
+        assertEquals(1f, spring.dampingRatio)
+        assertEquals(300f, spring.stiffness)
+        assertEquals(0.5f, spring.visibilityThreshold)
+    }
 
     @Test
     fun iosMorphSpec_usesSharedAppleEaseInOutCurve() {

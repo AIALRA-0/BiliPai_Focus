@@ -3,6 +3,15 @@ package com.android.purebilibili.feature.home
 import androidx.compose.ui.graphics.Color
 
 internal object HomeVisualPalette {
+    val GlassLight = Color.White
+    val GlassDark = Color.Black
+    val WallpaperFallbackStops = listOf(
+        Color(0xFF6750A4),
+        Color(0xFF5B4D82),
+        Color(0xFF6B4A6A),
+        Color(0xFF7D5260),
+        Color(0xFF8C4F5A),
+    )
     val GlassSpectrum = listOf(
         Color(0xFFFF6B6B),
         Color(0xFFFF8E53),

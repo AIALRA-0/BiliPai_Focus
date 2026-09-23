@@ -26,7 +26,9 @@ class BangumiPlayerCommentPolicyTest {
         )
 
         assertTrue(source.contains("commentViewModel.init("))
-        assertTrue(source.contains("aid = currentAid"))
+        assertTrue(source.contains("val targetOid = if (isPugv) (successState?.currentEpisode?.id ?: currentEpisodeIdForDebug) else currentAid"))
+        assertTrue(source.contains("aid = targetOid"))
+        assertTrue(source.contains("commentType = targetType"))
         assertTrue(source.contains("expectedReplyCount = successState?.seasonDetail?.stat?.reply?.toInt() ?: 0"))
     }
 

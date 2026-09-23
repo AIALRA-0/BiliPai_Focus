@@ -1,12 +1,13 @@
 package androidx.navigationevent.compose
 
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class NavigationBackHandlerCompatibilityTest {
 
     @Test
-    fun retainsLegacyNavigation3BackHandlerAbi() {
+    fun removesUnusedLegacyNavigation3BackHandlerAbi() {
         val legacyParameterTypes = listOf(
             "androidx.navigationevent.compose.NavigationEventState",
             "kotlin.jvm.functions.Function0",
@@ -23,7 +24,7 @@ class NavigationBackHandlerCompatibilityTest {
                 method.parameterTypes.map { it.name } == legacyParameterTypes
         }
 
-        assertTrue(hasLegacyBridge)
+        assertFalse(hasLegacyBridge)
     }
 
     @Test

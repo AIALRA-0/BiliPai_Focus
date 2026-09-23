@@ -29,8 +29,12 @@ class VideoDetailShapeStructureTest {
         val summary = loadMainSource("feature/video/ui/section/AiSummarySection.kt")
         val note = loadMainSource("feature/video/ui/section/VideoNoteSection.kt")
 
-        assertTrue(related.contains("VideoDetailShapes.contentCard()"))
-        assertTrue(related.contains("VideoDetailShapes.media()"))
+        // Related cards share their entire shell with home cards, so keep the same app card token
+        // for both the visible clip and the transition bounds.
+        assertTrue(related.contains("val cardShape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(related.contains("clipShape = cardShape"))
+        assertTrue(related.contains(".clip(cardShape)"))
+        assertTrue(related.contains("sourceCornerDp = cardCornerRadiusDp"))
         assertTrue(skeleton.contains("VideoDetailShapes.contentCard()"))
         assertTrue(skeleton.contains("VideoDetailShapes.media()"))
         assertTrue(collection.contains("VideoDetailShapes.compactIcon()"))

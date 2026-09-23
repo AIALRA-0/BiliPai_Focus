@@ -29,7 +29,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +41,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
@@ -213,13 +213,13 @@ internal fun LivePortraitChatStream(
                     .semantics { contentDescription = "查看 $superChatCount 条醒目留言" }
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.Micro),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
                 ) {
                     AppText(
                         text = "SC($superChatCount)",
-                        color = Color(0xFFFFD54F),
+                        color = LiveStatusPalette.SuperChatBadgeAccent,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -227,7 +227,7 @@ internal fun LivePortraitChatStream(
                         imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                         contentDescription = null,
                         tint = LiveStatusPalette.MediaContent,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(LivePortraitChromeSpec.StatusChevronIconSize)
                     )
                 }
             }
@@ -252,19 +252,19 @@ internal fun LivePortraitChatStream(
                 shape = AppShapes.container(ContainerLevel.Pill),
                 color = LiveStatusPalette.MediaScrim.copy(alpha = 0.82f),
                 contentColor = LiveStatusPalette.MediaContent,
-                modifier = Modifier.heightIn(min = 32.dp)
+                modifier = Modifier.heightIn(min = LivePortraitChromeSpec.ReturnToBottomMinHeight)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall)
                 ) {
                     AppIcon(
                         imageVector = Icons.Outlined.KeyboardArrowDown,
                         contentDescription = null,
                         tint = LiveStatusPalette.MediaContent,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(LivePortraitChromeSpec.ReturnToBottomIconSize)
                     )
-                    Spacer(Modifier.width(2.dp))
+                    Spacer(Modifier.width(AppSpacingTokens.Micro))
                     AppText(
                         text = "回到底部",
                         color = LiveStatusPalette.MediaContent,
@@ -376,7 +376,7 @@ private fun LivePortraitDanmakuBubble(
                 AsyncImage(
                     model = item.emoticonUrl,
                     contentDescription = item.text,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(LivePortraitChromeSpec.EmoticonSize)
                 )
             }
         } else {
@@ -485,11 +485,11 @@ private fun LivePortraitMedalBadge(
             .background(medalColor.copy(alpha = 0.85f))
             .padding(horizontal = visualSpec.horizontalPaddingDp.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
     ) {
         AppText(
             text = name,
-            color = Color.White,
+            color = LiveStatusPalette.MediaContent,
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = visualSpec.fontSizeSp.sp,
                 fontWeight = FontWeight.Bold
@@ -498,7 +498,7 @@ private fun LivePortraitMedalBadge(
         )
         AppText(
             text = "$level",
-            color = Color.White.copy(alpha = 0.9f),
+            color = LiveStatusPalette.MediaContent.copy(alpha = 0.9f),
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = visualSpec.fontSizeSp.sp,
                 fontWeight = FontWeight.Medium
@@ -517,11 +517,11 @@ private fun LivePortraitSuperChatBubble(
     AppSurface(
         color = bg.copy(alpha = 0.88f),
         shape = AppShapes.container(ContainerLevel.Card),
-        modifier = Modifier.padding(vertical = 2.dp)
+        modifier = Modifier.padding(vertical = AppSpacingTokens.Micro)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -530,20 +530,20 @@ private fun LivePortraitSuperChatBubble(
             ) {
                 AppText(
                     text = item.uname.ifBlank { "醒目留言" },
-                    color = Color.White,
+                    color = LiveStatusPalette.MediaContent,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )
                 AppText(
                     text = "¥${item.superChatPrice}",
-                    color = Color.White.copy(alpha = 0.95f),
+                    color = LiveStatusPalette.MediaContent.copy(alpha = 0.95f),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
                 )
             }
             AppText(
                 text = item.text,
-                color = Color.White,
+                color = LiveStatusPalette.MediaContent,
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -656,7 +656,7 @@ internal fun LivePortraitBottomBar(
             onToggle = onToggleDanmaku,
             activeTint = LiveStatusPalette.MediaContent,
             inactiveTint = LiveStatusPalette.MediaContent.copy(alpha = 0.55f),
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(AppChromeSizeTokens.CompactControlHeightDp.dp)
         )
 
         // 2. 发送弹幕输入条
@@ -667,7 +667,7 @@ internal fun LivePortraitBottomBar(
             contentColor = LiveStatusPalette.MediaContent,
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 44.dp)
+                .heightIn(min = AppChromeSizeTokens.CompactControlHeightDp.dp)
                 .clip(barShape)
                 .then(
                     if (hazeState != null) {
@@ -708,7 +708,7 @@ internal fun LivePortraitBottomBar(
             AppIconButton(
                 onClick = onOpenEmote,
                 colors = mediaColors,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(AppChromeSizeTokens.CompactControlHeightDp.dp)
             ) {
                 AppIcon(
                     imageVector = Icons.Outlined.EmojiEmotions,
@@ -723,7 +723,7 @@ internal fun LivePortraitBottomBar(
             onClick = onToggleChat,
             colors = mediaColors,
             modifier = Modifier
-                .size(44.dp)
+                .size(AppChromeSizeTokens.CompactControlHeightDp.dp)
                 .semantics { stateDescription = if (chatVisible) "聊天已显示" else "聊天已隐藏" },
         ) {
             AppIcon(
@@ -737,7 +737,7 @@ internal fun LivePortraitBottomBar(
         AppIconButton(
             onClick = onOpenMore,
             colors = mediaColors,
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(AppChromeSizeTokens.CompactControlHeightDp.dp)
         ) {
             AppIcon(
                 imageVector = Icons.Outlined.MoreHoriz,
@@ -760,7 +760,7 @@ internal fun LivePortraitMoreSheet(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 520.dp),
+                .heightIn(max = LivePortraitChromeSpec.MoreSheetMaxHeight),
             contentPadding = PaddingValues(
                 horizontal = AppSpacingTokens.Large,
                 vertical = AppSpacingTokens.Small,
@@ -799,7 +799,7 @@ internal fun LivePortraitMoreSheet(
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)
                             .padding(AppSpacingTokens.Medium),
                     )
                 }

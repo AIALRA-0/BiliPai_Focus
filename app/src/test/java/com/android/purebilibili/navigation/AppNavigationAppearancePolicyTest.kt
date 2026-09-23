@@ -139,23 +139,22 @@ class AppNavigationAppearancePolicyTest {
     @Test
     fun appNavigationProvidesGlobalSharedTransitionSwitch() {
         val navigationSource = loadSource("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
-        val providerSource = loadSource("app/src/main/java/com/android/purebilibili/core/ui/SharedTransitionProvider.kt")
         val activitySource = loadSource("app/src/main/java/com/android/purebilibili/MainActivity.kt")
 
-        assertTrue(
-            navigationSource.contains(
-                "SharedTransitionProvider(enabled = sharedVideoCardTransitionEnabled)"
-            )
-        )
+        assertTrue(navigationSource.contains("val sharedVideoCardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion"))
+        assertTrue(navigationSource.contains("val officialVideoSharedBoundsEnabled ="))
+        assertTrue(navigationSource.contains("sharedVideoCardTransitionEnabled && !liveSurfaceCardTransitionEnabled"))
+        assertTrue(navigationSource.contains("SharedTransitionLayout(modifier = Modifier.fillMaxSize())"))
+        assertTrue(navigationSource.contains("LocalSharedTransitionScope provides"))
+        assertTrue(navigationSource.contains("this.takeIf { officialVideoSharedBoundsEnabled }"))
+        assertTrue(navigationSource.contains("LocalOfficialVideoSharedTransition provides realVideoSharedTransition"))
+        assertTrue(navigationSource.contains("cardTransitionEnabled = sharedVideoCardTransitionEnabled"))
         assertTrue(navigationSource.contains("cardTransitionEnabled && !systemReduceMotion"))
         assertTrue(
             navigationSource.contains(
                 "VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS"
             )
         )
-        assertTrue(providerSource.contains("val sharedTransitionScope = if (enabled) this else null"))
-        assertTrue(providerSource.contains("LocalSharedTransitionScope provides sharedTransitionScope"))
-        assertTrue(providerSource.contains("LocalSharedTransitionEnabled provides enabled"))
         assertFalse(activitySource.contains("SharedTransitionProvider"))
     }
 
@@ -209,15 +208,13 @@ class AppNavigationAppearancePolicyTest {
             .substringAfter("BiliPaiNavDisplayHost(")
             .substringBefore(") { key ->")
 
-        assertTrue(
-            navHostCall.contains(
-                "videoCardDepthEffectEnabled = sharedVideoCardTransitionEnabled"
-            )
-        )
+        assertTrue(navHostCall.contains("videoTransitionRealtimeBlurEnabled = videoTransitionRealtimeBlurEnabled"))
+        assertTrue(navHostCall.contains("miuixTransitionBlurEnabled ="))
         assertFalse(navHostCall.contains("videoCardBackgroundSinkEnabled"))
         assertFalse(navHostSource.contains("isBackgroundSinkEnabledProvider ="))
         assertFalse(navHostSource.contains("videoCardBackgroundSinkEnabled"))
-        assertTrue(navHostSource.contains("videoCardDepthEffectEnabled"))
+        assertTrue(navHostSource.contains("effectiveRealtimeBlurEnabled = videoTransitionRealtimeBlurEnabled ||"))
+        assertTrue(navHostSource.contains("realtimeBlurEnabledProvider = { effectiveRealtimeBlurEnabled }"))
     }
 
     @Test

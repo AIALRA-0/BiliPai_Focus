@@ -443,7 +443,7 @@ class SearchScreenPolicyTest {
             "关闭液态玻璃后 MD3 下划线必须完整显示 直播间 / UP主 等标签",
         )
         assertTrue(searchSource.contains("miuixBackdrop = searchChromeBackdrop"))
-        assertTrue(searchSource.contains(".layerBackdrop(searchChromeBackdrop)"))
+        assertTrue(searchSource.contains(".then(searchChromeSource?.modifier ?: Modifier)"))
         assertTrue(searchSource.contains("externalPagerMotionEffectsEnabled = true"))
         val filterBar = searchSource.substringAfter("fun SearchFilterBar(")
         assertTrue(filterBar.contains("isMiuixNonGlassEnabled()"))
@@ -457,10 +457,14 @@ class SearchScreenPolicyTest {
         assertTrue(typeTabRowBody.contains("shouldScrollSearchTypeTabs("))
         assertTrue(typeTabRowBody.contains("resolveSearchTypeTabAdaptiveItemWidthDp("))
         assertTrue(typeTabRowBody.contains(".liquidDockViewport()"))
-        assertTrue(typeTabRowBody.contains(".horizontalScroll(scrollState)"))
+        assertTrue(typeTabRowBody.contains("scrollState = scrollState.takeIf { useScrollableRail }"))
         assertTrue(typeTabRowBody.contains("KeepScrollableTabSelectionVisible("))
         assertTrue(typeTabRowBody.contains("onIndicatorPositionChanged = { position ->"))
         assertTrue(typeTabRowBody.contains("resolveSearchTypeTabDragScrollDeltaPx("))
+        val segmentedControl = loadSource(
+            "feature/home/components/BottomBarLiquidSegmentedControl.kt"
+        )
+        assertTrue(segmentedControl.contains("modifier.horizontalScroll(scrollState)"))
         assertFalse(searchSource.contains("androidx.compose.material3.ScrollableTabRow("))
         assertFalse(searchSource.contains("tabIndicatorOffset("))
         // Top bar uses native BasicTextField + TextFieldValue (not AppSearchField wrapper).

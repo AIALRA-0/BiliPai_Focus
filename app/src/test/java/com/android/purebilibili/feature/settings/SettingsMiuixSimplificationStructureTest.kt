@@ -84,7 +84,7 @@ class SettingsMiuixSimplificationStructureTest {
         assertTrue(source.contains("R.drawable.liquid_glass_preview_prismatic"))
         assertTrue(source.contains("rememberPagerState("))
         assertTrue(source.contains("HorizontalPager("))
-        assertTrue(source.contains("左右滑动切换内置背景"))
+        assertTrue(source.contains("左右滑动可更换测试背景"))
         assertTrue(source.contains("bottomBarItems: List<BottomNavItem>"))
         assertTrue(source.contains("previewBottomBarItems.forEachIndexed"))
         assertTrue(source.contains("resolveMaterialBottomBarIcon("))
@@ -197,11 +197,15 @@ class SettingsMiuixSimplificationStructureTest {
                 braceDepth += line.count { it == '{' }
                 braceDepth -= line.count { it == '}' }
 
-                Regex("""icon\s*=\s*([^,]+),?""")
+                Regex("""icon\s*=\s*""")
                     .find(line)
                     ?.let { match ->
                         pendingIcon = PendingIcon(
-                            icon = match.groupValues[1].trim(),
+                            icon = extractIconExpression(
+                                lines = lines,
+                                startLine = index,
+                                startColumn = match.range.last + 1,
+                            ),
                             lineNumber = index + 1
                         )
                     }
@@ -226,6 +230,30 @@ class SettingsMiuixSimplificationStructureTest {
         }
 
         return duplicates
+    }
+
+    private fun extractIconExpression(
+        lines: List<String>,
+        startLine: Int,
+        startColumn: Int,
+    ): String {
+        val expression = StringBuilder()
+        var parenthesisDepth = 0
+        for (lineIndex in startLine..lines.lastIndex) {
+            val line = lines[lineIndex]
+            val firstColumn = if (lineIndex == startLine) startColumn else 0
+            for (column in firstColumn until line.length) {
+                val character = line[column]
+                when (character) {
+                    '(' -> parenthesisDepth++
+                    ')' -> parenthesisDepth--
+                    ',' -> if (parenthesisDepth == 0) return expression.toString().trim()
+                }
+                expression.append(character)
+            }
+            if (lineIndex < lines.lastIndex) expression.append(' ')
+        }
+        return expression.toString().trim()
     }
 
     private data class PendingIcon(

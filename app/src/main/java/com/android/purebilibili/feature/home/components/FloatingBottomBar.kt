@@ -16,7 +16,6 @@ package com.android.purebilibili.feature.home.components
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -84,12 +83,15 @@ import com.android.purebilibili.feature.home.components.liquid.vibrancy
 import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry
+import com.android.purebilibili.feature.home.HomeVisualPalette
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.feature.home.components.miuix.DampedDragAnimation
 import com.android.purebilibili.feature.home.components.miuix.DampedDragTrackingMode
 import com.android.purebilibili.feature.home.components.miuix.InteractiveHighlight
 import kotlin.math.abs
 import kotlin.math.sign
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -177,7 +179,7 @@ fun PlainMiuixFloatingBottomBar(
         modifier = modifier
             .dropShadow(
                 shape = shape,
-                shadow = Shadow(radius = 10.dp, color = Color.Black, alpha = 0.12f),
+                shadow = Shadow(radius = 10.dp, color = HomeVisualPalette.GlassDark, alpha = 0.12f),
             )
             .background(colors.containerColor, shape)
             .padding(4.dp),
@@ -486,7 +488,7 @@ fun FloatingBottomBar(
         enabled = adaptiveReadabilityEnabled,
         contrastBackgroundColor = colors.containerColor,
     )
-    val readabilityScrimColor = if (isInDark) Color.Black else Color.White
+    val readabilityScrimColor = if (isInDark) HomeVisualPalette.GlassDark else HomeVisualPalette.GlassLight
     val containerColor =
         if (isLiquidGlassMode) {
             colors.containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
@@ -681,7 +683,7 @@ fun FloatingBottomBar(
                 }
                 offsetJobHolder.job?.cancel()
                 offsetJobHolder.job = animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                    offsetAnimation.animateTo(0f, AppMotionTokens.floatingDockOffsetSpring())
                 }
             },
             onDrag = { _, dragAmount ->
@@ -719,6 +721,7 @@ fun FloatingBottomBar(
     }
     LaunchedEffect(dampedDragAnimation) {
         snapshotFlow { dampedDragAnimation.value }
+            .drop(1)
             .collect { position -> onIndicatorPositionChangedLatest.value?.invoke(position) }
     }
     val itemAlignmentOffsetProvider: (Int) -> Float = { itemIndex ->
@@ -886,7 +889,7 @@ fun FloatingBottomBar(
                         shape = pillShape,
                         shadow = Shadow(
                             radius = 10.dp,
-                            color = Color.Black,
+                            color = HomeVisualPalette.GlassDark,
                             alpha = if (isInDark) 0.2f else 0.1f,
                         ),
                     )
@@ -1126,19 +1129,19 @@ fun FloatingBottomBar(
                                 val progress = dampedDragAnimation.pressProgress
                                 drawRect(
                                     color = indicatorIdleSurfaceColorOverride ?: if (!isInDark) {
-                                        Color.Black.copy(alpha = 0.1f)
+                                        HomeVisualPalette.GlassDark.copy(alpha = 0.1f)
                                     } else {
-                                        Color.White.copy(alpha = 0.1f)
+                                        HomeVisualPalette.GlassLight.copy(alpha = 0.1f)
                                     },
                                     alpha = 1f - progress,
                                 )
-                                drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                                drawRect(HomeVisualPalette.GlassDark.copy(alpha = 0.03f * progress))
                             },
                         )
                         .innerShadow(shape = pillShape) {
                             InnerShadow(
                                 radius = innerShadowRadius * dampedDragAnimation.pressProgress,
-                                color = Color.Black.copy(alpha = 0.15f),
+                                color = HomeVisualPalette.GlassDark.copy(alpha = 0.15f),
                                 alpha = dampedDragAnimation.pressProgress,
                             )
                         }

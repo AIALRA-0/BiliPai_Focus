@@ -208,12 +208,30 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private var activeSearchSessionId: Long = 0L
     private var blockedUpObserverStarted = false
     private var landingBootstrapStarted = false
+    private var easterEggEnabled = false
 
     private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
     private var blockedMids: Set<Long> = emptySet()
 
     init {
         loadHistory()
+        viewModelScope.launch {
+            com.android.purebilibili.core.store.SettingsManager.getEasterEggEnabled(application)
+                .collect { enabled ->
+                    easterEggEnabled = enabled
+                    val currentState = _uiState.value
+                    if (currentState.showResults && currentState.query.isNotBlank()) {
+                        val message = if (enabled) {
+                            com.android.purebilibili.core.util.EasterEggs.checkSearchEasterEgg(currentState.query)
+                        } else null
+                        _uiState.update { state ->
+                            if (state.searchSessionId == currentState.searchSessionId &&
+                                state.easterEggMessage != message
+                            ) state.copy(easterEggMessage = message) else state
+                        }
+                    }
+                }
+        }
         viewModelScope.launch {
             com.android.purebilibili.core.store.SettingsManager.getSearchSuggestionsEnabled(application)
                 .collect { enabled ->
@@ -536,7 +554,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         ensureBlockedUpObserver()
 
         val context = getApplication<android.app.Application>()
-        val easterEggEnabled = com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(context)
         val easterEggMessage = if (easterEggEnabled) {
             com.android.purebilibili.core.util.EasterEggs.checkSearchEasterEgg(normalizedKeyword)
         } else null

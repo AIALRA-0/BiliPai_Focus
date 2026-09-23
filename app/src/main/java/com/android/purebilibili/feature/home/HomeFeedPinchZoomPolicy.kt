@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -30,6 +29,7 @@ import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.util.WindowWidthSizeClass
@@ -247,13 +247,13 @@ internal fun GridPinchColumnHudPill(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(150)) + scaleIn(
+        enter = fadeIn(animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(150)) + scaleIn(
             initialScale = 0.85f,
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
         ),
-        exit = fadeOut(animationSpec = tween(200)) + scaleOut(
+        exit = fadeOut(animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(200)) + scaleOut(
             targetScale = 0.85f,
-            animationSpec = tween(200)
+            animationSpec = AppMotionTokens.fastOutSlowInTweenSpec(200)
         ),
         modifier = modifier.zIndex(92f)
     ) {

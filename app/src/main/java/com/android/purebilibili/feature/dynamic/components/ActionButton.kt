@@ -1,5 +1,6 @@
 // 文件路径: feature/dynamic/components/ActionButton.kt
 package com.android.purebilibili.feature.dynamic.components
+import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -10,6 +11,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppTypographyTokens
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import com.android.purebilibili.feature.dynamic.DynamicActionButtonPalette
 import com.android.purebilibili.feature.dynamic.DynamicStatusPalette
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -41,7 +43,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -75,19 +76,19 @@ fun ActionButton(
     val isComment = label == "评论"
     
     //  统一中性操作按钮颜色 - 避免主题色入侵卡片底部操作区
-    val neutralContentColor = if (isDark) Color(0xFFDDDDDD) else Color(0xFF444444)
+    val neutralContentColor = DynamicActionButtonPalette.content(isDark)
     val buttonColor = when {
-        !enabled -> if (isDark) Color(0xFF666666) else Color(0xFF999999)
+        !enabled -> DynamicActionButtonPalette.disabledContent(isDark)
         isLike && isActive -> DynamicStatusPalette.liked()
         else -> neutralContentColor
     }
-    val containerBgColor = if (isDark) Color(0xFF242424) else Color(0xFFF2F2F2)
-    val disabledContainerBgColor = if (isDark) Color(0x10FFFFFF) else Color(0x05000000)
+    val containerBgColor = DynamicActionButtonPalette.container(isDark)
+    val disabledContainerBgColor = DynamicActionButtonPalette.disabledContainer(isDark)
     val miuixButtonColors = MiuixButtonColors(
         color = containerBgColor,
         contentColor = buttonColor,
         disabledColor = disabledContainerBgColor,
-        disabledContentColor = if (isDark) Color(0xFF666666) else Color(0xFF999999),
+        disabledContentColor = DynamicActionButtonPalette.disabledContent(isDark),
     )
     
     //  iOS 风格按压动画
@@ -151,7 +152,7 @@ fun ActionButton(
 
         // Material 3 主题同样使用原生 Button，避免主题切换后退回自绘点击 Row。
         if (LocalAppUiStyle.current == AppUiStyle.MATERIAL3) {
-            Button(
+            AppButton(
                 onClick = onClick,
                 enabled = enabled,
                 modifier = Modifier
@@ -168,7 +169,6 @@ fun ActionButton(
                     disabledContainerColor = Color.Transparent,
                     disabledContentColor = buttonColor,
                 ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
             ) {
                 AppIcon(
                     imageVector = buttonIcon,

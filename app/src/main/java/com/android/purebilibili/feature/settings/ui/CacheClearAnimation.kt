@@ -52,6 +52,7 @@ import com.android.purebilibili.core.ui.AppPopupSurface
 import com.android.purebilibili.core.ui.AppPopupSurfaceType
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppCheckbox
 import com.android.purebilibili.core.ui.components.AppCheckboxDefaults
@@ -431,7 +432,7 @@ private fun CacheClearSuccessAnimation() {
         transitionSpec = { tween(durationMillis = 650, delayMillis = 180) },
         label = "cacheClearSparkleAlpha"
     ) { complete -> if (complete) 1f else 0f }
-    val successColor = Color(0xFF34C759)
+    val successColor = iOSGreen
 
     Box(modifier = Modifier.size(96.dp), contentAlignment = Alignment.Center) {
         Canvas(

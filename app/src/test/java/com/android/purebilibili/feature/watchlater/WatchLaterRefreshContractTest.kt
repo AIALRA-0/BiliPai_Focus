@@ -69,19 +69,18 @@ class WatchLaterRefreshContractTest {
     }
 
     @Test
-    fun watchLaterScreen_usesDenseListCardsInsteadOfAdaptiveGrid() {
+    fun watchLaterScreen_usesFixedUserSelectedColumnsAndKeepsDenseCards() {
         val source = sourceText("src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt")
         val listBranch = source
             .substringAfter("state.items.isEmpty() ->")
             .substringBefore("if (showBatchDeleteConfirm)")
 
-        assertTrue(
-            listBranch.contains("LazyColumn("),
-            "稍后再看主列表应使用长条列表卡片，避免窄 dp 设备退成单列大卡"
-        )
+        assertTrue(listBranch.contains("resolveVideoListColumns("))
+        assertTrue(listBranch.contains("LazyVerticalGrid("))
+        assertTrue(listBranch.contains("columns = GridCells.Fixed(columns)"))
         assertFalse(
             listBranch.contains("GridCells.Adaptive"),
-            "稍后再看主列表不应继续依赖自适应网格"
+            "稍后再看应按用户布局偏好选定列数，不依赖自适应网格导致卡片尺寸漂移"
         )
         assertTrue(
             listBranch.contains("WatchLaterVideoCard("),
@@ -105,7 +104,7 @@ class WatchLaterRefreshContractTest {
             .substringBefore("containerColor = MaterialTheme.colorScheme.background")
 
         assertTrue(
-            topBarSection.contains("text = { AppText(\"批量删除\") }") &&
+            topBarSection.contains("label = \"批量删除\"") &&
                 topBarSection.contains("isBatchMode = true"),
             "批量删除应放进管理菜单，避免 MIUIX 顶栏操作区挤压标题"
         )
@@ -114,7 +113,7 @@ class WatchLaterRefreshContractTest {
                 "顶栏操作区不应直接放置批量删除文字按钮"
         )
         assertTrue(
-            topBarSection.contains("text = { AppText(\"全部听\") }") &&
+            topBarSection.contains("label = \"全部听\"") &&
                 topBarSection.contains("onPlayAllAudioClick?.invoke"),
             "全部听应放进管理菜单，避免 MIUIX 顶栏操作区挤压标题"
         )

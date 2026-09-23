@@ -19,14 +19,16 @@ class SpaceScreenStructureTest {
     }
 
     @Test
-    fun `title and tabs share one measured chrome while full viewport content supplies blur`() {
+    fun `pinned title chrome and scrolling tabs share full viewport backdrop`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt")
         val chrome = source.substringAfter("topBar = {").substringBefore(") { scaffoldPadding ->")
-        assertTrue(chrome.contains("SpacePinnedTabs("))
-        assertTrue(chrome.indexOf("AppTopBar(") < chrome.indexOf("SpacePinnedTabs("))
+        val content = source.indexOf("private fun SpaceContent(")
+        val tabs = source.indexOf("SpaceContentTabs(", content)
+        assertTrue(chrome.contains("AppTopBar("))
+        assertFalse(chrome.contains("SpaceContentTabs("))
+        assertTrue(content >= 0 && tabs > content)
         assertFalse(chrome.contains("spaceChromeSource?.modifier"))
         val capture = source.indexOf(".then(spaceChromeSource?.modifier ?: Modifier)")
-        val content = source.indexOf("SpaceContent(")
         assertTrue(capture >= 0 && capture < content)
         assertTrue(source.substring(capture, content).contains("globalWallpaperAwareBackground"))
         assertFalse(source.contains(".padding(top = chromeTopInset)"))
@@ -53,7 +55,7 @@ class SpaceScreenStructureTest {
         assertFalse(source.contains("forceLiquidChrome = true"))
         assertTrue(source.contains("SpaceSecondarySwitchRow("))
         assertTrue(source.contains("resolveSpacePrimaryTab(selectedMainTab)"))
-        assertTrue(source.contains("showTabRail = false"))
+        assertTrue(source.contains("dragSelectionEnabled = spec.dragSelectionEnabled"))
         assertTrue(source.contains("onFollowingClick"))
         assertTrue(source.contains("onFansClick"))
         assertTrue(source.contains("Intent.ACTION_SEND"))
@@ -198,9 +200,20 @@ class SpaceScreenStructureTest {
     fun `space media library uses card semantic corners`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt")
 
-        assertTrue(source.contains("AppShapes.borderedContainer(ContainerLevel.Card)"))
+        val cheeseCard = source
+            .substringAfter("private fun SpaceCheeseCard(")
+            .substringBefore("private fun SpaceCheeseSkeletonItem(")
+        val collectionCard = source
+            .substringAfter("private fun SpaceCollectionSummaryCard(")
+            .substringBefore("private fun SpaceCollectionWithPreviewCard(")
+        val collectionPreviewCard = source
+            .substringAfter("private fun SpaceCollectionWithPreviewCard(")
+            .substringBefore("private fun SpaceOfficialTag(")
+
+        assertTrue(cheeseCard.contains("shape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(collectionCard.contains("shape = AppShapes.container(ContainerLevel.Card)"))
+        assertTrue(collectionPreviewCard.contains("shape = AppShapes.container(ContainerLevel.Card)"))
         assertTrue(source.contains("AppShapes.containerCornerDp(ContainerLevel.Card)"))
-        assertFalse(source.contains("RoundedCornerShape("))
         assertFalse(source.contains("ContainerLevel.Dialog"))
         assertFalse(source.contains("sourceCornerDp = 12"))
         assertFalse(source.contains("sourceCornerDp = 14"))
@@ -217,9 +230,11 @@ class SpaceScreenStructureTest {
         assertTrue(source.contains(".focusRequester(searchFocusRequester)"))
         assertTrue(source.contains("SpaceSearchEntryChip("))
         assertTrue(source.contains("onSearchEntryClick = { viewModel.setSearchMode(true) }"))
-        // bordered Field shape avoids iOS continuous-corner + BorderStroke chamfer
-        assertTrue(source.contains("AppShapes.borderedContainer(ContainerLevel.Field)"))
-        assertTrue(source.contains("onPrimaryClickOverride = { onSpaceDynamicCommentClick(dynamic) }"))
+        // The search action uses the same capsule geometry as the dock above it.
+        assertTrue(source.contains("val shape = resolveSharedBottomBarCapsuleShape()"))
+        assertTrue(source.contains("shape = shape"))
+        assertTrue(source.contains("onPrimaryClickOverride = { dynamic -> onSpaceDynamicCommentClick(dynamic) }"))
+        assertTrue(source.contains("onCommentClick = { onDynamicDetailClick(dynamic.id_str) }"))
     }
 
     @Test
@@ -246,7 +261,7 @@ class SpaceScreenStructureTest {
         assertTrue(source.contains("userInfo.official.spliceTitle.ifBlank"))
         assertTrue(officialTag.contains("Icons.Outlined.Bolt"))
         assertTrue(officialTag.contains("Color(0xFFFFCC00)"))
-        assertTrue(officialTag.contains("fontSize = 12.sp"))
+        assertTrue(officialTag.contains("MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)"))
         assertFalse(officialTag.contains("maxLines = 1"))
         assertFalse(officialTag.contains("TextOverflow.Ellipsis"))
         assertFalse(officialTag.contains("widthIn("))

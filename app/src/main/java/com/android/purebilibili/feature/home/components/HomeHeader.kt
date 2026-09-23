@@ -2263,7 +2263,7 @@ fun HomeHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(pinnedChromeContentHeight)
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 1f))
+                    .background(AppSurfaceTokens.background())
             )
         }
         val shouldRenderContinuousSlab = effectiveContinuousSlabRenderMode != HomeTopChromeRenderMode.PLAIN ||
@@ -2298,7 +2298,7 @@ fun HomeHeader(
             ) {
                 if (isProgressiveFadeActive) {
                     TopSolidProgressiveFadeOverlay(
-                        surfaceColor = globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.background),
+                        surfaceColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.background()),
                         fadeHeight = continuousSlabHeight,
                     )
                 }

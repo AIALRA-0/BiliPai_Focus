@@ -111,7 +111,7 @@ class LiveBiliPaiVisualPolicyTest {
         assertEquals(12, spec.horizontalPaddingDp)
         assertEquals(8, spec.verticalPaddingDp)
         assertEquals(44, spec.heightDp)
-        assertEquals(33, spec.indicatorHeightDp)
+        assertEquals(39, spec.indicatorHeightDp)
         assertEquals(14, spec.labelFontSizeSp)
     }
 
@@ -151,6 +151,8 @@ class LiveBiliPaiVisualPolicyTest {
         assertEquals(48, playerControl.rowHeightDp)
         assertEquals(420, sheet.emoticonListMaxHeightDp)
         assertEquals(360, sheet.contributionListMaxHeightDp)
+        assertEquals(13, sheet.emoticonTabLabelFontSizeSp)
+        assertEquals(12, resolveLiveSuperChatVisualSpec().cardCornerRadiusDp)
     }
 
     @Test

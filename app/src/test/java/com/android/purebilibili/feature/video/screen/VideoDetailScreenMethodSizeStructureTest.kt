@@ -31,7 +31,14 @@ class VideoDetailScreenMethodSizeStructureTest {
         ).forEach { name ->
             val source = loadSource(name)
             assertFalse(source.contains("ViewModel"), "$name must remain ViewModel-free")
-            assertFalse(source.contains("collectAsStateWithLifecycle"), "$name must not collect business state")
+            if (name == "TabletVideoLayout.kt") {
+                // This is a user presentation preference, not business state from a ViewModel.
+                assertTrue(source.contains("SettingsManager"))
+                assertTrue(source.contains(".getTabletSecondaryDefaultTab(context)"))
+                assertEquals(1, source.split("collectAsStateWithLifecycle").size - 1)
+            } else {
+                assertFalse(source.contains("collectAsStateWithLifecycle"), "$name must not collect business state")
+            }
         }
     }
 

@@ -11,6 +11,7 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
+import com.android.purebilibili.feature.home.HomeVisualPalette
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,17 +142,12 @@ object WallpaperPaletteStore {
     }
 
     private fun createDefaultThemePalette(): WallpaperPalette {
+        val fallbackStops = HomeVisualPalette.WallpaperFallbackStops
         return WallpaperPalette(
-            topColor = Color(0xFF6750A4),
-            bottomColor = Color(0xFF7D5260),
-            dominantColor = Color(0xFF6750A4),
-            stops = listOf(
-                Color(0xFF6750A4),
-                Color(0xFF5B4D82),
-                Color(0xFF6B4A6A),
-                Color(0xFF7D5260),
-                Color(0xFF8C4F5A)
-            )
+            topColor = fallbackStops.first(),
+            bottomColor = fallbackStops.last(),
+            dominantColor = fallbackStops.first(),
+            stops = fallbackStops,
         )
     }
 

@@ -331,7 +331,7 @@ class VideoDetailScreenPolicyTest {
         // Visibility stays independent; reuse only switches floating liquid chrome.
         assertTrue(source.contains("shouldUseFloatingLiquidBottomInputBar("))
         assertTrue(source.contains("resolveBottomInputBarContentBottomPadding("))
-        assertTrue(source.contains("val bottomInputBarBackdrop = rememberLayerBackdrop()"))
+        assertTrue(source.contains("val bottomInputBarBackdrop = if (floatingLiquidBottomInputBar)"))
         assertTrue(source.contains(".layerBackdrop(bottomInputBarBackdrop)"))
         assertTrue(source.contains("backdrop = if (floatingLiquidBottomInputBar)"))
         assertTrue(source.contains("hazeState = hazeState"))
@@ -404,8 +404,8 @@ class VideoDetailScreenPolicyTest {
             "src/main/java/com/android/purebilibili/feature/video/screen/TabletCinemaLayout.kt"
         ).readText()
 
-        assertTrue(tabletSource.contains("transitionEnabled = LocalSharedTransitionEnabled.current"))
-        assertTrue(cinemaSource.contains("transitionEnabled = LocalSharedTransitionEnabled.current"))
+        assertTrue(tabletSource.contains("cardTransitionEnabled = transitionEnabled"))
+        assertTrue(cinemaSource.contains("cardTransitionEnabled = transitionEnabled"))
         assertTrue(tabletSource.contains("LocalVideoCardSharedElementSourceRoute provides"))
         assertTrue(cinemaSource.contains("LocalVideoCardSharedElementSourceRoute provides"))
     }

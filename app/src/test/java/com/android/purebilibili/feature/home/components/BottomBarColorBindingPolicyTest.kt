@@ -118,44 +118,35 @@ class BottomBarColorBindingPolicyTest {
     }
 
     @Test
-    fun `bottom bar selected icons use filled symbols`() {
+    fun `material selected icons use filled symbols and miuix tint stays silhouette aligned`() {
         val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
             .readText()
-        val selectedSymbols = listOf(
-            "House",
-            "Bell",
-            "PlayCircle",
-            "Clock",
-            "Person",
-            "Star",
-            "Video",
-            "Gearshape"
-        )
+        val materialResolver = source
+            .substringAfter("internal fun resolveMaterialBottomBarIcon(")
+            .substringBefore("internal fun resolveHomeNavigationBarIcon(")
+        val miuixResolver = File("src/main/java/com/android/purebilibili/feature/home/components/HomeNavigationIconPolicy.kt")
+            .readText()
 
-        assertTrue(
-            selectedSymbols.all { symbol ->
-                source.contains("{ AppIcon(CupertinoIcons.Filled.$symbol, contentDescription = null) }")
-            },
-            "Bottom bar selected icons should use filled symbols so the whole selected icon is tinted by the theme color."
-        )
+        val filledMaterialMappings = Regex("BottomNavItem\\.\\w+ -> if \\(selected\\) Icons\\.Filled\\.")
+            .findAll(materialResolver)
+            .count()
+        assertEquals(BottomNavItem.values().size, filledMaterialMappings)
+        assertTrue(miuixResolver.contains("HomeNavigationIconRole.HOME -> R.drawable.ms_home_fill_24"))
+        assertTrue(miuixResolver.contains("HomeNavigationIconRole.HISTORY -> R.drawable.ms_history_fill_24"))
+        assertTrue(source.contains("val idleIcon = resolveHomeNavigationBarIcon(item, selected = false)"))
+        assertTrue(source.contains("val activeIcon = resolveHomeNavigationBarIcon(item, selected = true)"))
+        assertTrue(source.contains("modifier = Modifier.alpha(clampedSelectedAlpha)"))
     }
 
     @Test
     fun `watch later bottom bar icons use clock semantics`() {
         val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
             .readText()
-        val watchLaterBlock = source
-            .substringAfter("WATCHLATER(")
-            .substringBefore("    ),")
-
-        assertTrue(watchLaterBlock.contains("CupertinoIcons.Filled.Clock"))
-        assertTrue(watchLaterBlock.contains("CupertinoIcons.Outlined.Clock"))
-        assertFalse(watchLaterBlock.contains("Bookmark"))
-        assertTrue(
-            source.contains(
-                "BottomNavItem.WATCHLATER -> if (selected) Icons.Filled.WatchLater else Icons.Outlined.WatchLater"
-            )
-        )
+        val miuixSource = File("src/main/java/com/android/purebilibili/feature/home/components/HomeNavigationIconPolicy.kt")
+            .readText()
+        assertTrue(miuixSource.contains("HomeNavigationIconRole.WATCH_LATER -> MiuixIcons.Light.Stopwatch"))
+        assertTrue(source.contains("BottomNavItem.WATCHLATER -> if (selected) Icons.Filled.WatchLater else Icons.Outlined.WatchLater"))
+        assertFalse(miuixSource.contains("HomeNavigationIconRole.WATCH_LATER -> MiuixIcons.Light.Favorites"))
     }
 
     @Test

@@ -95,7 +95,9 @@ internal const val MIUIX_VIDEO_CARD_GESTURE_SHADOW_DP = 12f
 internal const val MIUIX_VIDEO_CARD_FLOATING_CORNER_DP = 28f
 
 internal fun resolveMiuixVideoCardGesturePoseWeight(morphProgress: Float): Float {
-    val pull = (1f - morphProgress.coerceIn(0f, 1f)).coerceIn(0f, 1f)
+    val morph = morphProgress.coerceIn(0f, 1f)
+    if (morph == 0f || morph == 1f) return 0f
+    val pull = 1f - morph
     return sin(PI.toFloat() * pull)
 }
 

@@ -132,13 +132,17 @@ class HomeTokenAdoptionTest {
         val source = locate(
             "src/main/java/com/android/purebilibili/feature/home/components/BottomBarLiquidSegmentedControl.kt"
         )?.readText() ?: error("BottomBarLiquidSegmentedControl source not found")
+        val renderer = locate(
+            "src/main/java/com/android/purebilibili/feature/home/components/BottomBarFloatingSegmentedControl.kt"
+        )?.readText() ?: error("BottomBarFloatingSegmentedControl source not found")
 
         assertTrue(
-            source.contains("AppShapes.container(ContainerLevel.Pill)"),
+            source.contains("BottomBarFloatingSegmentedControl(") &&
+                renderer.contains("shape = resolveSharedBottomBarCapsuleShape()"),
             "底栏分段控件外层容器圆角应走 AppShapes Pill token"
         )
         assertFalse(
-            source.contains("RoundedCornerShape(height / 2)"),
+            renderer.contains("RoundedCornerShape(height / 2)"),
             "底栏分段控件外层容器不能继续按当前高度写死半径"
         )
     }

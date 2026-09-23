@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.feature.home.HomeVisualPalette
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -57,19 +58,19 @@ import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 
 private val iosIndicatorSpecular: Highlight = Highlight(
-    width = 1.dp,
+    width = AppSurfaceTokens.OutlineWidth,
     alpha = 1f,
     style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
+        color = HomeVisualPalette.GlassLight.copy(alpha = 0.12f),
+        innerBlurRadius = FloatingDockChromeSpec.SpecularInnerBlurRadius,
         primaryLight = LightSource(
             position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = Color.White,
+            color = HomeVisualPalette.GlassLight,
             intensity = 1f,
         ),
         secondaryLight = LightSource(
             position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = Color.White,
+            color = HomeVisualPalette.GlassLight,
             intensity = 0.4f,
         ),
         dualPeak = true,
@@ -168,8 +169,8 @@ internal fun Modifier.biliPaiFloatingDockShell(
         .dropShadow(
             shape = shape,
             shadow = Shadow(
-                radius = 10.dp,
-                color = Color.Black,
+                radius = FloatingDockChromeSpec.DockShadowRadius,
+                color = HomeVisualPalette.GlassDark,
                 alpha = if (isDark) 0.2f else 0.1f,
             ),
         )
@@ -177,7 +178,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
     if (enabled && backdrop != null) {
         val baseHighlight = rememberBiliPaiGravityHighlight(extraDegrees = -45f)
         val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
-        val readabilityScrimColor = if (isDark) Color.Black else Color.White
+        val readabilityScrimColor = if (isDark) HomeVisualPalette.GlassDark else HomeVisualPalette.GlassLight
         val resolvedLensIntensity = lensIntensity.coerceIn(0f, 1f) *
             liquidGlassTuning.contentDistortionScale.coerceIn(0f, 1.8f)
         val shouldDrawLens = drawLens && resolvedLensIntensity > 0.001f
@@ -215,7 +216,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
         val layerBlock = remember(pressProgress) {
             val block: GraphicsLayerScope.() -> Unit = {
                 val width = size.width.coerceAtLeast(1f)
-                val s = lerp(1f, 1f + 16.dp.toPx() / width, pressProgress)
+                val s = lerp(1f, 1f + FloatingDockChromeSpec.PressScaleTravel.toPx() / width, pressProgress)
                 scaleX = s
                 scaleY = s
             }
@@ -258,7 +259,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
                 )
                 .background(blurSurfaceColor, shape)
         } else if (backdrop != null) {
-            val blurRadiusPx = with(density) { 25.dp.toPx() }
+            val blurRadiusPx = with(density) { FloatingDockChromeSpec.ShellBlurRadius.toPx() }
             val blurSurfaceColor = containerColor.copy(alpha = 0.65f)
             val onDrawBlurSurface = remember(blurSurfaceColor) {
                 val block: DrawScope.() -> Unit = {
@@ -296,7 +297,7 @@ internal fun Modifier.biliPaiFloatingDockCaptureSurface(
     val isDark = isSystemInDarkTheme()
     val density = LocalDensity.current
     val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
-    val readabilityScrimColor = if (isDark) Color.Black else Color.White
+    val readabilityScrimColor = if (isDark) HomeVisualPalette.GlassDark else HomeVisualPalette.GlassLight
     val distortionScale = liquidGlassTuning.contentDistortionScale.coerceIn(0f, 1.8f)
     val shouldDrawLens = distortionScale > 0.001f
     val blurRadiusPx = with(density) { liquidGlassTuning.backdropBlurRadius.dp.toPx() }
@@ -411,10 +412,10 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                             effects = {
                                 val progress = pressProgress
                                 lens(
-                                    refractionHeight = 10.dp.toPx() * progress *
+                                    refractionHeight = FloatingDockChromeSpec.IndicatorRefractionHeight.toPx() * progress *
                                         liquidGlassTuning.indicatorLensBoost *
                                         liquidGlassTuning.contentDistortionScale,
-                                    refractionAmount = 14.dp.toPx() * progress *
+                                    refractionAmount = FloatingDockChromeSpec.IndicatorRefractionAmount.toPx() * progress *
                                         liquidGlassTuning.indicatorEdgeWarpBoost *
                                         liquidGlassTuning.contentDistortionScale,
                                     depthEffect = true,
@@ -435,19 +436,19 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                                 val progress = pressProgress
                                 drawRect(
                                     color = if (!isDark) {
-                                        Color.Black.copy(alpha = 0.1f)
+                                        HomeVisualPalette.GlassDark.copy(alpha = 0.1f)
                                     } else {
-                                        Color.White.copy(alpha = 0.1f)
+                                        HomeVisualPalette.GlassLight.copy(alpha = 0.1f)
                                     },
                                     alpha = 1f - progress,
                                 )
-                                drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                                drawRect(HomeVisualPalette.GlassDark.copy(alpha = 0.03f * progress))
                             },
                         )
                         .innerShadow(shape = shape) {
                             InnerShadow(
-                                radius = 8.dp * pressProgress,
-                                color = Color.Black.copy(alpha = 0.15f),
+                                radius = FloatingDockChromeSpec.PressInnerShadowRadius * pressProgress,
+                                color = HomeVisualPalette.GlassDark.copy(alpha = 0.15f),
                                 alpha = pressProgress,
                             )
                         }
@@ -462,7 +463,11 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                             if (!isDark) {
                                 Modifier.dropShadow(
                                     shape = shape,
-                                    shadow = Shadow(radius = 3.dp, color = Color.Black, alpha = 0.08f)
+                                    shadow = Shadow(
+                                        radius = FloatingDockChromeSpec.SolidFallbackShadowRadius,
+                                        color = HomeVisualPalette.GlassDark,
+                                        alpha = 0.08f,
+                                    )
                                 )
                             } else Modifier
                         )

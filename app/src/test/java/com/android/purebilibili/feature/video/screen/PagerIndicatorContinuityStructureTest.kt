@@ -31,7 +31,8 @@ class PagerIndicatorContinuityStructureTest {
         )
         val panelSource = source.substringAfter("private fun LivePrimaryInteractionPanel(")
 
-        assertEquals(1, Regex("pagerState\\.animateScrollToPage").findAll(panelSource).count())
+        assertEquals(1, Regex("animatePagerSelection\\(pagerState,").findAll(panelSource).count())
+        assertTrue(!panelSource.contains("pagerState.animateScrollToPage"))
     }
 
     private fun loadSource(path: String): String {

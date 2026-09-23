@@ -49,8 +49,9 @@ class HomeChromeLiquidSurfaceStructureTest {
         )
         assertTrue(
             "cold start must wait until the shared layer backdrop has recorded before consumers sample it",
-            homeScreenSource.contains("val shouldCaptureHomeHaze = isLiquidGlassEnabled ||") &&
-                homeScreenSource.contains("val shouldCaptureHomeChromeBackdrop = isLiquidGlassEnabled ||") &&
+            homeScreenSource.contains("val shouldCaptureHomeChromeBackdrop = isLiquidGlassEnabled ||") &&
+                homeScreenSource.contains("val homeMiuixBackdropSource = if (shouldCaptureHomeChromeBackdrop)") &&
+                homeScreenSource.contains("val shouldCaptureHomeHaze = if (homeMiuixBackdropSource != null)") &&
                 homeScreenSource.contains("if (shouldCaptureHomeChromeBackdrop)") &&
                 homeScreenSource.contains("chromeContentReady && it.isReady") &&
                 homeScreenSource.contains("val readyHomeMiuixBackdrop") &&
@@ -89,7 +90,8 @@ class HomeChromeLiquidSurfaceStructureTest {
         )
         assertTrue(
             "home header should only draw a matched dock for presentations that need an outer track",
-            topHeaderSource.contains("val topTabDockChromeRenderMode = resolveHomeTopTabDockChromeRenderMode(") &&
+            topHeaderSource.contains("val resolvedTopTabDockChromeRenderMode = resolveHomeTopTabDockChromeRenderMode(") &&
+                topHeaderSource.contains("val topTabDockChromeRenderMode = if (") &&
                 topHeaderSource.contains("val topTabDockHazeState = hazeState.takeIf") &&
                 topHeaderSource.contains("shouldApplyHomeTopTabDockHaze(") &&
                 topHeaderSource.contains("localTabChromeRenderMode = unifiedLocalTabChromeRenderMode") &&

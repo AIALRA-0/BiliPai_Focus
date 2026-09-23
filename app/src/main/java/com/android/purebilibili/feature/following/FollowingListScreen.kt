@@ -1275,7 +1275,7 @@ private fun FollowingUserItem(
                         vipStatus = user.vip?.vipStatus,
                     ),
                     modifier = Modifier.align(Alignment.BottomEnd),
-                    badgeSize = 14.dp,
+                    badgeSize = resolveFollowingUserAvatarBadgeSize(),
                 )
             }
         }

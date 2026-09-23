@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui.common
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VerticalPriorityPagerGestureTest {
@@ -215,11 +216,10 @@ class VerticalPriorityPagerGestureTest {
     }
 
     @Test
-    fun `other paged vertical lists use the shared direction gate`() {
+    fun `gesture driven paged lists use the shared direction gate`() {
         val expectedGateCounts = mapOf(
             "feature/search/SearchScreen.kt" to 1,
             "feature/dynamic/DynamicScreen.kt" to 2,
-            "feature/list/CommonListScreen.kt" to 1,
             "feature/live/LiveAreaScreen.kt" to 1,
             "feature/bangumi/ui/player/BangumiPlayerContent.kt" to 1,
             "feature/video/screen/TabletVideoLayout.kt" to 1,
@@ -237,6 +237,15 @@ class VerticalPriorityPagerGestureTest {
                 "$relativePath should disable the pager's competing built-in drag detector",
             )
         }
+
+        val commonList = File("src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt")
+            .readText()
+        val personalListPager = commonList
+            .substringAfter("Personal-list pages use explicit controls for horizontal navigation.")
+            .substringAfter("HorizontalPager(")
+            .substringBefore(") { page ->")
+        assertTrue(personalListPager.contains("userScrollEnabled = false"))
+        assertFalse(personalListPager.contains("verticalPriorityHorizontalPagerSwipe"))
     }
 
     private fun String.countOccurrences(value: String): Int = split(value).size - 1

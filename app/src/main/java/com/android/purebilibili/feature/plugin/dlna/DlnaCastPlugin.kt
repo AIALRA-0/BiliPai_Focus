@@ -52,7 +52,7 @@ class DlnaCastPlugin : CastPluginApi {
         )
     )
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 
     private val _routes = MutableStateFlow<List<CastPluginRoute>>(emptyList())
     override val routes: StateFlow<List<CastPluginRoute>> = _routes.asStateFlow()

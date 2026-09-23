@@ -96,7 +96,7 @@ class ContentLoadingSkeletonStructureTest {
 
         assertTrue(category.contains("ContentVideoGridSkeletonFixedColumns("))
         assertTrue(partition.contains("ContentMediaListSkeleton("))
-        assertTrue(watchLater.contains("ContentMediaListSkeleton("))
+        assertTrue(watchLater.contains("PersonalMediaCardSkeleton("))
         assertTrue(liveSearch.contains("ContentVideoGridSkeletonFixedColumns("))
         assertTrue(liveSearch.contains("ContentMediaListSkeleton("))
     }

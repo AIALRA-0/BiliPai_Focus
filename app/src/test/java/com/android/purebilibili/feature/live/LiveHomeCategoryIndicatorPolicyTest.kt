@@ -49,11 +49,11 @@ class LiveHomeCategoryIndicatorPolicyTest {
         )
 
         assertEquals(44, ios.heightDp)
-        assertEquals(33, ios.indicatorHeightDp)
+        assertEquals(39, ios.indicatorHeightDp)
         assertEquals(56, md3.heightDp)
-        assertEquals(42, md3.indicatorHeightDp)
+        assertEquals(49, md3.indicatorHeightDp)
         assertEquals(48, miuix.heightDp)
-        assertEquals(36, miuix.indicatorHeightDp)
+        assertEquals(42, miuix.indicatorHeightDp)
         listOf(ios, md3, miuix).forEach { spec ->
             assertEquals(82, spec.itemWidthDp)
             assertEquals(14, spec.labelFontSizeSp)
@@ -71,7 +71,7 @@ class LiveHomeCategoryIndicatorPolicyTest {
 
         assertEquals(112, spec.itemWidthDp)
         assertEquals(56, spec.heightDp)
-        assertEquals(42, spec.indicatorHeightDp)
+        assertEquals(49, spec.indicatorHeightDp)
         assertEquals(16, spec.labelFontSizeSp)
         assertEquals(4, spec.containerHorizontalPaddingDp)
         assertEquals(4, spec.containerVerticalPaddingDp)

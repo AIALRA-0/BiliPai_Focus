@@ -20,70 +20,59 @@ class BiliPaiNavDisplayHostNativeTransitionStructureTest {
     }
 
     @Test
-    fun hostForwardsPredictiveBackProgressAndCancellationToNativeVideoTransition() {
+    fun hostRoutesOnlyCancelledVideoBackGesturesToPlayerRecovery() {
         val source = loadSource()
+        val appNavigation = loadAppNavigationSource()
 
-        assertTrue(source.contains("onNativeVideoBackProgress:"))
-        assertTrue(source.contains("NavigationEventTransitionState.InProgress"))
-        assertTrue(source.contains("latestEvent?.progress"))
-        assertTrue(source.contains("onNativeVideoBackCancelled("))
+        assertTrue(source.contains("videoCardTransitionProgress.settleStateOrNull()"))
+        assertTrue(source.contains("VideoCardTransitionSettleState.CancelRestore"))
+        assertTrue(source.contains("previousSettleState != VideoCardTransitionSettleState.CancelRestore"))
+        assertTrue(source.contains("shouldRecoverVideoPlayerAfterBackCancellation("))
+        assertTrue(source.contains("latestPredictiveBackCancelled(currentKey, currentBackTarget)"))
+        assertTrue(appNavigation.contains("onPredictiveBackCancelled = { _, _ ->"))
+        assertTrue(appNavigation.contains("predictiveBackCancelRecoveryGeneration += 1"))
+        assertTrue(
+            Regex(
+                """predictiveBackCancelRecoveryGeneration\.takeIf\s*\{\s*navigation3BackStack\.lastOrNull\(\)\s*==\s*videoKey""",
+            ).containsMatchIn(appNavigation),
+        )
     }
 
     @Test
-    fun scopedEntryContentRefreshesItsExposureProviderBeforePredictiveBack() {
+    fun hostSharesOneMiuixProgressDriverAcrossVideoTransitions() {
         val source = loadSource()
-        val scopedContentRememberKeys = source
-            .substringAfter("val scopedContent:")
-            .substringAfter("remember(")
-            .substringBefore(") {")
 
-        assertTrue(scopedContentRememberKeys.contains("videoCardExposureProvider"))
-        // sourceMetadata 经 rememberUpdatedState 保持最新且不触发 scopedContent 重建，
-        // 不再作为 remember key（避免预测返回期间 entry lambda 重建打断 seek）。
-        assertTrue(source.contains("rememberUpdatedState(sourceMetadata)"))
+        assertTrue(source.contains("remember(sourceMetadata.sourceKey) { MiuixVideoCardTransitionProgress() }"))
+        assertTrue(source.contains("videoCardTransitionProgress.observe("))
+        assertTrue(source.contains("videoCardTransitionProgress.clear()"))
+        assertTrue(source.contains("videoCardClock.bindNavigationDriver("))
     }
 
     @Test
-    fun predictiveCommitMarksCardReturnBeforeWaitingForNativePop() {
+    fun completedBackPreparesSharedReturnBeforePoppingNavigation() {
         val performBackSource = loadSource()
-            .substringAfter("val performBack:")
-            .substringBefore("val latestProgrammaticBackAction")
-        val prepareIndex = performBackSource.indexOf("onPrepareVideoCardSharedReturn()")
-        val nativePopWaitIndex = performBackSource.indexOf("predictiveBlurFadeJob?.join()")
+            .substringAfter("val performBack = remember(")
+            .substringBefore("DisposableEffect(programmaticBackDispatcher, performBack)")
+        val prepareIndex = performBackSource.indexOf("latestPrepareReturn()")
+        val popIndex = performBackSource.indexOf("latestOnBack()")
 
         assertTrue(prepareIndex >= 0)
-        assertTrue(nativePopWaitIndex >= 0)
-        assertTrue(prepareIndex < nativePopWaitIndex)
-        assertTrue(performBackSource.countOccurrences("onPrepareVideoCardSharedReturn()") == 1)
+        assertTrue(popIndex >= 0)
+        assertTrue(prepareIndex < popIndex)
+        assertTrue(performBackSource.countOccurrences("latestPrepareReturn()") == 1)
     }
 
     @Test
-    fun predictiveCancelRestoresLivePlayerBeforeDepthAnimation() {
-        val cancelSource = loadSource()
-            .substringAfter("onBackCancelled = {")
-            .substringBefore("commitTransition()")
-        val playerRecoveryIndex = cancelSource.indexOf(
-            "onNativeVideoBackCancelled(currentBackKey, targetBackKey)"
-        )
-        val depthRestoreIndex = cancelSource.indexOf("videoCardClock.animateFallbackTo(")
-        val restoreFlagIndex = cancelSource.indexOf("videoCardClock.beginGestureRestore()")
-        val restoreLaunchIndex = cancelSource.indexOf(
-            "navigationScope.launch",
-            startIndex = restoreFlagIndex,
-        )
+    fun predictiveCancelRecoveryIsSeparateFromCommittedReturn() {
+        val source = loadSource()
+        val cancelEdge = source
+            .substringAfter("if (\n                settle == VideoCardTransitionSettleState.CancelRestore")
+            .substringBefore("previousSettleState = settle")
 
-        assertTrue(playerRecoveryIndex >= 0)
-        assertTrue(depthRestoreIndex >= 0)
-        assertTrue(playerRecoveryIndex < depthRestoreIndex)
-        assertTrue(restoreFlagIndex >= 0)
-        assertTrue(restoreLaunchIndex >= 0)
-        assertTrue(restoreFlagIndex < playerRecoveryIndex)
-        assertTrue(restoreFlagIndex < restoreLaunchIndex)
-        assertTrue(
-            cancelSource.countOccurrences(
-                "onNativeVideoBackCancelled(currentBackKey, targetBackKey)"
-            ) == 1
-        )
+        assertTrue(cancelEdge.contains("previousSettleState != VideoCardTransitionSettleState.CancelRestore"))
+        assertTrue(cancelEdge.contains("shouldRecoverVideoPlayerAfterBackCancellation("))
+        assertTrue(cancelEdge.contains("latestPredictiveBackCancelled(currentKey, currentBackTarget)"))
+        assertTrue(source.contains("VideoCardTransitionSettleState.AutoReturn"))
     }
 
     @Test
@@ -102,6 +91,13 @@ class BiliPaiNavDisplayHostNativeTransitionStructureTest {
         return listOf(
             File("app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt"),
             File("src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt")
+        ).first { it.exists() }.readText()
+    }
+
+    private fun loadAppNavigationSource(): String {
+        return listOf(
+            File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),
+            File("src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
         ).first { it.exists() }.readText()
     }
 }

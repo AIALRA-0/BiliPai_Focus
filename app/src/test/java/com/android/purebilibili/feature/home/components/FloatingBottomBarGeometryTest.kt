@@ -436,7 +436,7 @@ class FloatingBottomBarGeometryTest {
     fun `narrow fitted indicator still grows beyond the dock while dragging`() {
         val fittedHeight = resolveFloatingDockIndicatorHeightDp(
             requestedHeightDp = 39f,
-            tabWidthDp = 42f,
+            tabWidthDp = 30f,
         )
         val geometry = com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry(
             dockHeightDp = 44f,

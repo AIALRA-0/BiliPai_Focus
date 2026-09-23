@@ -18,7 +18,7 @@ class HomePopularSubCategorySegmentedControlStructureTest {
         assertTrue(source.contains("dragSelectionEnabled = labels.size > 1"))
         assertTrue(source.contains("liquidGlassEffectsEnabled = true"))
         assertTrue(source.contains("tapPressRefractionEnabled = true"))
-        assertTrue(source.contains("miuixBackdrop = popularBackdrop"))
+        assertTrue(source.contains("miuixBackdrop = null"))
         assertTrue(source.contains("preferInlineContentStyle = true"))
         assertTrue(source.contains("height = AppSpacingTokens.TripleExtraLarge"))
         assertTrue(source.contains("roundMatchedLiquidIndicatorHeightDp("))

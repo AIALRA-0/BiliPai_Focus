@@ -20,7 +20,7 @@ class NavigationUiPolicyTest {
     }
 
     @Test
-    fun mediumTabletUsesSidebarWhenEnabled() {
+    fun mediumTabletKeepsBottomNavigationEvenWhenSidebarEnabled() {
         val windowSizeClass = WindowSizeClass(
             widthSizeClass = WindowWidthSizeClass.Medium,
             heightSizeClass = WindowHeightSizeClass.Medium,
@@ -28,7 +28,7 @@ class NavigationUiPolicyTest {
             heightDp = 1000.dp
         )
 
-        assertTrue(shouldUseSidebarNavigationForLayout(windowSizeClass, tabletUseSidebar = true))
+        assertFalse(shouldUseSidebarNavigationForLayout(windowSizeClass, tabletUseSidebar = true))
     }
 
     @Test

@@ -170,8 +170,9 @@ class BottomBarMiuixPolicyTest {
             "app/src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt"
         )
 
-        assertTrue(floating.contains("val tabsBackdrop = rememberLayerBackdrop()"))
-        assertTrue(floating.contains(".layerBackdrop(tabsBackdrop)"))
+        assertTrue(floating.contains("val tabsBackdropSource = if (isLiquidGlassMode) rememberChromeBackdropSource() else null"))
+        assertTrue(floating.contains("val tabsBackdrop = tabsBackdropSource?.backdrop"))
+        assertTrue(floating.contains(".then(tabsBackdropSource?.modifier ?: Modifier)"))
         assertTrue(floating.contains("rememberCombinedBackdrop(backdrop, tabsBackdrop)"))
         assertTrue(floating.contains("liquidGlassTuning.backdropBlurRadius.dp.toPx()"))
         assertTrue(floating.contains("padding = maxOf("))
@@ -207,7 +208,7 @@ class BottomBarMiuixPolicyTest {
             .substringBefore("internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(")
 
         assertTrue(floating.contains("rememberCombinedBackdrop(backdrop, tabsBackdrop)"))
-        assertTrue(floating.contains(".layerBackdrop(tabsBackdrop)"))
+        assertTrue(floating.contains(".then(tabsBackdropSource?.modifier ?: Modifier)"))
         assertTrue(floating.contains("FloatingBottomBarIndicatorHeight: Dp = 56.dp"))
         assertTrue(renderer.contains("FloatingBottomBar("))
         assertTrue(renderer.contains("indicatorHeight = resolveBiliPaiBottomBarIndicatorHeight(dockHeight)"))
@@ -221,7 +222,9 @@ class BottomBarMiuixPolicyTest {
     fun `android native ordinary blur does not redraw raw backdrop over haze`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
 
-        assertTrue(source.contains("if (backdrop != null && !useHazeBlur)"))
+        assertTrue(source.contains("val hasBackdrop = backdrop != null && (renderGlassEffects || blurEnabled)"))
+        assertTrue(source.contains("val hasHazeBlur = !hasBackdrop && useHazeBlur && hazeState != null"))
+        assertTrue(source.contains("if (hasHazeBlur)"))
         assertTrue(source.contains("Modifier.unifiedBlur("))
     }
 

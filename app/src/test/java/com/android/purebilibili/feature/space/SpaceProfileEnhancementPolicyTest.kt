@@ -172,6 +172,7 @@ class SpaceProfileEnhancementPolicyTest {
                 SpaceMainTab.HOME,
                 SpaceMainTab.DYNAMIC,
                 SpaceMainTab.CONTRIBUTION,
+                SpaceMainTab.FAVORITE,
             ),
             mainTabs.map { it.tab }
         )

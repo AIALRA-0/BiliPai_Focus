@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.home.components.cards
 
 import android.graphics.Bitmap
-import android.graphics.Color as AndroidColor
 import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.Color
@@ -84,9 +83,16 @@ object VideoCardCoverColorStore {
     ): Palette.Swatch? {
         if (swatches.isEmpty()) return null
         val useful = swatches.filterNot { swatch ->
-            val hsv = FloatArray(3)
-            AndroidColor.colorToHSV(swatch.rgb, hsv)
-            hsv[1] < 0.08f || hsv[2] < 0.08f || hsv[2] > 0.96f
+            val rgb = swatch.rgb
+            val red = (rgb ushr 16) and 0xFF
+            val green = (rgb ushr 8) and 0xFF
+            val blue = rgb and 0xFF
+            val brightest = maxOf(red, green, blue)
+            val darkest = minOf(red, green, blue)
+            val saturation = if (brightest == 0) 0f else
+                (brightest - darkest).toFloat() / brightest
+            val brightness = brightest / 255f
+            saturation < 0.08f || brightness < 0.08f || brightness > 0.96f
         }
         return (useful.ifEmpty { swatches }).maxByOrNull { it.population }
     }

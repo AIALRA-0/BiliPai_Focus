@@ -1298,7 +1298,7 @@ fun DynamicScreen(
                         }
                     },
                     modifier = Modifier.heightIn(min = 48.dp),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(DynamicScreenShapePolicy.refreshDividerLocatorButtonCornerRadiusDp.dp),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     AppText("定位上次刷新")
@@ -1868,7 +1868,7 @@ private fun OldContentDivider(label: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Small),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(DynamicScreenShapePolicy.oldContentDividerCornerRadiusDp.dp),
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         tonalElevation = 1.dp,

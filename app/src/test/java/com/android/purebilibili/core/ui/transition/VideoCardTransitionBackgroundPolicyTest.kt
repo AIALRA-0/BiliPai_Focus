@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 
 class VideoCardTransitionBackgroundPolicyTest {
     @Test
-    fun backgroundScalesSmoothlyWithCornerRadiiDuringTransition() {
+    fun backgroundGeometryStaysStableWhileBlurAndScrimTrackTransition() {
         for (phase in VideoCardTransitionBackgroundPhase.entries) {
             for (progress in listOf(0f, 0.25f, 0.5f, 1f)) {
                 for (restoring in listOf(false, true)) {
@@ -22,17 +22,13 @@ class VideoCardTransitionBackgroundPolicyTest {
                         isGestureRestoreInProgress = restoring,
                         sdkInt = 35,
                     )
-                    if (phase == VideoCardTransitionBackgroundPhase.IDLE || progress == 0f) {
-                        assertEquals(1f, frame.contentScale, 0.0001f)
-                        assertEquals(0f, frame.cornerRadiusPx, 0.0001f)
-                        assertFalse(shouldDrawVideoCardTransitionScaleGapFill(frame.contentScale))
-                    } else {
-                        val expectedScale = 1f - 0.04f * progress
-                        val expectedCorner = 24f * progress
-                        assertEquals(expectedScale, frame.contentScale, 0.0001f)
-                        assertEquals(expectedCorner, frame.cornerRadiusPx, 0.0001f)
-                        assertTrue(shouldDrawVideoCardTransitionScaleGapFill(frame.contentScale))
-                        assertTrue(frame.shadowElevationPx > 0f)
+                    assertEquals(1f, frame.contentScale, 0.0001f)
+                    assertEquals(0f, frame.cornerRadiusPx, 0.0001f)
+                    assertEquals(0f, frame.shadowElevationPx, 0.0001f)
+                    assertFalse(shouldDrawVideoCardTransitionScaleGapFill(frame.contentScale))
+                    if (phase != VideoCardTransitionBackgroundPhase.IDLE && progress > 0f) {
+                        assertTrue(frame.blurRadiusPx > 0f)
+                        assertTrue(frame.scrimAlpha > 0f)
                     }
                 }
             }
@@ -365,7 +361,7 @@ class VideoCardTransitionBackgroundPolicyTest {
             overlayHeight = 200f,
         )
         assertEquals(0.5f, overlayPivot.x, 0.0001f)
-        assertEquals(5f, overlayPivot.y, 0.0001f)
+        assertEquals(0f, overlayPivot.y, 0.0001f)
     }
 
     @Test
@@ -637,8 +633,8 @@ class VideoCardTransitionBackgroundPolicyTest {
         // 12dp × 2.75 ≈ 33px；12dp × 1.5 = 18px
         assertEquals(33f, phone.blurRadiusPx, 0.51f)
         assertEquals(18f, tablet.blurRadiusPx, 0.51f)
-        assertEquals(66f, phone.cornerRadiusPx, 0.01f)
-        assertEquals(36f, tablet.cornerRadiusPx, 0.01f)
+        assertEquals(0f, phone.cornerRadiusPx, 0.01f)
+        assertEquals(0f, tablet.cornerRadiusPx, 0.01f)
         assertEquals(
             33f,
             resolveVideoCardTransitionMaxBlurRadiusPx(MotionTier.Normal, density = 2.75f),
@@ -724,14 +720,14 @@ class VideoCardTransitionBackgroundPolicyTest {
     }
 
     @Test
-    fun backgroundScalePivotsAroundTheScreenCenter() {
+    fun backgroundUsesTopCenterPivotForStableFullScreenGeometry() {
         val pivot = resolveVideoCardTransitionBackgroundScalePivot(
             sourceBounds = Rect(100f, 200f, 300f, 400f),
             canvasWidth = 1000f,
             canvasHeight = 2000f,
         )
         assertEquals(0.5f, pivot.x, 0.0001f)
-        assertEquals(0.5f, pivot.y, 0.0001f)
+        assertEquals(0f, pivot.y, 0.0001f)
         assertEquals(
             pivot,
             resolveVideoCardTransitionBackgroundScalePivot(
@@ -741,7 +737,7 @@ class VideoCardTransitionBackgroundPolicyTest {
             ),
         )
         assertEquals(
-            Offset(500f, 1000f),
+            Offset(500f, 0f),
             resolveVideoCardTransitionBackgroundScalePivotOffset(
                 sourceBounds = Rect(100f, 200f, 300f, 400f),
                 canvasSize = Size(1000f, 2000f),
@@ -750,9 +746,9 @@ class VideoCardTransitionBackgroundPolicyTest {
     }
 
     @Test
-    fun backgroundScaleFallsBackToScreenCenterWithoutCardBounds() {
+    fun backgroundPivotDoesNotDependOnCardBounds() {
         assertEquals(
-            Offset(0.5f, 0.5f),
+            Offset(0.5f, 0f),
             resolveVideoCardTransitionBackgroundScalePivot(
                 sourceBounds = null,
                 canvasWidth = 1080f,
@@ -760,7 +756,7 @@ class VideoCardTransitionBackgroundPolicyTest {
             ),
         )
         assertEquals(
-            Offset(0.5f, 0.5f),
+            Offset(0.5f, 0f),
             resolveVideoCardTransitionBackgroundScalePivot(
                 sourceBounds = Rect(10f, 10f, 10.5f, 10.5f),
                 canvasWidth = 1080f,
@@ -768,7 +764,7 @@ class VideoCardTransitionBackgroundPolicyTest {
             ),
         )
         assertEquals(
-            Offset(540f, 1200f),
+            Offset(540f, 0f),
             resolveVideoCardTransitionBackgroundScalePivotOffset(
                 sourceBounds = null,
                 canvasSize = Size(1080f, 2400f),
@@ -860,7 +856,7 @@ class VideoCardTransitionBackgroundPolicyTest {
         assertEquals(2f, early.blurRadiusPx, 0.01f)
         assertTrue(early.scrimAlpha > 0f)
         assertTrue(early.blurRadiusPx > 0f)
-        assertEquals(4.8f, early.cornerRadiusPx, 0.01f)
+        assertEquals(0f, early.cornerRadiusPx, 0.01f)
     }
 
     @Test
@@ -1109,8 +1105,8 @@ class VideoCardTransitionBackgroundPolicyTest {
 
         assertTrue(frame.blurRadiusPx > 0f)
         assertTrue(frame.scrimAlpha > 0f)
-        assertEquals(0.99f, frame.contentScale, 0.0001f)
-        assertEquals(6f, frame.cornerRadiusPx, 0.0001f)
+        assertEquals(1f, frame.contentScale, 0.0001f)
+        assertEquals(0f, frame.cornerRadiusPx, 0.0001f)
     }
 
     @Test

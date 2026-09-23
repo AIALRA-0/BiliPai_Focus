@@ -508,6 +508,7 @@ fun GlassVideoCard(
                             HorizontalVideoStatRow(
                                 playText = FormatUtils.formatStat(video.stat.view.toLong()),
                                 danmakuText = FormatUtils.formatStat(video.stat.danmaku.toLong()),
+                                textStyle = contentTypography.statistic,
                             )
                         }
                     }

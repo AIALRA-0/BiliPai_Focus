@@ -192,13 +192,14 @@ internal fun resolveTopTabDockEndInsetDp(
 /**
  * 顶部 Tab 的视觉背景保持 30dp 高；36dp 行高留出上下各 3dp 的呼吸空间。
  */
+@Composable
 internal fun resolveTopTabIndicatorShape(
     showIcon: Boolean,
     showText: Boolean,
     isMiuixNonGlass: Boolean = false,
 ): Shape = when {
-    isMiuixNonGlass -> RoundedCornerShape(8.dp)
-    showIcon && showText -> RoundedCornerShape(12.dp)
+    isMiuixNonGlass -> AppShapes.container(ContainerLevel.Field)
+    showIcon && showText -> AppShapes.container(ContainerLevel.Card)
     else -> resolveSharedBottomBarCapsuleShape()
 }
 
@@ -477,7 +478,7 @@ internal fun resolveMd3TopTabItemWidthDp(
     if (visibleSlots >= 5) {
         return (containerWidthDp / visibleSlots).coerceIn(minWidth, maxWidth)
     }
-    return (containerWidthDp / visibleSlots.coerceAtLeast(1)).coerceAtLeast(minWidth.coerceAtLeast(88f))
+    return (containerWidthDp / visibleSlots.coerceAtLeast(1)).coerceAtLeast(minWidth)
 }
 
 internal fun resolveFixedHomeTopTabItemWidthDp(
@@ -900,7 +901,8 @@ fun FluidHomeTopBar(
                 
                 //  右侧：设置按钮
                 AppIconButton(
-                    onClick = onSettingsClick
+                    onClick = onSettingsClick,
+                    modifier = Modifier.size(AppChromeSizeTokens.MinimumTouchTarget),
                 ) {
                     AppIcon(
                         Icons.Outlined.Settings,

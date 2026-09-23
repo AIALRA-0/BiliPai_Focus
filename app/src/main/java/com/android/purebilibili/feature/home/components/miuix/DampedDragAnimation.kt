@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -20,8 +19,6 @@ import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -198,13 +195,30 @@ class DampedDragAnimation(
             if (value != targetValue) {
                 val threshold = ((valueRange.endInclusive - valueRange.start) * 0.025f)
                     .coerceAtLeast(visibilityThreshold.coerceAtLeast(0.001f))
-                snapshotFlow { abs(valueAnimation.value - targetValue) }
-                    .filter { it <= threshold }
-                    .first()
+                while (abs(valueAnimation.value - targetValue) > threshold) {
+                    withFrameNanos { }
+                }
             }
-            // 照搬 HyperIsland LiquidGlassNavigationBar 的 release()：直接接管正在跑的
-            // 放大动画，不等待它结束。原先这里的 pressJob?.join() 会让缩放先跑到峰值停住、
-            // 之后才开始缩回（放大 → 停顿 → 缩小），破坏连贯性。
+            // Ensure the press is perceptible even when the position target is already reached
+            // (for example, a one-item dock). Starting the return before the scale rises makes
+            // the still-running press spring win the race and leave the indicator enlarged.
+            val pressScaleDelta = pressedScale - initialScale
+            if (abs(pressScaleDelta) > 0.001f) {
+                val visiblePressScale = initialScale + pressScaleDelta * 0.3f
+                fun hasVisiblePressScale(): Boolean = if (pressScaleDelta > 0f) {
+                    scaleXAnimation.value >= visiblePressScale
+                } else {
+                    scaleXAnimation.value <= visiblePressScale
+                }
+                while (!hasVisiblePressScale()) {
+                    withFrameNanos { }
+                }
+            }
+            // Cancel the press spring at its current value, then let the return spring own both
+            // axes. This keeps the handoff continuous without joining the press all the way to
+            // its peak, which previously introduced a visible pause before shrinking.
+            pressJob?.cancel()
+            pressJob = null
             launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
             launch { scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec) }
             launch { scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec) }

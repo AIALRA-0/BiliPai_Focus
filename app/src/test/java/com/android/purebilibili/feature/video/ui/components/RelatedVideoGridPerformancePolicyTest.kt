@@ -37,10 +37,12 @@ class RelatedVideoGridPerformancePolicyTest {
         assertTrue(source.contains("coverCoordinatesRef.value = coordinates"))
         assertFalse(source.contains("cardBoundsRef.value = coordinates.boundsInRoot()"))
         assertTrue(source.contains("val coverRequest = remember(stationaryCoverUrl)"))
-        assertTrue(source.contains("sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE"))
+        assertTrue(source.contains("sourceLayout = if (stacked)"))
+        assertTrue(source.contains("VideoCardSourceLayout.STACKED"))
+        assertTrue(source.contains("VideoCardSourceLayout.SIDE_BY_SIDE"))
         assertTrue(source.contains("sourceChromeSnapshot = VideoCardSourceChromeSnapshot("))
         assertTrue(source.contains(".withMeasuredCoverDecodeSize(sourceCoverBounds)"))
-        assertTrue(source.contains(".then(nativeCardSnapshot.coverOverlayModifier)"))
+        assertTrue(source.contains("coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier"))
         assertTrue(source.contains("showDurationOnCover = true"))
     }
 }

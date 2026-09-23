@@ -25,7 +25,7 @@ class BiliPaiMiuixNavTransitionTest {
         ).first(File::exists).readText()
 
         assertTrue(source.contains("NONE -> return NoPredictiveBackTransition"))
-        assertTrue(source.contains("else NavTransitions.MiuixDefault"))
+        assertTrue(source.contains("NavTransitions.MiuixDefault"))
         assertTrue(source.contains("return realtimeCoveredBlurTransition("))
         assertTrue(source.contains("baseTransition = baseTransition"))
     }

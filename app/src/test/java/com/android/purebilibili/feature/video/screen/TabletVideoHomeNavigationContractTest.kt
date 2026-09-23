@@ -49,7 +49,7 @@ class TabletVideoHomeNavigationContractTest {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoDetailScreenStateHolder.kt"
         )
-        val largeScreenCall = firstCallBlock(source, "LargeScreenVideoLayout")
+        val largeScreenCall = lastCallBlock(source, "LargeScreenVideoLayout")
 
         assertTrue(
             largeScreenCall.contains("onHomeClick ="),
@@ -80,6 +80,14 @@ class TabletVideoHomeNavigationContractTest {
 
     private fun firstCallBlock(source: String, functionName: String): String {
         val start = source.indexOf("$functionName(")
+        require(start >= 0) { "Cannot find call $functionName" }
+        val openParen = source.indexOf('(', start)
+        val closeParen = findMatchingParenthesis(source, openParen)
+        return source.substring(start, closeParen + 1)
+    }
+
+    private fun lastCallBlock(source: String, functionName: String): String {
+        val start = source.lastIndexOf("$functionName(")
         require(start >= 0) { "Cannot find call $functionName" }
         val openParen = source.indexOf('(', start)
         val closeParen = findMatchingParenthesis(source, openParen)

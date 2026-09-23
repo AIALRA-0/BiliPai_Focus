@@ -46,13 +46,16 @@ class HomeVideoTransitionBackgroundStructureTest {
     }
 
     @Test
-    fun navigationHostOnlyProvidesVideoTransitionBackgroundState() {
+    fun navigationHostProvidesLiveTransitionStateAndLeavesRenderingToRoutes() {
         val source = navDisplayHostSource()
 
         assertTrue(source.contains("VideoCardTransitionBackgroundPhase.OPENING"))
         assertTrue(source.contains("VideoCardTransitionBackgroundPhase.RETURNING"))
         assertTrue(source.contains("LocalVideoCardTransitionBackgroundState provides"))
-        assertTrue(source.contains("resolveVideoCardTransitionMotionTier(reduceMotion)"))
+        assertTrue(source.contains("val transitionMotionTier = if (reduceMotion) MotionTier.Reduced else MotionTier.Normal"))
+        assertTrue(source.contains("motionTierProvider = { transitionMotionTier }"))
+        assertTrue(source.contains("LocalPredictiveBackBackgroundState provides"))
+        assertTrue(source.contains("progress = videoCardTransitionProgress"))
         assertFalse(source.contains("runtimeGuardDecision.effectiveMotionTier"))
         assertFalse(source.contains("videoCardTransitionBackgroundEffect("))
     }

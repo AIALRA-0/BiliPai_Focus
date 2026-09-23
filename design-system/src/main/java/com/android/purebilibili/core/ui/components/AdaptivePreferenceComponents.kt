@@ -660,7 +660,10 @@ internal fun AdaptiveSwitchPreferenceContent(
         )
         return
     }
-    if (listItemStyle == AppListItemStyle.NATIVE && uiStyle == AppUiStyle.MIUIX) {
+    if (
+        listItemStyle == AppListItemStyle.NATIVE &&
+        shouldRouteSwitchItemToMiuixSwitchPreference(uiStyle)
+    ) {
         val platformHaptic = LocalHapticFeedback.current
         val effectiveHaptic = if (LocalAppThemeConfig.current.hapticFeedbackEnabled) {
             platformHaptic

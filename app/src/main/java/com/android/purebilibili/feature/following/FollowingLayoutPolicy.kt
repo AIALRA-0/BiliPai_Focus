@@ -6,3 +6,5 @@ import androidx.compose.ui.unit.dp
 internal fun resolveFollowingListMaxWidth(): Dp = 720.dp
 
 internal fun resolveFollowingBatchGroupDialogMaxHeight(): Dp = 320.dp
+
+internal fun resolveFollowingUserAvatarBadgeSize(): Dp = 14.dp

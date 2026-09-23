@@ -778,9 +778,9 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun storyBottomPagerPage_staysComposedAfterContentReadyLikeBiliPai() {
-        // BiliPai mounts every page after contentReady; active work still uses settledPage.
-        assertTrue(
+    fun storyBottomPagerPage_doesNotPrecomposeInactivePlayerAfterContentReady() {
+        // Inactive Story composition starts a real player session, so contentReady alone is not enough.
+        assertFalse(
             shouldComposeBottomPagerPage(
                 item = BottomNavItem.STORY,
                 page = 3,

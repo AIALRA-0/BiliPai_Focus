@@ -11,15 +11,17 @@ class BottomBarFloatingSegmentedControlBackdropStructureTest {
         val entry = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarLiquidSegmentedControl.kt")
         val wrapper = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBarFloatingSegmentedControl.kt")
         val renderer = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/FloatingBottomBar.kt")
-        for (parameter in listOf("tapPressRefractionEnabled", "indicatorIdleSurfaceColorOverride")) {
-            assertTrue(entry.contains("$parameter = $parameter"))
-            assertTrue(wrapper.contains("$parameter = $parameter"))
-        }
+        assertTrue(entry.contains("tapPressRefractionEnabled = tapPressRefractionEnabled"))
+        assertTrue(entry.contains("indicatorIdleSurfaceColorOverride = indicatorIdleSurfaceColorOverride"))
+        assertTrue(wrapper.contains("tapPressRefractionEnabled = tapPressRefractionEnabled"))
+        assertTrue(wrapper.contains("val themedIndicatorSurface = indicatorIdleSurfaceColorOverride"))
+        assertTrue(wrapper.contains("indicatorIdleSurfaceColorOverride = themedIndicatorSurface"))
         assertTrue(wrapper.contains("contentHorizontalPadding = horizontalPadding"))
         assertTrue(wrapper.contains("contentVerticalPadding = verticalPadding"))
         assertTrue(renderer.contains("resolveFloatingDockRefractionProgress("))
         assertTrue(renderer.contains("color = indicatorIdleSurfaceColorOverride ?:"))
-        assertTrue(renderer.contains(".background(indicatorIdleSurfaceColorOverride ?:"))
+        assertTrue(renderer.contains("if (indicatorIdleSurfaceColorOverride != null || isLiquidGlassMode)"))
+        assertTrue(renderer.contains("Modifier.background("))
         assertTrue(renderer.contains("horizontalPaddingLatest.value.toPx()"))
     }
 

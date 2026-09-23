@@ -176,8 +176,10 @@ class CommonListAppearancePolicyTest {
         assertTrue(source.contains("historyViewModel != null || favoriteViewModel != null"))
         assertTrue(source.contains("scrollUnderHeader = commonListScrollUnderHeader"))
         assertTrue(source.contains("captureScrollableContent = progressiveHeaderRequested"))
-        assertTrue(source.contains("selectedContainerColor = MaterialTheme.colorScheme.primaryContainer"))
-        assertTrue(source.contains("selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer"))
+        assertTrue(source.contains("AppLiquidAwareTabRow("))
+        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
+        assertTrue(source.contains("selectedValue = favoriteSection"))
+        assertTrue(source.contains("selectedValue = historyContentFilter"))
     }
 
     @Test
