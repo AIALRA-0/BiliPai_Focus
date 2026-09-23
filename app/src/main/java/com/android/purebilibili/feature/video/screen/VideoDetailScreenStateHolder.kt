@@ -124,6 +124,9 @@ import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.navigation3.LocalOfficialVideoCoverTransitionActive
+import com.android.purebilibili.navigation3.LocalOfficialVideoSharedTransition
+import com.android.purebilibili.navigation3.LocalOfficialVideoSharedSession
+import com.android.purebilibili.navigation3.nowPlayingSharedSourceRoute
 import com.android.purebilibili.core.ui.AppWindowSystemUiController
 import com.android.purebilibili.core.ui.setWindowNavigationBarColor
 import com.android.purebilibili.core.ui.setWindowStatusBarColor
@@ -1576,11 +1579,14 @@ internal fun VideoDetailScreenStateHolder(
     }
     val detailShellModifier = Modifier.videoCardShellSharedBoundsOrEmpty(
         enabled = detailShellSharedBoundsEnabled &&
-            !isNavigatingToVideo,
+            (!isNavigatingToVideo || LocalOfficialVideoSharedTransition.current != null),
         sharedTransitionScope = rootSharedTransitionScope,
         animatedVisibilityScope = rootAnimatedVisibilityScope,
         bvid = bvid,
-        sourceRoute = sourceRouteForSharedElement,
+        sourceRoute = LocalOfficialVideoSharedSession.current
+            ?.takeIf { it.bvid == bvid && it.sourceChromeSnapshot?.isNowPlayingBar == true }
+            ?.let { nowPlayingSharedSourceRoute(it.sourceRoute) }
+            ?: sourceRouteForSharedElement,
         motionSpec = homeSharedTransitionMotionSpec,
         clipShape = detailShellShape,
         role = VideoCardShellSharedBoundsRole.DetailShell,

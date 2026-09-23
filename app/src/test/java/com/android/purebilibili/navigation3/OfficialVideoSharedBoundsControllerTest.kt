@@ -3,11 +3,26 @@ package com.android.purebilibili.navigation3
 import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionSettleState
+import com.android.purebilibili.core.ui.transition.videoCardShellSharedElementKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertNotEquals
 
 class OfficialVideoSharedBoundsControllerTest {
+    @Test
+    fun nowPlayingBarCannotCompeteWithTheSameVideoInTheFeed() {
+        val barSourceRoute = nowPlayingSharedSourceRoute("home")
+        assertNotEquals(
+            videoCardShellSharedElementKey("BV1", "home"),
+            videoCardShellSharedElementKey("BV1", barSourceRoute),
+        )
+        assertEquals(
+            videoCardShellSharedElementKey("BV1", barSourceRoute),
+            videoCardShellSharedElementKey("BV1", nowPlayingSharedSourceRoute("home")),
+        )
+    }
+
     private fun session(bounds: Rect? = Rect(12f, 24f, 220f, 140f)) =
         VideoCardTransitionSession(
             bvid = "BV1",
@@ -43,12 +58,15 @@ class OfficialVideoSharedBoundsControllerTest {
     @Test
     fun committedReturnReleasesTheFrozenSource() {
         val controller = OfficialVideoSharedBoundsController()
-        controller.beginOpening(session())
+        controller.beginOpening(session(), sourceEntry = BiliPaiNavKey.MainHost)
+        controller.setTargetEntry(BiliPaiNavKey.VideoDetail(bvid = "BV1"))
         controller.onNavigationFrame(1f, VideoCardTransitionSettleState.Held, false)
         controller.beginReturning()
         controller.onNavigationFrame(0f, VideoCardTransitionSettleState.Idle, false)
         assertNull(controller.session)
         assertNull(controller.phase)
+        assertNull(controller.sourceEntryKey)
+        assertNull(controller.targetEntryKey)
     }
 
     @Test
@@ -74,16 +92,23 @@ class OfficialVideoSharedBoundsControllerTest {
     @Test
     fun nestedDetailReturnRestoresTheParentCardSource() {
         val controller = OfficialVideoSharedBoundsController()
-        controller.beginOpening(session())
+        val parentDetail = BiliPaiNavKey.VideoDetail(bvid = "BV1")
+        val childDetail = BiliPaiNavKey.VideoDetail(bvid = "BV2")
+        controller.beginOpening(session(), sourceEntry = BiliPaiNavKey.MainHost)
+        controller.setTargetEntry(parentDetail)
         controller.onNavigationFrame(1f, VideoCardTransitionSettleState.Held, false)
         controller.beginOpening(
             session().copy(bvid = "BV2", sourceKey = "video/BV1:BV2"),
+            sourceEntry = parentDetail,
         )
+        controller.setTargetEntry(childDetail)
         controller.onNavigationFrame(1f, VideoCardTransitionSettleState.Held, false)
         controller.beginReturning()
         controller.onNavigationFrame(0f, VideoCardTransitionSettleState.Idle, false)
 
         assertEquals("BV1", controller.session?.bvid)
         assertNull(controller.phase)
+        assertEquals(BiliPaiNavKey.MainHost, controller.sourceEntryKey)
+        assertEquals(parentDetail, controller.targetEntryKey)
     }
 }

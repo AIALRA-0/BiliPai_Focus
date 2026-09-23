@@ -1,5 +1,11 @@
 package com.android.purebilibili.feature.audio.screen
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope.OverlayClip
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -24,6 +30,8 @@ import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
@@ -32,6 +40,8 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
+import com.android.purebilibili.core.ui.transition.videoCardShellSharedElementKey
+import com.android.purebilibili.navigation3.nowPlayingSharedSourceRoute
 import com.android.purebilibili.core.util.CardPositionManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -76,6 +86,7 @@ internal data class AudioNowPlayingBarState(
     val playbackSpeed: Float = 1f
 )
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AudioNowPlayingBar(
     state: AudioNowPlayingBarState,
@@ -92,6 +103,7 @@ internal fun AudioNowPlayingBar(
     returningDetailBvid: String? = null,
     isSharedTransitionRunning: Boolean = false,
     isSharedTransitionSourceOwner: Boolean = false,
+    sharedTransitionDurationMillis: Int = 360,
     glassEnabled: Boolean = LocalSettingsLiquidGlassEnabled.current,
     blurEnabled: Boolean = false,
     hazeState: HazeState? = null,
@@ -160,6 +172,7 @@ internal fun AudioNowPlayingBar(
                             followed = false,
                             coverUrl = state.coverUrl,
                             coverCacheKey = state.coverUrl,
+                            isNowPlayingBar = true,
                         )
                     )
                     nativeCardSnapshot.capture()
@@ -183,6 +196,28 @@ internal fun AudioNowPlayingBar(
         glassEnabled = glassEnabled
     )
     val shape = resolveSharedBottomBarCapsuleShape()
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val realSharedBoundsActive = sharedTransitionScope != null && animatedVisibilityScope != null
+    val sharedBarModifier = if (realSharedBoundsActive) {
+        with(requireNotNull(sharedTransitionScope)) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(
+                    videoCardShellSharedElementKey(
+                        state.bvid,
+                        nowPlayingSharedSourceRoute(sourceRoute),
+                    ),
+                ),
+                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                enter = fadeIn(tween(sharedTransitionDurationMillis, easing = LinearEasing)),
+                exit = fadeOut(tween(sharedTransitionDurationMillis, easing = LinearEasing)),
+                boundsTransform = { _, _ ->
+                    tween(sharedTransitionDurationMillis, easing = LinearEasing)
+                },
+                clipInOverlayDuringTransition = OverlayClip(shape),
+            )
+        }
+    } else Modifier
     val containerColor = AppSurfaceTokens.surfaceContainer()
     val glassActive = glassEnabled && miuixBackdrop != null
     val coverRotationDegrees = rememberMusicArtworkRotationDegrees(
@@ -210,11 +245,12 @@ internal fun AudioNowPlayingBar(
             .onGloballyPositioned { coordinates ->
                 barCoordsRef[0] = coordinates
             }
+            .then(sharedBarModifier)
             .then(nativeCardSnapshot.modifier)
             .graphicsLayer {
                 // The transition host owns the source pixels during return; do not
                 // start a second settle animation when the real bar is revealed.
-                alpha = if (sourceInActiveReturn) 0f else 1f
+                alpha = if (sourceInActiveReturn && !realSharedBoundsActive) 0f else 1f
             }
             .clip(shape)
             .semantics {

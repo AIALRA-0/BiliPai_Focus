@@ -206,7 +206,11 @@ import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.navigation3.BiliPaiNavDisplayHost
 import com.android.purebilibili.navigation3.OfficialVideoSharedBoundsController
-import com.android.purebilibili.navigation3.OfficialVideoSharedBoundsOverlay
+import com.android.purebilibili.navigation3.LocalOfficialVideoSharedTransition
+import com.android.purebilibili.navigation3.LocalOfficialVideoSharedSession
+import com.android.purebilibili.navigation3.OfficialVideoNowPlayingSourceScope
+import com.android.purebilibili.navigation3.rememberOfficialVideoSharedTransition
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.navigation3.BiliPaiProgrammaticBackDispatcher
 import com.android.purebilibili.navigation3.BiliPaiNavCardSourceDirection
 import com.android.purebilibili.navigation3.BiliPaiNavEntryContentRole
@@ -1149,6 +1153,7 @@ fun AppNavigation(
             prearmVideoCardOpening(transitionSession)
             val useOfficialVideoSharedBounds = officialVideoSharedBoundsEnabled &&
                 videoKey != null &&
+                isVideoCardReturnTargetRoute(transitionSession.sourceRoute) &&
                 resolveVideoCardTransitionEnabledForSource(
                     cardTransitionEnabled = sharedVideoCardTransitionEnabled,
                     relatedVideoTransitionEnabled = relatedVideoTransitionEnabled,
@@ -1157,11 +1162,8 @@ fun AppNavigation(
             if (useOfficialVideoSharedBounds) {
                 officialVideoSharedBoundsController.beginOpening(
                     transitionSession,
-                    destination = navigationHostBoundsInRoot,
+                    sourceEntry = navigation3BackStack.lastOrNull(),
                 )
-                coroutineScope.launch {
-                    officialVideoSharedBoundsController.freezeSourceBitmap(transitionSession.sourceKey)
-                }
             }
             miniPlayerManager?.isNavigatingToVideo = true
             // 合集列表 / 详情压详情：进新片前立刻挂起上一级仍在响的 player，避免只听见旧声音。
@@ -1188,6 +1190,11 @@ fun AppNavigation(
                 else -> parsedKey
             }
             pushNavigation3Key(key)
+            if (useOfficialVideoSharedBounds) {
+                officialVideoSharedBoundsController.setTargetEntry(
+                    navigation3BackStack.lastOrNull(),
+                )
+            }
         }
         fun navigateToVideoInNavigation3(
             bvid: String,
@@ -1982,6 +1989,18 @@ fun AppNavigation(
                 )
             }
             SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+            val realVideoSharedTransition = if (officialVideoSharedBoundsEnabled) {
+                rememberOfficialVideoSharedTransition(officialVideoSharedBoundsController)
+            } else null
+            CompositionLocalProvider(
+                LocalSharedTransitionScope provides
+                    this.takeIf { officialVideoSharedBoundsEnabled },
+                LocalOfficialVideoSharedTransition provides realVideoSharedTransition,
+                LocalOfficialVideoSharedSession provides
+                    officialVideoSharedBoundsController.session.takeIf {
+                        officialVideoSharedBoundsEnabled
+                    },
+            ) {
             Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 // Remove the whole slot on video detail so an exit animation cannot reserve width.
@@ -2961,7 +2980,8 @@ fun AppNavigation(
                                 transitionEnabled = shouldEnableVideoDetailSharedTransition(
                                     cardTransitionEnabled = sharedVideoCardTransitionEnabled,
                                     sourceRoute = videoKey.sourceRoute,
-                                ),
+                                ) || (officialVideoSharedBoundsEnabled &&
+                                    officialVideoSharedBoundsController.targetEntryKey == videoKey),
                                 transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
                                 onBack = {
                                     if (!navigation3ProgrammaticBackDispatcher.dispatch()) {
@@ -4332,6 +4352,10 @@ fun AppNavigation(
                                 { audioModifier, dockMergeProgress, iconOnlyProgress, surfaceMergeProgress,
                                     compactClick, layoutStable ->
                                     val playbackManager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
+                                    OfficialVideoNowPlayingSourceScope(
+                                        controller = officialVideoSharedBoundsController,
+                                        bvid = audioNowPlayingItem.bvid,
+                                    ) {
                                     AudioNowPlayingBar(
                                         state = AudioNowPlayingBarState(
                                             bvid = audioNowPlayingItem.bvid,
@@ -4344,11 +4368,15 @@ fun AppNavigation(
                                         ),
                                         onCompactClick = compactClick,
                                         isLayoutStable = layoutStable && !driveBottomBarByProgress,
-                                        sourceRoute = currentRoute ?: ScreenRoutes.Home.route,
+                                        sourceRoute = officialVideoSharedBoundsController.session
+                                            ?.takeIf { it.sourceChromeSnapshot?.isNowPlayingBar == true &&
+                                                it.bvid == audioNowPlayingItem.bvid }
+                                            ?.sourceRoute ?: currentRoute ?: ScreenRoutes.Home.route,
                                         isReturningFromDetail = navigation3ReturnSession.isReturningFromDetail,
                                         returningDetailBvid = navigation3ReturnSession.transitionSession?.bvid,
                                         isSharedTransitionRunning = driveBottomBarByProgress,
                                         isSharedTransitionSourceOwner = videoCardSourceChromeVisible,
+                                        sharedTransitionDurationMillis = effectiveVideoCardTransitionDurationMillis,
                                         onExpand = {
                                             val expandRoute = resolveAudioNowPlayingBarExpandRoute(
                                                 opensAudioMode = audioNowPlayingBarOpensAudioMode,
@@ -4401,6 +4429,7 @@ fun AppNavigation(
                                         iconOnlyProgress = iconOnlyProgress,
                                         modifier = audioModifier
                                     )
+                                    }
                                 }
                             } else null
                         if (!isBottomBarFloating) {
@@ -4530,6 +4559,10 @@ fun AppNavigation(
                 }
             } else if (showAudioNowPlayingIndependent && audioNowPlayingItem != null) {
                 val playbackManager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
+                OfficialVideoNowPlayingSourceScope(
+                    controller = officialVideoSharedBoundsController,
+                    bvid = audioNowPlayingItem.bvid,
+                ) {
                 AudioNowPlayingBar(
                     state = AudioNowPlayingBarState(
                         bvid = audioNowPlayingItem.bvid,
@@ -4541,11 +4574,15 @@ fun AppNavigation(
                         playbackSpeed = playbackManager.player?.playbackParameters?.speed ?: 1f
                     ),
                     isLayoutStable = !driveBottomBarByProgress,
-                    sourceRoute = currentRoute ?: ScreenRoutes.Home.route,
+                    sourceRoute = officialVideoSharedBoundsController.session
+                        ?.takeIf { it.sourceChromeSnapshot?.isNowPlayingBar == true &&
+                            it.bvid == audioNowPlayingItem.bvid }
+                        ?.sourceRoute ?: currentRoute ?: ScreenRoutes.Home.route,
                     isReturningFromDetail = navigation3ReturnSession.isReturningFromDetail,
                     returningDetailBvid = navigation3ReturnSession.transitionSession?.bvid,
                     isSharedTransitionRunning = driveBottomBarByProgress,
                     isSharedTransitionSourceOwner = videoCardSourceChromeVisible,
+                    sharedTransitionDurationMillis = effectiveVideoCardTransitionDurationMillis,
                     onExpand = {
                         val expandRoute = resolveAudioNowPlayingBarExpandRoute(
                             opensAudioMode = audioNowPlayingBarOpensAudioMode,
@@ -4596,6 +4633,7 @@ fun AppNavigation(
                         .align(Alignment.BottomCenter)
                         .zIndex(2f)
                 )
+                }
             }
 
             // BiliPai MainScreenBackHandler: onBackCompleted → animateToPage(home)
@@ -4621,12 +4659,8 @@ fun AppNavigation(
                     .fillMaxSize()
                     .zIndex(101f),
             )
-            OfficialVideoSharedBoundsOverlay(
-                controller = officialVideoSharedBoundsController,
-                durationMillis = effectiveVideoCardTransitionDurationMillis,
-                modifier = Modifier.zIndex(102f),
-            )
         } // End of Main Box
+        } // End of official shared scope provider
         } // End of SharedTransitionLayout
         } // End of CompositionLocalProvider
     }

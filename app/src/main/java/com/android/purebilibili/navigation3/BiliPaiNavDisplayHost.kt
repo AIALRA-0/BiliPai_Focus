@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,7 +25,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -43,6 +45,7 @@ import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
 import com.android.purebilibili.core.ui.transition.LocalClickToPlayEnabled
 import com.android.purebilibili.core.ui.transition.LocalDynamicImagePreviewTextVisible
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.transition.LocalMiuixVideoCardTransitionState
 import com.android.purebilibili.core.ui.transition.LocalVideoCardTransitionBackgroundState
 import com.android.purebilibili.core.ui.transition.MiuixVideoCardTransitionState
@@ -163,8 +166,11 @@ internal fun BiliPaiNavDisplayHost(
             ?.let { it.width > 1f && it.height > 1f } == true,
     )
     val cardMorphAvailable = cardMorphMode != BiliPaiVideoCardMorphMode.NONE
-    val officialStaticSessionActive = officialSharedBoundsController?.session?.sourceKey
-        ?.let { it == sourceMetadata.sourceKey } == true
+    val officialStaticSessionActive = officialSharedBoundsController?.let { controller ->
+        controller.session != null && controller.targetEntryKey != null &&
+            (controller.targetEntryKey in stackSnapshot ||
+                controller.phase == OfficialVideoSharedBoundsController.Phase.Returning)
+    } == true
     var relatedReturnRestorePending by remember { mutableStateOf(false) }
     var relatedReturnTransitionObserved by remember { mutableStateOf(false) }
     val style = if (reduceMotion) {
@@ -290,8 +296,8 @@ internal fun BiliPaiNavDisplayHost(
                 ),
                 scrim = { 0f },
             ) {
-                // The shared bounds surface covers the retained page. A second navigation alpha
-                // makes the whole destination translucent underneath that moving surface.
+                // The real source and destination share bounds. Keep navigation opaque so its
+                // backing page never shows through their content handoff.
                 alpha = 1f
             },
         )
@@ -737,6 +743,9 @@ internal fun BiliPaiNavDisplayHost(
                 val opaqueVideoChild = remember(key) {
                     shouldUseOpaqueVideoChildBackground(key, stackSnapshot)
                 }
+                val realSharedTransition = LocalOfficialVideoSharedTransition.current
+                val isRealSharedSource = officialSharedBoundsController?.sourceEntryKey == key
+                val isRealSharedTarget = officialSharedBoundsController?.targetEntryKey == key
                 BiliPaiMiuixNavEntry(
                     interceptPredictiveBack = interceptPredictiveBack,
                     onBack = performBack,
@@ -762,25 +771,28 @@ internal fun BiliPaiNavDisplayHost(
                                 if (opaqueVideoChild) {
                                     Modifier.background(AppSurfaceTokens.groupedListContainer().copy(alpha = 1f))
                                 } else Modifier
-                            ).then(
-                                if (key is BiliPaiNavKey.VideoDetail &&
-                                    officialSharedBoundsController != null
-                                ) {
-                                    Modifier.graphicsLayer {
-                                        val ownsStaticTransition =
-                                            officialSharedBoundsController.phase != null &&
-                                            officialSharedBoundsController.session?.bvid == key.bvid
-                                        alpha = if (ownsStaticTransition) {
-                                            // Reveal the actual detail behind the fading card snapshot.
-                                            ((officialSharedBoundsController.progress - 0.05f) / 0.5f)
-                                                .coerceIn(0f, 1f)
-                                        } else 1f
-                                    }
-                                } else Modifier
                             ),
                         ) {
                             ProvideMiuixNavViewModelApplicationExtras(application) {
-                                content(key)
+                                if (realSharedTransition != null &&
+                                    (isRealSharedSource || isRealSharedTarget)
+                                ) {
+                                    realSharedTransition.AnimatedVisibility(
+                                        visible = { expanded ->
+                                            if (isRealSharedTarget) expanded else !expanded
+                                        },
+                                        enter = EnterTransition.None,
+                                        exit = ExitTransition.None,
+                                    ) {
+                                        CompositionLocalProvider(
+                                            LocalAnimatedVisibilityScope provides this,
+                                        ) {
+                                            content(key)
+                                        }
+                                    }
+                                } else {
+                                    content(key)
+                                }
                             }
                         }
                     }
